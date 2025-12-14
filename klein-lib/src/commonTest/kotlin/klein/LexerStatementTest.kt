@@ -222,6 +222,27 @@ class LexerStatementTest {
     }
 
     @Test
+    fun noNewlineAfterComment() {
+        Lexer(
+                """
+            x = foo(a, # )
+                b)
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"),
+                sym('='),
+                ident("foo"),
+                sym('('),
+                ident("a"),
+                sym(','),
+                ident("b"),
+                sym(')'),
+                eof,
+            )
+    }
+
+    @Test
     fun noNewlineAfterComma() {
         Lexer(
                 """

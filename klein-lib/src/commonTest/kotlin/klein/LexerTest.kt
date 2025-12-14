@@ -125,4 +125,45 @@ class LexerTest {
         val tokens = Lexer("x").tokenize()
         assertEquals(SourceSpan(1, 1), tokens[1].span)
     }
+
+    @Test
+    fun commentAtEndOfLine() {
+        Lexer("x + 1 # add one").assertTokens(ident("x"), sym('+'), num("1"), eof)
+    }
+
+    @Test
+    fun commentOnOwnLine() {
+        Lexer(
+                """
+            # this is a comment
+            x
+            """
+                    .trimIndent())
+            .assertTokens(ident("x"), eof)
+    }
+
+    @Test
+    fun commentBetweenStatements() {
+        Lexer(
+                """
+            x = 1
+            # comment
+            y = 2
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+    }
+
+    @Test
+    fun commentAfterStatement() {
+        Lexer(
+                """
+            x = 1 # comment
+            y = 2
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+    }
 }
