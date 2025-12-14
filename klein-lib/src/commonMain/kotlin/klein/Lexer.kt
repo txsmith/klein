@@ -25,81 +25,6 @@ enum class KeywordKind {
     Fun,
 }
 
-/**
- * Tracks nested bracket contexts to determine newline handling.
- *
- * In statement contexts (top-level, braces, pipes), newlines become StatementEnd tokens. In
- * expression contexts (parens, brackets), newlines are ignored as whitespace.
- *
- * Example: `foo(\n a,\n b\n)` - newlines inside parens are ignored Example: `{\n x = 1\n y =
- * 2\n}` - newlines inside braces become statement separators
- */
-class WhitespaceContext() {
-    private enum class Item(
-        val openingChar: Char?,
-        val closingChar: Char?,
-        val isStatement: Boolean,
-    ) {
-        Brace('{', '}', true),
-        Pipe('|', '|', true),
-        Paren('(', ')', false),
-        Bracket('[', ']', false),
-    }
-
-    private val stack: ArrayDeque<Item> = ArrayDeque<Item>()
-
-    val isStatement: Boolean
-        get() = stack.isEmpty() || stack.first().isStatement
-
-    var lastClosed: Char? = null
-
-    fun handleChar(char: Char, pos: Int) {
-        if (char == '|') {
-            if (stack.firstOrNull() == Item.Pipe) {
-                lastClosed = stack.removeFirst().closingChar
-            } else {
-                stack.addFirst(Item.Pipe)
-            }
-            return
-        }
-
-        fromOpeningChar(char)?.let {
-            stack.addFirst(it)
-            return
-        }
-
-        fromClosingChar(char)?.let { expected ->
-            val top = stack.firstOrNull()
-            if (top == expected) {
-                lastClosed = stack.removeFirst().closingChar
-            } else {
-                val expectedChar = top?.closingChar
-                val msg =
-                    if (expectedChar != null) {
-                        "Unexpected '$char', expected '$expectedChar'"
-                    } else {
-                        "Unexpected '$char'"
-                    }
-                throw LexerError(msg, SourceSpan(pos - 1, pos))
-            }
-        }
-    }
-
-    private fun fromOpeningChar(char: Char): Item? = byOpeningChar[char]
-
-    private fun fromClosingChar(char: Char): Item? = byClosingChar[char]
-
-    companion object {
-        private val byOpeningChar =
-            Item.entries.filter { it.openingChar != null }.associateBy { it.openingChar }
-        private val byClosingChar =
-            Item.entries.filter { it.closingChar != null }.associateBy { it.closingChar }
-        private val closingChars = byClosingChar.keys
-
-        fun isClosingChar(char: Char): Boolean = char in closingChars
-    }
-}
-
 class Lexer(private val source: String) {
     private var pos: Int = 0
     val tokens = mutableListOf<Token>()
@@ -115,17 +40,10 @@ class Lexer(private val source: String) {
     }
 
     private fun next(): Token {
+        skipWhitespaceAndComments()
+
         if (pos >= source.length) {
             return Token.Eof(SourceSpan.pos(pos))
-        }
-
-        // Drop irrelevant whitespace
-        if (whitespaceContext.isStatement) {
-            // In statements, newlines are significant for determining where it ends
-            consumeWhile { it.isWhitespace() && it != '\n' }
-        } else {
-            // In expressions, newlines aren't significant
-            consumeWhile { it.isWhitespace() }
         }
 
         val start = pos
@@ -149,6 +67,25 @@ class Lexer(private val source: String) {
                 Token.Symbol(c, SourceSpan(start, pos))
             }
             else -> throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
+        }
+    }
+
+    private fun skipWhitespaceAndComments() {
+        while (true) {
+            // Drop irrelevant whitespace
+            if (whitespaceContext.isStatement) {
+                // In statements, newlines are significant for determining where it ends
+                consumeWhile { it.isWhitespace() && it != '\n' }
+            } else {
+                // In expressions, newlines aren't significant
+                consumeWhile { it.isWhitespace() }
+            }
+            // Skip comments (but not the newline after them)
+            if (peek() == '#') {
+                consumeWhile { it != '\n' }
+            } else {
+                break
+            }
         }
     }
 
@@ -261,3 +198,78 @@ class Lexer(private val source: String) {
 }
 
 class LexerError(message: String, val span: SourceSpan) : Exception(message)
+
+/**
+ * Tracks nested bracket contexts to determine newline handling.
+ *
+ * In statement contexts (top-level, braces, pipes), newlines become StatementEnd tokens. In
+ * expression contexts (parens, brackets), newlines are ignored as whitespace.
+ *
+ * Example: `foo(\n a,\n b\n)` - newlines inside parens are ignored Example: `{\n x = 1\n y =
+ * 2\n}` - newlines inside braces become statement separators
+ */
+class WhitespaceContext() {
+    private enum class Item(
+        val openingChar: Char?,
+        val closingChar: Char?,
+        val isStatement: Boolean,
+    ) {
+        Brace('{', '}', true),
+        Pipe('|', '|', true),
+        Paren('(', ')', false),
+        Bracket('[', ']', false),
+    }
+
+    private val stack: ArrayDeque<Item> = ArrayDeque<Item>()
+
+    val isStatement: Boolean
+        get() = stack.isEmpty() || stack.first().isStatement
+
+    var lastClosed: Char? = null
+
+    fun handleChar(char: Char, pos: Int) {
+        if (char == '|') {
+            if (stack.firstOrNull() == Item.Pipe) {
+                lastClosed = stack.removeFirst().closingChar
+            } else {
+                stack.addFirst(Item.Pipe)
+            }
+            return
+        }
+
+        fromOpeningChar(char)?.let {
+            stack.addFirst(it)
+            return
+        }
+
+        fromClosingChar(char)?.let { expected ->
+            val top = stack.firstOrNull()
+            if (top == expected) {
+                lastClosed = stack.removeFirst().closingChar
+            } else {
+                val expectedChar = top?.closingChar
+                val msg =
+                    if (expectedChar != null) {
+                        "Unexpected '$char', expected '$expectedChar'"
+                    } else {
+                        "Unexpected '$char'"
+                    }
+                throw LexerError(msg, SourceSpan(pos - 1, pos))
+            }
+        }
+    }
+
+    private fun fromOpeningChar(char: Char): Item? = byOpeningChar[char]
+
+    private fun fromClosingChar(char: Char): Item? = byClosingChar[char]
+
+    companion object {
+        private val byOpeningChar =
+            Item.entries.filter { it.openingChar != null }.associateBy { it.openingChar }
+        private val byClosingChar =
+            Item.entries.filter { it.closingChar != null }.associateBy { it.closingChar }
+        private val closingChars = byClosingChar.keys
+
+        fun isClosingChar(char: Char): Boolean = char in closingChars
+    }
+}
