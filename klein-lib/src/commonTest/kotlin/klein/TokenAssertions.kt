@@ -10,7 +10,7 @@ sealed class ExpectedToken {
 
     data class Str(val value: String) : ExpectedToken()
 
-    data class Symbol(val char: Char) : ExpectedToken()
+    data class Symbol(val text: String) : ExpectedToken()
 
     data class Keyword(val kind: KeywordKind) : ExpectedToken()
 
@@ -25,7 +25,9 @@ fun num(text: String) = ExpectedToken.Number(text)
 
 fun str(value: String) = ExpectedToken.Str(value)
 
-fun sym(char: Char) = ExpectedToken.Symbol(char)
+fun sym(char: Char) = ExpectedToken.Symbol(char.toString())
+
+fun sym(text: String) = ExpectedToken.Symbol(text)
 
 fun kw(kind: KeywordKind) = ExpectedToken.Keyword(kind)
 
@@ -51,7 +53,7 @@ private fun Token.toExpected(): ExpectedToken =
         is Token.Ident -> ExpectedToken.Ident(name)
         is Token.Number -> ExpectedToken.Number(text)
         is Token.Str -> ExpectedToken.Str(value)
-        is Token.Symbol -> ExpectedToken.Symbol(char)
+        is Token.Symbol -> ExpectedToken.Symbol(text)
         is Token.Keyword -> ExpectedToken.Keyword(kind)
         is Token.StatementEnd -> ExpectedToken.StatementEnd
         is Token.Eof -> ExpectedToken.Eof

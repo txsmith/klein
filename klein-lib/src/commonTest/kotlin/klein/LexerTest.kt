@@ -2,58 +2,36 @@ package klein
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 class LexerTest {
     @Test
     fun singleNumber() {
-        val tokens = Lexer("42").tokenize()
-        assertEquals(2, tokens.size)
-        assertEquals("42", (tokens[0] as Token.Number).text)
+        Lexer("42").assertTokens(num("42"), eof)
     }
 
     @Test
     fun decimal() {
-        val tokens = Lexer("3.14").tokenize()
-        assertEquals("3.14", (tokens[0] as Token.Number).text)
+        Lexer("3.14").assertTokens(num("3.14"), eof)
     }
 
     @Test
     fun largerNumber() {
-        val tokens = Lexer("1122334455.5").tokenize()
-        assertEquals("1122334455.5", (tokens[0] as Token.Number).text)
+        Lexer("1122334455.5").assertTokens(num("1122334455.5"), eof)
     }
 
     @Test
     fun operators() {
-        val tokens = Lexer("+ - * / %").tokenize()
-        assertEquals('+', (tokens[0] as Token.Symbol).char)
-        assertEquals('-', (tokens[1] as Token.Symbol).char)
-        assertEquals('*', (tokens[2] as Token.Symbol).char)
-        assertEquals('/', (tokens[3] as Token.Symbol).char)
-        assertEquals('%', (tokens[4] as Token.Symbol).char)
+        Lexer("+ - * / %").assertTokens(sym('+'), sym('-'), sym('*'), sym('/'), sym('%'), eof)
     }
 
     @Test
     fun expression() {
-        val tokens = Lexer("1 + 2 * 3").tokenize()
-        assertEquals(6, tokens.size)
-        assertEquals("1", (tokens[0] as Token.Number).text)
-        assertEquals('+', (tokens[1] as Token.Symbol).char)
-        assertEquals("2", (tokens[2] as Token.Number).text)
-        assertEquals('*', (tokens[3] as Token.Symbol).char)
-        assertEquals("3", (tokens[4] as Token.Number).text)
-        assertIs<Token.Eof>(tokens[5])
+        Lexer("1 + 2 * 3").assertTokens(num("1"), sym('+'), num("2"), sym('*'), num("3"), eof)
     }
 
     @Test
     fun parens() {
-        val tokens = Lexer("(1 + 2)").tokenize()
-        assertEquals('(', (tokens[0] as Token.Symbol).char)
-        assertEquals("1", (tokens[1] as Token.Number).text)
-        assertEquals('+', (tokens[2] as Token.Symbol).char)
-        assertEquals("2", (tokens[3] as Token.Number).text)
-        assertEquals(')', (tokens[4] as Token.Symbol).char)
+        Lexer("(1 + 2)").assertTokens(sym('('), num("1"), sym('+'), num("2"), sym(')'), eof)
     }
 
     @Test
@@ -66,45 +44,39 @@ class LexerTest {
 
     @Test
     fun ident() {
-        val tokens = Lexer("foo").tokenize()
-        assertEquals("foo", (tokens[0] as Token.Ident).name)
+        Lexer("foo").assertTokens(ident("foo"), eof)
     }
 
     @Test
     fun identWithUnderscore() {
-        val tokens = Lexer("foo_bar").tokenize()
-        assertEquals("foo_bar", (tokens[0] as Token.Ident).name)
+        Lexer("foo_bar").assertTokens(ident("foo_bar"), eof)
     }
 
     @Test
     fun identWithDigits() {
-        val tokens = Lexer("x2 _2 2_").tokenize()
-        assertEquals("x2", (tokens[0] as Token.Ident).name)
-        assertEquals("_2", (tokens[1] as Token.Ident).name)
-        assertEquals("2", (tokens[2] as Token.Number).text)
-        assertEquals("_", (tokens[3] as Token.Ident).name)
+        Lexer("x2 _2 2_").assertTokens(ident("x2"), ident("_2"), num("2"), ident("_"), eof)
     }
 
     @Test
     fun identStartingWithUnderscore() {
-        val tokens = Lexer("_foo").tokenize()
-        assertEquals("_foo", (tokens[0] as Token.Ident).name)
+        Lexer("_foo").assertTokens(ident("_foo"), eof)
     }
 
     @Test
     fun keywords() {
-        val tokens = Lexer("if then else fun").tokenize()
-        assertEquals(KeywordKind.If, (tokens[0] as Token.Keyword).kind)
-        assertEquals(KeywordKind.Then, (tokens[1] as Token.Keyword).kind)
-        assertEquals(KeywordKind.Else, (tokens[2] as Token.Keyword).kind)
-        assertEquals(KeywordKind.Fun, (tokens[3] as Token.Keyword).kind)
+        Lexer("if then else fun")
+            .assertTokens(
+                kw(KeywordKind.If),
+                kw(KeywordKind.Then),
+                kw(KeywordKind.Else),
+                kw(KeywordKind.Fun),
+                eof,
+            )
     }
 
     @Test
     fun keywordLikeIdent() {
-        val tokens = Lexer("iffy elsewhere").tokenize()
-        assertEquals("iffy", (tokens[0] as Token.Ident).name)
-        assertEquals("elsewhere", (tokens[1] as Token.Ident).name)
+        Lexer("iffy elsewhere").assertTokens(ident("iffy"), ident("elsewhere"), eof)
     }
 
     @Test
@@ -165,5 +137,45 @@ class LexerTest {
                     .trimIndent())
             .assertTokens(
                 ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+    }
+
+    @Test
+    fun doubleEquals() {
+        Lexer("a == b").assertTokens(ident("a"), sym("=="), ident("b"), eof)
+    }
+
+    @Test
+    fun notEquals() {
+        Lexer("a != b").assertTokens(ident("a"), sym("!="), ident("b"), eof)
+    }
+
+    @Test
+    fun lessThanOrEqual() {
+        Lexer("a <= b").assertTokens(ident("a"), sym("<="), ident("b"), eof)
+    }
+
+    @Test
+    fun greaterThanOrEqual() {
+        Lexer("a >= b").assertTokens(ident("a"), sym(">="), ident("b"), eof)
+    }
+
+    @Test
+    fun arrow() {
+        Lexer("x -> y").assertTokens(ident("x"), sym("->"), ident("y"), eof)
+    }
+
+    @Test
+    fun range() {
+        Lexer("1..10").assertTokens(num("1"), sym(".."), num("10"), eof)
+    }
+
+    @Test
+    fun singleEqualsStillWorks() {
+        Lexer("x = 1").assertTokens(ident("x"), sym("="), num("1"), eof)
+    }
+
+    @Test
+    fun lessThanStillWorks() {
+        Lexer("a < b").assertTokens(ident("a"), sym("<"), ident("b"), eof)
     }
 }
