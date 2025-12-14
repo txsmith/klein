@@ -3,10 +3,7 @@ package klein
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SourceSpan(
-    val start: Int,
-    val end: Int,
-) {
+data class SourceSpan(val start: Int, val end: Int) {
     companion object {
         val zero: SourceSpan = SourceSpan(0, 0)
 
@@ -19,22 +16,12 @@ sealed class Expr {
     abstract val span: SourceSpan
 }
 
-data class IntLiteral(
-    val value: Long,
-    override val span: SourceSpan,
-) : Expr()
+data class IntLiteral(val value: Long, override val span: SourceSpan) : Expr()
 
-data class DoubleLiteral(
-    val value: Double,
-    override val span: SourceSpan,
-) : Expr()
+data class DoubleLiteral(val value: Double, override val span: SourceSpan) : Expr()
 
-data class BinaryOp(
-    val left: Expr,
-    val op: Op,
-    val right: Expr,
-    override val span: SourceSpan,
-) : Expr()
+data class BinaryOp(val left: Expr, val op: Op, val right: Expr, override val span: SourceSpan) :
+    Expr()
 
 @Serializable
 enum class Op {
