@@ -2,3 +2,4 @@ build/
 .gradle/
 .kotlin/
 node_modules/
+kls_database.db
