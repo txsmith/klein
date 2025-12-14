@@ -1,151 +1,266 @@
 package klein
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 class LexerStatementTest {
     @Test
     fun simpleBinding() {
-        val tokens = Lexer("x = 1").tokenize()
-        assertEquals("x", (tokens[0] as Token.Ident).name)
-        assertEquals('=', (tokens[1] as Token.Symbol).char)
-        assertEquals("1", (tokens[2] as Token.Number).text)
-        assertIs<Token.Eof>(tokens[3])
+        Lexer("x = 1").assertTokens(ident("x"), sym('='), num("1"), eof)
     }
 
     @Test
     fun twoBindingsOnSeparateLines() {
-        val tokens =
-            Lexer(
+        Lexer(
                 """
-                x = 1
-                y = 2
-                """.trimIndent(),
-            ).tokenize()
-
-        assertEquals("x", (tokens[0] as Token.Ident).name)
-        assertEquals('=', (tokens[1] as Token.Symbol).char)
-        assertEquals("1", (tokens[2] as Token.Number).text)
-        assertIs<Token.StatementEnd>(tokens[3])
-        assertEquals("y", (tokens[4] as Token.Ident).name)
-        assertEquals('=', (tokens[5] as Token.Symbol).char)
-        assertEquals("2", (tokens[6] as Token.Number).text)
-        assertIs<Token.Eof>(tokens[7])
+            x = 1
+            y = 2
+        """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"),
+                sym('='),
+                num("1"),
+                stmtEnd,
+                ident("y"),
+                sym('='),
+                num("2"),
+                eof,
+            )
     }
 
     @Test
     fun noNewlineAfterOperator() {
-        val tokens = Lexer("x = 1 +\n2").tokenize()
-        assertEquals("x", (tokens[0] as Token.Ident).name)
-        assertEquals('=', (tokens[1] as Token.Symbol).char)
-        assertEquals("1", (tokens[2] as Token.Number).text)
-        assertEquals('+', (tokens[3] as Token.Symbol).char)
-        assertEquals("2", (tokens[4] as Token.Number).text)
-        assertIs<Token.Eof>(tokens[5])
+        Lexer(
+                """
+            x = 1 +
+            2
+            """
+                    .trimIndent())
+            .assertTokens(ident("x"), sym('='), num("1"), sym('+'), num("2"), eof)
     }
 
-    // @Test
-    // fun noNewlineAfterOpenParen() {
-    //     val tokens = Lexer("foo(\na,\nb\n)").tokenize()
-    //     assertEquals("foo", (tokens[0] as Token.Ident).name)
-    //     assertEquals('(', (tokens[1] as Token.Symbol).char)
-    //     assertEquals("a", (tokens[2] as Token.Ident).name)
-    //     assertEquals(',', (tokens[3] as Token.Symbol).char)
-    //     assertEquals("b", (tokens[4] as Token.Ident).name)
-    //     assertEquals(')', (tokens[5] as Token.Symbol).char)
-    //     assertTrue(tokens[6] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun newlineInsideBlock() {
-    //     val tokens = Lexer("{\nx = 1\ny = 2\n}").tokenize()
-    //     assertEquals('{', (tokens[0] as Token.Symbol).char)
-    //     assertEquals("x", (tokens[1] as Token.Ident).name)
-    //     assertEquals('=', (tokens[2] as Token.Symbol).char)
-    //     assertEquals("1", (tokens[3] as Token.Number).text)
-    //     assertTrue(tokens[4] is Token.Newline)
-    //     assertEquals("y", (tokens[5] as Token.Ident).name)
-    //     assertEquals('=', (tokens[6] as Token.Symbol).char)
-    //     assertEquals("2", (tokens[7] as Token.Number).text)
-    //     assertTrue(tokens[8] is Token.Newline)
-    //     assertEquals('}', (tokens[9] as Token.Symbol).char)
-    //     assertTrue(tokens[10] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun noNewlineInsideParensInsideBlock() {
-    //     val tokens = Lexer("{\nfoo(\na\n)\n}").tokenize()
-    //     assertEquals('{', (tokens[0] as Token.Symbol).char)
-    //     assertEquals("foo", (tokens[1] as Token.Ident).name)
-    //     assertEquals('(', (tokens[2] as Token.Symbol).char)
-    //     assertEquals("a", (tokens[3] as Token.Ident).name)
-    //     assertEquals(')', (tokens[4] as Token.Symbol).char)
-    //     assertTrue(tokens[5] is Token.Newline)
-    //     assertEquals('}', (tokens[6] as Token.Symbol).char)
-    //     assertTrue(tokens[7] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun newlineInsidePipeLambda() {
-    //     val tokens = Lexer("|\nx = 1\ny\n|").tokenize()
-    //     assertEquals('|', (tokens[0] as Token.Symbol).char)
-    //     assertEquals("x", (tokens[1] as Token.Ident).name)
-    //     assertEquals('=', (tokens[2] as Token.Symbol).char)
-    //     assertEquals("1", (tokens[3] as Token.Number).text)
-    //     assertTrue(tokens[4] is Token.Newline)
-    //     assertEquals("y", (tokens[5] as Token.Ident).name)
-    //     assertTrue(tokens[6] is Token.Newline)
-    //     assertEquals('|', (tokens[7] as Token.Symbol).char)
-    //     assertTrue(tokens[8] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun nestedLambdaInParens() {
-    //     val tokens = Lexer("foo(|.x|)").tokenize()
-    //     assertEquals("foo", (tokens[0] as Token.Ident).name)
-    //     assertEquals('(', (tokens[1] as Token.Symbol).char)
-    //     assertEquals('|', (tokens[2] as Token.Symbol).char)
-    //     assertEquals('.', (tokens[3] as Token.Symbol).char)
-    //     assertEquals("x", (tokens[4] as Token.Ident).name)
-    //     assertEquals('|', (tokens[5] as Token.Symbol).char)
-    //     assertEquals(')', (tokens[6] as Token.Symbol).char)
-    //     assertTrue(tokens[7] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun noNewlineAfterEquals() {
-    //     val tokens = Lexer("x =\n1").tokenize()
-    //     assertEquals("x", (tokens[0] as Token.Ident).name)
-    //     assertEquals('=', (tokens[1] as Token.Symbol).char)
-    //     assertEquals("1", (tokens[2] as Token.Number).text)
-    //     assertTrue(tokens[3] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun noNewlineAfterComma() {
-    //     val tokens = Lexer("x = foo(a,\nb)").tokenize()
-    //     assertEquals("x", (tokens[0] as Token.Ident).name)
-    //     assertEquals('=', (tokens[1] as Token.Symbol).char)
-    //     assertEquals("foo", (tokens[2] as Token.Ident).name)
-    //     assertEquals('(', (tokens[3] as Token.Symbol).char)
-    //     assertEquals("a", (tokens[4] as Token.Ident).name)
-    //     assertEquals(',', (tokens[5] as Token.Symbol).char)
-    //     assertEquals("b", (tokens[6] as Token.Ident).name)
-    //     assertEquals(')', (tokens[7] as Token.Symbol).char)
-    //     assertTrue(tokens[8] is Token.Eof)
-    // }
-    //
-    // @Test
-    // fun multipleNewlinesCollapsed() {
-    //     val tokens = Lexer("x = 1\n\n\ny = 2").tokenize()
-    //     assertEquals("x", (tokens[0] as Token.Ident).name)
-    //     assertEquals('=', (tokens[1] as Token.Symbol).char)
-    //     assertEquals("1", (tokens[2] as Token.Number).text)
-    //     assertTrue(tokens[3] is Token.Newline)
-    //     assertEquals("y", (tokens[4] as Token.Ident).name)
-    //     assertEquals('=', (tokens[5] as Token.Symbol).char)
-    //     assertEquals("2", (tokens[6] as Token.Number).text)
-    //     assertTrue(tokens[7] is Token.Eof)
-    // }
+    @Test
+    fun noNewlineAfterOpenParen() {
+        Lexer(
+                """
+            foo(
+                a,
+                b
+            )
+            """
+                    .trimIndent())
+            .assertTokens(ident("foo"), sym('('), ident("a"), sym(','), ident("b"), sym(')'), eof)
+    }
+
+    @Test
+    fun newlineInsideBlock() {
+        Lexer(
+                """
+            {
+                x = 1
+                y = 2
+            }
+            """
+                    .trimIndent())
+            .assertTokens(
+                sym('{'),
+                ident("x"),
+                sym('='),
+                num("1"),
+                stmtEnd,
+                ident("y"),
+                sym('='),
+                num("2"),
+                stmtEnd,
+                sym('}'),
+                eof,
+            )
+    }
+
+    @Test
+    fun noNewlineInsideParensInsideBlock() {
+        Lexer(
+                """
+            {
+                foo(
+                    a,
+                    b
+                )
+            }
+            """
+                    .trimIndent())
+            .assertTokens(
+                sym('{'),
+                ident("foo"),
+                sym('('),
+                ident("a"),
+                sym(','),
+                ident("b"),
+                sym(')'),
+                stmtEnd,
+                sym('}'),
+                eof,
+            )
+    }
+
+    @Test
+    fun newlineInsidePipeLambda() {
+        Lexer(
+                """
+            |
+                x = 1
+                y
+            |
+            """
+                    .trimIndent())
+            .assertTokens(
+                sym('|'),
+                ident("x"),
+                sym('='),
+                num("1"),
+                stmtEnd,
+                ident("y"),
+                stmtEnd,
+                sym('|'),
+                eof,
+            )
+    }
+
+    @Test
+    fun nestedLambdaInParens() {
+        Lexer("foo(|.x|)")
+            .assertTokens(
+                ident("foo"),
+                sym('('),
+                sym('|'),
+                sym('.'),
+                ident("x"),
+                sym('|'),
+                sym(')'),
+                eof,
+            )
+    }
+
+    @Test
+    fun nestedLambdas() {
+        Lexer("filter(items, |.orders.any(|.price > 100|)|)")
+            .assertTokens(
+                ident("filter"),
+                sym('('),
+                ident("items"),
+                sym(','),
+                sym('|'),
+                sym('.'),
+                ident("orders"),
+                sym('.'),
+                ident("any"),
+                sym('('),
+                sym('|'),
+                sym('.'),
+                ident("price"),
+                sym('>'),
+                num("100"),
+                sym('|'),
+                sym(')'),
+                sym('|'),
+                sym(')'),
+                eof,
+            )
+    }
+
+    @Test
+    fun nestedMultilineLambda() {
+        Lexer(
+                """
+            filter(items,
+              |.orders.any(|
+                  x = .price
+                  x > 100
+              |)
+            |)
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("filter"),
+                sym('('),
+                ident("items"),
+                sym(','),
+                sym('|'),
+                sym('.'),
+                ident("orders"),
+                sym('.'),
+                ident("any"),
+                sym('('),
+                sym('|'),
+                ident("x"),
+                sym('='),
+                sym('.'),
+                ident("price"),
+                stmtEnd,
+                ident("x"),
+                sym('>'),
+                num("100"),
+                stmtEnd,
+                sym('|'),
+                sym(')'),
+                stmtEnd,
+                sym('|'),
+                sym(')'),
+                eof,
+            )
+    }
+
+    @Test
+    fun noNewlineAfterEquals() {
+        Lexer(
+                """
+            x =
+            1
+            """
+                    .trimIndent())
+            .assertTokens(ident("x"), sym('='), num("1"), eof)
+    }
+
+    @Test
+    fun noNewlineAfterComma() {
+        Lexer(
+                """
+            x = foo(a,
+                b)
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"),
+                sym('='),
+                ident("foo"),
+                sym('('),
+                ident("a"),
+                sym(','),
+                ident("b"),
+                sym(')'),
+                eof,
+            )
+    }
+
+    @Test
+    fun multipleNewlinesCollapsed() {
+        Lexer(
+                """
+            x = 1
+
+
+            y = 2
+            """
+                    .trimIndent())
+            .assertTokens(
+                ident("x"),
+                sym('='),
+                num("1"),
+                stmtEnd,
+                ident("y"),
+                sym('='),
+                num("2"),
+                eof,
+            )
+    }
 }

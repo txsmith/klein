@@ -3,38 +3,19 @@ package klein
 sealed class Token {
     abstract val span: SourceSpan
 
-    data class Number(
-        val text: String,
-        override val span: SourceSpan,
-    ) : Token()
+    data class Number(val text: String, override val span: SourceSpan) : Token()
 
-    data class Ident(
-        val name: String,
-        override val span: SourceSpan,
-    ) : Token()
+    data class Ident(val name: String, override val span: SourceSpan) : Token()
 
-    data class Str(
-        val value: String,
-        override val span: SourceSpan,
-    ) : Token()
+    data class Str(val value: String, override val span: SourceSpan) : Token()
 
-    data class Symbol(
-        val char: Char,
-        override val span: SourceSpan,
-    ) : Token()
+    data class Symbol(val char: Char, override val span: SourceSpan) : Token()
 
-    data class Keyword(
-        val kind: KeywordKind,
-        override val span: SourceSpan,
-    ) : Token()
+    data class Keyword(val kind: KeywordKind, override val span: SourceSpan) : Token()
 
-    data class StatementEnd(
-        override val span: SourceSpan,
-    ) : Token()
+    data class StatementEnd(override val span: SourceSpan) : Token()
 
-    data class Eof(
-        override val span: SourceSpan,
-    ) : Token()
+    data class Eof(override val span: SourceSpan) : Token()
 }
 
 enum class KeywordKind {
@@ -45,65 +26,84 @@ enum class KeywordKind {
 }
 
 /**
- * Determines how newlines are treated. In 'statement' mode (at top level, in blocks and lambdas),
- * newline signifies a new statement. In expr mode, newlines can be freely introduced and parsed as
- * part of the expression.
+ * Tracks nested bracket contexts to determine newline handling.
+ *
+ * In statement contexts (top-level, braces, pipes), newlines become StatementEnd tokens. In
+ * expression contexts (parens, brackets), newlines are ignored as whitespace.
+ *
+ * Example: `foo(\n a,\n b\n)` - newlines inside parens are ignored Example: `{\n x = 1\n y =
+ * 2\n}` - newlines inside braces become statement separators
  */
-sealed class WhitespaceContext {
-    abstract val span: SourceSpan
+class WhitespaceContext() {
+    private enum class Item(
+        val openingChar: Char?,
+        val closingChar: Char?,
+        val isStatement: Boolean,
+    ) {
+        Brace('{', '}', true),
+        Pipe('|', '|', true),
+        Paren('(', ')', false),
+        Bracket('[', ']', false),
+    }
 
-    val isStatement: Boolean = this is TopLevel || this is Brace || this is Pipe
+    private val stack: ArrayDeque<Item> = ArrayDeque<Item>()
 
-    val isExpr: Boolean = !isStatement
+    val isStatement: Boolean
+        get() = stack.isEmpty() || stack.first().isStatement
 
-    data class TopLevel(
-        override val span: SourceSpan,
-    ) : WhitespaceContext() {
-        companion object {
-            val zero: TopLevel = TopLevel(SourceSpan.zero)
+    var lastClosed: Char? = null
+
+    fun handleChar(char: Char, pos: Int) {
+        if (char == '|') {
+            if (stack.firstOrNull() == Item.Pipe) {
+                lastClosed = stack.removeFirst().closingChar
+            } else {
+                stack.addFirst(Item.Pipe)
+            }
+            return
+        }
+
+        fromOpeningChar(char)?.let {
+            stack.addFirst(it)
+            return
+        }
+
+        fromClosingChar(char)?.let { expected ->
+            val top = stack.firstOrNull()
+            if (top == expected) {
+                lastClosed = stack.removeFirst().closingChar
+            } else {
+                val expectedChar = top?.closingChar
+                val msg =
+                    if (expectedChar != null) {
+                        "Unexpected '$char', expected '$expectedChar'"
+                    } else {
+                        "Unexpected '$char'"
+                    }
+                throw LexerError(msg, SourceSpan(pos - 1, pos))
+            }
         }
     }
 
-    data class Brace(
-        override val span: SourceSpan,
-    ) : WhitespaceContext()
+    private fun fromOpeningChar(char: Char): Item? = byOpeningChar[char]
 
-    data class Pipe(
-        override val span: SourceSpan,
-    ) : WhitespaceContext()
+    private fun fromClosingChar(char: Char): Item? = byClosingChar[char]
 
-    data class Paren(
-        override val span: SourceSpan,
-    ) : WhitespaceContext()
+    companion object {
+        private val byOpeningChar =
+            Item.entries.filter { it.openingChar != null }.associateBy { it.openingChar }
+        private val byClosingChar =
+            Item.entries.filter { it.closingChar != null }.associateBy { it.closingChar }
+        private val closingChars = byClosingChar.keys
 
-    data class Bracket(
-        override val span: SourceSpan,
-    ) : WhitespaceContext()
+        fun isClosingChar(char: Char): Boolean = char in closingChars
+    }
 }
 
-class Lexer(
-    private val source: String,
-) {
+class Lexer(private val source: String) {
     private var pos: Int = 0
     val tokens = mutableListOf<Token>()
-
-    private val whitespaceContext: ArrayDeque<WhitespaceContext> =
-        ArrayDeque<WhitespaceContext>().apply { addFirst(WhitespaceContext.TopLevel.zero) }
-
-    private fun isInPositionStatement(): Boolean = whitespaceContext.first().isStatement
-
-    private fun canStatementEndHere(): Boolean {
-        val last = tokens.lastOrNull() ?: return false
-        return when (last) {
-            is Token.Ident -> true
-            is Token.Number -> true
-            is Token.Str -> true
-            is Token.Symbol -> last.char in ")]}"
-            is Token.Keyword -> false
-            is Token.StatementEnd -> false
-            is Token.Eof -> false
-        }
-    }
+    private val whitespaceContext = WhitespaceContext()
 
     fun tokenize(): List<Token> {
         while (true) {
@@ -120,9 +120,11 @@ class Lexer(
         }
 
         // Drop irrelevant whitespace
-        if (isInPositionStatement()) {
+        if (whitespaceContext.isStatement) {
+            // In statements, newlines are significant for determining where it ends
             consumeWhile { it.isWhitespace() && it != '\n' }
         } else {
+            // In expressions, newlines aren't significant
             consumeWhile { it.isWhitespace() }
         }
 
@@ -130,7 +132,7 @@ class Lexer(
         val c = source[pos]
 
         return when {
-            c == '\n' && isInPositionStatement() -> {
+            c == '\n' && whitespaceContext.isStatement -> {
                 pos++
                 if (canStatementEndHere()) {
                     Token.StatementEnd(SourceSpan(start, pos))
@@ -143,9 +145,23 @@ class Lexer(
             c == '\'' -> string()
             c in "+-*/%()=<>!&|,.;:{}[]@" -> {
                 pos++
+                whitespaceContext.handleChar(c, pos)
                 Token.Symbol(c, SourceSpan(start, pos))
             }
             else -> throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
+        }
+    }
+
+    private fun canStatementEndHere(): Boolean {
+        val last = tokens.lastOrNull() ?: return false
+        return when (last) {
+            is Token.Ident -> true
+            is Token.Number -> true
+            is Token.Str -> true
+            is Token.Symbol -> whitespaceContext.lastClosed == last.char
+            is Token.Keyword -> false
+            is Token.StatementEnd -> false
+            is Token.Eof -> false
         }
     }
 
@@ -229,31 +245,19 @@ class Lexer(
         return false
     }
 
-    private fun peekIf(
-        chars: String,
-        offset: Int = 0,
-    ): Boolean = peekIf(offset) { it in chars }
+    private fun peekIf(chars: String): Boolean = peekIf { it in chars }
 
-    private fun peekIfNot(
-        chars: String,
-        offset: Int = 0,
-    ): Boolean = peekIf(offset) { it !in chars }
+    private fun peekIfNot(chars: String): Boolean = peekIf { it !in chars }
 
-    private inline fun peekIf(
-        offset: Int = 0,
-        predicate: (Char) -> Boolean,
-    ): Boolean {
-        val c = peek(offset)
+    private inline fun peekIf(predicate: (Char) -> Boolean): Boolean {
+        val c = peek()
         return c != null && predicate(c)
     }
 
-    private fun peek(offset: Int = 0): Char? {
-        val index = pos + offset
+    private fun peek(): Char? {
+        val index = pos
         return if (index < source.length) source[index] else null
     }
 }
 
-class LexerError(
-    message: String,
-    val span: SourceSpan,
-) : Exception(message)
+class LexerError(message: String, val span: SourceSpan) : Exception(message)
