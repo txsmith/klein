@@ -9,7 +9,7 @@ sealed class Token {
 
     data class Str(val value: String, override val span: SourceSpan) : Token()
 
-    data class Symbol(val char: Char, override val span: SourceSpan) : Token()
+    data class Symbol(val text: String, override val span: SourceSpan) : Token()
 
     data class Keyword(val kind: KeywordKind, override val span: SourceSpan) : Token()
 
@@ -61,11 +61,7 @@ class Lexer(private val source: String) {
             c.isDigit() -> number()
             c.isLetter() || c == '_' -> ident()
             c == '\'' -> string()
-            c in "+-*/%()=<>!&|,.;:{}[]@" -> {
-                pos++
-                whitespaceContext.handleChar(c, pos)
-                Token.Symbol(c, SourceSpan(start, pos))
-            }
+            c in "+-*/%()=<>!&|,.;:{}[]@" -> symbol(start, c)
             else -> throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
         }
     }
@@ -95,17 +91,61 @@ class Lexer(private val source: String) {
             is Token.Ident -> true
             is Token.Number -> true
             is Token.Str -> true
-            is Token.Symbol -> whitespaceContext.lastClosed == last.char
+            is Token.Symbol -> last.text.length == 1 && whitespaceContext.lastClosed == last.text[0]
             is Token.Keyword -> false
             is Token.StatementEnd -> false
             is Token.Eof -> false
         }
     }
 
+    private fun symbol(start: Int, c: Char): Token {
+        pos++
+        val text =
+            when (c) {
+                '=' ->
+                    if (peek() == '=') {
+                        pos++
+                        "=="
+                    } else "="
+                '!' ->
+                    if (peek() == '=') {
+                        pos++
+                        "!="
+                    } else "!"
+                '<' ->
+                    if (peek() == '=') {
+                        pos++
+                        "<="
+                    } else "<"
+                '>' ->
+                    if (peek() == '=') {
+                        pos++
+                        ">="
+                    } else ">"
+                '-' ->
+                    if (peek() == '>') {
+                        pos++
+                        "->"
+                    } else "-"
+                '.' ->
+                    if (peek() == '.') {
+                        pos++
+                        ".."
+                    } else "."
+                else -> c.toString()
+            }
+        if (text.length == 1) {
+            whitespaceContext.handleChar(c, pos)
+        }
+        return Token.Symbol(text, SourceSpan(start, pos))
+    }
+
     private fun number(): Token {
         val start = pos
         consumeWhile { it.isDigit() }
-        if (consumeChar { it == '.' }) {
+        // Only consume decimal point if followed by a digit (not for ranges like 1..10)
+        if (peek() == '.' && peekAt(1)?.isDigit() == true) {
+            pos++
             consumeWhile { it.isDigit() }
         }
         return Token.Number(source.substring(start, pos), SourceSpan(start, pos))
@@ -191,8 +231,10 @@ class Lexer(private val source: String) {
         return c != null && predicate(c)
     }
 
-    private fun peek(): Char? {
-        val index = pos
+    private fun peek(): Char? = peekAt(0)
+
+    private fun peekAt(offset: Int): Char? {
+        val index = pos + offset
         return if (index < source.length) source[index] else null
     }
 }
