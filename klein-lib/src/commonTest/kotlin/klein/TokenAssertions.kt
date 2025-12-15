@@ -4,15 +4,25 @@ import kotlin.test.assertEquals
 import kotlin.test.fail
 
 sealed class ExpectedToken {
-    data class Ident(val name: String) : ExpectedToken()
+    data class Ident(
+        val name: String,
+    ) : ExpectedToken()
 
-    data class Number(val text: String) : ExpectedToken()
+    data class Number(
+        val text: String,
+    ) : ExpectedToken()
 
-    data class Str(val value: String) : ExpectedToken()
+    data class Str(
+        val value: String,
+    ) : ExpectedToken()
 
-    data class Symbol(val text: String) : ExpectedToken()
+    data class Symbol(
+        val text: String,
+    ) : ExpectedToken()
 
-    data class Keyword(val kind: KeywordKind) : ExpectedToken()
+    data class Keyword(
+        val kind: KeywordKind,
+    ) : ExpectedToken()
 
     data object StatementEnd : ExpectedToken()
 
@@ -39,7 +49,8 @@ fun Lexer.assertTokens(vararg expected: ExpectedToken) {
     assertEquals(
         expected.size,
         actual.size,
-        "Token count mismatch.\nExpected: ${expected.toList()}\nActual:   ${actual.map { it.toExpected() }}")
+        "Token count mismatch.\nExpected: ${expected.toList()}\nActual:   ${actual.map { it.toExpected() }}",
+    )
     expected.zip(actual).forEachIndexed { i, (exp, act) ->
         val actualExpected = act.toExpected()
         if (exp != actualExpected) {

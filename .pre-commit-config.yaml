@@ -3,4 +3,4 @@ repos:
     rev: v2.14.0
     hooks:
       - id: pretty-format-kotlin
-        args: [--autofix, --ktfmt, --ktfmt-style=kotlinlang]
+        args: [--autofix]

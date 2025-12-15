@@ -65,13 +65,7 @@ class LexerTest {
     @Test
     fun keywords() {
         Lexer("if then else fun")
-            .assertTokens(
-                kw(KeywordKind.If),
-                kw(KeywordKind.Then),
-                kw(KeywordKind.Else),
-                kw(KeywordKind.Fun),
-                eof,
-            )
+            .assertTokens(kw(KeywordKind.If), kw(KeywordKind.Then), kw(KeywordKind.Else), kw(KeywordKind.Fun), eof)
     }
 
     @Test
@@ -106,37 +100,32 @@ class LexerTest {
     @Test
     fun commentOnOwnLine() {
         Lexer(
-                """
+            """
             # this is a comment
             x
-            """
-                    .trimIndent())
-            .assertTokens(ident("x"), eof)
+            """.trimIndent(),
+        ).assertTokens(ident("x"), eof)
     }
 
     @Test
     fun commentBetweenStatements() {
         Lexer(
-                """
+            """
             x = 1
             # comment
             y = 2
-            """
-                    .trimIndent())
-            .assertTokens(
-                ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+            """.trimIndent(),
+        ).assertTokens(ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
     }
 
     @Test
     fun commentAfterStatement() {
         Lexer(
-                """
+            """
             x = 1 # comment
             y = 2
-            """
-                    .trimIndent())
-            .assertTokens(
-                ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+            """.trimIndent(),
+        ).assertTokens(ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
     }
 
     @Test
