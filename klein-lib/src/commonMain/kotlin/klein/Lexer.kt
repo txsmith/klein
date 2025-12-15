@@ -3,19 +3,38 @@ package klein
 sealed class Token {
     abstract val span: SourceSpan
 
-    data class Number(val text: String, override val span: SourceSpan) : Token()
+    data class Number(
+        val text: String,
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class Ident(val name: String, override val span: SourceSpan) : Token()
+    data class Ident(
+        val name: String,
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class Str(val value: String, override val span: SourceSpan) : Token()
+    data class Str(
+        val value: String,
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class Symbol(val text: String, override val span: SourceSpan) : Token()
+    data class Symbol(
+        val text: String,
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class Keyword(val kind: KeywordKind, override val span: SourceSpan) : Token()
+    data class Keyword(
+        val kind: KeywordKind,
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class StatementEnd(override val span: SourceSpan) : Token()
+    data class StatementEnd(
+        override val span: SourceSpan,
+    ) : Token()
 
-    data class Eof(override val span: SourceSpan) : Token()
+    data class Eof(
+        override val span: SourceSpan,
+    ) : Token()
 }
 
 enum class KeywordKind {
@@ -25,7 +44,9 @@ enum class KeywordKind {
     Fun,
 }
 
-class Lexer(private val source: String) {
+class Lexer(
+    private val source: String,
+) {
     private var pos: Int = 0
     val tokens = mutableListOf<Token>()
     private val whitespaceContext = WhitespaceContext()
@@ -58,11 +79,26 @@ class Lexer(private val source: String) {
                     next()
                 }
             }
-            c.isDigit() -> number()
-            c.isLetter() || c == '_' -> ident()
-            c == '\'' -> string()
-            c in "+-*/%()=<>!&|,.;:{}[]@" -> symbol(start, c)
-            else -> throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
+
+            c.isDigit() -> {
+                number()
+            }
+
+            c.isLetter() || c == '_' -> {
+                ident()
+            }
+
+            c == '\'' -> {
+                string()
+            }
+
+            c in "+-*/%()=<>!&|,.;:{}[]@" -> {
+                symbol(start, c)
+            }
+
+            else -> {
+                throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
+            }
         }
     }
 
@@ -98,41 +134,70 @@ class Lexer(private val source: String) {
         }
     }
 
-    private fun symbol(start: Int, c: Char): Token {
+    private fun symbol(
+        start: Int,
+        c: Char,
+    ): Token {
         pos++
         val text =
             when (c) {
-                '=' ->
+                '=' -> {
                     if (peek() == '=') {
                         pos++
                         "=="
-                    } else "="
-                '!' ->
+                    } else {
+                        "="
+                    }
+                }
+
+                '!' -> {
                     if (peek() == '=') {
                         pos++
                         "!="
-                    } else "!"
-                '<' ->
+                    } else {
+                        "!"
+                    }
+                }
+
+                '<' -> {
                     if (peek() == '=') {
                         pos++
                         "<="
-                    } else "<"
-                '>' ->
+                    } else {
+                        "<"
+                    }
+                }
+
+                '>' -> {
                     if (peek() == '=') {
                         pos++
                         ">="
-                    } else ">"
-                '-' ->
+                    } else {
+                        ">"
+                    }
+                }
+
+                '-' -> {
                     if (peek() == '>') {
                         pos++
                         "->"
-                    } else "-"
-                '.' ->
+                    } else {
+                        "-"
+                    }
+                }
+
+                '.' -> {
                     if (peek() == '.') {
                         pos++
                         ".."
-                    } else "."
-                else -> c.toString()
+                    } else {
+                        "."
+                    }
+                }
+
+                else -> {
+                    c.toString()
+                }
             }
         if (text.length == 1) {
             whitespaceContext.handleChar(c, pos)
@@ -239,7 +304,10 @@ class Lexer(private val source: String) {
     }
 }
 
-class LexerError(message: String, val span: SourceSpan) : Exception(message)
+class LexerError(
+    message: String,
+    val span: SourceSpan,
+) : Exception(message)
 
 /**
  * Tracks nested bracket contexts to determine newline handling.
@@ -250,7 +318,7 @@ class LexerError(message: String, val span: SourceSpan) : Exception(message)
  * Example: `foo(\n a,\n b\n)` - newlines inside parens are ignored Example: `{\n x = 1\n y =
  * 2\n}` - newlines inside braces become statement separators
  */
-class WhitespaceContext() {
+class WhitespaceContext {
     private enum class Item(
         val openingChar: Char?,
         val closingChar: Char?,
@@ -269,7 +337,10 @@ class WhitespaceContext() {
 
     var lastClosed: Char? = null
 
-    fun handleChar(char: Char, pos: Int) {
+    fun handleChar(
+        char: Char,
+        pos: Int,
+    ) {
         if (char == '|') {
             if (stack.firstOrNull() == Item.Pipe) {
                 lastClosed = stack.removeFirst().closingChar
