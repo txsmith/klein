@@ -1,5 +1,7 @@
-package klein
+package klein.lexer
 
+import klein.KeywordKind
+import klein.Lexer
 import kotlin.test.Test
 
 class LexerStatementTest {
@@ -192,5 +194,24 @@ class LexerStatementTest {
             y = 2
             """.trimIndent(),
         ).assertTokens(ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
+    }
+
+    @Test
+    fun newlineAfterBoolLiteral() {
+        Lexer(
+            """
+            x = true
+            y = false
+            """.trimIndent(),
+        ).assertTokens(
+            ident("x"),
+            sym('='),
+            kw(KeywordKind.True),
+            stmtEnd,
+            ident("y"),
+            sym('='),
+            kw(KeywordKind.False),
+            eof,
+        )
     }
 }

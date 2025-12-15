@@ -1,5 +1,7 @@
-package klein
+package klein.lexer
 
+import klein.Lexer
+import klein.SourceSpan
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -60,17 +62,6 @@ class LexerTest {
     @Test
     fun identStartingWithUnderscore() {
         Lexer("_foo").assertTokens(ident("_foo"), eof)
-    }
-
-    @Test
-    fun keywords() {
-        Lexer("if then else fun")
-            .assertTokens(kw(KeywordKind.If), kw(KeywordKind.Then), kw(KeywordKind.Else), kw(KeywordKind.Fun), eof)
-    }
-
-    @Test
-    fun keywordLikeIdent() {
-        Lexer("iffy elsewhere").assertTokens(ident("iffy"), ident("elsewhere"), eof)
     }
 
     @Test

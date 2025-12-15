@@ -37,11 +37,25 @@ sealed class Token {
     ) : Token()
 }
 
-enum class KeywordKind {
-    If,
-    Then,
-    Else,
-    Fun,
+enum class KeywordKind(
+    val text: String,
+) {
+    If("if"),
+    Then("then"),
+    Else("else"),
+    Fun("fun"),
+    True("true"),
+    False("false"),
+    And("and"),
+    Or("or"),
+    Not("not"),
+    ;
+
+    companion object {
+        private val byText = entries.associateBy { it.text }
+
+        fun fromText(text: String): KeywordKind? = byText[text]
+    }
 }
 
 class Lexer(
@@ -128,7 +142,7 @@ class Lexer(
             is Token.Number -> true
             is Token.Str -> true
             is Token.Symbol -> last.text.length == 1 && whitespaceContext.lastClosed == last.text[0]
-            is Token.Keyword -> false
+            is Token.Keyword -> last.kind == KeywordKind.True || last.kind == KeywordKind.False
             is Token.StatementEnd -> false
             is Token.Eof -> false
         }
@@ -220,13 +234,8 @@ class Lexer(
         val start = pos
         val text = consumeWhile { it.isLetterOrDigit() || it == '_' }
         val span = SourceSpan(start, pos)
-        return when (text) {
-            "if" -> Token.Keyword(KeywordKind.If, span)
-            "then" -> Token.Keyword(KeywordKind.Then, span)
-            "else" -> Token.Keyword(KeywordKind.Else, span)
-            "fun" -> Token.Keyword(KeywordKind.Fun, span)
-            else -> Token.Ident(text, span)
-        }
+        val keyword = KeywordKind.fromText(text)
+        return if (keyword != null) Token.Keyword(keyword, span) else Token.Ident(text, span)
     }
 
     private fun string(): Token {

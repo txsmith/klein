@@ -6,7 +6,7 @@
 |---------|--------|-------|
 | Blocks | `{ }` | Braces, not indentation |
 | Lambdas | `\| \|` | Pipes |
-| Variable binding | `x = 3` | No `let`/`val` keyword |
+| Variable binding | `x = 3` | Simple assignment |
 | Record access | `.field` | Dot notation |
 | Type annotation | `x: T = ...` | Colon before type |
 | Equality test | `==` | Double equals |
@@ -113,10 +113,10 @@ runLater(|1 + 2|)                     // () -> int
 map(nums, |. * 2|)                    // (int) -> int
 
 // Lambdas can be bound to variables
-predicate = |.price > 100|            // (Item) -> bool
-thunk = |1 + 2|                       // () -> int
-constant = |42|                       // () -> int
-identity = |.|                        // (a) -> a
+predicate = |.price > 100|        // (Item) -> bool
+thunk = |1 + 2|                   // () -> int
+constant = |42|                   // () -> int
+identity = |.|                    // (a) -> a
 
 // Blocks (braces) — immediate evaluation
 x = {
