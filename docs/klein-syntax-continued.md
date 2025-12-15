@@ -299,7 +299,7 @@ type Decision =
 fun assessApplication(app: Application): Decision = {
   customer = app.customer
   amount = app.amount
-  
+
   # Early rejection using condition match
   match {
     not customer.verified -> Rejected('Customer not verified')
@@ -311,7 +311,7 @@ fun assessApplication(app: Application): Decision = {
 
 fun continueAssessment(app: Application): Decision = {
   riskScore = calculateRisk(app)
-  
+
   match {
     riskScore < 20 and app.amount < 5000 -> AutoApproved
     riskScore < 50 -> NeedsReview(assignReviewer(app))
@@ -325,14 +325,14 @@ fun calculateRisk(app: Application): int = {
     Standard -> 10
     New -> 25
   }
-  
+
   amountRisk = match {
     app.amount > 50000 -> 30
     app.amount > 10000 -> 15
     app.amount > 5000 -> 5
     else -> 0
   }
-  
+
   base + amountRisk
 }
 

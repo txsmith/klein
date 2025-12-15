@@ -18,7 +18,7 @@ A cross-platform expression language with algebraic effects (pluggable suspendin
 ## Language Design
 
 ### Core (pure, no effects)
-- Variables, bindings, scopes (`let x = ... in ...`)
+- Variables, bindings, scopes (`x = ...`)
 - Types: `int`, `double`, `string`, `boolean`, `List<A>`, `Option<A>`, records, enums
 - Arithmetic, comparisons, boolean logic
 - Conditionals (`if`/`else`)
@@ -62,7 +62,7 @@ This allows one language to power different use cases:
 ```
 ┌─────────────────────────────────────────────────────┐
 │  DSL Source                                         │
-│  e.g., "acreage = ask("Acres", double)"             │
+│  e.g., "acreage = ask('Acres', double)"             │
 └─────────────────────┬───────────────────────────────┘
                       │ parse
                       ▼

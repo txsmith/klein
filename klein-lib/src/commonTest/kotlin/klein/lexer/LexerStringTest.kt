@@ -1,5 +1,9 @@
-package klein
+package klein.lexer
 
+import klein.Lexer
+import klein.LexerError
+import klein.SourceSpan
+import klein.Token
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
