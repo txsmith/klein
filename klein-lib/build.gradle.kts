@@ -29,6 +29,30 @@ kotlin {
         nodejs()
     }
 
+    macosArm64 {
+        binaries {
+            executable {
+                entryPoint = "klein.main"
+            }
+        }
+    }
+
+    macosX64 {
+        binaries {
+            executable {
+                entryPoint = "klein.main"
+            }
+        }
+    }
+
+    linuxX64 {
+        binaries {
+            executable {
+                entryPoint = "klein.main"
+            }
+        }
+    }
+
     sourceSets {
         commonMain {
             dependencies {
