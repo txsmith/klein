@@ -99,42 +99,22 @@ enum class Operator(
     ;
 
     companion object {
-        private val bySymbol =
-            mapOf(
-                "+" to Add,
-                "-" to Sub,
-                "*" to Mul,
-                "/" to Div,
-                "%" to Mod,
-                "==" to Eq,
-                "!=" to NotEq,
-                "<" to Lt,
-                "<=" to LtEq,
-                ">" to Gt,
-                ">=" to GtEq,
-            )
-
-        fun fromSymbol(text: String): Operator? = bySymbol[text]
-
-        fun fromKeyword(kind: KeywordKind): Operator? =
+        fun fromTokenKind(kind: TokenKind): Operator? =
             when (kind) {
-                KeywordKind.And -> And
-                KeywordKind.Or -> Or
+                TokenKind.PLUS -> Add
+                TokenKind.MINUS -> Sub
+                TokenKind.STAR -> Mul
+                TokenKind.SLASH -> Div
+                TokenKind.PERCENT -> Mod
+                TokenKind.EQEQ -> Eq
+                TokenKind.NEQ -> NotEq
+                TokenKind.LT -> Lt
+                TokenKind.LTEQ -> LtEq
+                TokenKind.GT -> Gt
+                TokenKind.GTEQ -> GtEq
+                TokenKind.AND -> And
+                TokenKind.OR -> Or
                 else -> null
             }
-    }
-}
-
-@Serializable
-data class SourceSpan(
-    val start: Int,
-    val end: Int,
-) {
-    operator fun plus(other: SourceSpan): SourceSpan = SourceSpan(start, other.end)
-
-    companion object {
-        val zero: SourceSpan = SourceSpan(0, 0)
-
-        fun pos(pos: Int): SourceSpan = SourceSpan(pos, pos)
     }
 }

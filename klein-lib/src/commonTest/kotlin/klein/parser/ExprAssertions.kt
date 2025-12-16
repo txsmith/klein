@@ -133,7 +133,7 @@ fun Expr.stripSpans(): Expr =
     }
 
 fun parse(source: String): Expr {
-    val tokens = Lexer(source).tokenize()
+    val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseExpr()
 }
 
@@ -150,7 +150,7 @@ fun valStmt(
 ) = Val(name, value, noSpan)
 
 fun parseStmt(source: String): Stmt {
-    val tokens = Lexer(source).tokenize()
+    val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseStmt()
 }
 
@@ -168,7 +168,7 @@ fun assertStmtEquals(
 }
 
 fun parseProgram(source: String): List<Stmt> {
-    val tokens = Lexer(source).tokenize()
+    val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseProgram()
 }
 

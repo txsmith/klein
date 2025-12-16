@@ -5,34 +5,24 @@ import kotlin.test.Test
 class CommentTest {
     @Test
     fun bindingsWithComments() {
-        val prog =
-            parseProgram(
-                """
-                # comment
-                x = 1
-                # another
-                y = 2
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("x", int(1)),
-                valStmt("y", int(2)),
-            ),
-        )
+        val program =
+            """
+            # comment
+            x = 1
+            # another
+            y = 2
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", int(1)), valStmt("y", int(2))))
     }
 
     @Test
     fun onlyComments() {
-        val prog =
-            parseProgram(
-                """
-                # just a comment
-                # and another
-                """.trimIndent(),
-            )
-        assertProgramEquals(prog, emptyList())
+        val program =
+            """
+            # just a comment
+            # and another
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), emptyList())
     }
 
     @Test
@@ -43,14 +33,12 @@ class CommentTest {
 
     @Test
     fun commentInMultilineExpression() {
-        val expr =
-            parse(
-                """
-                1 + # first operand
-                2   # second operand
-                """.trimIndent(),
-            )
-        assertExprEquals(expr, add(int(1), int(2)))
+        val program =
+            """
+            1 + # first operand
+            2   # second operand
+            """.trimIndent()
+        assertExprEquals(parse(program), add(int(1), int(2)))
     }
 
     @Test
@@ -61,28 +49,24 @@ class CommentTest {
 
     @Test
     fun commentBetweenOperatorAndOperand() {
-        val expr =
-            parse(
-                """
-                1 * # multiply
-                2 + # then add
-                3
-                """.trimIndent(),
-            )
-        assertExprEquals(expr, add(mul(int(1), int(2)), int(3)))
+        val program =
+            """
+            1 * # multiply
+            2 + # then add
+            3
+            """.trimIndent()
+        assertExprEquals(parse(program), add(mul(int(1), int(2)), int(3)))
     }
 
     @Test
     fun commentInFunctionCall() {
-        val expr =
-            parse(
-                """
-                foo(
-                    a, # first arg
-                    b  # second arg
-                )
-                """.trimIndent(),
+        val program =
+            """
+            foo(
+                a, # first arg
+                b  # second arg
             )
-        assertExprEquals(expr, call(id("foo"), id("a"), id("b")))
+            """.trimIndent()
+        assertExprEquals(parse(program), call(id("foo"), id("a"), id("b")))
     }
 }

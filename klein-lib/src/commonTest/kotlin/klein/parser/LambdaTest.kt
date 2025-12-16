@@ -189,13 +189,13 @@ class LambdaTest {
     @Test
     fun keywordIfAsParam() {
         val error = assertFailsWith<ParseError> { parse("|if -> 1|") }
-        assertEquals("Unexpected keyword: If", error.message)
+        assertEquals("Expected expression, got Keyword(IF, span=SourceSpan(start=1, end=3))", error.message)
     }
 
     @Test
     fun keywordAndAsParam() {
         val error = assertFailsWith<ParseError> { parse("|and -> 1|") }
-        assertEquals("Unexpected keyword: And", error.message)
+        assertEquals("Expected expression, got Keyword(AND, span=SourceSpan(start=1, end=4))", error.message)
     }
 
     @Test
@@ -257,134 +257,85 @@ class LambdaTest {
 
     @Test
     fun lambdaWithSingleStatement() {
-        val expr =
-            parse(
-                """
-                |x ->
-                  y = x + 1
-                  y * 2
-                |
-                """.trimIndent(),
-            )
+        val program =
+            """
+            |x ->
+              y = x + 1
+              y * 2
+            |
+            """.trimIndent()
         assertExprEquals(
-            expr,
-            lambda(
-                "x",
-                body =
-                    block(
-                        valStmt("y", add(id("x"), int(1))),
-                        expr = mul(id("y"), int(2)),
-                    ),
-            ),
+            parse(program),
+            lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = mul(id("y"), int(2)))),
         )
     }
 
     @Test
     fun lambdaWithMultipleStatements() {
-        val expr =
-            parse(
-                """
-                |x ->
-                  a = x + 1
-                  b = a * 2
-                  a + b
-                |
-                """.trimIndent(),
-            )
+        val program =
+            """
+            |x ->
+              a = x + 1
+              b = a * 2
+              a + b
+            |
+            """.trimIndent()
         assertExprEquals(
-            expr,
+            parse(program),
             lambda(
                 "x",
-                body =
-                    block(
-                        valStmt("a", add(id("x"), int(1))),
-                        valStmt("b", mul(id("a"), int(2))),
-                        expr = add(id("a"), id("b")),
-                    ),
+                body = block(valStmt("a", add(id("x"), int(1))), valStmt("b", mul(id("a"), int(2))), expr = add(id("a"), id("b"))),
             ),
         )
     }
 
     @Test
     fun lambdaNoParamWithStatements() {
-        val expr =
-            parse(
-                """
-                |
-                  x = 1
-                  y = 2
-                  x + y
-                |
-                """.trimIndent(),
-            )
+        val program =
+            """
+            |
+              x = 1
+              y = 2
+              x + y
+            |
+            """.trimIndent()
         assertExprEquals(
-            expr,
-            lambda(
-                body =
-                    block(
-                        valStmt("x", int(1)),
-                        valStmt("y", int(2)),
-                        expr = add(id("x"), id("y")),
-                    ),
-            ),
+            parse(program),
+            lambda(body = block(valStmt("x", int(1)), valStmt("y", int(2)), expr = add(id("x"), id("y")))),
         )
     }
 
     @Test
     fun lambdaWithCompactStatements() {
-        val expr =
-            parse(
-                """
-                |x ->
-                  y = x
-                  y
-                |
-                """.trimIndent(),
-            )
-        assertExprEquals(
-            expr,
-            lambda(
-                "x",
-                body =
-                    block(
-                        valStmt("y", id("x")),
-                        expr = id("y"),
-                    ),
-            ),
-        )
+        val program =
+            """
+            |x ->
+              y = x
+              y
+            |
+            """.trimIndent()
+        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", id("x")), expr = id("y"))))
     }
 
     @Test
     fun nestedLambdaWithStatements() {
-        val expr =
-            parse(
-                """
-                |x ->
-                  f = |y ->
-                    z = y + 1
-                    z
-                  |
-                  f(x)
-                |
-                """.trimIndent(),
-            )
+        val program =
+            """
+            |x ->
+              f = |y ->
+                z = y + 1
+                z
+              |
+              f(x)
+            |
+            """.trimIndent()
         assertExprEquals(
-            expr,
+            parse(program),
             lambda(
                 "x",
                 body =
                     block(
-                        valStmt(
-                            "f",
-                            lambda(
-                                "y",
-                                body =
-                                    block(
-                                        valStmt("z", add(id("y"), int(1))),
-                                        expr = id("z"),
-                                    ),
-                            ),
-                        ),
+                        valStmt("f", lambda("y", body = block(valStmt("z", add(id("y"), int(1))), expr = id("z")))),
                         expr = call(id("f"), id("x")),
                     ),
             ),
@@ -393,27 +344,15 @@ class LambdaTest {
 
     @Test
     fun lambdaWithMultilineStatement() {
-        val expr =
-            parse(
-                """
-                |x ->
-                  y = x +
-                    1
-                  y
-                |
-                """.trimIndent(),
-            )
-        assertExprEquals(
-            expr,
-            lambda(
-                "x",
-                body =
-                    block(
-                        valStmt("y", add(id("x"), int(1))),
-                        expr = id("y"),
-                    ),
-            ),
-        )
+        val program =
+            """
+            |x ->
+              y = x +
+                1
+              y
+            |
+            """.trimIndent()
+        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y"))))
     }
 
     @Test
@@ -423,18 +362,86 @@ class LambdaTest {
     }
 
     @Test
-    fun multipleExpressionsWithoutValIsError() {
-        val error =
-            assertFailsWith<ParseError> {
-                parse(
-                    """
-                    |x ->
-                      1
-                      2
-                    |
-                    """.trimIndent(),
-                )
-            }
-        assertEquals("Expected '|', got Number(text=2, span=SourceSpan(start=12, end=13))", error.message)
+    fun multipleExpressionsInBlock() {
+        val program =
+            """
+            |x ->
+              1
+              2
+            |
+            """.trimIndent()
+        assertExprEquals(parse(program), lambda("x", body = block(int(1), expr = int(2))))
+    }
+
+    @Test
+    fun tripleNestedNoParamLambda() {
+        val expr = parse("|||42|||")
+        assertExprEquals(expr, lambda(body = lambda(body = lambda(body = int(42)))))
+    }
+
+    @Test
+    fun nestedNoParamLambdaInParens() {
+        val expr = parse("(||42||)")
+        assertExprEquals(expr, lambda(body = lambda(body = int(42))))
+    }
+
+    @Test
+    fun quadrupleNestedNoParamLambda() {
+        val expr = parse("(|| || 42 || ||)")
+        assertExprEquals(expr, lambda(body = lambda(body = lambda(body = lambda(body = int(42))))))
+    }
+
+    @Test
+    fun lambdaAsArgumentToCall() {
+        val expr = parse("map(items, |x -> x + 1|)")
+        assertExprEquals(expr, call(id("map"), id("items"), lambda("x", body = add(id("x"), int(1)))))
+    }
+
+    @Test
+    fun noParamLambdaAsArgument() {
+        val expr = parse("foo(|42|)")
+        assertExprEquals(expr, call(id("foo"), lambda(body = int(42))))
+    }
+
+    @Test
+    fun lambdaWithBlockAsArgument() {
+        val program =
+            """
+            foo(|
+              x = 1
+              x
+            |)
+            """.trimIndent()
+        assertExprEquals(parse(program), call(id("foo"), lambda(body = block(valStmt("x", int(1)), expr = id("x")))))
+    }
+
+    @Test
+    fun lambdaWithNestedCallAsArgument() {
+        val program =
+            """
+            filter(items, |
+              x = foo(42)
+              x
+            |)
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            call(id("filter"), id("items"), lambda(body = block(valStmt("x", call(id("foo"), int(42))), expr = id("x")))),
+        )
+    }
+
+    @Test
+    fun lambdaArgumentWithParamAndBlock() {
+        val program =
+            """
+            foo(|x ->
+              y = x + 1
+              y
+            |)
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y")))),
+        )
     }
 }

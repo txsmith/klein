@@ -19,75 +19,45 @@ class ProgramTest {
 
     @Test
     fun twoBindings() {
-        val prog =
-            parseProgram(
-                """
-                x = 1
-                y = 2
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("x", int(1)),
-                valStmt("y", int(2)),
-            ),
-        )
+        val program =
+            """
+            x = 1
+            y = 2
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", int(1)), valStmt("y", int(2))))
     }
 
     @Test
     fun threeBindings() {
-        val prog =
-            parseProgram(
-                """
-                a = 1
-                b = 2
-                c = 3
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("a", int(1)),
-                valStmt("b", int(2)),
-                valStmt("c", int(3)),
-            ),
-        )
+        val program =
+            """
+            a = 1
+            b = 2
+            c = 3
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("a", int(1)), valStmt("b", int(2)), valStmt("c", int(3))))
     }
 
     @Test
     fun bindingsWithExpressions() {
-        val prog =
-            parseProgram(
-                """
-                x = 1 + 2
-                y = x * 3
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("x", add(int(1), int(2))),
-                valStmt("y", mul(id("x"), int(3))),
-            ),
-        )
+        val program =
+            """
+            x = 1 + 2
+            y = x * 3
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", add(int(1), int(2))), valStmt("y", mul(id("x"), int(3)))))
     }
 
     @Test
     fun bindingsWithLambdas() {
-        val prog =
-            parseProgram(
-                """
-                f = |x -> x + 1|
-                g = |y -> f(y)|
-                """.trimIndent(),
-            )
+        val program =
+            """
+            f = |x -> x + 1|
+            g = |y -> f(y)|
+            """.trimIndent()
         assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("f", lambda("x", body = add(id("x"), int(1)))),
-                valStmt("g", lambda("y", body = call(id("f"), id("y")))),
-            ),
+            parseProgram(program),
+            listOf(valStmt("f", lambda("x", body = add(id("x"), int(1)))), valStmt("g", lambda("y", body = call(id("f"), id("y"))))),
         )
     }
 
@@ -100,60 +70,34 @@ class ProgramTest {
 
     @Test
     fun bindingsWithExtraWhitespace() {
-        val prog =
-            parseProgram(
-                """
-                x = 1
+        val program =
+            """
+            x = 1
 
-                y = 2
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("x", int(1)),
-                valStmt("y", int(2)),
-            ),
-        )
+            y = 2
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", int(1)), valStmt("y", int(2))))
     }
 
     @Test
     fun expressionStatements() {
-        val prog =
-            parseProgram(
-                """
-                x = 10
-                ask(x)
-                y = 20
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                valStmt("x", int(10)),
-                call(id("ask"), id("x")),
-                valStmt("y", int(20)),
-            ),
-        )
+        val program =
+            """
+            x = 10
+            ask(x)
+            y = 20
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", int(10)), call(id("ask"), id("x")), valStmt("y", int(20))))
     }
 
     @Test
     fun multipleExpressionStatements() {
-        val prog =
-            parseProgram(
-                """
-                foo()
-                bar(1, 2)
-                baz
-                """.trimIndent(),
-            )
-        assertProgramEquals(
-            prog,
-            listOf(
-                call(id("foo")),
-                call(id("bar"), int(1), int(2)),
-                id("baz"),
-            ),
-        )
+        val program =
+            """
+            foo()
+            bar(1, 2)
+            baz
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(call(id("foo")), call(id("bar"), int(1), int(2)), id("baz")))
     }
 }

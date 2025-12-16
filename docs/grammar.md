@@ -2,16 +2,20 @@
 
 This document defines the formal grammar for Klein expressions.
 
+Klein uses indentation-significant syntax. Braces `{}` are reserved for record literals only.
+
 ```
 prog        = stmt*
 
-block       = '{' stmt* '}'
-
-stmt        = IDENT '=' ( block | expr )
-            | 'fun' IDENT '(' params? ')' '=' ( block | expr )
+stmt        = binding
             | expr
 
-lambda      = '|' (params? '->')? stmt* expr '|'
+binding     = IDENT '=' block
+
+block       = INDENT stmt* expr DEDENT
+            | expr
+
+lambda      = '|' (params '->')? block '|'
 
 params      = IDENT (',' IDENT)*
 
@@ -35,6 +39,20 @@ binop       = '+' | '-' | '*' | '/' | '%'
             | '==' | '!=' | '<' | '<=' | '>' | '>='
             | 'and' | 'or'
 ```
+
+## Virtual Tokens
+
+The lexer emits these virtual tokens based on indentation:
+
+```
+INDENT      = (emitted when indentation increases after block starter)
+DEDENT      = (emitted when indentation decreases)
+STATEMENT_END = (emitted at newlines in statement context)
+```
+
+**Block starters**: `=`, `->`, `|` at end of line trigger INDENT on next line if indented.
+
+**Auto-DEDENT**: DEDENT is automatically inserted before closing tokens `)`, `]`, `|`.
 
 ## Tokens
 
@@ -66,6 +84,14 @@ From lowest to highest:
 
 Parentheses `( )` override precedence.
 
+
+## Indentation Rules
+
+1. **Tabs or spaces, not mixed** — pick one per file, mixing is an error
+2. **Block starters** — `=`, `->`, `|` at end of line start an indented block
+3. **Inside parens/brackets** — indentation is ignored
+4. **Braces** — reserved for record literals, not blocks
+5. **Alignment** — DEDENT must align with a previous indentation level
 
 ## Comments
 

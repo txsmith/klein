@@ -214,7 +214,7 @@ class BasicExprTest {
     @Test
     fun unexpectedKeywordInExpression() {
         val error = assertFailsWith<ParseError> { parse("if") }
-        assertEquals("Unexpected keyword: If", error.message)
+        assertEquals("Expected expression, got Keyword(IF, span=SourceSpan(start=0, end=2))", error.message)
     }
 
     @Test
