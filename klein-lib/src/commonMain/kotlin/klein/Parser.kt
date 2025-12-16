@@ -1,5 +1,12 @@
 package klein
 
+import klein.TokenKind.*
+
+class ParseError(
+    message: String,
+    val span: SourceSpan,
+) : Exception(message)
+
 class Parser(
     private val tokens: List<Token>,
 ) {
@@ -10,14 +17,14 @@ class Parser(
     fun parseProgram(): List<Stmt> {
         val stmts = mutableListOf<Stmt>()
         skipLeadingStatementEnds()
-        while (peek() !is Token.Eof) {
+        while (peek().kind != EOF) {
             stmts.add(parseStmt())
         }
         return stmts
     }
 
     private fun skipLeadingStatementEnds() {
-        while (peek() is Token.StatementEnd) {
+        while (peek().kind == STMT_END) {
             advance()
         }
     }
@@ -31,23 +38,24 @@ class Parser(
             }
 
         val next = peek()
-        when {
-            next is Token.StatementEnd -> advance()
-            next is Token.Eof -> {}
-            next.isSymbol("}") || next.isSymbol("|") -> {}
+        when (next.kind) {
+            STMT_END -> advance()
+            EOF -> {}
+            BLOCK_END -> {}
+            RBRACE, PIPE_CLOSE -> {}
             else -> throw ParseError("Expected newline or end of input, got $next", next.span)
         }
 
         return stmt
     }
 
-    private fun isBinding(): Boolean = peek() is Token.Ident && peekAt(1).isSymbol("=")
+    private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
 
     private fun parseBinding(): Val {
-        val name = advance() as Token.Ident
+        val name = advance()
         advance() // consume '='
         val value = parseExpr()
-        return Val(name.name, value, name.span + value.span)
+        return Val(name.text!!, value, name.span + value.span)
     }
 
     private fun parseExprAtPrecedence(minPrecedence: Int): Expr {
@@ -65,96 +73,84 @@ class Parser(
         return left
     }
 
-    private fun peekBinaryOp(): Operator? =
-        when (val token = peek()) {
-            is Token.Symbol -> Operator.fromSymbol(token.text)
-            is Token.Keyword -> Operator.fromKeyword(token.kind)
-            else -> null
-        }
+    private fun peekBinaryOp(): Operator? = Operator.fromTokenKind(peek().kind)
 
     private fun parseAtom(): Expr {
         val token = peek()
-        return when (token) {
-            is Token.Number -> {
+        return when (token.kind) {
+            INT -> {
                 advance()
-                if ('.' in token.text) {
-                    val value = token.text.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                    DoubleLiteral(value, token.span)
-                } else {
-                    val value = token.text.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                    IntLiteral(value, token.span)
-                }
+                val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                IntLiteral(value, token.span)
             }
 
-            is Token.Str -> {
+            DOUBLE -> {
                 advance()
-                StringLiteral(token.value, token.span)
+                val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                DoubleLiteral(value, token.span)
             }
 
-            is Token.Ident -> {
+            STRING -> {
                 advance()
-                Ident(token.name, token.span)
+                StringLiteral(token.text!!, token.span)
             }
 
-            is Token.Keyword -> {
-                when (token.kind) {
-                    KeywordKind.True -> {
-                        advance()
-                        BoolLiteral(true, token.span)
-                    }
-                    KeywordKind.False -> {
-                        advance()
-                        BoolLiteral(false, token.span)
-                    }
-                    KeywordKind.Not -> {
-                        advance()
-                        val operand = parseAtom()
-                        UnaryOp(UnaryOperator.Not, operand, token.span + operand.span)
-                    }
-                    else -> throw ParseError("Unexpected keyword: ${token.kind}", token.span)
+            IDENT -> {
+                advance()
+                Ident(token.text!!, token.span)
+            }
+
+            TRUE -> {
+                advance()
+                BoolLiteral(true, token.span)
+            }
+
+            FALSE -> {
+                advance()
+                BoolLiteral(false, token.span)
+            }
+
+            NOT -> {
+                advance()
+                val operand = parseAtom()
+                UnaryOp(UnaryOperator.Not, operand, token.span + operand.span)
+            }
+
+            MINUS -> {
+                advance()
+                val operand = parseAtom()
+                UnaryOp(UnaryOperator.Neg, operand, token.span + operand.span)
+            }
+
+            LPAREN -> {
+                advance()
+                val expr = parseExpr()
+                val close = peek()
+                if (close.kind != RPAREN) {
+                    throw ParseError("Expected ')', got $close", close.span)
                 }
+                advance()
+                expr
             }
 
-            is Token.Symbol -> {
-                when (token.text) {
-                    "-" -> {
-                        advance()
-                        val operand = parseAtom()
-                        UnaryOp(UnaryOperator.Neg, operand, token.span + operand.span)
-                    }
-                    "(" -> {
-                        advance()
-                        val expr = parseExpr()
-                        val close = peek()
-                        if (!close.isSymbol(")")) {
-                            throw ParseError("Expected ')', got $close", close.span)
-                        }
-                        advance()
-                        expr
-                    }
-                    "|" -> {
-                        advance()
-                        parseLambda(token)
-                    }
-                    else -> throw ParseError("Expected expression, got $token", token.span)
-                }
+            PIPE_OPEN -> {
+                advance()
+                parseLambda(token)
             }
 
-            else -> {
-                throw ParseError("Expected expression, got $token", token.span)
-            }
+            else -> throw ParseError("Expected expression, got $token", token.span)
         }
     }
 
     private fun parseApply(): Expr {
         var callee = parseAtom()
 
-        while (peek().isSymbol("(")) {
+        while (peek().kind == LPAREN) {
             advance()
             val args = parseArgs()
 
             val close = peek()
-            if (!close.isSymbol(")")) {
+            if (close.kind != RPAREN) {
                 throw ParseError("Expected ')', got $close", close.span)
             }
             advance()
@@ -166,12 +162,12 @@ class Parser(
     }
 
     private fun parseArgs(): List<Expr> {
-        if (peek().isSymbol(")")) return emptyList()
+        if (peek().kind == RPAREN) return emptyList()
 
         val args = mutableListOf<Expr>()
         args.add(parseExpr())
 
-        while (peek().isSymbol(",")) {
+        while (peek().kind == COMMA) {
             advance()
             args.add(parseExpr())
         }
@@ -179,12 +175,12 @@ class Parser(
         return args
     }
 
-    private fun parseLambda(open: Token.Symbol): Lambda {
+    private fun parseLambda(open: Token): Lambda {
         val params = parseParamsIfPresent()
         val body = parseLambdaBody()
 
         val close = peek()
-        if (!close.isSymbol("|")) {
+        if (close.kind != PIPE_CLOSE) {
             throw ParseError("Expected '|', got $close", close.span)
         }
         advance()
@@ -195,6 +191,12 @@ class Parser(
     private fun parseLambdaBody(): Expr {
         skipLeadingStatementEnds()
 
+        // Check for indented block
+        if (peek().kind == BLOCK_START) {
+            return parseBlock()
+        }
+
+        // Single-line lambda: stmt* expr
         val stmts = mutableListOf<Stmt>()
         while (isBinding()) {
             stmts.add(parseStmt())
@@ -211,18 +213,63 @@ class Parser(
         }
     }
 
+    private fun parseBlock(): Expr {
+        val blockStart = advance()
+        skipLeadingStatementEnds()
+
+        val stmts = mutableListOf<Stmt>()
+
+        // Parse stmt* expr BlockEnd
+        while (peek().kind != BLOCK_END && peek().kind != EOF) {
+            if (isBinding()) {
+                stmts.add(parseStmt())
+            } else {
+                // This might be the final expression
+                val expr = parseExpr()
+                skipLeadingStatementEnds()
+
+                // Check if this is the last item (followed by BlockEnd or EOF)
+                if (peek().kind == BLOCK_END || peek().kind == EOF) {
+                    val blockEnd = if (peek().kind == BLOCK_END) advance() else peek()
+                    return if (stmts.isEmpty()) {
+                        expr
+                    } else {
+                        Block(stmts, expr, blockStart.span + blockEnd.span)
+                    }
+                }
+
+                // Not the last item, so it's an expression statement
+                // (This handles cases like `print(x)` followed by more statements)
+                stmts.add(expr)
+            }
+            skipLeadingStatementEnds()
+        }
+
+        // Should have a BlockEnd or EOF
+        val blockEnd = peek()
+        if (blockEnd.kind != BLOCK_END && blockEnd.kind != EOF) {
+            throw ParseError("Expected block end, got $blockEnd", blockEnd.span)
+        }
+        if (blockEnd.kind == BLOCK_END) {
+            advance()
+        }
+
+        // Empty block is an error
+        throw ParseError("Block must contain at least one expression", blockStart.span)
+    }
+
     private fun parseParamsIfPresent(): List<String> {
-        if (peek() !is Token.Ident) return emptyList()
+        if (peek().kind != IDENT) return emptyList()
 
         val next = peekAt(1)
-        if (!next.isSymbol("->") && !next.isSymbol(",")) return emptyList()
+        if (next.kind != ARROW && next.kind != COMMA) return emptyList()
 
         val params = mutableListOf<String>()
-        while (peek() is Token.Ident) {
-            val ident = advance() as Token.Ident
-            params.add(ident.name)
+        while (peek().kind == IDENT) {
+            val ident = advance()
+            params.add(ident.text!!)
 
-            if (peek().isSymbol(",") && peekAt(1) is Token.Ident) {
+            if (peek().kind == COMMA && peekAt(1).kind == IDENT) {
                 advance()
             } else {
                 break
@@ -230,7 +277,7 @@ class Parser(
         }
 
         val arrow = peek()
-        if (!arrow.isSymbol("->")) {
+        if (arrow.kind != ARROW) {
             throw ParseError("Expected '->', got $arrow", arrow.span)
         }
         advance()
@@ -243,11 +290,4 @@ class Parser(
     private fun peekAt(offset: Int): Token = tokens[pos + offset]
 
     private fun advance(): Token = tokens[pos++]
-
-    private fun Token.isSymbol(text: String): Boolean = this is Token.Symbol && this.text == text
 }
-
-class ParseError(
-    message: String,
-    val span: SourceSpan,
-) : Exception(message)

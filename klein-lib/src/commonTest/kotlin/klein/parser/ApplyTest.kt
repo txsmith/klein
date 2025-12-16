@@ -1,6 +1,5 @@
 package klein.parser
 
-import klein.LexerError
 import klein.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -190,13 +189,13 @@ class ApplyTest {
     @Test
     fun keywordAndAsCallee() {
         val error = assertFailsWith<ParseError> { parse("and(1)") }
-        assertEquals("Unexpected keyword: And", error.message)
+        assertEquals("Expected expression, got Keyword(AND, span=SourceSpan(start=0, end=3))", error.message)
     }
 
     @Test
     fun keywordOrAsCallee() {
         val error = assertFailsWith<ParseError> { parse("or(1)") }
-        assertEquals("Unexpected keyword: Or", error.message)
+        assertEquals("Expected expression, got Keyword(OR, span=SourceSpan(start=0, end=2))", error.message)
     }
 
     @Test
@@ -276,8 +275,8 @@ class ApplyTest {
 
     @Test
     fun callWithUnclosedLambdaArg() {
-        val error = assertFailsWith<LexerError> { parse("f(|x -> x)") }
-        assertEquals("Unexpected ')', expected '|'", error.message)
+        val error = assertFailsWith<ParseError> { parse("f(|x -> x)") }
+        assertEquals("Expected '|', got Symbol(text=), span=SourceSpan(start=9, end=10))", error.message)
     }
 
     @Test

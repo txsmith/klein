@@ -11,6 +11,7 @@ insert_final_newline = true
 [*.{kt,kts}]
 indent_size = 4
 ktlint_code_style = ktlint_official
+ktlint_standard_no-wildcard-imports = disabled
 
 [*.md]
 trim_trailing_whitespace = false
