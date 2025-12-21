@@ -237,10 +237,12 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
-                        int(0),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
+                            block(int(0)),
+                        ),
                     ),
             ),
         )
@@ -263,10 +265,12 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        int(1),
-                        block(valStmt("y", sub(id("x"), int(1))), expr = id("y")),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(int(1)),
+                            block(valStmt("y", sub(id("x"), int(1))), expr = id("y")),
+                        ),
                     ),
             ),
         )
@@ -290,10 +294,12 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        block(valStmt("a", add(id("x"), int(1))), expr = id("a")),
-                        block(valStmt("b", sub(id("x"), int(1))), expr = id("b")),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(valStmt("a", add(id("x"), int(1))), expr = id("a")),
+                            block(valStmt("b", sub(id("x"), int(1))), expr = id("b")),
+                        ),
                     ),
             ),
         )
@@ -314,9 +320,11 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        block(valStmt("y", mul(id("x"), int(2))), expr = call(id("print"), id("y"))),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(valStmt("y", mul(id("x"), int(2))), expr = call(id("print"), id("y"))),
+                        ),
                     ),
             ),
         )
@@ -342,14 +350,18 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
+                    block(
                         ifThenElse(
-                            gt(id("x"), int(10)),
-                            block(valStmt("y", id("x")), expr = id("y")),
-                            int(0),
+                            gt(id("x"), int(0)),
+                            block(
+                                ifThenElse(
+                                    gt(id("x"), int(10)),
+                                    block(valStmt("y", id("x")), expr = id("y")),
+                                    block(int(0)),
+                                ),
+                            ),
+                            block(neg(int(1))),
                         ),
-                        neg(int(1)),
                     ),
             ),
         )
@@ -372,13 +384,15 @@ class IfThenElseTest {
             lambda(
                 "x",
                 body =
-                    ifThenElse(
-                        id("x"),
-                        block(
-                            valStmt("f", lambda("y", body = add(id("y"), int(1)))),
-                            expr = call(id("f"), id("x")),
+                    block(
+                        ifThenElse(
+                            id("x"),
+                            block(
+                                valStmt("f", lambda("y", body = add(id("y"), int(1)))),
+                                expr = call(id("f"), id("x")),
+                            ),
+                            block(int(0)),
                         ),
-                        int(0),
                     ),
             ),
         )
@@ -418,7 +432,7 @@ class IfThenElseTest {
                 "x",
                 body =
                     block(
-                        ifThenElse(gt(id("x"), int(0)), call(id("print"), id("x"))),
+                        ifThenElse(gt(id("x"), int(0)), block(call(id("print"), id("x")))),
                         expr = call(id("doSomethingElse")),
                     ),
             ),
@@ -472,9 +486,11 @@ class IfThenElseTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            ifThenElse(
-                                gt(id("x"), int(10)),
-                                block(valStmt("y", id("x")), expr = call(id("print"), id("y"))),
+                            block(
+                                ifThenElse(
+                                    gt(id("x"), int(10)),
+                                    block(valStmt("y", id("x")), expr = call(id("print"), id("y"))),
+                                ),
                             ),
                         ),
                         expr = call(id("done")),
@@ -501,8 +517,8 @@ class IfThenElseTest {
                 "x",
                 body =
                     block(
-                        ifThenElse(gt(id("x"), int(0)), call(id("print"), int(1))),
-                        ifThenElse(gt(id("x"), int(10)), call(id("print"), int(2))),
+                        ifThenElse(gt(id("x"), int(0)), block(call(id("print"), int(1)))),
+                        ifThenElse(gt(id("x"), int(10)), block(call(id("print"), int(2)))),
                         expr = call(id("done")),
                     ),
             ),

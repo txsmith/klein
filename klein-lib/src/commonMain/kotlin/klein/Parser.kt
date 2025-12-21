@@ -30,12 +30,13 @@ class Parser(
                 parseExpr()
             }
 
+        // Statements must be terminated by STMT_END (newline), EOF, or BLOCK_END.
+        // Exception: statements ending with a block (if-then-else, etc.) don't need
+        // explicit termination since the block's BLOCK_END serves as an implicit separator.
         val next = peek()
         when (next.kind) {
             STMT_END -> advance()
-            EOF -> {}
-            BLOCK_END -> {}
-            RBRACE, PIPE_CLOSE -> {}
+            EOF, BLOCK_END -> {}
             else -> {
                 if (!endsWithBlock(stmt)) {
                     throw ParseError("Expected newline or end of input, got $next", next.span)
@@ -85,7 +86,7 @@ class Parser(
             parseExpr()
         }
 
-    private fun parseBlock(): Expr {
+    private fun parseBlock(): Block {
         val blockStart = advance()
 
         val stmts = mutableListOf<Stmt>()
@@ -98,18 +99,12 @@ class Parser(
                 tryAdvance(STMT_END)
 
                 tryAdvance(BLOCK_END, EOF)?.let { blockEnd ->
-                    return if (stmts.isEmpty()) {
-                        expr
-                    } else {
-                        Block(stmts, expr, blockStart.span + blockEnd.span)
-                    }
+                    return Block(stmts, expr, blockStart.span + blockEnd.span)
                 }
 
                 stmts.add(expr)
             }
         }
-
-        expectAndAdvance(BLOCK_END, EOF, message = "Expected block end")
 
         throw ParseError("Block must contain at least one expression", blockStart.span)
     }

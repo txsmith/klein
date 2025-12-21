@@ -125,4 +125,34 @@ class BindingTest {
         val error = assertFailsWith<ParseError> { parseStmt("123 = 1") }
         assertEquals("Expected newline or end of input, got Symbol(text==, span=SourceSpan(start=4, end=5))", error.message)
     }
+
+    @Test
+    fun nestedBlockFollowedByBinding() {
+        val program =
+            """
+            x =
+              y = 1
+              y
+            z = 2
+            """.trimIndent()
+        assertProgramEquals(
+            parseProgram(program),
+            listOf(
+                valStmt("x", block(valStmt("y", int(1)), expr = id("y"))),
+                valStmt("z", int(2)),
+            ),
+        )
+    }
+
+    @Test
+    fun blockWithoutFinalExpression() {
+        val program =
+            """
+            x =
+              y = 1
+            z = 2
+            """.trimIndent()
+        val error = assertFailsWith<ParseError> { parseProgram(program) }
+        assertEquals("Block must contain at least one expression", error.message)
+    }
 }

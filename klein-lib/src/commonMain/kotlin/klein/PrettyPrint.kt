@@ -47,8 +47,12 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             "${pad}Apply\n${callee.prettyPrint(indent + 1)}\n$pad  args:\n$argsStr"
         }
         is Block -> {
-            val stmtsStr = stmts.joinToString("\n") { it.prettyPrint(indent + 1) }
-            "${pad}Block\n$stmtsStr\n${expr.prettyPrint(indent + 1)}"
+            if (stmts.isEmpty()) {
+                "${pad}Block\n${expr.prettyPrint(indent + 1)}"
+            } else {
+                val stmtsStr = stmts.joinToString("\n") { it.prettyPrint(indent + 1) }
+                "${pad}Block\n$stmtsStr\n${expr.prettyPrint(indent + 1)}"
+            }
         }
         is IfThenElse -> {
             val elseStr = if (elseBranch != null) "\n${pad}Else\n${elseBranch.prettyPrint(indent + 1)}" else ""
