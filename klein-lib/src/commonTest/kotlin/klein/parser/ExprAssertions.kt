@@ -13,9 +13,9 @@ import klein.ImplicitParam
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
-import klein.RecordLiteral
 import klein.Operator
 import klein.Parser
+import klein.RecordLiteral
 import klein.SourceSpan
 import klein.Stmt
 import klein.StringLiteral

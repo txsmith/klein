@@ -332,7 +332,7 @@ class BlockTest {
 
     @Test
     fun unmatchedClosePipe() {
-        assertTokens("x|", ident("x"), sym('|'), eof)
+        assertTokens("x|", ident("x"), pipeOpen, eof)
     }
 
     @Test

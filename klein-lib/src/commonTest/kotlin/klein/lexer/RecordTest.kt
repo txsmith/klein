@@ -103,11 +103,11 @@ class RecordTest {
         assertTokens(
             program,
             ident("f"), sym('='),
-            sym('|'), ident("x"), sym("->"),
+            pipeOpen, ident("x"), sym("->"),
             blockStart,
             sym('{'), ident("value"), sym('='), ident("x"), sym('}'),
             blockEnd,
-            sym('|'),
+            pipeClose,
             eof
         )
     }
@@ -250,9 +250,9 @@ class RecordTest {
     fun recordInLambdaClosesPipe() {
         assertTokens(
             "|x -> { a = x }|",
-            sym('|'), ident("x"), sym("->"),
+            pipeOpen, ident("x"), sym("->"),
             sym('{'), ident("a"), sym('='), ident("x"), sym('}'),
-            sym('|'),
+            pipeClose,
             eof
         )
     }

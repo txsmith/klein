@@ -54,11 +54,11 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','), sym('|'), ident("x"), sym("->"), blockStart,
+            ident("filter"), sym('('), ident("items"), sym(','), pipeOpen, ident("x"), sym("->"), blockStart,
             kw(IF), ident("x"), sym('>'), num("0"), kw(THEN), blockStart,
             ident("x"), sym('+'), num("1"), blockEnd,
             kw(ELSE), blockStart, ident("x"), sym('-'), num("1"), blockEnd, blockEnd,
-            sym('|'), sym(')'), eof,
+            pipeClose, sym(')'), eof,
         )
     }
 
@@ -76,9 +76,9 @@ class IfThenElseTest {
             program,
             ident("foo"), sym('('),
             kw(IF), ident("x"), kw(THEN),
-            sym('|'), blockStart,
+            pipeOpen, blockStart,
             ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), blockEnd, sym('|'),
+            ident("y"), blockEnd, pipeClose,
             kw(ELSE), ident("z"), sym(')'), eof,
         )
     }
@@ -98,9 +98,9 @@ class IfThenElseTest {
             ident("foo"), sym('('),
             kw(IF), ident("x"), kw(THEN), ident("y"),
             kw(ELSE),
-            sym('|'), blockStart,
+            pipeOpen, blockStart,
             ident("z"), sym('='), num("1"), stmtEnd,
-            ident("z"), blockEnd, sym('|'), sym(')'), eof,
+            ident("z"), blockEnd, pipeClose, sym(')'), eof,
         )
     }
 
@@ -118,11 +118,11 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), sym('|'), blockStart,
+            ident("foo"), sym('('), pipeOpen, blockStart,
             kw(IF), ident("x"), kw(THEN), blockStart,
             ident("a"), blockEnd,
             kw(ELSE), blockStart, ident("b"), blockEnd,
-            blockEnd, sym('|'), sym(')'), eof,
+            blockEnd, pipeClose, sym(')'), eof,
         )
     }
 
@@ -135,9 +135,9 @@ class IfThenElseTest {
             program,
             ident("foo"), sym('('),
             kw(IF), ident("x"), kw(THEN),
-            sym('|'), ident("y"), sym('|'),
+            pipeOpen, ident("y"), pipeClose,
             kw(ELSE),
-            sym('|'), ident("z"), sym('|'),
+            pipeOpen, ident("z"), pipeClose,
             sym(')'), eof,
         )
     }
@@ -159,13 +159,13 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), sym('|'), ident("x"), sym("->"), blockStart,
+            ident("foo"), sym('('), pipeOpen, ident("x"), sym("->"), blockStart,
             kw(IF), ident("x"), kw(THEN), blockStart,
-            sym('|'), blockStart,
+            pipeOpen, blockStart,
             ident("a"), sym('='), num("1"), stmtEnd,
-            ident("a"), blockEnd, sym('|'), blockEnd,
+            ident("a"), blockEnd, pipeClose, blockEnd,
             kw(ELSE), blockStart, ident("b"), blockEnd,
-            blockEnd, sym('|'), sym(')'), eof,
+            blockEnd, pipeClose, sym(')'), eof,
         )
     }
 }
