@@ -245,4 +245,15 @@ class RecordTest {
             eof
         )
     }
+
+    @Test
+    fun recordInLambdaClosesPipe() {
+        assertTokens(
+            "|x -> { a = x }|",
+            sym('|'), ident("x"), sym("->"),
+            sym('{'), ident("a"), sym('='), ident("x"), sym('}'),
+            sym('|'),
+            eof
+        )
+    }
 }

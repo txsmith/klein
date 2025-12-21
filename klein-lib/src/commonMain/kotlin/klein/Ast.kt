@@ -90,6 +90,11 @@ data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
 
+data class RecordLiteral(
+    val fields: List<Pair<String, Expr>>,
+    override val span: SourceSpan,
+) : Expr()
+
 @Serializable
 enum class UnaryOperator {
     Neg,

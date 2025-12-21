@@ -13,6 +13,7 @@ import klein.ImplicitParam
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
+import klein.RecordLiteral
 import klein.Operator
 import klein.Parser
 import klein.SourceSpan
@@ -134,6 +135,8 @@ fun fieldAccess(
 
 fun implicitParam() = ImplicitParam(noSpan)
 
+fun record(vararg fields: Pair<String, Expr>) = RecordLiteral(fields.toList(), noSpan)
+
 fun Expr.stripSpans(): Expr =
     when (this) {
         is IntLiteral -> IntLiteral(value, noSpan)
@@ -149,6 +152,7 @@ fun Expr.stripSpans(): Expr =
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
+        is RecordLiteral -> RecordLiteral(fields.map { (name, value) -> name to value.stripSpans() }, noSpan)
     }
 
 fun parse(source: String): Expr {
