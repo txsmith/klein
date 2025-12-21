@@ -5,7 +5,9 @@ This document defines the formal grammar for Klein expressions.
 Klein uses indentation-significant syntax. Braces `{}` are reserved for record literals only.
 
 ```
-prog        = stmt*
+prog        = (fun_def | stmt)*
+
+fun_def     = 'fun' IDENT '(' params? ')' '=' block
 
 stmt        = binding
             | expr

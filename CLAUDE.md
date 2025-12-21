@@ -106,6 +106,7 @@ klein-lang/
 ## Implemented Features
 
 ### Fully Working
+- ✅ Function definitions (`fun add(x, y) = x + y`)
 - ✅ If-then-else expressions
 - ✅ Lambdas (nested, multi-param, with blocks)
 - ✅ Function application
