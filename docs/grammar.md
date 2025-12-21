@@ -28,6 +28,9 @@ atom        = literal
             | unaryop atom
             | '(' expr ')'
             | lambda
+            | if_expr
+
+if_expr     = 'if' expr 'then' block ('else' block)?
 
 args        = expr (',' expr)*
 
@@ -50,7 +53,7 @@ DEDENT      = (emitted when indentation decreases)
 STATEMENT_END = (emitted at newlines in statement context)
 ```
 
-**Block starters**: `=`, `->`, `|` at end of line trigger INDENT on next line if indented.
+**Block starters**: `=`, `->`, `|`, `then`, `else` at end of line trigger INDENT on next line if indented.
 
 **Auto-DEDENT**: DEDENT is automatically inserted before closing tokens `)`, `]`, `|`.
 

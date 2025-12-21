@@ -212,9 +212,9 @@ class BasicExprTest {
     }
 
     @Test
-    fun unexpectedKeywordInExpression() {
+    fun incompleteIfExpression() {
         val error = assertFailsWith<ParseError> { parse("if") }
-        assertEquals("Expected expression, got Keyword(IF, span=SourceSpan(start=0, end=2))", error.message)
+        assertEquals("Expected expression, got Eof(span=SourceSpan(start=2, end=2))", error.message)
     }
 
     @Test
