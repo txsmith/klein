@@ -722,4 +722,22 @@ class LambdaTest {
             ),
         )
     }
+
+    @Test
+    fun inlineBindingInLambdaIsError() {
+        val error = assertFailsWith<ParseError> { parse("|x -> y = 1 y|") }
+        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=8, end=9))", error.message)
+    }
+
+    @Test
+    fun multipleInlineBindingsInLambdaIsError() {
+        val error = assertFailsWith<ParseError> { parse("|x -> a = 1 b = 2 a + b|") }
+        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=8, end=9))", error.message)
+    }
+
+    @Test
+    fun inlineBindingInHeadlessLambdaIsError() {
+        val error = assertFailsWith<ParseError> { parse("|y = 1 y|") }
+        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=3, end=4))", error.message)
+    }
 }
