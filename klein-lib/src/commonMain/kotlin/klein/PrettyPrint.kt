@@ -50,5 +50,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             val elseStr = if (elseBranch != null) "\n${pad}Else\n${elseBranch.prettyPrint(indent + 1)}" else ""
             "${pad}If\n${condition.prettyPrint(indent + 1)}\n${pad}Then\n${thenBranch.prettyPrint(indent + 1)}$elseStr"
         }
+        is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
+        is ImplicitParam -> "${pad}ImplicitParam"
     }
 }

@@ -93,6 +93,11 @@ class LambdaTest {
     }
 
     @Test
+    fun bareImplicitParamLambda() {
+        assertTokens("|.|", sym('|'), sym('.'), sym('|'), eof)
+    }
+
+    @Test
     fun nestedLambdas() {
         assertTokens(
             "filter(items, |.orders.any(|.price > 100|)|)",

@@ -75,8 +75,8 @@ klein-lang/
 │   │   │   ├── Token.kt        # Token types
 │   │   │   └── SourceSpan.kt   # Source location tracking
 │   │   ├── commonTest/kotlin/klein/
-│   │   │   ├── lexer/          # Lexer tests (7 files, 61 tests)
-│   │   │   └── parser/         # Parser tests (8 files, 210 tests)
+│   │   │   ├── lexer/
+│   │   │   └── parser/
 │   │   └── nativeMain/kotlin/klein/
 │   │       └── Main.kt         # CLI entry point
 │   └── build.gradle.kts
@@ -103,19 +103,13 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
-
-## Current Test Coverage
-
-- **Lexer:** 61 tests across 7 files
-- **Parser:** 210 tests across 8 files
-- **Total:** 345 tests, all passing ✅
-
 ## Implemented Features
 
 ### Fully Working
 - ✅ If-then-else expressions
 - ✅ Lambdas (nested, multi-param, with blocks)
 - ✅ Function application
+- ✅ Field access and implicit parameters (`user.name`, `|.price|`, `|.|`)
 - ✅ Binary operators (+, -, \*, /, %, ==, !=, <, <=, >, >=, and, or)
 - ✅ Unary operators (-, not)
 - ✅ Val bindings
@@ -126,7 +120,6 @@ klein-lang/
 - ✅ Significant indentation
 
 ### Lexer Only (Parser TODO)
-- Dot notation (`.` for field access, `|.x|` for implicit params)
 - Range operator (`..`)
 - Arrays (`[]`)
 - Objects (`{}`)
