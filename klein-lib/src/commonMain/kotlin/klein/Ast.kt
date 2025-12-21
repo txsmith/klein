@@ -80,6 +80,16 @@ data class IfThenElse(
     override val span: SourceSpan,
 ) : Expr()
 
+data class FieldAccess(
+    val target: Expr,
+    val field: String,
+    override val span: SourceSpan,
+) : Expr()
+
+data class ImplicitParam(
+    override val span: SourceSpan,
+) : Expr()
+
 @Serializable
 enum class UnaryOperator {
     Neg,

@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class ValTest {
+class BindingTest {
     @Test
     fun simpleBinding() {
         val stmt = parseStmt("x = 1")

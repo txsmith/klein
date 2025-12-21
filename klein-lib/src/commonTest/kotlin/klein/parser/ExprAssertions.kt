@@ -6,8 +6,10 @@ import klein.Block
 import klein.BoolLiteral
 import klein.DoubleLiteral
 import klein.Expr
+import klein.FieldAccess
 import klein.Ident
 import klein.IfThenElse
+import klein.ImplicitParam
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
@@ -125,6 +127,13 @@ fun ifThenElse(
     elseBranch: Expr? = null,
 ) = IfThenElse(condition, thenBranch, elseBranch, noSpan)
 
+fun fieldAccess(
+    target: Expr,
+    field: String,
+) = FieldAccess(target, field, noSpan)
+
+fun implicitParam() = ImplicitParam(noSpan)
+
 fun Expr.stripSpans(): Expr =
     when (this) {
         is IntLiteral -> IntLiteral(value, noSpan)
@@ -138,6 +147,8 @@ fun Expr.stripSpans(): Expr =
         is Apply -> Apply(callee.stripSpans(), args.map { it.stripSpans() }, noSpan)
         is Block -> Block(stmts.map { it.stripSpan() }, expr.stripSpans(), noSpan)
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
+        is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
+        is ImplicitParam -> ImplicitParam(noSpan)
     }
 
 fun parse(source: String): Expr {
