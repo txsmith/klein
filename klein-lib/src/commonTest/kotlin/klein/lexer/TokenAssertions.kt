@@ -26,6 +26,8 @@ sealed class ExpectedToken {
             is StatementEnd -> other is StatementEnd
             is BlockStart -> other is BlockStart
             is BlockEnd -> other is BlockEnd
+            is PipeOpen -> other is PipeOpen
+            is PipeClose -> other is PipeClose
             is Eof -> other is Eof
             is Error -> other is Error && expectedMessage == other.expectedMessage
         }
@@ -65,6 +67,14 @@ sealed class ExpectedToken {
     ) : ExpectedToken()
 
     data class BlockEnd(
+        override val span: klein.SourceSpan? = null,
+    ) : ExpectedToken()
+
+    data class PipeOpen(
+        override val span: klein.SourceSpan? = null,
+    ) : ExpectedToken()
+
+    data class PipeClose(
         override val span: klein.SourceSpan? = null,
     ) : ExpectedToken()
 
@@ -119,6 +129,8 @@ fun error(message: String) = ExpectedToken.Error(message)
 val stmtEnd get() = ExpectedToken.StatementEnd()
 val blockStart get() = ExpectedToken.BlockStart()
 val blockEnd get() = ExpectedToken.BlockEnd()
+val pipeOpen get() = ExpectedToken.PipeOpen()
+val pipeClose get() = ExpectedToken.PipeClose()
 val eof get() = ExpectedToken.Eof()
 
 fun stmtEnd(span: klein.SourceSpan) = ExpectedToken.StatementEnd(span)
@@ -195,7 +207,8 @@ private fun Token.toExpected(): ExpectedToken =
         STMT_END -> ExpectedToken.StatementEnd(span)
         BLOCK_START -> ExpectedToken.BlockStart(span)
         BLOCK_END -> ExpectedToken.BlockEnd(span)
-        PIPE_OPEN, PIPE_CLOSE -> ExpectedToken.Symbol("|", span)
+        PIPE_OPEN -> ExpectedToken.PipeOpen(span)
+        PIPE_CLOSE -> ExpectedToken.PipeClose(span)
         EOF -> ExpectedToken.Eof(span)
         else -> if (kind.keyword != null) ExpectedToken.Keyword(kind, span) else ExpectedToken.Symbol(kind.symbol!!, span)
     }

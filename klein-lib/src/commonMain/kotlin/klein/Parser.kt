@@ -209,12 +209,13 @@ class Parser(
             val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
             val name = nameToken.text!!
 
-            val value = if (peek().kind == EQ) {
-                advance()
-                parseExpr()
-            } else {
-                Ident(name, nameToken.span)
-            }
+            val value =
+                if (peek().kind == EQ) {
+                    advance()
+                    parseExpr()
+                } else {
+                    Ident(name, nameToken.span)
+                }
 
             fields.add(name to value)
 
