@@ -469,7 +469,7 @@ class LambdaTest {
                             lambda(
                                 body =
                                     block(
-                                        valStmt("b", lambda(body = int(1))),
+                                        valStmt("b", lambda(body = block(int(1)))),
                                         expr = id("b"),
                                     ),
                             ),
@@ -545,7 +545,7 @@ class LambdaTest {
                                             lambda(
                                                 body =
                                                     block(
-                                                        valStmt("c", lambda(body = int(42))),
+                                                        valStmt("c", lambda(body = block(int(42)))),
                                                         expr = id("c"),
                                                     ),
                                             ),
@@ -617,10 +617,12 @@ class LambdaTest {
             parse(program),
             lambda(
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
-                        int(0),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
+                            block(int(0)),
+                        ),
                     ),
             ),
         )
@@ -640,9 +642,11 @@ class LambdaTest {
             parse(program),
             lambda(
                 body =
-                    ifThenElse(
-                        gt(id("x"), int(0)),
-                        block(valStmt("y", add(id("x"), int(1))), expr = call(id("print"), id("y"))),
+                    block(
+                        ifThenElse(
+                            gt(id("x"), int(0)),
+                            block(valStmt("y", add(id("x"), int(1))), expr = call(id("print"), id("y"))),
+                        ),
                     ),
             ),
         )
@@ -666,7 +670,7 @@ class LambdaTest {
                     block(
                         ifThenElse(
                             id("a"),
-                            ifThenElse(id("b"), call(id("print"), int(1))),
+                            block(ifThenElse(id("b"), block(call(id("print"), int(1))))),
                         ),
                         expr = call(id("done")),
                     ),
@@ -691,8 +695,8 @@ class LambdaTest {
             lambda(
                 body =
                     block(
-                        ifThenElse(id("a"), call(id("print"), int(1))),
-                        ifThenElse(id("b"), call(id("print"), int(2))),
+                        ifThenElse(id("a"), block(call(id("print"), int(1)))),
+                        ifThenElse(id("b"), block(call(id("print"), int(2)))),
                         expr = call(id("done")),
                     ),
             ),
@@ -716,7 +720,7 @@ class LambdaTest {
                 body =
                     block(
                         valStmt("x", call(id("getValue"))),
-                        ifThenElse(gt(id("x"), int(0)), call(id("print"), id("x"))),
+                        ifThenElse(gt(id("x"), int(0)), block(call(id("print"), id("x")))),
                         expr = call(id("finish")),
                     ),
             ),

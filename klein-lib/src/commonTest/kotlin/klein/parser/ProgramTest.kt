@@ -194,7 +194,7 @@ class ProgramTest {
                     "result",
                     block(
                         valStmt("x", call(id("getValue"))),
-                        expr = ifThenElse(gt(id("x"), int(0)), id("x"), int(0)),
+                        expr = ifThenElse(gt(id("x"), int(0)), block(id("x")), block(int(0))),
                     ),
                 ),
             ),
@@ -216,7 +216,7 @@ class ProgramTest {
                 valStmt(
                     "main",
                     block(
-                        ifThenElse(call(id("ready")), call(id("doWork"))),
+                        ifThenElse(call(id("ready")), block(call(id("doWork")))),
                         expr = call(id("cleanup")),
                     ),
                 ),

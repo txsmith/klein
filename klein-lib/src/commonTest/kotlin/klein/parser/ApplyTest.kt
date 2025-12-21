@@ -338,7 +338,10 @@ class ApplyTest {
         assertExprEquals(
             parse(program),
             call(
-                lambda("x", body = ifThenElse(gt(id("x"), int(0)), id("x"), int(0))),
+                lambda(
+                    "x",
+                    body = block(ifThenElse(gt(id("x"), int(0)), block(id("x")), block(int(0)))),
+                ),
                 int(5),
             ),
         )

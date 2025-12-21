@@ -58,6 +58,8 @@ fun block(
     expr: Expr,
 ) = Block(stmts.toList(), expr, noSpan)
 
+fun block(expr: Expr) = Block(emptyList(), expr, noSpan)
+
 fun add(
     left: Expr,
     right: Expr,

@@ -33,13 +33,13 @@ data class SourceSpan(
 
             fun gutter(n: Int?) = if (n != null) n.toString().padStart(gutterWidth) else " ".repeat(gutterWidth)
 
-            appendLine("${gutter(null)} |")
+            appendLine("${gutter(null)}  |")
             for (lineNum in startLine..endLine) {
                 val line = lines.getOrElse(lineNum - 1) { "" }
                 val marker = if (lineNum == errorLine) ">" else " "
-                appendLine("${gutter(lineNum)} |$marker$line")
+                appendLine("${gutter(lineNum)} $marker| $line")
                 if (lineNum == errorLine) {
-                    append("${gutter(null)} | ")
+                    append("${gutter(null)}  | ")
                     append(" ".repeat(colStart))
                     append("^".repeat(maxOf(1, colEnd - colStart)))
                     if (message != null) {

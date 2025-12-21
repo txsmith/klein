@@ -10,11 +10,12 @@ Klein is a small, safe expression language designed to be embedded in larger app
 # Loan approval logic
 riskScore = calculateRisk(application)
 
-match {
-  riskScore < 20 and amount < 5000 -> approve()
-  riskScore < 50 -> requestReview(assignReviewer(amount))
-  else -> reject('Risk score too high: ${riskScore}')
-}
+if riskScore < 20 and amount < 5000 then
+    approve()
+else if riskScore < 50 then
+    requestReview(assignReviewer(amount))
+else
+    reject('Risk score too high')
 ```
 
 ## The Key Idea
@@ -55,7 +56,7 @@ This enables:
 
 - **Type inference** — no annotations required, but full type safety
 - **Readable syntax** — `and`/`or`/`not` instead of `&&`/`||`/`!`
-- **Pattern matching** — handle enums and conditions cleanly
+- **Indentation-based** — clean, Python-like block structure
 - **Cross-platform** — compiles to JVM, JavaScript, and native
 
 ## Example
@@ -63,13 +64,11 @@ This enables:
 ```klein
 # Calculate shipping cost based on order
 
-baseRate = match customer.tier {
-  Premium -> 0
-  Standard -> 5.99
-  New -> 7.99
-}
+baseRate =
+    if customer.tier == 'Premium' then 0
+    else if customer.tier == 'Standard' then 5.99
+    else 7.99
 
-itemCount = length(order.items)
 weightSurcharge = if totalWeight > 50 then 15.00 else 0
 
 baseRate + weightSurcharge
