@@ -380,4 +380,71 @@ class BlockTest {
             eof,
         )
     }
+
+    @Test
+    fun emptyLinesWithinBlock() {
+        val program = """
+            x =
+                y = 1
+
+                y + 2
+        """.trimIndent()
+        assertTokens(
+            program,
+            ident("x"), sym('='), blockStart,
+            ident("y"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('+'), num("2"),
+            eof,
+        )
+    }
+
+    @Test
+    fun emptyLineWithSpacesWithinBlock() {
+        val program = """
+        x =
+            y = 1
+            # empty line with indentation
+            y + 2
+        """.trimIndent()
+        assertTokens(
+            program,
+            ident("x"), sym('='), blockStart,
+            ident("y"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('+'), num("2"),
+            eof,
+        )
+    }
+
+    @Test
+    fun emptyLineWithCommentWithinBlock() {
+        val program = """
+        x =
+            y = 1
+        # empty line without indentation
+            y + 2
+        """.trimIndent()
+        assertTokens(
+            program,
+            ident("x"), sym('='), blockStart,
+            ident("y"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('+'), num("2"),
+            eof,
+        )
+    }
+
+    @Test
+    fun emptyLineWithHalfIndentation() {
+        val program =
+            "x = \n" +
+            "    y = 1\n" +
+            "  \n" +
+            "    y + 2"
+        assertTokens(
+            program,
+            ident("x"), sym('='), blockStart,
+            ident("y"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('+'), num("2"),
+            eof,
+        )
+    }
 }

@@ -105,6 +105,12 @@ class Lexer(
         indent = consumeIndentation()
         atLineStart = false
 
+        // Empty lines and comment-only lines should be skipped for indentation
+        // But NOT at EOF - we need to process dedentation to emit BlockEnd tokens
+        if (peek() == '\n' || peek() == '#') {
+            return emptyList()
+        }
+
         // Track indentation outside of parens or if we're inside a statement
         if (nesting.isIndentTrackingEnabled) {
             val span = SourceSpan(indentStart, pos)

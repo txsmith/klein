@@ -33,6 +33,22 @@ sealed class ExpectedToken {
         }
     }
 
+    fun display(): String =
+        when (this) {
+            is Ident -> "ident($name)"
+            is Number -> "num($text)"
+            is Str -> "str($value)"
+            is Symbol -> if (text.length == 1) "sym('$text')" else "sym(\"$text\")"
+            is Keyword -> "kw(${kind.name})"
+            is StatementEnd -> "stmtEnd"
+            is BlockStart -> "blockStart"
+            is BlockEnd -> "blockEnd"
+            is PipeOpen -> "pipeOpen"
+            is PipeClose -> "pipeClose"
+            is Eof -> "eof"
+            is Error -> "error($expectedMessage)"
+        }
+
     data class Ident(
         val name: String,
         override val span: klein.SourceSpan? = null,
@@ -163,13 +179,17 @@ fun assertTokens(
         assertEquals(
             tokensBeforeError.size,
             actualTokens.size,
-            "Token count before error mismatch.\nExpected: $tokensBeforeError\nActual:   ${actualTokens.map { it.toExpected() }}",
+            "Token count before error mismatch.\nExpected: ${tokensBeforeError.map { it.display() }}\nActual:   ${actualTokens.map {
+                it
+                    .toExpected()
+                    .display()
+            }}",
         )
 
         tokensBeforeError.zip(actualTokens).forEachIndexed { i, (exp, act) ->
             val actualExpected = act.toExpected()
             if (!exp.matches(actualExpected)) {
-                fail("Token mismatch at index $i.\nExpected: $exp\nActual:   $actualExpected")
+                fail("Token mismatch at index $i.\nExpected: ${exp.display()}\nActual:   ${actualExpected.display()}")
             }
         }
 
@@ -187,13 +207,15 @@ fun assertTokens(
         assertEquals(
             expected.size,
             actualTokens.size,
-            "Token count mismatch.\nExpected: ${expected.toList()}\nActual:   ${actualTokens.map { it.toExpected() }}",
+            "Token count mismatch.\nExpected: ${expected.map {
+                it.display()
+            }}\nActual:   ${actualTokens.map { it.toExpected().display() }}",
         )
 
         expected.zip(actualTokens).forEachIndexed { i, (exp, act) ->
             val actualExpected = act.toExpected()
             if (!exp.matches(actualExpected)) {
-                fail("Token mismatch at index $i.\nExpected: $exp\nActual:   $actualExpected")
+                fail("Token mismatch at index $i.\nExpected: ${exp.display()}\nActual:   ${actualExpected.display()}")
             }
         }
     }

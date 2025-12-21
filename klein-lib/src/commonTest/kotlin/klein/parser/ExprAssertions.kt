@@ -7,6 +7,7 @@ import klein.BoolLiteral
 import klein.DoubleLiteral
 import klein.Expr
 import klein.FieldAccess
+import klein.FunDef
 import klein.Ident
 import klein.IfThenElse
 import klein.ImplicitParam
@@ -172,6 +173,12 @@ fun valStmt(
     value: Expr,
 ) = Val(name, value, noSpan)
 
+fun funDef(
+    name: String,
+    vararg params: String,
+    body: Expr,
+) = FunDef(name, params.toList(), body, noSpan)
+
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseStmt()
@@ -180,6 +187,7 @@ fun parseStmt(source: String): Stmt {
 fun Stmt.stripSpan(): Stmt =
     when (this) {
         is Val -> Val(name, value.stripSpans(), noSpan)
+        is FunDef -> FunDef(name, params, body.stripSpans(), noSpan)
         is Expr -> stripSpans()
     }
 

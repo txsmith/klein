@@ -12,6 +12,13 @@ data class Val(
     override val span: SourceSpan,
 ) : Stmt()
 
+data class FunDef(
+    val name: String,
+    val params: List<String>,
+    val body: Expr,
+    override val span: SourceSpan,
+) : Stmt()
+
 @Serializable
 sealed class Expr : Stmt() {
     abstract override val span: SourceSpan

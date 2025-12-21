@@ -22,7 +22,9 @@ class Parser(
 
     fun parseStmt(): Stmt {
         val stmt =
-            if (isBinding()) {
+            if (peek().kind == FUN) {
+                parseFunDef()
+            } else if (isBinding()) {
                 parseBinding()
             } else {
                 parseExpr()
@@ -44,29 +46,75 @@ class Parser(
         return stmt
     }
 
-    fun parseExpr(): Expr = parseExprAtPrecedence(0)
+    private fun parseFunDef(): FunDef {
+        val funToken = advance()
+        val name = expectAndAdvance(IDENT, message = "Expected function name")
+        expectAndAdvance(LPAREN, message = "Expected '('")
+        val params = parseFunParams()
+        expectAndAdvance(RPAREN, message = "Expected ')'")
+        expectAndAdvance(EQ, message = "Expected '='")
+        val body = parseBlockOrExpr()
+        return FunDef(name.text!!, params, body, funToken.span + body.span)
+    }
 
-    private fun endsWithBlock(stmt: Stmt): Boolean =
-        when (stmt) {
-            is Val -> endsWithBlockExpr(stmt.value)
-            is Expr -> endsWithBlockExpr(stmt)
+    private fun parseFunParams(): List<String> {
+        if (peek().kind == RPAREN) return emptyList()
+
+        val params = mutableListOf<String>()
+        params.add(expectAndAdvance(IDENT, message = "Expected parameter name").text!!)
+
+        while (peek().kind == COMMA) {
+            advance()
+            params.add(expectAndAdvance(IDENT, message = "Expected parameter name").text!!)
         }
 
-    private fun endsWithBlockExpr(expr: Expr): Boolean =
-        when (expr) {
-            is Block -> true
-            is IfThenElse -> endsWithBlockExpr(expr.elseBranch ?: expr.thenBranch)
-            else -> false
-        }
-
-    private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
+        return params
+    }
 
     private fun parseBinding(): Val {
         val name = expectAndAdvance(IDENT, message = "Expected identifier")
         expectAndAdvance(EQ, message = "Expected =")
-        val value = parseExpr()
+        val value = parseBlockOrExpr()
         return Val(name.text!!, value, name.span + value.span)
     }
+
+    private fun parseBlockOrExpr(): Expr =
+        if (peek().kind == BLOCK_START) {
+            parseBlock()
+        } else {
+            parseExpr()
+        }
+
+    private fun parseBlock(): Expr {
+        val blockStart = advance()
+
+        val stmts = mutableListOf<Stmt>()
+
+        while (peek().kind != BLOCK_END && peek().kind != EOF) {
+            if (isBinding()) {
+                stmts.add(parseStmt())
+            } else {
+                val expr = parseExpr()
+                tryAdvance(STMT_END)
+
+                tryAdvance(BLOCK_END, EOF)?.let { blockEnd ->
+                    return if (stmts.isEmpty()) {
+                        expr
+                    } else {
+                        Block(stmts, expr, blockStart.span + blockEnd.span)
+                    }
+                }
+
+                stmts.add(expr)
+            }
+        }
+
+        expectAndAdvance(BLOCK_END, EOF, message = "Expected block end")
+
+        throw ParseError("Block must contain at least one expression", blockStart.span)
+    }
+
+    fun parseExpr(): Expr = parseExprAtPrecedence(0)
 
     private fun parseExprAtPrecedence(minPrecedence: Int): Expr {
         var left = parseApply()
@@ -83,7 +131,25 @@ class Parser(
         return left
     }
 
-    private fun peekBinaryOp(): Operator? = Operator.fromTokenKind(peek().kind)
+    private fun parseApply(): Expr {
+        var expr = parseAtom()
+
+        while (true) {
+            when (peek().kind) {
+                LPAREN -> {
+                    expr = parseFunctionCallOn(expr)
+                }
+
+                DOT -> {
+                    expr = parseFieldAccessOn(expr)
+                }
+
+                else -> break
+            }
+        }
+
+        return expr
+    }
 
     private fun parseAtom(): Expr {
         val token = peek()
@@ -146,59 +212,53 @@ class Parser(
                 parseLambda(token)
             }
 
-            BLOCK_START -> parseBlock()
-
             DOT -> parseImplicitParam(token)
 
             LBRACE -> parseRecordLiteral(token)
+
+            FUN -> throw ParseError("Function definitions are only allowed at the top level", token.span)
 
             else -> throw ParseError("Expected expression, got $token", token.span)
         }
     }
 
-    private fun parseApply(): Expr {
-        var expr = parseAtom()
+    private fun parseIfThenElse(ifToken: Token): IfThenElse {
+        advance()
+        val condition = parseExpr()
+        expectAndAdvance(THEN, message = "Expected 'then'")
+        val thenBranch = parseBlockOrExpr()
+        val elseBranch = tryAdvance(ELSE)?.let { parseBlockOrExpr() }
+        val endSpan = elseBranch?.span ?: thenBranch.span
+        return IfThenElse(condition, thenBranch, elseBranch, ifToken.span + endSpan)
+    }
 
-        while (true) {
-            when (peek().kind) {
-                LPAREN -> {
-                    expr = parseFunctionCallOn(expr)
-                }
+    private fun parseLambda(open: Token): Lambda {
+        val params = parseLambdaParams()
+        val body = parseBlockOrExpr()
+        val close = expectAndAdvance(PIPE_CLOSE, message = "Expected '|'")
+        return Lambda(params, body, open.span + close.span)
+    }
 
-                DOT -> {
-                    expr = parseFieldAccessOn(expr)
-                }
+    private fun parseLambdaParams(): List<String> {
+        if (peek().kind != IDENT) return emptyList()
 
-                else -> break
+        val next = peekAt(1)
+        if (next.kind != ARROW && next.kind != COMMA) return emptyList()
+
+        val params = mutableListOf<String>()
+        while (peek().kind == IDENT) {
+            val ident = advance()
+            params.add(ident.text!!)
+
+            if (peek().kind == COMMA && peekAt(1).kind == IDENT) {
+                advance()
+            } else {
+                break
             }
         }
 
-        return expr
-    }
-
-    private fun parseFunctionCallOn(callee: Expr): Apply {
-        advance()
-        val args = parseArgs()
-        val close = expectAndAdvance(RPAREN, message = "Expected ')'")
-        return Apply(callee, args, callee.span + close.span)
-    }
-
-    private fun parseFieldAccessOn(target: Expr): FieldAccess {
-        advance()
-        val field = expectAndAdvance(IDENT, message = "Expected field name after '.'")
-        return FieldAccess(target, field.text!!, target.span + field.span)
-    }
-
-    private fun parseImplicitParam(dotToken: Token): Expr {
-        advance()
-        val implicitParam = ImplicitParam(dotToken.span)
-        val field = peek()
-        return if (field.kind == IDENT) {
-            advance()
-            FieldAccess(implicitParam, field.text!!, dotToken.span + field.span)
-        } else {
-            implicitParam
-        }
+        expectAndAdvance(ARROW, message = "Expected '->'")
+        return params
     }
 
     private fun parseRecordLiteral(open: Token): RecordLiteral {
@@ -230,6 +290,25 @@ class Parser(
         return RecordLiteral(fields, open.span + close.span)
     }
 
+    private fun parseImplicitParam(dotToken: Token): Expr {
+        advance()
+        val implicitParam = ImplicitParam(dotToken.span)
+        val field = peek()
+        return if (field.kind == IDENT) {
+            advance()
+            FieldAccess(implicitParam, field.text!!, dotToken.span + field.span)
+        } else {
+            implicitParam
+        }
+    }
+
+    private fun parseFunctionCallOn(callee: Expr): Apply {
+        advance()
+        val args = parseArgs()
+        val close = expectAndAdvance(RPAREN, message = "Expected ')'")
+        return Apply(callee, args, callee.span + close.span)
+    }
+
     private fun parseArgs(): List<Expr> {
         if (peek().kind == RPAREN) return emptyList()
 
@@ -244,94 +323,29 @@ class Parser(
         return args
     }
 
-    private fun parseLambda(open: Token): Lambda {
-        val params = parseParamsIfPresent()
-        val body = parseLambdaBody()
-        val close = expectAndAdvance(PIPE_CLOSE, message = "Expected '|'")
-        return Lambda(params, body, open.span + close.span)
-    }
-
-    private fun parseLambdaBody(): Expr =
-        if (peek().kind == BLOCK_START) {
-            parseBlock()
-        } else {
-            parseExpr()
-        }
-
-    private fun parseBlock(): Expr {
-        val blockStart = advance()
-
-        val stmts = mutableListOf<Stmt>()
-
-        // Parse stmt* expr BlockEnd
-        while (peek().kind != BLOCK_END && peek().kind != EOF) {
-            if (isBinding()) {
-                stmts.add(parseStmt())
-            } else {
-                // This might be the final expression
-                val expr = parseExpr()
-                tryAdvance(STMT_END)
-
-                // Check if this is the last item (followed by BlockEnd or EOF)
-                tryAdvance(BLOCK_END, EOF)?.let { blockEnd ->
-                    return if (stmts.isEmpty()) {
-                        expr
-                    } else {
-                        Block(stmts, expr, blockStart.span + blockEnd.span)
-                    }
-                }
-
-                // Not the last item, so it's an expression statement
-                // (This handles cases like `print(x)` followed by more statements)
-                stmts.add(expr)
-            }
-        }
-
-        // Should have a BlockEnd or EOF
-        expectAndAdvance(BLOCK_END, EOF, message = "Expected block end")
-
-        // Empty block is an error
-        throw ParseError("Block must contain at least one expression", blockStart.span)
-    }
-
-    private fun parseParamsIfPresent(): List<String> {
-        if (peek().kind != IDENT) return emptyList()
-
-        val next = peekAt(1)
-        if (next.kind != ARROW && next.kind != COMMA) return emptyList()
-
-        val params = mutableListOf<String>()
-        while (peek().kind == IDENT) {
-            val ident = advance()
-            params.add(ident.text!!)
-
-            if (peek().kind == COMMA && peekAt(1).kind == IDENT) {
-                advance()
-            } else {
-                break
-            }
-        }
-
-        expectAndAdvance(ARROW, message = "Expected '->'")
-        return params
-    }
-
-    private fun parseBranchExpr(): Expr =
-        if (peek().kind == BLOCK_START) {
-            parseBlock()
-        } else {
-            parseExpr()
-        }
-
-    private fun parseIfThenElse(ifToken: Token): IfThenElse {
+    private fun parseFieldAccessOn(target: Expr): FieldAccess {
         advance()
-        val condition = parseExpr()
-        expectAndAdvance(THEN, message = "Expected 'then'")
-        val thenBranch = parseBranchExpr()
-        val elseBranch = tryAdvance(ELSE)?.let { parseBranchExpr() }
-        val endSpan = elseBranch?.span ?: thenBranch.span
-        return IfThenElse(condition, thenBranch, elseBranch, ifToken.span + endSpan)
+        val field = expectAndAdvance(IDENT, message = "Expected field name after '.'")
+        return FieldAccess(target, field.text!!, target.span + field.span)
     }
+
+    private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
+
+    private fun endsWithBlock(stmt: Stmt): Boolean =
+        when (stmt) {
+            is Val -> endsWithBlockExpr(stmt.value)
+            is FunDef -> endsWithBlockExpr(stmt.body)
+            is Expr -> endsWithBlockExpr(stmt)
+        }
+
+    private fun endsWithBlockExpr(expr: Expr): Boolean =
+        when (expr) {
+            is Block -> true
+            is IfThenElse -> endsWithBlockExpr(expr.elseBranch ?: expr.thenBranch)
+            else -> false
+        }
+
+    private fun peekBinaryOp(): Operator? = Operator.fromTokenKind(peek().kind)
 
     private fun peek(): Token = tokens[pos]
 

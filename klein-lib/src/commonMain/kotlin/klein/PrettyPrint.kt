@@ -20,6 +20,10 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
     return when (this) {
         is Val -> "${pad}Val($name) =\n${value.prettyPrint(indent + 1)}"
+        is FunDef -> {
+            val paramsStr = params.joinToString(", ")
+            "${pad}Fun $name($paramsStr) =\n${body.prettyPrint(indent + 1)}"
+        }
         is Expr -> prettyPrint(indent)
     }
 }
