@@ -52,5 +52,11 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         }
         is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
         is ImplicitParam -> "${pad}ImplicitParam"
+        is RecordLiteral -> {
+            val fieldsStr = fields.joinToString("\n") { (name, value) ->
+                "$pad  $name:\n${value.prettyPrint(indent + 2)}"
+            }
+            "${pad}Record\n$fieldsStr"
+        }
     }
 }
