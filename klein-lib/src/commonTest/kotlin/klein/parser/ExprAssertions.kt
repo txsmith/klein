@@ -7,6 +7,7 @@ import klein.BoolLiteral
 import klein.DoubleLiteral
 import klein.Expr
 import klein.Ident
+import klein.IfThenElse
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
@@ -118,6 +119,12 @@ fun or(
     right: Expr,
 ) = BinaryOp(left, Operator.Or, right, noSpan)
 
+fun ifThenElse(
+    condition: Expr,
+    thenBranch: Expr,
+    elseBranch: Expr? = null,
+) = IfThenElse(condition, thenBranch, elseBranch, noSpan)
+
 fun Expr.stripSpans(): Expr =
     when (this) {
         is IntLiteral -> IntLiteral(value, noSpan)
@@ -130,6 +137,7 @@ fun Expr.stripSpans(): Expr =
         is Lambda -> Lambda(params, body.stripSpans(), noSpan)
         is Apply -> Apply(callee.stripSpans(), args.map { it.stripSpans() }, noSpan)
         is Block -> Block(stmts.map { it.stripSpan() }, expr.stripSpans(), noSpan)
+        is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
     }
 
 fun parse(source: String): Expr {

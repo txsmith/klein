@@ -122,6 +122,22 @@ class Parser(
                 UnaryOp(UnaryOperator.Neg, operand, token.span + operand.span)
             }
 
+            IF -> {
+                advance()
+                val condition = parseExpr()
+                expectAndAdvance(THEN, "Expected 'then'")
+                val thenBranch = parseBranchExpr()
+                val elseBranch =
+                    if (peek().kind == ELSE) {
+                        advance()
+                        parseBranchExpr()
+                    } else {
+                        null
+                    }
+                val endSpan = elseBranch?.span ?: thenBranch.span
+                IfThenElse(condition, thenBranch, elseBranch, token.span + endSpan)
+            }
+
             LPAREN -> {
                 advance()
                 val expr = parseExpr()
@@ -290,4 +306,22 @@ class Parser(
     private fun peekAt(offset: Int): Token = tokens[pos + offset]
 
     private fun advance(): Token = tokens[pos++]
+
+    private fun expectAndAdvance(
+        kind: TokenKind,
+        message: String,
+    ) {
+        val token = peek()
+        if (token.kind != kind) {
+            throw ParseError("$message, got $token", token.span)
+        }
+        advance()
+    }
+
+    private fun parseBranchExpr(): Expr =
+        if (peek().kind == BLOCK_START) {
+            parseBlock()
+        } else {
+            parseExpr()
+        }
 }

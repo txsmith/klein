@@ -73,6 +73,13 @@ data class Block(
     override val span: SourceSpan,
 ) : Expr()
 
+data class IfThenElse(
+    val condition: Expr,
+    val thenBranch: Expr,
+    val elseBranch: Expr?,
+    override val span: SourceSpan,
+) : Expr()
+
 @Serializable
 enum class UnaryOperator {
     Neg,

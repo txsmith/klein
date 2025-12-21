@@ -189,7 +189,7 @@ class LambdaTest {
     @Test
     fun keywordIfAsParam() {
         val error = assertFailsWith<ParseError> { parse("|if -> 1|") }
-        assertEquals("Expected expression, got Keyword(IF, span=SourceSpan(start=1, end=3))", error.message)
+        assertEquals("Expected expression, got Symbol(text=->, span=SourceSpan(start=4, end=6))", error.message)
     }
 
     @Test
@@ -442,6 +442,284 @@ class LambdaTest {
         assertExprEquals(
             parse(program),
             call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y")))),
+        )
+    }
+
+    @Test
+    fun multipleDedentsAtOnce() {
+        val program =
+            """
+            |
+              a = |
+                b = |
+                  1
+                |
+                b
+              |
+              a
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    block(
+                        valStmt(
+                            "a",
+                            lambda(
+                                body =
+                                    block(
+                                        valStmt("b", lambda(body = int(1))),
+                                        expr = id("b"),
+                                    ),
+                            ),
+                        ),
+                        expr = id("a"),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun expressionContinuationInBlock() {
+        val program =
+            """
+            |x ->
+              y = 1 +
+                2
+              y
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda("x", body = block(valStmt("y", add(int(1), int(2))), expr = id("y"))),
+        )
+    }
+
+    @Test
+    fun expressionContinuationWithDeeperIndent() {
+        val program =
+            """
+            |x ->
+              y = 1
+                + 2
+                + 3
+              y
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda("x", body = block(valStmt("y", add(add(int(1), int(2)), int(3))), expr = id("y"))),
+        )
+    }
+
+    @Test
+    fun deeplyNestedBlocks() {
+        val program =
+            """
+            |
+              a = |
+                b = |
+                  c = |
+                    42
+                  |
+                  c
+                |
+                b
+              |
+              a
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    block(
+                        valStmt(
+                            "a",
+                            lambda(
+                                body =
+                                    block(
+                                        valStmt(
+                                            "b",
+                                            lambda(
+                                                body =
+                                                    block(
+                                                        valStmt("c", lambda(body = int(42))),
+                                                        expr = id("c"),
+                                                    ),
+                                            ),
+                                        ),
+                                        expr = id("b"),
+                                    ),
+                            ),
+                        ),
+                        expr = id("a"),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun blockWithCallsInsideParens() {
+        val program =
+            """
+            |x ->
+              result = foo(
+                a,
+                b
+              )
+              result
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                "x",
+                body =
+                    block(
+                        valStmt("result", call(id("foo"), id("a"), id("b"))),
+                        expr = id("result"),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun noHeadWithIfThenElse() {
+        assertExprEquals(
+            parse("|if x then y else z|"),
+            lambda(body = ifThenElse(id("x"), id("y"), id("z"))),
+        )
+    }
+
+    @Test
+    fun noHeadWithIfThenNoElse() {
+        assertExprEquals(
+            parse("|if x then y|"),
+            lambda(body = ifThenElse(id("x"), id("y"))),
+        )
+    }
+
+    @Test
+    fun noHeadWithIfAndBlock() {
+        val program =
+            """
+            |
+              if x > 0 then
+                y = x + 1
+                y
+              else
+                0
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    ifThenElse(
+                        gt(id("x"), int(0)),
+                        block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
+                        int(0),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun noHeadWithIfThenNoElseAndBlock() {
+        val program =
+            """
+            |
+              if x > 0 then
+                y = x + 1
+                print(y)
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    ifThenElse(
+                        gt(id("x"), int(0)),
+                        block(valStmt("y", add(id("x"), int(1))), expr = call(id("print"), id("y"))),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun noHeadWithNestedIfThen() {
+        val program =
+            """
+            |
+              if a then
+                if b then
+                  print(1)
+              done()
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    block(
+                        ifThenElse(
+                            id("a"),
+                            ifThenElse(id("b"), call(id("print"), int(1))),
+                        ),
+                        expr = call(id("done")),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun noHeadWithMultipleIfThen() {
+        val program =
+            """
+            |
+              if a then
+                print(1)
+              if b then
+                print(2)
+              done()
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    block(
+                        ifThenElse(id("a"), call(id("print"), int(1))),
+                        ifThenElse(id("b"), call(id("print"), int(2))),
+                        expr = call(id("done")),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun noHeadIfThenWithValAndIf() {
+        val program =
+            """
+            |
+              x = getValue()
+              if x > 0 then
+                print(x)
+              finish()
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                body =
+                    block(
+                        valStmt("x", call(id("getValue"))),
+                        ifThenElse(gt(id("x"), int(0)), call(id("print"), id("x"))),
+                        expr = call(id("finish")),
+                    ),
+            ),
         )
     }
 }
