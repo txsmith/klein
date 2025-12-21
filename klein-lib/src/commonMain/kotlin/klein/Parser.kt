@@ -16,17 +16,10 @@ class Parser(
 
     fun parseProgram(): List<Stmt> {
         val stmts = mutableListOf<Stmt>()
-        skipLeadingStatementEnds()
         while (peek().kind != EOF) {
             stmts.add(parseStmt())
         }
         return stmts
-    }
-
-    private fun skipLeadingStatementEnds() {
-        while (peek().kind == STMT_END) {
-            advance()
-        }
     }
 
     fun parseStmt(): Stmt {
@@ -43,17 +36,34 @@ class Parser(
             EOF -> {}
             BLOCK_END -> {}
             RBRACE, PIPE_CLOSE -> {}
-            else -> throw ParseError("Expected newline or end of input, got $next", next.span)
+            else -> {
+                if (!endsWithBlock(stmt)) {
+                    throw ParseError("Expected newline or end of input, got $next", next.span)
+                }
+            }
         }
 
         return stmt
     }
 
+    private fun endsWithBlock(stmt: Stmt): Boolean =
+        when (stmt) {
+            is Val -> endsWithBlockExpr(stmt.value)
+            is Expr -> endsWithBlockExpr(stmt)
+        }
+
+    private fun endsWithBlockExpr(expr: Expr): Boolean =
+        when (expr) {
+            is Block -> true
+            is IfThenElse -> endsWithBlockExpr(expr.elseBranch ?: expr.thenBranch)
+            else -> false
+        }
+
     private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
 
     private fun parseBinding(): Val {
-        val name = advance()
-        advance() // consume '='
+        val name = expectAndAdvance(TokenKind.IDENT, "Expected identifier")
+        expectAndAdvance(TokenKind.EQ, "Expected =")
         val value = parseExpr()
         return Val(name.text!!, value, name.span + value.span)
     }
@@ -122,21 +132,7 @@ class Parser(
                 UnaryOp(UnaryOperator.Neg, operand, token.span + operand.span)
             }
 
-            IF -> {
-                advance()
-                val condition = parseExpr()
-                expectAndAdvance(THEN, "Expected 'then'")
-                val thenBranch = parseBranchExpr()
-                val elseBranch =
-                    if (peek().kind == ELSE) {
-                        advance()
-                        parseBranchExpr()
-                    } else {
-                        null
-                    }
-                val endSpan = elseBranch?.span ?: thenBranch.span
-                IfThenElse(condition, thenBranch, elseBranch, token.span + endSpan)
-            }
+            IF -> parseIfThenElse(token)
 
             LPAREN -> {
                 advance()
@@ -153,6 +149,8 @@ class Parser(
                 advance()
                 parseLambda(token)
             }
+
+            BLOCK_START -> parseBlock()
 
             else -> throw ParseError("Expected expression, got $token", token.span)
         }
@@ -204,34 +202,15 @@ class Parser(
         return Lambda(params, body, open.span + close.span)
     }
 
-    private fun parseLambdaBody(): Expr {
-        skipLeadingStatementEnds()
-
-        // Check for indented block
+    private fun parseLambdaBody(): Expr =
         if (peek().kind == BLOCK_START) {
-            return parseBlock()
-        }
-
-        // Single-line lambda: stmt* expr
-        val stmts = mutableListOf<Stmt>()
-        while (isBinding()) {
-            stmts.add(parseStmt())
-            skipLeadingStatementEnds()
-        }
-
-        val expr = parseExpr()
-        skipLeadingStatementEnds()
-
-        return if (stmts.isEmpty()) {
-            expr
+            parseBlock()
         } else {
-            Block(stmts, expr, stmts.first().span + expr.span)
+            parseExpr()
         }
-    }
 
     private fun parseBlock(): Expr {
         val blockStart = advance()
-        skipLeadingStatementEnds()
 
         val stmts = mutableListOf<Stmt>()
 
@@ -242,7 +221,7 @@ class Parser(
             } else {
                 // This might be the final expression
                 val expr = parseExpr()
-                skipLeadingStatementEnds()
+                if (peek().kind == STMT_END) advance()
 
                 // Check if this is the last item (followed by BlockEnd or EOF)
                 if (peek().kind == BLOCK_END || peek().kind == EOF) {
@@ -258,7 +237,6 @@ class Parser(
                 // (This handles cases like `print(x)` followed by more statements)
                 stmts.add(expr)
             }
-            skipLeadingStatementEnds()
         }
 
         // Should have a BlockEnd or EOF
@@ -310,12 +288,12 @@ class Parser(
     private fun expectAndAdvance(
         kind: TokenKind,
         message: String,
-    ) {
+    ): Token {
         val token = peek()
         if (token.kind != kind) {
             throw ParseError("$message, got $token", token.span)
         }
-        advance()
+        return advance()
     }
 
     private fun parseBranchExpr(): Expr =
@@ -324,4 +302,20 @@ class Parser(
         } else {
             parseExpr()
         }
+
+    private fun parseIfThenElse(ifToken: Token): IfThenElse {
+        advance()
+        val condition = parseExpr()
+        expectAndAdvance(THEN, "Expected 'then'")
+        val thenBranch = parseBranchExpr()
+        val elseBranch =
+            if (peek().kind == ELSE) {
+                advance()
+                parseBranchExpr()
+            } else {
+                null
+            }
+        val endSpan = elseBranch?.span ?: thenBranch.span
+        return IfThenElse(condition, thenBranch, elseBranch, ifToken.span + endSpan)
+    }
 }

@@ -308,4 +308,54 @@ class ApplyTest {
         val error = assertFailsWith<ParseError> { parse("f(") }
         assertEquals("Expected expression, got Eof(span=SourceSpan(start=2, end=2))", error.message)
     }
+
+    @Test
+    fun applyMultiLineLambda() {
+        val program =
+            """
+            |x ->
+              y = x + 1
+              y
+            |(5)
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            call(lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y"))), int(5)),
+        )
+    }
+
+    @Test
+    fun applyLambdaWithIfThenElse() {
+        val program =
+            """
+            |x ->
+              if x > 0 then
+                x
+              else
+                0
+            |(5)
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            call(
+                lambda("x", body = ifThenElse(gt(id("x"), int(0)), id("x"), int(0))),
+                int(5),
+            ),
+        )
+    }
+
+    @Test
+    fun callWithMultiLineLambdaArg() {
+        val program =
+            """
+            foo(|x ->
+              y = x + 1
+              y
+            |)
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y")))),
+        )
+    }
 }

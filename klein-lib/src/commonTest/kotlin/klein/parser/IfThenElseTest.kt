@@ -127,6 +127,61 @@ class IfThenElseTest {
     }
 
     @Test
+    fun ifWithLambdaCondition() {
+        val expr = parse("if |x| then 1 else 0")
+        assertExprEquals(
+            expr,
+            ifThenElse(lambda(body = id("x")), int(1), int(0)),
+        )
+    }
+
+    @Test
+    fun ifWithAppliedLambdaCondition() {
+        val expr = parse("if |x -> x|(true) then 1 else 0")
+        assertExprEquals(
+            expr,
+            ifThenElse(call(lambda("x", body = id("x")), bool(true)), int(1), int(0)),
+        )
+    }
+
+    @Test
+    fun ifWithChainedCallCondition() {
+        val expr = parse("if foo(x)(y) then 1 else 0")
+        assertExprEquals(
+            expr,
+            ifThenElse(call(call(id("foo"), id("x")), id("y")), int(1), int(0)),
+        )
+    }
+
+    @Test
+    fun ifWithComplexBooleanCondition() {
+        val expr = parse("if a and b or c and d then 1 else 0")
+        assertExprEquals(
+            expr,
+            ifThenElse(or(and(id("a"), id("b")), and(id("c"), id("d"))), int(1), int(0)),
+        )
+    }
+
+    @Test
+    fun ifWithMultiLineLambdaCondition() {
+        val program =
+            """
+            if |
+              x = foo()
+              x > 0
+            |() then 1 else 0
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            ifThenElse(
+                call(lambda(body = block(valStmt("x", call(id("foo"))), expr = gt(id("x"), int(0))))),
+                int(1),
+                int(0),
+            ),
+        )
+    }
+
+    @Test
     fun ifAsArgument() {
         val expr = parse("foo(if x then 1 else 2)")
         assertExprEquals(
