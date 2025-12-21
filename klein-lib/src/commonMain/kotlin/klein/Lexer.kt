@@ -457,7 +457,7 @@ class NestingContext {
     fun determinePipeKind(lastTokenKind: TokenKind?): TokenKind {
         val lastTokenCanEndExpr =
             when (lastTokenKind) {
-                IDENT, INT, DOUBLE, STRING, TRUE, FALSE, RPAREN, RBRACKET, BLOCK_END, STMT_END, PIPE_OPEN, PIPE_CLOSE, DOT -> true
+                IDENT, INT, DOUBLE, STRING, TRUE, FALSE, RPAREN, RBRACKET, RBRACE, BLOCK_END, STMT_END, PIPE_OPEN, PIPE_CLOSE, DOT -> true
                 else -> false
             }
         val isOpeningPipe =

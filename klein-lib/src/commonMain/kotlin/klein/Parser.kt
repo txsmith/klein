@@ -150,6 +150,8 @@ class Parser(
 
             DOT -> parseImplicitParam(token)
 
+            LBRACE -> parseRecordLiteral(token)
+
             else -> throw ParseError("Expected expression, got $token", token.span)
         }
     }
@@ -197,6 +199,34 @@ class Parser(
         } else {
             implicitParam
         }
+    }
+
+    private fun parseRecordLiteral(open: Token): RecordLiteral {
+        advance()
+        val fields = mutableListOf<Pair<String, Expr>>()
+
+        while (peek().kind != RBRACE && peek().kind != EOF) {
+            val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
+            val name = nameToken.text!!
+
+            val value = if (peek().kind == EQ) {
+                advance()
+                parseExpr()
+            } else {
+                Ident(name, nameToken.span)
+            }
+
+            fields.add(name to value)
+
+            if (peek().kind == COMMA) {
+                advance()
+            } else {
+                break
+            }
+        }
+
+        val close = expectAndAdvance(RBRACE, message = "Expected '}'")
+        return RecordLiteral(fields, open.span + close.span)
     }
 
     private fun parseArgs(): List<Expr> {

@@ -110,6 +110,7 @@ klein-lang/
 - ✅ Lambdas (nested, multi-param, with blocks)
 - ✅ Function application
 - ✅ Field access and implicit parameters (`user.name`, `|.price|`, `|.|`)
+- ✅ Record literals (`{ name = 'Alice', age = 30 }`, shorthand `{ name }`, trailing comma)
 - ✅ Binary operators (+, -, \*, /, %, ==, !=, <, <=, >, >=, and, or)
 - ✅ Unary operators (-, not)
 - ✅ Val bindings
@@ -122,6 +123,5 @@ klein-lang/
 ### Lexer Only (Parser TODO)
 - Range operator (`..`)
 - Arrays (`[]`)
-- Objects (`{}`)
 
 See [LEXER_PARSER_GAP.md](./LEXER_PARSER_GAP.md) for details.
