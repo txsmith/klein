@@ -76,7 +76,7 @@ class Lexer(
                 blockEnds + listOf(token)
             }
 
-            c in "()[]" -> {
+            c in "()[]{}" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
                         ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1), nesting.describeStack())
@@ -86,7 +86,7 @@ class Lexer(
                 blockEnds + listOf(token)
             }
 
-            c in "+-*/%=<>!&,.;:{}@" -> {
+            c in "+-*/%=<>!&,.;:@" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
                         ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1), nesting.describeStack())
@@ -169,7 +169,7 @@ class Lexer(
             val last = lastToken ?: return false
             return when (last.kind) {
                 IDENT, INT, DOUBLE, STRING, TRUE, FALSE -> true
-                RPAREN, RBRACKET, PIPE_CLOSE -> nesting.isCurrentContextBlock
+                RPAREN, RBRACKET, RBRACE, PIPE_CLOSE -> nesting.isCurrentContextBlock
                 else -> false
             }
         }
@@ -184,7 +184,7 @@ class Lexer(
             }
         }
 
-    private fun isClosingDelimiter(char: Char?): Boolean = char == '|' || char == ')' || char == ']'
+    private fun isClosingDelimiter(char: Char?): Boolean = char == '|' || char == ')' || char == ']' || char == '}'
 
     private fun statementEndSpan(): SourceSpan {
         val lastSpan = lastToken?.span
@@ -375,6 +375,8 @@ class NestingContext {
 
         data object Bracket : Item(needsIndentTracking = false)
 
+        data object Brace : Item(needsIndentTracking = false)
+
         data class Pipe(
             val anchorIndent: Int?, // Source line indent where pipe opened (for pipes inside parens)
         ) : Item(needsIndentTracking = true)
@@ -391,9 +393,9 @@ class NestingContext {
     val isIndentTrackingEnabled: Boolean
         get() = stack.first().needsIndentTracking
 
-    /** True if anywhere inside parens or brackets (expression context). */
+    /** True if anywhere inside parens, brackets, or braces (expression context). */
     val inParenOrBracket: Boolean
-        get() = stack.any { it is Item.Paren || it is Item.Bracket }
+        get() = stack.any { it is Item.Paren || it is Item.Bracket || it is Item.Brace }
 
     /** True if the innermost context is an indent block. */
     val isCurrentContextBlock: Boolean
@@ -487,6 +489,11 @@ class NestingContext {
                 emptyList()
             }
             RBRACKET -> popUntilMatching<Item.Bracket>(token.span)
+            LBRACE -> {
+                stack.addFirst(Item.Brace)
+                emptyList()
+            }
+            RBRACE -> popUntilMatching<Item.Brace>(token.span)
             PIPE_OPEN -> {
                 val anchorIndent = if (inParenOrBracket) lineIndent else null
                 stack.addFirst(Item.Pipe(anchorIndent))
@@ -503,6 +510,7 @@ class NestingContext {
                 is Item.BlockStart -> "Block(indent=${item.indent})"
                 is Item.Paren -> "Paren"
                 is Item.Bracket -> "Bracket"
+                is Item.Brace -> "Brace"
                 is Item.Pipe -> "Pipe(anchor=${item.anchorIndent})"
             }
         }
@@ -514,10 +522,10 @@ class NestingContext {
 
         val blockEnds = mutableListOf<Token>()
         while (true) {
-            when (val top = stack.removeFirst()) {
+            when (stack.removeFirst()) {
                 is T -> return blockEnds
                 is Item.BlockStart -> blockEnds.add(Token(BLOCK_END, span))
-                is Item.Paren, is Item.Bracket, is Item.Pipe -> {}
+                is Item.Paren, is Item.Bracket, is Item.Brace, is Item.Pipe -> {}
             }
         }
     }
