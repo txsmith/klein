@@ -127,7 +127,7 @@ class BlockTest {
     }
 
     @Test
-    fun deeperIndentWithinBlockIsContinuation() {
+    fun deeperIndentWithNonOperatorIsNewStatement() {
         val program = """
             if true then
                 s = 1
@@ -138,8 +138,8 @@ class BlockTest {
         assertTokens(
             program,
             kw(IF), kw(TRUE), kw(THEN), blockStart,
-            ident("s"), sym('='), num("1"),
-            ident("y"), sym('='), num("3"),
+            ident("s"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('='), num("3"), stmtEnd,
             ident("println"), sym('('), ident("s"), sym(')'), stmtEnd,
             ident("println"), sym('('), ident("y"), sym(')'), eof,
         )
@@ -445,6 +445,78 @@ class BlockTest {
             ident("y"), sym('='), num("1"), stmtEnd,
             ident("y"), sym('+'), num("2"),
             eof,
+        )
+    }
+
+    @Test
+    fun topLevelIndentedBindingIsNewStatement() {
+        val program =
+            "x = 1\n" +
+            "\n" +
+            "  y = 2\n" +
+            "\n" +
+            "z = 3"
+        assertTokens(
+            program,
+            ident("x"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('='), num("2"), stmtEnd,
+            ident("z"), sym('='), num("3"), eof,
+        )
+    }
+
+    @Test
+    fun topLevelIndentedOperatorIsContinuation() {
+        val program =
+            "x = 1\n" +
+            "  + 2"
+        assertTokens(
+            program,
+            ident("x"), sym('='), num("1"),
+            sym('+'), num("2"), eof,
+        )
+    }
+
+    @Test
+    fun topLevelIndentedOperatorAfterBlankLineIsContinuation() {
+        val program =
+            "x = 1\n" +
+            "\n" +
+            "  + 2"
+        assertTokens(
+            program,
+            ident("x"), sym('='), num("1"),
+            sym('+'), num("2"), eof,
+        )
+    }
+
+    @Test
+    fun indentedBindingInBlockIsNewStatement() {
+        val program =
+            "result =\n" +
+            "  x = 1\n" +
+            "    y = 2\n" +
+            "  x + y"
+        assertTokens(
+            program,
+            ident("result"), sym('='), blockStart,
+            ident("x"), sym('='), num("1"), stmtEnd,
+            ident("y"), sym('='), num("2"), stmtEnd,
+            ident("x"), sym('+'), ident("y"), eof,
+        )
+    }
+
+    @Test
+    fun indentedOperatorInBlockIsContinuation() {
+        val program =
+            "result =\n" +
+            "  x = 1\n" +
+            "    + 2\n" +
+            "  x"
+        assertTokens(
+            program,
+            ident("result"), sym('='), blockStart,
+            ident("x"), sym('='), num("1"), sym('+'), num("2"), stmtEnd,
+            ident("x"), eof,
         )
     }
 }
