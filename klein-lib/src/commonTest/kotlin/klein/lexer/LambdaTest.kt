@@ -8,12 +8,12 @@ import kotlin.test.Test
 class LambdaTest {
     @Test
     fun pipeWithContent() {
-        assertTokens("|x|", pipeOpen, ident("x"), pipeClose, eof)
+        assertTokens("|x|", pipe, ident("x"), pipe, eof)
     }
 
     @Test
     fun emptyPipePair() {
-        assertTokens("||", pipeOpen, pipeOpen, eof)
+        assertTokens("||", pipe, pipe, eof)
     }
 
     @Test
@@ -26,10 +26,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            pipeOpen,
-            blockStart, ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"),
-            blockEnd, pipeClose, eof)
+            pipe(0),
+            ident("x", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4),
+            pipe(0), eof)
     }
 
     @Test
@@ -42,10 +42,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            pipeOpen, pipeOpen, blockStart,
-            ident("x"), sym('='), num("42"), stmtEnd,
-            ident("x"),
-            blockEnd, pipeClose, pipeClose, eof,
+            pipe(0), pipe,
+            ident("x", indent = 4), sym('='), num("42"),
+            ident("x", indent = 4),
+            pipe(0), pipe, eof,
         )
     }
 
@@ -61,12 +61,12 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            pipeOpen,
-            blockStart, pipeOpen,
-            blockStart, ident("x"), sym('='), num("42"), stmtEnd,
-            ident("x"),
-            blockEnd, pipeClose,
-            blockEnd, pipeClose, eof,
+            pipe(0),
+            pipe(2),
+            ident("x", indent = 4), sym('='), num("42"),
+            ident("x", indent = 4),
+            pipe(2),
+            pipe(0), eof,
         )
     }
 
@@ -80,21 +80,21 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            pipeOpen, pipeOpen, pipeOpen, blockStart,
-            ident("x"), sym('='), num("42"), stmtEnd,
-            ident("x"),
-            blockEnd, pipeClose, pipeClose, pipeClose, eof,
+            pipe(0), pipe, pipe,
+            ident("x", indent = 4), sym('='), num("42"),
+            ident("x", indent = 4),
+            pipe(0), pipe, pipe, eof,
         )
     }
 
     @Test
     fun nestedLambdaInParens() {
-        assertTokens("foo(|.x|)", ident("foo"), sym('('), pipeOpen, sym('.'), ident("x"), pipeClose, sym(')'), eof)
+        assertTokens("foo(|.x|)", ident("foo"), sym('('), pipe, sym('.'), ident("x"), pipe, sym(')'), eof)
     }
 
     @Test
     fun bareImplicitParamLambda() {
-        assertTokens("|.|", pipeOpen, sym('.'), pipeClose, eof)
+        assertTokens("|.|", pipe, sym('.'), pipe, eof)
     }
 
     @Test
@@ -102,9 +102,9 @@ class LambdaTest {
         assertTokens(
             "filter(items, |.orders.any(|.price > 100|)|)",
             ident("filter"), sym('('), ident("items"), sym(','),
-            pipeOpen, sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
-            pipeOpen, sym('.'), ident("price"), sym('>'), num("100"), pipeClose,
-            sym(')'), pipeClose, sym(')'), eof,
+            pipe, sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
+            pipe, sym('.'), ident("price"), sym('>'), num("100"), pipe,
+            sym(')'), pipe, sym(')'), eof,
         )
     }
 
@@ -120,8 +120,8 @@ class LambdaTest {
         assertTokens(
             program,
             ident("filter"), sym('('), ident("items"), sym(','),
-            pipeOpen, sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
-            num("1"), sym(')'), pipeClose, sym(')'), eof,
+            pipe, sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
+            num("1"), sym(')'), pipe, sym(')'), eof,
         )
     }
 
@@ -139,12 +139,15 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','),
-            pipeOpen, blockStart,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
-            num("1"), sym(')'),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("filter", indent = 0), sym('('), ident("items"), sym(','),
+            pipe(4),
+            ident("x", indent = 8), sym('='), num("1"),
+            sym('.', indent = 8), ident("orders"), sym('.'), ident("any"), sym('('),
+            num("1", indent = 12),
+            sym(')', indent = 8),
+            pipe(4),
+            sym(')', indent = 0),
+            eof,
         )
     }
 
@@ -159,9 +162,11 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','),
-            pipeOpen, sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
-            num("1"), sym(')'), pipeClose, sym(')'), eof,
+            ident("filter", indent = 4), sym('('), ident("items"), sym(','),
+            pipe(indent = 8), sym('.'), ident("orders"), sym('.'), ident("any"), sym('('),
+            num("1", indent = 0), sym(')', indent = 8), pipe,
+            sym(')', indent = 4),
+            eof,
         )
     }
 
@@ -169,7 +174,7 @@ class LambdaTest {
     fun nestedNoParamLambdas() {
         assertTokens(
             "||42||",
-            pipeOpen, pipeOpen, num("42"), pipeClose, pipeClose, eof,
+            pipe, pipe, num("42"), pipe, pipe, eof,
         )
     }
 
@@ -177,7 +182,7 @@ class LambdaTest {
     fun nestedNoParamLambdasInParens() {
         assertTokens(
             "(||42||)",
-            sym('('), pipeOpen, pipeOpen, num("42"), pipeClose, pipeClose, sym(')'), eof,
+            sym('('), pipe, pipe, num("42"), pipe, pipe, sym(')'), eof,
         )
     }
 
@@ -186,9 +191,9 @@ class LambdaTest {
         assertTokens(
             "(|| || 42 || ||)",
             sym('('),
-            pipeOpen, pipeOpen, pipeOpen, pipeOpen,
+            pipe, pipe, pipe, pipe,
             num("42"),
-            pipeClose, pipeClose, pipeClose, pipeClose,
+            pipe, pipe, pipe, pipe,
             sym(')'), eof,
         )
     }
@@ -197,7 +202,7 @@ class LambdaTest {
     fun unclosedPipeAfterExpression() {
         assertTokens(
             "x = 42|",
-            ident("x"), sym('='), num("42"), pipeOpen, eof,
+            ident("x"), sym('='), num("42"), pipe, eof,
         )
     }
 
@@ -205,7 +210,7 @@ class LambdaTest {
     fun pipeAfterIdentIsOpen() {
         assertTokens(
             "blah|x -> 42|",
-            ident("blah"), pipeOpen, ident("x"), sym("->"), num("42"), pipeClose, eof,
+            ident("blah"), pipe, ident("x"), sym("->"), num("42"), pipe, eof,
         )
     }
 
@@ -219,9 +224,9 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("f"), sym('='), pipeOpen, ident("x"), sym("->"), blockStart,
-            ident("y"), sym('='), ident("x"), sym('+'), num("1"), stmtEnd,
-            ident("y"), blockEnd, pipeClose, eof,
+            ident("f", indent = 0), sym('='), pipe, ident("x"), sym("->"),
+            ident("y", indent = 4), sym('='), ident("x"), sym('+'), num("1"),
+            ident("y", indent = 4), pipe(0), eof,
         )
     }
 
@@ -234,9 +239,9 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen,
-            blockStart, num("42"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('), pipe,
+            num("42", indent = 2),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -250,10 +255,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen,
-            blockStart, ident("x"), sym('='), num("1"), stmtEnd,
-            ident("x"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('), pipe,
+            ident("x", indent = 2), sym('='), num("1"),
+            ident("x", indent = 2),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -269,12 +274,12 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','), pipeOpen,
-            blockStart, ident("x"), sym('='), ident("foo"), sym('('),
-            num("42"),
-            sym(')'), stmtEnd,
-            ident("x"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("filter", indent = 0), sym('('), ident("items"), sym(','), pipe,
+            ident("x", indent = 2), sym('='), ident("foo"), sym('('),
+            num("42", indent = 4),
+            sym(')', indent = 2),
+            ident("x", indent = 2),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -288,10 +293,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','), pipeOpen,
-            blockStart, ident("x"), sym('='), ident("foo"), sym('('),
-            ident("x"), sym('>'), num("100"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("filter", indent = 0), sym('('), ident("items"), sym(','), pipe,
+            ident("x", indent = 2), sym('='), ident("foo"), sym('('),
+            ident("x", indent = 2), sym('>'), num("100"),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -305,10 +310,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','), pipeOpen,
-            blockStart, ident("x"), sym('='), ident("foo"), sym('('),
-            ident("x"), sym('>'), num("100"),
-            sym(')'), blockEnd, pipeClose, eof,
+            ident("filter", indent = 0), sym('('), ident("items"), sym(','), pipe,
+            ident("x", indent = 2), sym('='), ident("foo"), sym('('),
+            ident("x", indent = 2), sym('>'), num("100"),
+            sym(')', indent = 0), pipe, eof,
         )
     }
 
@@ -321,10 +326,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("map"), sym('('), ident("items"), sym(','), pipeOpen,
+            ident("map", indent = 0), sym('('), ident("items"), sym(','), pipe,
             ident("x"), sym("->"),
-            blockStart, ident("arr"), sym('['), ident("x"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("arr", indent = 2), sym('['), ident("x"),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -338,15 +343,15 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("f"), sym('('), pipeOpen,
-            blockStart, ident("a"), sym('('), ident("b"), sym('['), ident("c"), sym('('),
-            ident("x"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("f", indent = 0), sym('('), pipe,
+            ident("a", indent = 2), sym('('), ident("b"), sym('['), ident("c"), sym('('),
+            ident("x", indent = 2),
+            pipe(0), sym(')'), eof,
         )
     }
 
     @Test
-    fun pipeClosedThroughMultipleBlocks() {
+    fun pipedThroughMultipleBlocks() {
         val program = """
             f(|
               x =
@@ -356,11 +361,11 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("f"), sym('('), pipeOpen,
-            blockStart, ident("x"), sym('='),
-            blockStart, ident("y"), sym('='),
-            blockStart, ident("z"),
-            blockEnd, blockEnd, blockEnd, pipeClose, sym(')'), eof,
+            ident("f", indent = 0), sym('('), pipe,
+            ident("x", indent = 2), sym('='),
+            ident("y", indent = 4), sym('='),
+            ident("z", indent = 6),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -368,9 +373,9 @@ class LambdaTest {
     fun singleLineUnclosedParenInLambda() {
         assertTokens(
             "f(|x -> g(x|)",
-            ident("f"), sym('('), pipeOpen,
+            ident("f"), sym('('), pipe,
             ident("x"), sym("->"), ident("g"), sym('('), ident("x"),
-            pipeClose, sym(')'), eof,
+            pipe, sym(')'), eof,
         )
     }
 
@@ -378,9 +383,9 @@ class LambdaTest {
     fun singleLineUnclosedBracketInLambda() {
         assertTokens(
             "f(|x -> a[x|)",
-            ident("f"), sym('('), pipeOpen,
+            ident("f"), sym('('), pipe,
             ident("x"), sym("->"), ident("a"), sym('['), ident("x"),
-            pipeClose, sym(')'), eof,
+            pipe, sym(')'), eof,
         )
     }
 
@@ -388,7 +393,7 @@ class LambdaTest {
     fun singleLineParenClosedThroughPipe() {
         assertTokens(
             "f(|x)",
-            ident("f"), sym('('), pipeOpen, ident("x"), sym(')'), eof,
+            ident("f"), sym('('), pipe, ident("x"), sym(')'), eof,
         )
     }
 
@@ -396,9 +401,9 @@ class LambdaTest {
     fun singleLineMultipleUnclosed() {
         assertTokens(
             "f(|a(b[c|)",
-            ident("f"), sym('('), pipeOpen,
+            ident("f"), sym('('), pipe,
             ident("a"), sym('('), ident("b"), sym('['), ident("c"),
-            pipeClose, sym(')'), eof,
+            pipe, sym(')'), eof,
         )
     }
 
@@ -407,7 +412,7 @@ class LambdaTest {
         assertTokens(
             "f(||g(x||)",
             ident("f"), sym('('),
-            pipeOpen, pipeOpen, ident("g"), sym('('), ident("x"), pipeClose, pipeClose,
+            pipe, pipe, ident("g"), sym('('), ident("x"), pipe, pipe,
             sym(')'), eof,
         )
     }
@@ -424,9 +429,11 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen, blockStart,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('),
+            pipe(4),
+            ident("x", indent = 8), sym('='), num("1"),
+            ident("y", indent = 8),
+            pipe(4), sym(')'), eof,
         )
     }
 
@@ -440,9 +447,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen, blockStart,
-            ident("x"), sym('='), num("1"),
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('),
+            pipe(2),
+            ident("x", indent = 4), sym('='), num("1"),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -456,9 +464,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), sym('['), pipeOpen, blockStart,
-            ident("x"), sym('='), num("1"),
-            blockEnd, pipeClose, sym(']'), sym(')'), eof,
+            ident("foo", indent = 0), sym('('), sym('['),
+            pipe(2),
+            ident("x", indent = 4), sym('='), num("1"),
+            pipe(0), sym(']'), sym(')'), eof,
         )
     }
 
@@ -472,9 +481,10 @@ class LambdaTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen, ident("x"), sym("->"), blockStart,
-            ident("y"), sym('='), ident("x"), sym('+'), num("1"), stmtEnd,
-            ident("y"), blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('), pipe, ident("x"), sym("->"),
+            ident("y", indent = 4), sym('='), ident("x"), sym('+'), num("1"),
+            ident("y", indent = 4),
+            pipe(0), sym(')'), eof,
         )
     }
 }

@@ -104,6 +104,11 @@ class BasicExprTest {
     }
 
     @Test
+    fun subtractionWithTightMinus() {
+        assertExprEquals(parse("1 -3"), sub(int(1), int(3)))
+    }
+
+    @Test
     fun unaryNegation() {
         val expr = parse("-42")
         assertExprEquals(expr, neg(int(42)))
@@ -190,55 +195,55 @@ class BasicExprTest {
     @Test
     fun unexpectedOperatorAtStart() {
         val error = assertFailsWith<ParseError> { parse("* 2") }
-        assertEquals("Expected expression, got Symbol(text=*, span=SourceSpan(start=0, end=1))", error.message)
+        assertEquals("Expected expression, got '*'", error.message)
     }
 
     @Test
     fun unexpectedEof() {
         val error = assertFailsWith<ParseError> { parse("") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=0, end=0))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun unclosedParen() {
         val error = assertFailsWith<ParseError> { parse("(1 + 2") }
-        assertEquals("Expected ')', got Eof(span=SourceSpan(start=6, end=6))", error.message)
+        assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun unclosedNestedParen() {
         val error = assertFailsWith<ParseError> { parse("((1 + 2)") }
-        assertEquals("Expected ')', got Eof(span=SourceSpan(start=8, end=8))", error.message)
+        assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun incompleteIfExpression() {
         val error = assertFailsWith<ParseError> { parse("if") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=2, end=2))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingRightOperand() {
         val error = assertFailsWith<ParseError> { parse("1 +") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=3, end=3))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingOperandAfterNot() {
         val error = assertFailsWith<ParseError> { parse("not") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=3, end=3))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingOperandAfterNegation() {
         val error = assertFailsWith<ParseError> { parse("-") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=1, end=1))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun emptyParens() {
         val error = assertFailsWith<ParseError> { parse("()") }
-        assertEquals("Expected expression, got Symbol(text=), span=SourceSpan(start=1, end=2))", error.message)
+        assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test

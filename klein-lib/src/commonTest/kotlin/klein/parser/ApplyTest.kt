@@ -111,25 +111,25 @@ class ApplyTest {
     @Test
     fun unclosedCall() {
         val error = assertFailsWith<ParseError> { parse("f(1") }
-        assertEquals("Expected ')', got Eof(span=SourceSpan(start=3, end=3))", error.message)
+        assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun unclosedCallWithMultipleArgs() {
         val error = assertFailsWith<ParseError> { parse("f(1, 2") }
-        assertEquals("Expected ')', got Eof(span=SourceSpan(start=6, end=6))", error.message)
+        assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun trailingCommaInArgs() {
         val error = assertFailsWith<ParseError> { parse("f(1,)") }
-        assertEquals("Expected expression, got Symbol(text=), span=SourceSpan(start=4, end=5))", error.message)
+        assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test
     fun doubleCommaInArgs() {
         val error = assertFailsWith<ParseError> { parse("f(1,,2)") }
-        assertEquals("Expected expression, got Symbol(text=,, span=SourceSpan(start=4, end=5))", error.message)
+        assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
@@ -189,13 +189,13 @@ class ApplyTest {
     @Test
     fun keywordAndAsCallee() {
         val error = assertFailsWith<ParseError> { parse("and(1)") }
-        assertEquals("Expected expression, got Keyword(AND, span=SourceSpan(start=0, end=3))", error.message)
+        assertEquals("Expected expression, got Keyword(AND)", error.message)
     }
 
     @Test
     fun keywordOrAsCallee() {
         val error = assertFailsWith<ParseError> { parse("or(1)") }
-        assertEquals("Expected expression, got Keyword(OR, span=SourceSpan(start=0, end=2))", error.message)
+        assertEquals("Expected expression, got Keyword(OR)", error.message)
     }
 
     @Test
@@ -258,55 +258,55 @@ class ApplyTest {
     @Test
     fun leadingCommaInArgs() {
         val error = assertFailsWith<ParseError> { parse("f(,1)") }
-        assertEquals("Expected expression, got Symbol(text=,, span=SourceSpan(start=2, end=3))", error.message)
+        assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun missingCommaBetweenArgs() {
         val error = assertFailsWith<ParseError> { parse("f(1 2)") }
-        assertEquals("Expected ')', got Number(text=2, span=SourceSpan(start=4, end=5))", error.message)
+        assertEquals("Expected ')', got Number(2)", error.message)
     }
 
     @Test
     fun nestedUnclosedCall() {
         val error = assertFailsWith<ParseError> { parse("f(g(1)") }
-        assertEquals("Expected ')', got Eof(span=SourceSpan(start=6, end=6))", error.message)
+        assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun callWithUnclosedLambdaArg() {
         val error = assertFailsWith<ParseError> { parse("f(|x -> x)") }
-        assertEquals("Expected '|', got Symbol(text=), span=SourceSpan(start=9, end=10))", error.message)
+        assertEquals("Expected '|', got ')'", error.message)
     }
 
     @Test
     fun emptyParensAsCallee() {
         val error = assertFailsWith<ParseError> { parse("()(1)") }
-        assertEquals("Expected expression, got Symbol(text=), span=SourceSpan(start=1, end=2))", error.message)
+        assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test
     fun justCommaInArgs() {
         val error = assertFailsWith<ParseError> { parse("f(,)") }
-        assertEquals("Expected expression, got Symbol(text=,, span=SourceSpan(start=2, end=3))", error.message)
+        assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun plusNotUnary() {
         val error = assertFailsWith<ParseError> { parse("f(+)") }
-        assertEquals("Expected expression, got Symbol(text=+, span=SourceSpan(start=2, end=3))", error.message)
+        assertEquals("Expected expression, got '+'", error.message)
     }
 
     @Test
     fun multipleTrailingCommas() {
         val error = assertFailsWith<ParseError> { parse("f(1,,)") }
-        assertEquals("Expected expression, got Symbol(text=,, span=SourceSpan(start=4, end=5))", error.message)
+        assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun openParenAtEof() {
         val error = assertFailsWith<ParseError> { parse("f(") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=2, end=2))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
@@ -320,7 +320,7 @@ class ApplyTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            call(lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y"))), int(5)),
+            call(lambda("x", body = block(valStmt("y", add(id("x"), int(1))), id("y"))), int(5)),
         )
     }
 
@@ -358,7 +358,7 @@ class ApplyTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y")))),
+            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), id("y")))),
         )
     }
 }

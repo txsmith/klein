@@ -12,21 +12,26 @@ class Lexer(
     private val source: String,
 ) {
     private var pos: Int = 0
-    private var lastToken: Token? = null
-    private val nesting = NestingContext()
-
     private var atLineStart: Boolean = true
     private var indent: Int = 0 // Column position of first non-whitespace char on current line
+    private var nextTokenIndent: Int? = 0 // Indent to stamp on next token (null = same line)
+
+    private fun token(
+        kind: TokenKind,
+        span: SourceSpan,
+        text: String? = null,
+    ): Token {
+        val token = Token(kind, span, text, nextTokenIndent)
+        nextTokenIndent = null
+        return token
+    }
 
     fun tokenize(): Sequence<Token> =
         sequence {
             while (true) {
                 val batch = next()
                 if (batch.isEmpty()) continue
-                for (token in batch) {
-                    lastToken = token
-                    yield(token)
-                }
+                yieldAll(batch)
                 if (batch.last().kind == EOF) break
             }
         }
@@ -43,7 +48,8 @@ class Lexer(
         consumeWhitespaceAndComments()
 
         if (pos >= source.length) {
-            return listOf(Token(EOF, SourceSpan.pos(pos)))
+            // EOF always gets indent=0 so it naturally terminates any block
+            return listOf(Token(EOF, SourceSpan.pos(pos), indent = 0))
         }
 
         val start = pos
@@ -70,104 +76,63 @@ class Lexer(
 
             c == '|' -> {
                 advance()
-                val kind = nesting.determinePipeKind(lastToken?.kind)
-                val token = Token(kind, SourceSpan(start, pos))
-                val blockEnds = nesting.updateNesting(token, indent)
-                blockEnds + listOf(token)
+                listOf(token(PIPE, SourceSpan(start, pos)))
             }
 
             c in "()[]{}" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
-                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1), nesting.describeStack())
+                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1))
                 advance(length)
-                val token = Token(kind, SourceSpan(start, pos))
-                val blockEnds = nesting.updateNesting(token, indent)
-                blockEnds + listOf(token)
+                listOf(token(kind, SourceSpan(start, pos)))
             }
 
-            c in "+-*/%=<>!&,.;:@" -> {
+            c == '-' -> {
+                advance()
+                // Check if -> arrow
+                if (peek() == '>') {
+                    advance()
+                    listOf(token(ARROW, SourceSpan(start, pos)))
+                } else {
+                    // MINUS_TIGHT if no space after, MINUS otherwise
+                    val kind = if (peek()?.isWhitespace() != false) MINUS else MINUS_TIGHT
+                    listOf(token(kind, SourceSpan(start, pos)))
+                }
+            }
+
+            c in "+*/%=<>!&,.;:@" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
-                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1), nesting.describeStack())
+                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1))
                 advance(length)
-                listOf(Token(kind, SourceSpan(start, pos)))
+                listOf(token(kind, SourceSpan(start, pos)))
             }
 
             else -> {
-                throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1), nesting.describeStack())
+                throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
             }
         }
     }
 
     private fun handleIndentation(): List<Token> {
-        val indentStart = pos
         indent = consumeIndentation()
         atLineStart = false
 
         // Empty lines and comment-only lines should be skipped for indentation
-        // But NOT at EOF - we need to process dedentation to emit BlockEnd tokens
         if (peek() == '\n' || peek() == '#') {
             return emptyList()
         }
 
-        // Track indentation outside of parens or if we're inside a statement
-        if (nesting.isIndentTrackingEnabled) {
-            val span = SourceSpan(indentStart, pos)
-            if (indent > nesting.currentBlockIndent && lastTokenWasBlockStarter) {
-                return listOf(nesting.pushBlock(indent, span))
-            } else if (indent < nesting.currentBlockIndent) {
-                val blockEnds = mutableListOf<Token>()
-                while (nesting.currentBlockIndent > indent) {
-                    val token = nesting.popBlock(span) ?: break
-                    blockEnds.add(token)
-                }
-                if (blockEnds.isNotEmpty()) {
-                    return blockEnds
-                }
-            } else if (indent == nesting.currentBlockIndent) {
-                // Same level: emit StatementEnd if last token allows it
-                // But not if next token is a closing delimiter or continuation keyword
-                val nextChar = peekNonWhitespace()
-                if (lastTokenAllowsStatementEnd && !isClosingDelimiter(nextChar) && !peekIsContinuationKeyword()) {
-                    return listOf(Token(STMT_END, statementEndSpan()))
-                }
-            } else {
-                // More indented without block starter:
-                // - If next token is an operator or continuation keyword, it's expression continuation
-                // - Otherwise, it's a new statement (emit STMT_END)
-                val nextChar = peekNonWhitespace()
-                if (lastTokenAllowsStatementEnd && !isBinaryOperatorStart(nextChar) && !peekIsContinuationKeyword()) {
-                    return listOf(Token(STMT_END, statementEndSpan()))
-                }
-            }
-        } else {
-            // Inside brackets (expression context): may still need StatementEnd
-            if (lastTokenAllowsStatementEnd) {
-                return listOf(Token(STMT_END, statementEndSpan()))
-            }
-        }
+        // Set indent for next token (first token on this line)
+        nextTokenIndent = indent
 
         return emptyList()
     }
 
     private fun consumeWhitespaceAndComments() {
         while (true) {
-            // Drop irrelevant whitespace
-            if (nesting.isIndentTrackingEnabled) {
-                // In statements, newlines are significant for determining where it ends
-                consumeWhile { it.isWhitespace() && it != '\n' }
-            } else {
-                // In expressions, newlines aren't significant,
-                // but keep tracking line indent for when a statement starts
-                while (peek()?.isWhitespace() == true) {
-                    if (consumeIf('\n')) {
-                        indent = consumeIndentation()
-                    } else {
-                        advance()
-                    }
-                }
-            }
+            // Never consume newlines - they trigger handleIndentation via next()
+            consumeWhile { it.isWhitespace() && it != '\n' }
             // Skip comments (but not the newline after them)
             if (peek() == '#') {
                 consumeWhile { it != '\n' }
@@ -175,43 +140,6 @@ class Lexer(
                 break
             }
         }
-    }
-
-    private val lastTokenAllowsStatementEnd: Boolean
-        get() {
-            val last = lastToken ?: return false
-            return when (last.kind) {
-                IDENT, INT, DOUBLE, STRING, TRUE, FALSE -> true
-                RPAREN, RBRACKET, RBRACE, PIPE_CLOSE -> nesting.isCurrentContextBlock
-                else -> false
-            }
-        }
-
-    private val lastTokenWasBlockStarter: Boolean
-        get() {
-            val last = lastToken ?: return false
-            return when (last.kind) {
-                THEN, ELSE, EQ, ARROW -> true
-                PIPE_OPEN -> nesting.isCurrentContextPipe
-                else -> false
-            }
-        }
-
-    private fun isClosingDelimiter(char: Char?): Boolean = char == '|' || char == ')' || char == ']' || char == '}'
-
-    private fun isBinaryOperatorStart(char: Char?): Boolean = char != null && char in "+-*/%<>=!"
-
-    private fun statementEndSpan(): SourceSpan {
-        val lastSpan = lastToken?.span
-        return if (lastSpan != null) SourceSpan(lastSpan.end, lastSpan.end) else SourceSpan.pos(pos)
-    }
-
-    private fun symbol(start: Int): Token {
-        val (kind, length) =
-            TokenKind.matchSymbol(source, pos)
-                ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1), nesting.describeStack())
-        pos += length
-        return Token(kind, SourceSpan(start, pos))
     }
 
     private fun number(): Token {
@@ -225,7 +153,7 @@ class Lexer(
         }
         val text = source.substring(start, pos)
         val kind = if (isDouble) DOUBLE else INT
-        return Token(kind, SourceSpan(start, pos), text)
+        return token(kind, SourceSpan(start, pos), text)
     }
 
     private fun identOrKeyword(): Token {
@@ -233,7 +161,7 @@ class Lexer(
         val text = consumeWhile { it.isLetterOrDigit() || it == '_' }
         val span = SourceSpan(start, pos)
         val kind = TokenKind.fromKeyword(text) ?: IDENT
-        return Token(kind, span, text)
+        return token(kind, span, text)
     }
 
     private fun string(): Token {
@@ -247,9 +175,9 @@ class Lexer(
             }
         }
         if (consumeChar("'") == null) {
-            throw LexerError("Unterminated string", SourceSpan(start, pos), nesting.describeStack())
+            throw LexerError("Unterminated string", SourceSpan(start, pos))
         }
-        return Token(STRING, SourceSpan(start, pos), content.toString())
+        return token(STRING, SourceSpan(start, pos), content.toString())
     }
 
     private val escapes = mapOf('\'' to '\'', '\\' to '\\', 'n' to '\n', 't' to '\t')
@@ -259,9 +187,9 @@ class Lexer(
         if (c != null) return escapes[c]!!
         val next = peek()
         if (next == null) {
-            throw LexerError("Invalid escape sequence", SourceSpan(pos - 1, pos), nesting.describeStack())
+            throw LexerError("Invalid escape sequence", SourceSpan(pos - 1, pos))
         } else {
-            throw LexerError("Invalid escape sequence: \\$next", SourceSpan(pos - 1, pos + 1), nesting.describeStack())
+            throw LexerError("Invalid escape sequence: \\$next", SourceSpan(pos - 1, pos + 1))
         }
     }
 
@@ -321,39 +249,8 @@ class Lexer(
         if (actual !=
             expected
         ) {
-            throw LexerError("Unexpected '$actual', expected '$expected'", SourceSpan(pos - 1, pos), nesting.describeStack())
+            throw LexerError("Unexpected '$actual', expected '$expected'", SourceSpan(pos - 1, pos))
         }
-    }
-
-    private fun consumeIf(char: Char): Boolean {
-        if (peek() == char) {
-            advance()
-            return true
-        }
-        return false
-    }
-
-    private fun peekNonWhitespace(): Char? {
-        var i = pos
-        while (i < source.length && source[i].isWhitespace()) {
-            i++
-        }
-        return if (i < source.length) source[i] else null
-    }
-
-    private fun peekIsContinuationKeyword(): Boolean {
-        var i = pos
-        while (i < source.length && source[i].isWhitespace()) {
-            i++
-        }
-        if (i >= source.length || !source[i].isLetter()) return false
-
-        val start = i
-        while (i < source.length && (source[i].isLetterOrDigit() || source[i] == '_')) {
-            i++
-        }
-        val word = source.substring(start, i)
-        return TokenKind.fromKeyword(word)?.continuesExpression == true
     }
 
     private fun consumeIndentation(): Int {
@@ -363,185 +260,8 @@ class Lexer(
             advance()
         }
         if (pos < source.length && source[pos] == '\t') {
-            throw LexerError("Tabs are not allowed for indentation", SourceSpan(pos, pos + 1), nesting.describeStack())
+            throw LexerError("Tabs are not allowed for indentation", SourceSpan(pos, pos + 1))
         }
         return col
-    }
-}
-
-/**
- * Tracks nesting context for parens, brackets, pipes, and indentation blocks.
- *
- * Closing delimiters pop until matching opener, emitting BLOCK_END for any
- * indent blocks encountered. Unclosed intermediate delimiters are discarded.
- *
- * Newlines are significant in statement contexts (top-level, pipes, indent blocks)
- * but ignored in expression contexts (parens, brackets).
- */
-class NestingContext {
-    sealed class Item(
-        val needsIndentTracking: Boolean,
-    ) {
-        data class BlockStart(
-            val indent: Int,
-        ) : Item(needsIndentTracking = true)
-
-        data object Paren : Item(needsIndentTracking = false)
-
-        data object Bracket : Item(needsIndentTracking = false)
-
-        data object Brace : Item(needsIndentTracking = false)
-
-        data class Pipe(
-            val anchorIndent: Int?, // Source line indent where pipe opened (for pipes inside parens)
-        ) : Item(needsIndentTracking = true)
-    }
-
-    private val stack: ArrayDeque<Item> = ArrayDeque<Item>()
-    private var lastPipeWasOpen: Boolean = false
-
-    init {
-        stack.addFirst(Item.BlockStart(0))
-    }
-
-    /** True in statement contexts where newlines can end statements. */
-    val isIndentTrackingEnabled: Boolean
-        get() = stack.first().needsIndentTracking
-
-    /** True if anywhere inside parens, brackets, or braces (expression context). */
-    val inParenOrBracket: Boolean
-        get() = stack.any { it is Item.Paren || it is Item.Bracket || it is Item.Brace }
-
-    /** True if the innermost context is an indent block. */
-    val isCurrentContextBlock: Boolean
-        get() = stack.first() is Item.BlockStart
-
-    /** True if the innermost context is a pipe/lambda. */
-    val isCurrentContextPipe: Boolean
-        get() = stack.first() is Item.Pipe
-
-    /** True if any pipe is open (used to determine if `|` opens or closes). */
-    val hasPipeOnStack: Boolean
-        get() = stack.any { it is Item.Pipe }
-
-    /** Number of indent blocks currently open. */
-    val blockDepth: Int
-        get() = stack.count { it is Item.BlockStart }
-
-    /**
-     * The indent level that dedents are measured against.
-     * For pipes inside parens, this is the line where the pipe opened.
-     */
-    val currentBlockIndent: Int
-        get() {
-            for (item in stack) {
-                when (item) {
-                    is Item.BlockStart -> return item.indent
-                    is Item.Pipe -> item.anchorIndent?.let { return it }
-                    else -> continue
-                }
-            }
-            return 0
-        }
-
-    /** Opens a new indent block, returns BLOCK_START token. */
-    fun pushBlock(
-        indent: Int,
-        span: SourceSpan,
-    ): Token {
-        stack.addFirst(Item.BlockStart(indent))
-        return Token(BLOCK_START, span)
-    }
-
-    /** Pops an indent block if possible, returns BLOCK_END token or null. */
-    fun popBlock(span: SourceSpan): Token? {
-        val top = stack.firstOrNull()
-        return if (top is Item.BlockStart && blockDepth > 1) {
-            stack.removeFirst()
-            Token(BLOCK_END, span)
-        } else {
-            null
-        }
-    }
-
-    /**
-     * Determines whether a `|` should be PIPE_OPEN or PIPE_CLOSE.
-     * Opens if no pipe on stack or previous token can't end an expression.
-     * Consecutive pipes (||) follow the same direction as the first.
-     */
-    fun determinePipeKind(lastTokenKind: TokenKind?): TokenKind {
-        val lastTokenCanEndExpr =
-            when (lastTokenKind) {
-                IDENT, INT, DOUBLE, STRING, TRUE, FALSE, RPAREN, RBRACKET, RBRACE, BLOCK_END, STMT_END, PIPE_OPEN, PIPE_CLOSE, DOT -> true
-                else -> false
-            }
-        val isOpeningPipe =
-            when {
-                lastTokenKind == PIPE_OPEN || lastTokenKind == PIPE_CLOSE -> lastPipeWasOpen
-                hasPipeOnStack && lastTokenCanEndExpr -> false
-                else -> true
-            }
-        lastPipeWasOpen = isOpeningPipe
-        return if (isOpeningPipe) PIPE_OPEN else PIPE_CLOSE
-    }
-
-    /**
-     * Updates nesting for delimiter tokens (parens, brackets, pipes).
-     * Returns BLOCK_END tokens for any indent blocks closed by the delimiter.
-     */
-    fun updateNesting(
-        token: Token,
-        lineIndent: Int,
-    ): List<Token> =
-        when (token.kind) {
-            LPAREN -> {
-                stack.addFirst(Item.Paren)
-                emptyList()
-            }
-            RPAREN -> popUntilMatching<Item.Paren>(token.span)
-            LBRACKET -> {
-                stack.addFirst(Item.Bracket)
-                emptyList()
-            }
-            RBRACKET -> popUntilMatching<Item.Bracket>(token.span)
-            LBRACE -> {
-                stack.addFirst(Item.Brace)
-                emptyList()
-            }
-            RBRACE -> popUntilMatching<Item.Brace>(token.span)
-            PIPE_OPEN -> {
-                val anchorIndent = if (inParenOrBracket) lineIndent else null
-                stack.addFirst(Item.Pipe(anchorIndent))
-                emptyList()
-            }
-            PIPE_CLOSE -> popUntilMatching<Item.Pipe>(token.span)
-            else -> emptyList()
-        }
-
-    /** Returns a description of the nesting stack for error messages. */
-    fun describeStack(): List<String> =
-        stack.map { item ->
-            when (item) {
-                is Item.BlockStart -> "Block(indent=${item.indent})"
-                is Item.Paren -> "Paren"
-                is Item.Bracket -> "Bracket"
-                is Item.Brace -> "Brace"
-                is Item.Pipe -> "Pipe(anchor=${item.anchorIndent})"
-            }
-        }
-
-    private inline fun <reified T : Item> popUntilMatching(span: SourceSpan): List<Token> {
-        if (stack.none { it is T }) {
-            return emptyList()
-        }
-
-        val blockEnds = mutableListOf<Token>()
-        while (true) {
-            when (stack.removeFirst()) {
-                is T -> return blockEnds
-                is Item.BlockStart -> blockEnds.add(Token(BLOCK_END, span))
-                is Item.Paren, is Item.Bracket, is Item.Brace, is Item.Pipe -> {}
-            }
-        }
     }
 }

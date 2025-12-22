@@ -112,6 +112,10 @@ private fun parse(
         }
     } catch (e: ParseError) {
         printError(source, e.span, e.message ?: "Parse error", rawOutput)
+        if (verbose) {
+            println("\nCall stack:")
+            printFormattedStackTrace(e)
+        }
     }
 }
 
@@ -126,6 +130,30 @@ private fun printError(
     } else {
         print(span.formatInSource(source, contextLines = 5, message = message))
     }
+}
+
+private fun printFormattedStackTrace(e: Throwable) {
+    val pattern = Regex("""kfun:klein\.([^+]+).+/klein/(\w+\.kt):(\d+)""")
+    val frames =
+        e
+            .stackTraceToString()
+            .lines()
+            .mapNotNull { line ->
+                pattern.find(line)?.let { match ->
+                    val (func, file, lineNum) = match.destructured
+                    val funcName =
+                        func
+                            .replace(Regex("""Parser[.#]"""), "")
+                            .replace("#internal", "")
+                            .substringBefore("(")
+                            .substringBefore("{")
+                            .trim()
+                    "$funcName:$lineNum"
+                }
+            }.filter { !it.startsWith("ParseError") }
+            .reversed()
+
+    println(frames.joinToString(" -> "))
 }
 
 @OptIn(ExperimentalForeignApi::class)

@@ -76,7 +76,6 @@ data class Apply(
 
 data class Block(
     val stmts: List<Stmt>,
-    val expr: Expr,
     override val span: SourceSpan,
 ) : Expr()
 
@@ -132,6 +131,7 @@ enum class Operator(
             when (kind) {
                 TokenKind.PLUS -> Add
                 TokenKind.MINUS -> Sub
+                TokenKind.MINUS_TIGHT -> Sub
                 TokenKind.STAR -> Mul
                 TokenKind.SLASH -> Div
                 TokenKind.PERCENT -> Mod

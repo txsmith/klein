@@ -141,73 +141,73 @@ class LambdaTest {
     @Test
     fun unclosedLambda() {
         val error = assertFailsWith<ParseError> { parse("|42") }
-        assertEquals("Expected '|', got Eof(span=SourceSpan(start=3, end=3))", error.message)
+        assertEquals("Expected '|', got Eof", error.message)
     }
 
     @Test
     fun unclosedLambdaWithParam() {
         val error = assertFailsWith<ParseError> { parse("|x -> x") }
-        assertEquals("Expected '|', got Eof(span=SourceSpan(start=7, end=7))", error.message)
+        assertEquals("Expected '|', got Eof", error.message)
     }
 
     @Test
     fun emptyLambda() {
         val error = assertFailsWith<ParseError> { parse("||") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=2, end=2))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingArrowAfterParams() {
         val error = assertFailsWith<ParseError> { parse("|x, y x + y|") }
-        assertEquals("Expected '->', got Ident(name=x, span=SourceSpan(start=6, end=7))", error.message)
+        assertEquals("Expected '->', got Ident(x)", error.message)
     }
 
     @Test
     fun trailingCommaInParams() {
         val error = assertFailsWith<ParseError> { parse("|x, y, -> x|") }
-        assertEquals("Expected '->', got Symbol(text=,, span=SourceSpan(start=5, end=6))", error.message)
+        assertEquals("Expected '->', got ','", error.message)
     }
 
     @Test
     fun missingBodyAfterArrow() {
         val error = assertFailsWith<ParseError> { parse("|x -> |") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=7, end=7))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun lambdaWithOnlyArrow() {
         val error = assertFailsWith<ParseError> { parse("| -> 1|") }
-        assertEquals("Expected expression, got Symbol(text=->, span=SourceSpan(start=2, end=4))", error.message)
+        assertEquals("Expected expression, got '->'", error.message)
     }
 
     @Test
     fun keywordTrueAsParam() {
         val error = assertFailsWith<ParseError> { parse("|true -> 1|") }
-        assertEquals("Expected '|', got Symbol(text=->, span=SourceSpan(start=6, end=8))", error.message)
+        assertEquals("Expected '|', got '->'", error.message)
     }
 
     @Test
     fun keywordIfAsParam() {
         val error = assertFailsWith<ParseError> { parse("|if -> 1|") }
-        assertEquals("Expected expression, got Symbol(text=->, span=SourceSpan(start=4, end=6))", error.message)
+        assertEquals("Expected expression, got '->'", error.message)
     }
 
     @Test
     fun keywordAndAsParam() {
         val error = assertFailsWith<ParseError> { parse("|and -> 1|") }
-        assertEquals("Expected expression, got Keyword(AND, span=SourceSpan(start=1, end=4))", error.message)
+        assertEquals("Expected expression, got Keyword(AND)", error.message)
     }
 
     @Test
     fun parensAroundSingleParam() {
         val error = assertFailsWith<ParseError> { parse("|(x) -> x|") }
-        assertEquals("Expected '|', got Symbol(text=->, span=SourceSpan(start=5, end=7))", error.message)
+        assertEquals("Expected '|', got '->'", error.message)
     }
 
     @Test
     fun parensAroundMultipleParams() {
         val error = assertFailsWith<ParseError> { parse("|(x, y) -> x + y|") }
-        assertEquals("Expected ')', got Symbol(text=,, span=SourceSpan(start=3, end=4))", error.message)
+        assertEquals("Expected ')', got ','", error.message)
     }
 
     @Test
@@ -266,7 +266,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = mul(id("y"), int(2)))),
+            lambda("x", body = block(valStmt("y", add(id("x"), int(1))), mul(id("y"), int(2)))),
         )
     }
 
@@ -284,7 +284,7 @@ class LambdaTest {
             parse(program),
             lambda(
                 "x",
-                body = block(valStmt("a", add(id("x"), int(1))), valStmt("b", mul(id("a"), int(2))), expr = add(id("a"), id("b"))),
+                body = block(valStmt("a", add(id("x"), int(1))), valStmt("b", mul(id("a"), int(2))), add(id("a"), id("b"))),
             ),
         )
     }
@@ -301,7 +301,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            lambda(body = block(valStmt("x", int(1)), valStmt("y", int(2)), expr = add(id("x"), id("y")))),
+            lambda(body = block(valStmt("x", int(1)), valStmt("y", int(2)), add(id("x"), id("y")))),
         )
     }
 
@@ -314,7 +314,7 @@ class LambdaTest {
               y
             |
             """.trimIndent()
-        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", id("x")), expr = id("y"))))
+        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", id("x")), id("y"))))
     }
 
     @Test
@@ -335,8 +335,8 @@ class LambdaTest {
                 "x",
                 body =
                     block(
-                        valStmt("f", lambda("y", body = block(valStmt("z", add(id("y"), int(1))), expr = id("z")))),
-                        expr = call(id("f"), id("x")),
+                        valStmt("f", lambda("y", body = block(valStmt("z", add(id("y"), int(1))), id("z")))),
+                        call(id("f"), id("x")),
                     ),
             ),
         )
@@ -352,13 +352,13 @@ class LambdaTest {
               y
             |
             """.trimIndent()
-        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y"))))
+        assertExprEquals(parse(program), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), id("y"))))
     }
 
     @Test
     fun lambdaWithArrowNoParamsIsError() {
         val error = assertFailsWith<ParseError> { parse("|-> 42|") }
-        assertEquals("Expected expression, got Symbol(text=->, span=SourceSpan(start=1, end=3))", error.message)
+        assertEquals("Expected expression, got '->'", error.message)
     }
 
     @Test
@@ -370,7 +370,33 @@ class LambdaTest {
               2
             |
             """.trimIndent()
-        assertExprEquals(parse(program), lambda("x", body = block(int(1), expr = int(2))))
+        assertExprEquals(parse(program), lambda("x", body = block(int(1), int(2))))
+    }
+
+    @Test
+    fun closingPipeAtBlockIndent() {
+        val program =
+            """
+            |
+              .bar
+              |
+            """.trimIndent()
+        assertExprEquals(parse(program), lambda(body = block(fieldAccess(implicitParam(), "bar"))))
+    }
+
+    @Test
+    fun closingPipeOnSameLineAsLastStatement() {
+        val program =
+            """
+            |x ->
+              y =
+                1
+              y + x|
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda("x", body = block(valStmt("y", block(int(1))), add(id("y"), id("x")))),
+        )
     }
 
     @Test
@@ -412,7 +438,7 @@ class LambdaTest {
               x
             |)
             """.trimIndent()
-        assertExprEquals(parse(program), call(id("foo"), lambda(body = block(valStmt("x", int(1)), expr = id("x")))))
+        assertExprEquals(parse(program), call(id("foo"), lambda(body = block(valStmt("x", int(1)), id("x")))))
     }
 
     @Test
@@ -426,7 +452,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            call(id("filter"), id("items"), lambda(body = block(valStmt("x", call(id("foo"), int(42))), expr = id("x")))),
+            call(id("filter"), id("items"), lambda(body = block(valStmt("x", call(id("foo"), int(42))), id("x")))),
         )
     }
 
@@ -441,7 +467,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), expr = id("y")))),
+            call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), id("y")))),
         )
     }
 
@@ -470,11 +496,11 @@ class LambdaTest {
                                 body =
                                     block(
                                         valStmt("b", lambda(body = block(int(1)))),
-                                        expr = id("b"),
+                                        id("b"),
                                     ),
                             ),
                         ),
-                        expr = id("a"),
+                        id("a"),
                     ),
             ),
         )
@@ -492,7 +518,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            lambda("x", body = block(valStmt("y", add(int(1), int(2))), expr = id("y"))),
+            lambda("x", body = block(valStmt("y", add(int(1), int(2))), id("y"))),
         )
     }
 
@@ -509,7 +535,7 @@ class LambdaTest {
             """.trimIndent()
         assertExprEquals(
             parse(program),
-            lambda("x", body = block(valStmt("y", add(add(int(1), int(2)), int(3))), expr = id("y"))),
+            lambda("x", body = block(valStmt("y", add(add(int(1), int(2)), int(3))), id("y"))),
         )
     }
 
@@ -546,15 +572,15 @@ class LambdaTest {
                                                 body =
                                                     block(
                                                         valStmt("c", lambda(body = block(int(42)))),
-                                                        expr = id("c"),
+                                                        id("c"),
                                                     ),
                                             ),
                                         ),
-                                        expr = id("b"),
+                                        id("b"),
                                     ),
                             ),
                         ),
-                        expr = id("a"),
+                        id("a"),
                     ),
             ),
         )
@@ -579,7 +605,7 @@ class LambdaTest {
                 body =
                     block(
                         valStmt("result", call(id("foo"), id("a"), id("b"))),
-                        expr = id("result"),
+                        id("result"),
                     ),
             ),
         )
@@ -620,7 +646,7 @@ class LambdaTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
+                            block(valStmt("y", add(id("x"), int(1))), id("y")),
                             block(int(0)),
                         ),
                     ),
@@ -645,7 +671,7 @@ class LambdaTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("y", add(id("x"), int(1))), expr = call(id("print"), id("y"))),
+                            block(valStmt("y", add(id("x"), int(1))), call(id("print"), id("y"))),
                         ),
                     ),
             ),
@@ -672,7 +698,7 @@ class LambdaTest {
                             id("a"),
                             block(ifThenElse(id("b"), block(call(id("print"), int(1))))),
                         ),
-                        expr = call(id("done")),
+                        call(id("done")),
                     ),
             ),
         )
@@ -697,7 +723,7 @@ class LambdaTest {
                     block(
                         ifThenElse(id("a"), block(call(id("print"), int(1)))),
                         ifThenElse(id("b"), block(call(id("print"), int(2)))),
-                        expr = call(id("done")),
+                        call(id("done")),
                     ),
             ),
         )
@@ -721,7 +747,7 @@ class LambdaTest {
                     block(
                         valStmt("x", call(id("getValue"))),
                         ifThenElse(gt(id("x"), int(0)), block(call(id("print"), id("x")))),
-                        expr = call(id("finish")),
+                        call(id("finish")),
                     ),
             ),
         )
@@ -730,18 +756,18 @@ class LambdaTest {
     @Test
     fun inlineBindingInLambdaIsError() {
         val error = assertFailsWith<ParseError> { parse("|x -> y = 1 y|") }
-        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=8, end=9))", error.message)
+        assertEquals("Expected '|', got '='", error.message)
     }
 
     @Test
     fun multipleInlineBindingsInLambdaIsError() {
         val error = assertFailsWith<ParseError> { parse("|x -> a = 1 b = 2 a + b|") }
-        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=8, end=9))", error.message)
+        assertEquals("Expected '|', got '='", error.message)
     }
 
     @Test
     fun inlineBindingInHeadlessLambdaIsError() {
         val error = assertFailsWith<ParseError> { parse("|y = 1 y|") }
-        assertEquals("Expected '|', got Symbol(text==, span=SourceSpan(start=3, end=4))", error.message)
+        assertEquals("Expected '|', got '='", error.message)
     }
 }

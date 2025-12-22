@@ -54,11 +54,12 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("filter"), sym('('), ident("items"), sym(','), pipeOpen, ident("x"), sym("->"), blockStart,
-            kw(IF), ident("x"), sym('>'), num("0"), kw(THEN), blockStart,
-            ident("x"), sym('+'), num("1"), blockEnd,
-            kw(ELSE), blockStart, ident("x"), sym('-'), num("1"), blockEnd, blockEnd,
-            pipeClose, sym(')'), eof,
+            ident("filter", indent = 0), sym('('), ident("items"), sym(','), pipe, ident("x"), sym("->"),
+            kw(IF, indent = 4), ident("x"), sym('>'), num("0"), kw(THEN),
+            ident("x", indent = 8), sym('+'), num("1"),
+            kw(ELSE, indent = 4),
+            ident("x", indent = 8), sym('-'), num("1"),
+            pipe(0), sym(')'), eof,
         )
     }
 
@@ -74,12 +75,13 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('),
+            ident("foo", indent = 0), sym('('),
             kw(IF), ident("x"), kw(THEN),
-            pipeOpen, blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), blockEnd, pipeClose,
-            kw(ELSE), ident("z"), sym(')'), eof,
+            pipe(4),
+            ident("y", indent = 8), sym('='), num("1"),
+            ident("y", indent = 8),
+            pipe(4),
+            kw(ELSE, indent = 0), ident("z"), sym(')'), eof,
         )
     }
 
@@ -95,12 +97,13 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('),
+            ident("foo", indent = 0), sym('('),
             kw(IF), ident("x"), kw(THEN), ident("y"),
             kw(ELSE),
-            pipeOpen, blockStart,
-            ident("z"), sym('='), num("1"), stmtEnd,
-            ident("z"), blockEnd, pipeClose, sym(')'), eof,
+            pipe(4),
+            ident("z", indent = 8), sym('='), num("1"),
+            ident("z", indent = 8),
+            pipe(4), sym(')'), eof,
         )
     }
 
@@ -118,11 +121,13 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen, blockStart,
-            kw(IF), ident("x"), kw(THEN), blockStart,
-            ident("a"), blockEnd,
-            kw(ELSE), blockStart, ident("b"), blockEnd,
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('),
+            pipe(4),
+            kw(IF, indent = 8), ident("x"), kw(THEN),
+            ident("a", indent = 12),
+            kw(ELSE, indent = 8),
+            ident("b", indent = 12),
+            pipe(4), sym(')'), eof,
         )
     }
 
@@ -135,9 +140,9 @@ class IfThenElseTest {
             program,
             ident("foo"), sym('('),
             kw(IF), ident("x"), kw(THEN),
-            pipeOpen, ident("y"), pipeClose,
+            pipe, ident("y"), pipe,
             kw(ELSE),
-            pipeOpen, ident("z"), pipeClose,
+            pipe, ident("z"), pipe,
             sym(')'), eof,
         )
     }
@@ -159,13 +164,16 @@ class IfThenElseTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("foo"), sym('('), pipeOpen, ident("x"), sym("->"), blockStart,
-            kw(IF), ident("x"), kw(THEN), blockStart,
-            pipeOpen, blockStart,
-            ident("a"), sym('='), num("1"), stmtEnd,
-            ident("a"), blockEnd, pipeClose, blockEnd,
-            kw(ELSE), blockStart, ident("b"), blockEnd,
-            blockEnd, pipeClose, sym(')'), eof,
+            ident("foo", indent = 0), sym('('),
+            pipe(4), ident("x"), sym("->"),
+            kw(IF, indent = 8), ident("x"), kw(THEN),
+            pipe(12),
+            ident("a", indent = 16), sym('='), num("1"),
+            ident("a", indent = 16),
+            pipe(12),
+            kw(ELSE, indent = 8),
+            ident("b", indent = 12),
+            pipe(4), sym(')', indent = 0), eof,
         )
     }
 }

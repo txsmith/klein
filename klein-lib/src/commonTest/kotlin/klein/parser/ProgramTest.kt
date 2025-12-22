@@ -130,7 +130,7 @@ class ProgramTest {
             """.trimIndent()
         assertProgramEquals(
             parseProgram(program),
-            listOf(valStmt("result", block(valStmt("x", int(1)), valStmt("y", int(2)), expr = add(id("x"), id("y"))))),
+            listOf(valStmt("result", block(valStmt("x", int(1)), valStmt("y", int(2)), add(id("x"), id("y"))))),
         )
     }
 
@@ -146,7 +146,7 @@ class ProgramTest {
         assertProgramEquals(
             parseProgram(program),
             listOf(
-                valStmt("a", block(valStmt("x", int(1)), expr = id("x"))),
+                valStmt("a", block(valStmt("x", int(1)), id("x"))),
                 valStmt("b", int(2)),
             ),
         )
@@ -168,8 +168,8 @@ class ProgramTest {
                 valStmt(
                     "outer",
                     block(
-                        valStmt("inner", block(valStmt("x", int(1)), expr = id("x"))),
-                        expr = add(id("inner"), int(1)),
+                        valStmt("inner", block(valStmt("x", int(1)), id("x"))),
+                        add(id("inner"), int(1)),
                     ),
                 ),
             ),
@@ -194,7 +194,7 @@ class ProgramTest {
                     "result",
                     block(
                         valStmt("x", call(id("getValue"))),
-                        expr = ifThenElse(gt(id("x"), int(0)), block(id("x")), block(int(0))),
+                        ifThenElse(gt(id("x"), int(0)), block(id("x")), block(int(0))),
                     ),
                 ),
             ),
@@ -217,10 +217,23 @@ class ProgramTest {
                     "main",
                     block(
                         ifThenElse(call(id("ready")), block(call(id("doWork")))),
-                        expr = call(id("cleanup")),
+                        call(id("cleanup")),
                     ),
                 ),
             ),
+        )
+    }
+
+    @Test
+    fun negationAsStatement() {
+        val program =
+            """
+            x = 1
+            -a
+            """.trimIndent()
+        assertProgramEquals(
+            parseProgram(program),
+            listOf(valStmt("x", int(1)), neg(id("a"))),
         )
     }
 }

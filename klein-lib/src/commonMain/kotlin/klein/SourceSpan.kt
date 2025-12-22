@@ -22,12 +22,20 @@ data class SourceSpan(
     ): String =
         buildString {
             val lines = source.lines()
-            val errorLine = findLineNumber(source, start)
-            val colStart = start - findLineStart(source, start)
-            val colEnd = minOf(end - findLineStart(source, start), lines.getOrNull(errorLine - 1)?.length ?: 0)
+            val errorLineStart = findLineNumber(source, start)
+            val errorLineEnd = findLineNumber(source, end)
+            val isMultiLine = errorLineStart != errorLineEnd
 
-            val startLine = maxOf(1, errorLine - contextLines)
-            val endLine = minOf(lines.size, errorLine + contextLines)
+            val colStart = start - findLineStart(source, start)
+            val colEnd =
+                if (isMultiLine) {
+                    lines.getOrNull(errorLineEnd - 1)?.length ?: 0
+                } else {
+                    minOf(end - findLineStart(source, start), lines.getOrNull(errorLineStart - 1)?.length ?: 0)
+                }
+
+            val startLine = maxOf(1, errorLineStart - contextLines)
+            val endLine = minOf(lines.size, errorLineEnd + contextLines)
             val maxLineNum = endLine
             val gutterWidth = maxLineNum.toString().length
 
@@ -36,9 +44,17 @@ data class SourceSpan(
             appendLine("${gutter(null)}  |")
             for (lineNum in startLine..endLine) {
                 val line = lines.getOrElse(lineNum - 1) { "" }
-                val marker = if (lineNum == errorLine) ">" else " "
+                val marker = if (lineNum in errorLineStart..errorLineEnd) ">" else " "
                 appendLine("${gutter(lineNum)} $marker| $line")
-                if (lineNum == errorLine) {
+
+                if (isMultiLine && lineNum == errorLineEnd) {
+                    append("${gutter(null)}  | ")
+                    append("^".repeat(maxOf(1, colEnd)))
+                    if (message != null) {
+                        append(" $message")
+                    }
+                    appendLine()
+                } else if (!isMultiLine && lineNum == errorLineStart) {
                     append("${gutter(null)}  | ")
                     append(" ".repeat(colStart))
                     append("^".repeat(maxOf(1, colEnd - colStart)))

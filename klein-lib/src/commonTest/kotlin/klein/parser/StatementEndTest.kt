@@ -1,8 +1,6 @@
 package klein.parser
 
-import klein.ParseError
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
 
 class StatementEndTest {
     @Test
@@ -56,13 +54,13 @@ class StatementEndTest {
     }
 
     @Test
-    fun newlineBeforeOperatorEndsStatement() {
+    fun newlineBeforeOperatorContinuesExpression() {
         val program =
             """
             x = 1
             + 2
             """.trimIndent()
-        assertFailsWith<ParseError> { parseProgram(program) }
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", add(int(1), int(2)))))
     }
 
     @Test
@@ -251,6 +249,16 @@ class StatementEndTest {
             (2)
             """.trimIndent()
         assertProgramEquals(parseProgram(program), listOf(valStmt("x", call(id("foo"), int(1))), int(2)))
+    }
+
+    @Test
+    fun chainedCallsContinueWithIndent() {
+        val program =
+            """
+            x = foo()
+              (1)
+            """.trimIndent()
+        assertProgramEquals(parseProgram(program), listOf(valStmt("x", call(call(id("foo")), int(1)))))
     }
 
     @Test

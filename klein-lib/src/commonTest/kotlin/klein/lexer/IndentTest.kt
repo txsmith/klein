@@ -9,9 +9,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class BlockTest {
+class IndentTest {
     @Test
-    fun blockStartedBlockAfterEquals() {
+    fun blockAfterEquals() {
         val program = """
             result =
                 x = 1
@@ -20,10 +20,10 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("result"), sym('='), blockStart,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("2"), stmtEnd,
-            ident("y"), eof,
+            ident("result", indent = 0), sym('='),
+            ident("x", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4), sym('='), num("2"),
+            ident("y", indent = 4), eof,
         )
     }
 
@@ -38,8 +38,11 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("result"), sym('='),
-            blockStart, ident("foo"), sym('('), ident("a"), sym(','), ident("b"), sym(')'),
+            ident("result", indent = 0), sym('='),
+            ident("foo", indent = 4), sym('('),
+            ident("a", indent = 8), sym(','),
+            ident("b", indent = 8),
+            sym(')', indent = 4),
             eof,
         )
     }
@@ -55,10 +58,12 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("outer"), sym('='), blockStart,
-            ident("inner"), sym('='), blockStart,
-            ident("x"), sym('='), num("1"), stmtEnd, ident("x"), blockEnd,
-            ident("inner"), eof,
+            ident("outer", indent = 0), sym('='),
+            ident("inner", indent = 4), sym('='),
+            ident("x", indent = 8), sym('='), num("1"),
+            ident("x", indent = 8),
+            ident("inner", indent = 4),
+            eof,
         )
     }
 
@@ -73,11 +78,11 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("a"), sym('='), blockStart,
-            ident("b"), sym('='), blockStart,
-            ident("c"), sym('='), blockStart,
-            num("1"), blockEnd, blockEnd, blockEnd,
-            ident("d"), sym('='), num("2"), eof,
+            ident("a", indent = 0), sym('='),
+            ident("b", indent = 4), sym('='),
+            ident("c", indent = 8), sym('='),
+            num("1", indent = 12),
+            ident("d", indent = 0), sym('='), num("2"), eof,
         )
     }
 
@@ -87,7 +92,7 @@ class BlockTest {
             x =
             1
         """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), num("1"), eof)
+        assertTokens(program, ident("x", indent = 0), sym('='), num("1", indent = 0), eof)
     }
 
     @Test
@@ -101,10 +106,10 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(IF), kw(TRUE), kw(THEN), blockStart,
-            ident("q"), sym('='), num("1"), stmtEnd,
-            sym('+'), num("2"), blockEnd,
-            kw(ELSE), blockStart, ident("x"), eof,
+            kw(IF, indent = 0), kw(TRUE), kw(THEN),
+            ident("q", indent = 4), sym('='), num("1"),
+            sym('+', indent = 4), num("2"),
+            kw(ELSE, indent = 0), ident("x"), eof,
         )
     }
 
@@ -119,10 +124,11 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(IF), kw(TRUE), kw(THEN), blockStart,
-            ident("q"), sym('='), num("1"), sym('+'), num("2"), blockEnd,
-            kw(ELSE), blockStart,
-            ident("x"), eof,
+            kw(IF, indent = 0), kw(TRUE), kw(THEN),
+            ident("q", indent = 4), sym('='), num("1"),
+            sym('+', indent = 8), num("2"),
+            kw(ELSE, indent = 0),
+            ident("x", indent = 4), eof,
         )
     }
 
@@ -137,11 +143,11 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(IF), kw(TRUE), kw(THEN), blockStart,
-            ident("s"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("3"), stmtEnd,
-            ident("println"), sym('('), ident("s"), sym(')'), stmtEnd,
-            ident("println"), sym('('), ident("y"), sym(')'), eof,
+            kw(IF, indent = 0), kw(TRUE), kw(THEN),
+            ident("s", indent = 4), sym('='), num("1"),
+            ident("y", indent = 8), sym('='), num("3"),
+            ident("println", indent = 8), sym('('), ident("s"), sym(')'),
+            ident("println", indent = 4), sym('('), ident("y"), sym(')'), eof,
         )
     }
 
@@ -156,11 +162,11 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(IF), kw(TRUE), kw(THEN),
-            blockStart, ident("q"), sym('='), num("1"),
-            blockEnd, sym('+'), num("2"),
-            kw(ELSE),
-            blockStart, ident("x"),
+            kw(IF, indent = 0), kw(TRUE), kw(THEN),
+            ident("q", indent = 4), sym('='), num("1"),
+            sym('+', indent = 0), num("2"),
+            kw(ELSE, indent = 0),
+            ident("x", indent = 4),
             eof,
         )
     }
@@ -171,7 +177,7 @@ class BlockTest {
             x =
                 1
         """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), blockStart, num("1"), eof)
+        assertTokens(program, ident("x", indent = 0), sym('='), num("1", indent = 4), eof)
     }
 
     @Test
@@ -205,10 +211,10 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("outer"), sym('='),
-            blockStart, ident("inner"), sym('='),
-            blockStart, num("42"),
-            blockEnd, ident("inner"),
+            ident("outer", indent = 0), sym('='),
+            ident("inner", indent = 2), sym('='),
+            num("42", indent = 6),
+            ident("inner", indent = 2),
             eof,
         )
     }
@@ -223,10 +229,10 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("outer"), sym('='),
-            blockStart, ident("inner"), sym('='),
-            blockStart, num("42"),
-            blockEnd, ident("inner"),
+            ident("outer", indent = 0), sym('='),
+            ident("inner", indent = 4), sym('='),
+            num("42", indent = 6),
+            ident("inner", indent = 4),
             eof,
         )
     }
@@ -243,12 +249,12 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("a"), sym('='),
-            blockStart, ident("b"), sym('='),
-            blockStart, ident("c"), sym('='),
-            blockStart, ident("x"),
-            blockEnd, ident("c"),
-            blockEnd, ident("b"),
+            ident("a", indent = 0), sym('='),
+            ident("b", indent = 2), sym('='),
+            ident("c", indent = 6), sym('='),
+            ident("x", indent = 9),
+            ident("c", indent = 6),
+            ident("b", indent = 2),
             eof,
         )
     }
@@ -261,7 +267,13 @@ class BlockTest {
                 b
             )
         """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), sym('('), ident("a"), sym(','), ident("b"), sym(')'), eof)
+        assertTokens(
+            program,
+            ident("x", indent = 0), sym('='), sym('('),
+            ident("a", indent = 4), sym(','),
+            ident("b", indent = 4),
+            sym(')', indent = 0), eof,
+        )
     }
 
     @Test
@@ -271,7 +283,7 @@ class BlockTest {
               # comment
               42
         """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), blockStart, num("42"), eof)
+        assertTokens(program, ident("x", indent = 0), sym('='), num("42", indent = 2), eof)
     }
 
     @Test
@@ -284,9 +296,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 2), sym('='), num("1"),
+            ident("y", indent = 2), sym('+'), num("2"),
             eof,
         )
     }
@@ -301,9 +313,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 2), sym('='), num("1"),
+            ident("y", indent = 2), sym('+'), num("2"),
             eof,
         )
     }
@@ -317,49 +329,56 @@ class BlockTest {
               c
             )
         """.trimIndent()
-        assertTokens(program, ident("foo"), sym('('), ident("a"), sym(','), ident("b"), sym(','), ident("c"), sym(')'), eof)
+        assertTokens(
+            program,
+            ident("foo", indent = 0), sym('('),
+            ident("a", indent = 0), sym(','),
+            ident("b", indent = 8), sym(','),
+            ident("c", indent = 2),
+            sym(')', indent = 0), eof,
+        )
     }
 
     @Test
     fun unmatchedCloseParen() {
-        assertTokens(")", sym(')'), eof)
+        assertTokens(")", sym(')', indent = 0), eof)
     }
 
     @Test
     fun unmatchedCloseBracket() {
-        assertTokens("]", sym(']'), eof)
+        assertTokens("]", sym(']', indent = 0), eof)
     }
 
     @Test
     fun unmatchedClosePipe() {
-        assertTokens("x|", ident("x"), pipeOpen, eof)
+        assertTokens("x|", ident("x", indent = 0), pipe, eof)
     }
 
     @Test
     fun closeParenThroughBracket() {
-        assertTokens("([)", sym('('), sym('['), sym(')'), eof)
+        assertTokens("([)", sym('(', indent = 0), sym('['), sym(')'), eof)
     }
 
     @Test
     fun closeBracketThroughParen() {
-        assertTokens("[(]", sym('['), sym('('), sym(']'), eof)
+        assertTokens("[(]", sym('[', indent = 0), sym('('), sym(']'), eof)
     }
 
     @Test
     fun closeWithWrongDelimiterNotOnStack() {
-        assertTokens("(]", sym('('), sym(']'), eof)
+        assertTokens("(]", sym('(', indent = 0), sym(']'), eof)
     }
 
     @Test
     fun closeWithWrongDelimiterNotOnStackReversed() {
-        assertTokens("[)", sym('['), sym(')'), eof)
+        assertTokens("[)", sym('[', indent = 0), sym(')'), eof)
     }
 
     @Test
     fun deepStackCloseWithWrongDelimiter() {
         assertTokens(
             "((((((]",
-            sym('('), sym('('), sym('('), sym('('), sym('('), sym('('),
+            sym('(', indent = 0), sym('('), sym('('), sym('('), sym('('), sym('('),
             sym(']'),
             eof,
         )
@@ -374,9 +393,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='),
-            blockStart, ident("y"), sym('='), num("1"),
-            blockEnd, ident("z"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 4), sym('='), num("1"),
+            ident("z", indent = 2),
             eof,
         )
     }
@@ -391,9 +410,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4), sym('+'), num("2"),
             eof,
         )
     }
@@ -408,9 +427,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4), sym('+'), num("2"),
             eof,
         )
     }
@@ -425,9 +444,9 @@ class BlockTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4), sym('+'), num("2"),
             eof,
         )
     }
@@ -441,9 +460,9 @@ class BlockTest {
             "    y + 2"
         assertTokens(
             program,
-            ident("x"), sym('='), blockStart,
-            ident("y"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('+'), num("2"),
+            ident("x", indent = 0), sym('='),
+            ident("y", indent = 4), sym('='), num("1"),
+            ident("y", indent = 4), sym('+'), num("2"),
             eof,
         )
     }
@@ -458,9 +477,9 @@ class BlockTest {
             "z = 3"
         assertTokens(
             program,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("2"), stmtEnd,
-            ident("z"), sym('='), num("3"), eof,
+            ident("x", indent = 0), sym('='), num("1"),
+            ident("y", indent = 2), sym('='), num("2"),
+            ident("z", indent = 0), sym('='), num("3"), eof,
         )
     }
 
@@ -471,52 +490,53 @@ class BlockTest {
             "  + 2"
         assertTokens(
             program,
-            ident("x"), sym('='), num("1"),
-            sym('+'), num("2"), eof,
+            ident("x", indent = 0), sym('='), num("1"),
+            sym('+', indent = 2), num("2"), eof,
         )
     }
 
     @Test
     fun topLevelIndentedOperatorAfterBlankLineIsContinuation() {
-        val program =
-            "x = 1\n" +
-            "\n" +
-            "  + 2"
+        val program = """
+            x = 1
+
+              + 2"""
         assertTokens(
             program,
-            ident("x"), sym('='), num("1"),
-            sym('+'), num("2"), eof,
+            ident("x", indent = 12), sym('='), num("1"),
+            sym('+', indent = 14), num("2"), eof,
         )
     }
 
     @Test
     fun indentedBindingInBlockIsNewStatement() {
-        val program =
-            "result =\n" +
-            "  x = 1\n" +
-            "    y = 2\n" +
-            "  x + y"
+        val program = """
+            result =
+              x = 1
+                y = 2
+              x + y"""
         assertTokens(
             program,
-            ident("result"), sym('='), blockStart,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("2"), stmtEnd,
-            ident("x"), sym('+'), ident("y"), eof,
+            ident("result", indent = 12), sym('='),
+            ident("x", indent = 14), sym('='), num("1"),
+            ident("y", indent = 16), sym('='), num("2"),
+            ident("x", indent = 14), sym('+'), ident("y"), eof,
         )
     }
 
     @Test
     fun indentedOperatorInBlockIsContinuation() {
-        val program =
-            "result =\n" +
-            "  x = 1\n" +
-            "    + 2\n" +
-            "  x"
+        val program = """
+            result =
+              x = 1
+                + 2
+              x"""
         assertTokens(
             program,
-            ident("result"), sym('='), blockStart,
-            ident("x"), sym('='), num("1"), sym('+'), num("2"), stmtEnd,
-            ident("x"), eof,
+            ident("result", indent = 12), sym('='),
+            ident("x", indent = 14), sym('='), num("1"),
+            sym('+', indent = 16), num("2"),
+            ident("x", indent = 14), eof,
         )
     }
 }

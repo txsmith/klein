@@ -110,25 +110,6 @@ class AtomTest {
     }
 
     @Test
-    fun commentBetweenStatements() {
-        val program = """
-            x = 1
-            # comment
-            y = 2
-        """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
-    }
-
-    @Test
-    fun commentAfterStatement() {
-        val program = """
-            x = 1 # comment
-            y = 2
-        """.trimIndent()
-        assertTokens(program, ident("x"), sym('='), num("1"), stmtEnd, ident("y"), sym('='), num("2"), eof)
-    }
-
-    @Test
     fun doubleEquals() {
         assertTokens("a == b", ident("a"), sym("=="), ident("b"), eof)
     }
@@ -166,5 +147,20 @@ class AtomTest {
     @Test
     fun lessThanStillWorks() {
         assertTokens("a < b", ident("a"), sym("<"), ident("b"), eof)
+    }
+
+    @Test
+    fun minusTightVsLoose() {
+        // No space after - means MINUS_TIGHT (unary)
+        assertTokens("-2", sym("-", kind = MINUS_TIGHT), num("2"), eof)
+        // Space after - means MINUS (binary)
+        assertTokens("- 2", sym("-", kind = MINUS), num("2"), eof)
+    }
+
+    @Test
+    fun minusInExpression() {
+        // In expressions, space determines the kind
+        assertTokens("a -b", ident("a"), sym("-", kind = MINUS_TIGHT), ident("b"), eof)
+        assertTokens("a - b", ident("a"), sym("-", kind = MINUS), ident("b"), eof)
     }
 }

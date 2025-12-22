@@ -45,12 +45,9 @@ class FunTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(FUN), ident("calculate"), sym('('), ident("a"), sym(','), ident("b"), sym(')'),
-            sym('='),
-            blockStart,
-            ident("temp"), sym('='), ident("a"), sym('*'), num("2"),
-            stmtEnd,
-            ident("temp"), sym('+'), ident("b"),
+            kw(FUN, indent = 0), ident("calculate"), sym('('), ident("a"), sym(','), ident("b"), sym(')'), sym('='),
+            ident("temp", indent = 2), sym('='), ident("a"), sym('*'), num("2"),
+            ident("temp", indent = 2), sym('+'), ident("b"),
             eof
         )
     }
@@ -63,11 +60,10 @@ class FunTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(FUN), ident("add"), sym('('), ident("x"), sym(','), ident("y"), sym(')'),
-            sym('='), ident("x"), sym('+'), ident("y"),
-            stmtEnd,
-            kw(FUN), ident("mul"), sym('('), ident("x"), sym(','), ident("y"), sym(')'),
-            sym('='), ident("x"), sym('*'), ident("y"),
+            kw(FUN, indent = 0), ident("add"), sym('('), ident("x"), sym(','), ident("y"), sym(')'),
+                sym('='), ident("x"), sym('+'), ident("y"),
+            kw(FUN, indent = 0), ident("mul"), sym('('), ident("x"), sym(','), ident("y"), sym(')'),
+                sym('='), ident("x"), sym('*'), ident("y"),
             eof
         )
     }
@@ -76,9 +72,8 @@ class FunTest {
     fun functionWithRecordBody() {
         assertTokens(
             "fun makePerson(name) = { name = name }",
-            kw(FUN), ident("makePerson"), sym('('), ident("name"), sym(')'),
-            sym('='),
-            sym('{'), ident("name"), sym('='), ident("name"), sym('}'),
+            kw(FUN), ident("makePerson"), sym('('), ident("name"), sym(')'), sym('='),
+                sym('{'), ident("name"), sym('='), ident("name"), sym('}'),
             eof
         )
     }
@@ -89,10 +84,10 @@ class FunTest {
             "fun curry(f) = |x -> |y -> f(x, y)||",
             kw(FUN), ident("curry"), sym('('), ident("f"), sym(')'),
             sym('='),
-            pipeOpen, ident("x"), sym("->"),
-            pipeOpen, ident("y"), sym("->"),
+            pipe, ident("x"), sym("->"),
+            pipe, ident("y"), sym("->"),
             ident("f"), sym('('), ident("x"), sym(','), ident("y"), sym(')'),
-            pipeClose, pipeClose,
+            pipe, pipe,
             eof
         )
     }
