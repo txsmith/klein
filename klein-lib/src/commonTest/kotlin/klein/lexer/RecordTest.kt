@@ -85,10 +85,8 @@ class RecordTest {
         """.trimIndent() + "\n"
         assertTokens(
             program,
-            ident("result"), sym('='),
-            blockStart,
-            sym('{'), ident("name"), sym('='), str("Alice"), sym('}'),
-            blockEnd,
+            ident("result", indent = 0), sym('='),
+            sym('{', indent = 2), ident("name"), sym('='), str("Alice"), sym('}'),
             eof
         )
     }
@@ -102,12 +100,10 @@ class RecordTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("f"), sym('='),
-            pipeOpen, ident("x"), sym("->"),
-            blockStart,
-            sym('{'), ident("value"), sym('='), ident("x"), sym('}'),
-            blockEnd,
-            pipeClose,
+            ident("f", indent = 0), sym('='),
+            pipe, ident("x"), sym("->"),
+            sym('{', indent = 2), ident("value"), sym('='), ident("x"), sym('}'),
+            pipe(indent = 0),
             eof
         )
     }
@@ -123,13 +119,11 @@ class RecordTest {
         """.trimIndent() + "\n"
         assertTokens(
             program,
-            ident("person"), sym('='),
-            blockStart,
-            sym('{'),
-            ident("name"), sym('='), str("Alice"), sym(','),
-            ident("age"), sym('='), num("30"),
-            sym('}'),
-            blockEnd,
+            ident("person", indent = 0), sym('='),
+            sym('{', indent = 2),
+            ident("name", indent = 4), sym('='), str("Alice"), sym(','),
+            ident("age", indent = 4), sym('='), num("30"),
+            sym('}', indent = 2),
             eof
         )
     }
@@ -166,10 +160,9 @@ class RecordTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='),
+            ident("x", indent = 0), sym('='),
             sym('{'), ident("a"), sym('='), num("1"), sym('}'),
-            stmtEnd,
-            ident("y"), sym('='), num("2"),
+            ident("y", indent = 0), sym('='), num("2"),
             eof
         )
     }
@@ -250,9 +243,9 @@ class RecordTest {
     fun recordInLambdaClosesPipe() {
         assertTokens(
             "|x -> { a = x }|",
-            pipeOpen, ident("x"), sym("->"),
+            pipe, ident("x"), sym("->"),
             sym('{'), ident("a"), sym('='), ident("x"), sym('}'),
-            pipeClose,
+            pipe,
             eof
         )
     }

@@ -4,6 +4,7 @@ import klein.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class BindingTest {
     @Test
@@ -111,19 +112,19 @@ class BindingTest {
     @Test
     fun missingValue() {
         val error = assertFailsWith<ParseError> { parseStmt("x =") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=3, end=3))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun keywordAsName() {
         val error = assertFailsWith<ParseError> { parseStmt("true = 1") }
-        assertEquals("Expected newline or end of input, got Symbol(text==, span=SourceSpan(start=5, end=6))", error.message)
+        assertTrue(error.message!!.startsWith("Expected newline but got '='"))
     }
 
     @Test
     fun numberAsName() {
         val error = assertFailsWith<ParseError> { parseStmt("123 = 1") }
-        assertEquals("Expected newline or end of input, got Symbol(text==, span=SourceSpan(start=4, end=5))", error.message)
+        assertTrue(error.message!!.startsWith("Expected newline but got '='"))
     }
 
     @Test
@@ -138,21 +139,46 @@ class BindingTest {
         assertProgramEquals(
             parseProgram(program),
             listOf(
-                valStmt("x", block(valStmt("y", int(1)), expr = id("y"))),
+                valStmt("x", block(valStmt("y", int(1)), id("y"))),
                 valStmt("z", int(2)),
             ),
         )
     }
 
     @Test
-    fun blockWithoutFinalExpression() {
+    fun blockEndingInBinding() {
         val program =
             """
             x =
               y = 1
             z = 2
             """.trimIndent()
-        val error = assertFailsWith<ParseError> { parseProgram(program) }
-        assertEquals("Block must contain at least one expression", error.message)
+        assertProgramEquals(
+            parseProgram(program),
+            listOf(
+                valStmt("x", block(valStmt("y", int(1)))),
+                valStmt("z", int(2)),
+            ),
+        )
+    }
+
+    @Test
+    fun deeperIndentStillInBlock() {
+        val program =
+            """
+            main =
+              foo()
+                q = 1
+              y = 1
+            """.trimIndent()
+        assertProgramEquals(
+            parseProgram(program),
+            listOf(
+                valStmt(
+                    "main",
+                    block(call(id("foo")), valStmt("q", int(1)), valStmt("y", int(1))),
+                ),
+            ),
+        )
     }
 }

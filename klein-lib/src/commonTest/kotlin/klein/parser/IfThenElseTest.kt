@@ -174,7 +174,7 @@ class IfThenElseTest {
         assertExprEquals(
             parse(program),
             ifThenElse(
-                call(lambda(body = block(valStmt("x", call(id("foo"))), expr = gt(id("x"), int(0))))),
+                call(lambda(body = block(valStmt("x", call(id("foo"))), gt(id("x"), int(0))))),
                 int(1),
                 int(0),
             ),
@@ -193,7 +193,7 @@ class IfThenElseTest {
     @Test
     fun missingThen() {
         val error = assertFailsWith<ParseError> { parse("if x else y") }
-        assertEquals("Expected 'then', got Keyword(ELSE, span=SourceSpan(start=5, end=9))", error.message)
+        assertEquals("Expected 'then', got Keyword(ELSE)", error.message)
     }
 
     @Test
@@ -240,7 +240,7 @@ class IfThenElseTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("y", add(id("x"), int(1))), expr = id("y")),
+                            block(valStmt("y", add(id("x"), int(1))), id("y")),
                             block(int(0)),
                         ),
                     ),
@@ -269,7 +269,7 @@ class IfThenElseTest {
                         ifThenElse(
                             gt(id("x"), int(0)),
                             block(int(1)),
-                            block(valStmt("y", sub(id("x"), int(1))), expr = id("y")),
+                            block(valStmt("y", sub(id("x"), int(1))), id("y")),
                         ),
                     ),
             ),
@@ -297,8 +297,8 @@ class IfThenElseTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("a", add(id("x"), int(1))), expr = id("a")),
-                            block(valStmt("b", sub(id("x"), int(1))), expr = id("b")),
+                            block(valStmt("a", add(id("x"), int(1))), id("a")),
+                            block(valStmt("b", sub(id("x"), int(1))), id("b")),
                         ),
                     ),
             ),
@@ -323,7 +323,7 @@ class IfThenElseTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("y", mul(id("x"), int(2))), expr = call(id("print"), id("y"))),
+                            block(valStmt("y", mul(id("x"), int(2))), call(id("print"), id("y"))),
                         ),
                     ),
             ),
@@ -356,7 +356,7 @@ class IfThenElseTest {
                             block(
                                 ifThenElse(
                                     gt(id("x"), int(10)),
-                                    block(valStmt("y", id("x")), expr = id("y")),
+                                    block(valStmt("y", id("x")), id("y")),
                                     block(int(0)),
                                 ),
                             ),
@@ -389,7 +389,7 @@ class IfThenElseTest {
                             id("x"),
                             block(
                                 valStmt("f", lambda("y", body = add(id("y"), int(1)))),
-                                expr = call(id("f"), id("x")),
+                                call(id("f"), id("x")),
                             ),
                             block(int(0)),
                         ),
@@ -401,19 +401,19 @@ class IfThenElseTest {
     @Test
     fun missingCondition() {
         val error = assertFailsWith<ParseError> { parse("if then y else z") }
-        assertEquals("Expected expression, got Keyword(THEN, span=SourceSpan(start=3, end=7))", error.message)
+        assertEquals("Expected expression, got Keyword(THEN)", error.message)
     }
 
     @Test
     fun missingThenBranch() {
         val error = assertFailsWith<ParseError> { parse("if x then else z") }
-        assertEquals("Expected expression, got Keyword(ELSE, span=SourceSpan(start=10, end=14))", error.message)
+        assertEquals("Expected expression, got Keyword(ELSE)", error.message)
     }
 
     @Test
     fun missingElseBranch() {
         val error = assertFailsWith<ParseError> { parse("if x then y else") }
-        assertEquals("Expected expression, got Eof(span=SourceSpan(start=16, end=16))", error.message)
+        assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
@@ -433,7 +433,7 @@ class IfThenElseTest {
                 body =
                     block(
                         ifThenElse(gt(id("x"), int(0)), block(call(id("print"), id("x")))),
-                        expr = call(id("doSomethingElse")),
+                        call(id("doSomethingElse")),
                     ),
             ),
         )
@@ -458,9 +458,9 @@ class IfThenElseTest {
                     block(
                         ifThenElse(
                             gt(id("x"), int(0)),
-                            block(valStmt("y", add(id("x"), int(1))), expr = call(id("print"), id("y"))),
+                            block(valStmt("y", add(id("x"), int(1))), call(id("print"), id("y"))),
                         ),
-                        expr = call(id("doSomethingElse")),
+                        call(id("doSomethingElse")),
                     ),
             ),
         )
@@ -489,11 +489,11 @@ class IfThenElseTest {
                             block(
                                 ifThenElse(
                                     gt(id("x"), int(10)),
-                                    block(valStmt("y", id("x")), expr = call(id("print"), id("y"))),
+                                    block(valStmt("y", id("x")), call(id("print"), id("y"))),
                                 ),
                             ),
                         ),
-                        expr = call(id("done")),
+                        call(id("done")),
                     ),
             ),
         )
@@ -519,9 +519,39 @@ class IfThenElseTest {
                     block(
                         ifThenElse(gt(id("x"), int(0)), block(call(id("print"), int(1)))),
                         ifThenElse(gt(id("x"), int(10)), block(call(id("print"), int(2)))),
-                        expr = call(id("done")),
+                        call(id("done")),
                     ),
             ),
+        )
+    }
+
+    @Test
+    fun elseAtBlockIndent() {
+        val program =
+            """
+            if x
+            then
+              y
+              else z
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            ifThenElse(id("x"), block(id("y")), id("z")),
+        )
+    }
+
+    @Test
+    fun elseAtDedentedLevel() {
+        val program =
+            """
+            if x
+            then
+              if q then r
+            else z
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            ifThenElse(id("x"), block(ifThenElse(id("q"), id("r"))), id("z")),
         )
     }
 }

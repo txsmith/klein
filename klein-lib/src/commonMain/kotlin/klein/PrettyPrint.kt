@@ -7,11 +7,7 @@ fun Token.prettyPrint(): String =
         INT, DOUBLE -> "Number($text)"
         IDENT -> "Ident($text)"
         STRING -> "String(\"$text\")"
-        STMT_END -> "StatementEnd"
-        BLOCK_START -> "BlockStart"
-        BLOCK_END -> "BlockEnd"
-        PIPE_OPEN -> "PipeOpen"
-        PIPE_CLOSE -> "PipeClose"
+        PIPE -> "Pipe"
         EOF -> "Eof"
         else -> if (kind.keyword != null) "Keyword($kind)" else "Symbol($kind)"
     }
@@ -47,12 +43,8 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             "${pad}Apply\n${callee.prettyPrint(indent + 1)}\n$pad  args:\n$argsStr"
         }
         is Block -> {
-            if (stmts.isEmpty()) {
-                "${pad}Block\n${expr.prettyPrint(indent + 1)}"
-            } else {
-                val stmtsStr = stmts.joinToString("\n") { it.prettyPrint(indent + 1) }
-                "${pad}Block\n$stmtsStr\n${expr.prettyPrint(indent + 1)}"
-            }
+            val stmtsStr = stmts.joinToString("\n") { it.prettyPrint(indent + 1) }
+            "${pad}Block\n$stmtsStr"
         }
         is IfThenElse -> {
             val elseStr = if (elseBranch != null) "\n${pad}Else\n${elseBranch.prettyPrint(indent + 1)}" else ""

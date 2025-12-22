@@ -12,96 +12,85 @@ private fun LexerError.formatWithSource(source: String): String = span.formatInS
 
 sealed class ExpectedToken {
     abstract val span: klein.SourceSpan?
+    abstract val indent: Int?
 
     fun matches(other: ExpectedToken): Boolean {
         if (this::class != other::class) return false
         if (span != null && span != other.span) return false
+        if (indent != null && indent != other.indent) return false
 
         return when (this) {
             is Ident -> other is Ident && name == other.name
             is Number -> other is Number && text == other.text
             is Str -> other is Str && value == other.value
-            is Symbol -> other is Symbol && text == other.text
+            is Symbol -> other is Symbol && text == other.text && (kind == null || kind == other.kind)
             is Keyword -> other is Keyword && kind == other.kind
-            is StatementEnd -> other is StatementEnd
-            is BlockStart -> other is BlockStart
-            is BlockEnd -> other is BlockEnd
-            is PipeOpen -> other is PipeOpen
-            is PipeClose -> other is PipeClose
+            is Pipe -> other is Pipe
             is Eof -> other is Eof
             is Error -> other is Error && expectedMessage == other.expectedMessage
         }
     }
 
-    fun display(): String =
-        when (this) {
-            is Ident -> "ident($name)"
-            is Number -> "num($text)"
-            is Str -> "str($value)"
-            is Symbol -> if (text.length == 1) "sym('$text')" else "sym(\"$text\")"
-            is Keyword -> "kw(${kind.name})"
-            is StatementEnd -> "stmtEnd"
-            is BlockStart -> "blockStart"
-            is BlockEnd -> "blockEnd"
-            is PipeOpen -> "pipeOpen"
-            is PipeClose -> "pipeClose"
-            is Eof -> "eof"
+    fun display(): String {
+        val indentSuffix = if (indent != null) "@$indent" else ""
+        return when (this) {
+            is Ident -> "ident($name)$indentSuffix"
+            is Number -> "num($text)$indentSuffix"
+            is Str -> "str($value)$indentSuffix"
+            is Symbol -> (if (text.length == 1) "sym('$text')" else "sym(\"$text\")") + indentSuffix
+            is Keyword -> "kw(${kind.name})$indentSuffix"
+            is Pipe -> "pipe$indentSuffix"
+            is Eof -> "eof$indentSuffix"
             is Error -> "error($expectedMessage)"
         }
+    }
 
     data class Ident(
         val name: String,
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Number(
         val text: String,
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Str(
         val value: String,
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Symbol(
         val text: String,
+        val kind: TokenKind? = null,
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Keyword(
         val kind: TokenKind,
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
-    data class StatementEnd(
+    data class Pipe(
         override val span: klein.SourceSpan? = null,
-    ) : ExpectedToken()
-
-    data class BlockStart(
-        override val span: klein.SourceSpan? = null,
-    ) : ExpectedToken()
-
-    data class BlockEnd(
-        override val span: klein.SourceSpan? = null,
-    ) : ExpectedToken()
-
-    data class PipeOpen(
-        override val span: klein.SourceSpan? = null,
-    ) : ExpectedToken()
-
-    data class PipeClose(
-        override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Eof(
         override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
     ) : ExpectedToken()
 
     data class Error(
         val expectedMessage: String,
     ) : ExpectedToken() {
         override val span: klein.SourceSpan? = null
+        override val indent: Int? = null
     }
 }
 
@@ -113,47 +102,47 @@ fun span(
 fun ident(
     name: String,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Ident(name, span)
+    indent: Int? = null,
+) = ExpectedToken.Ident(name, span, indent)
 
 fun num(
     text: String,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Number(text, span)
+    indent: Int? = null,
+) = ExpectedToken.Number(text, span, indent)
 
 fun str(
     value: String,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Str(value, span)
+    indent: Int? = null,
+) = ExpectedToken.Str(value, span, indent)
 
 fun sym(
     char: Char,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Symbol(char.toString(), span)
+    kind: TokenKind? = null,
+    indent: Int? = null,
+) = ExpectedToken.Symbol(char.toString(), kind, span, indent)
 
 fun sym(
     text: String,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Symbol(text, span)
+    kind: TokenKind? = null,
+    indent: Int? = null,
+) = ExpectedToken.Symbol(text, kind, span, indent)
 
 fun kw(
     kind: TokenKind,
     span: klein.SourceSpan? = null,
-) = ExpectedToken.Keyword(kind, span)
+    indent: Int? = null,
+) = ExpectedToken.Keyword(kind, span, indent)
 
 fun error(message: String) = ExpectedToken.Error(message)
 
-val stmtEnd get() = ExpectedToken.StatementEnd()
-val blockStart get() = ExpectedToken.BlockStart()
-val blockEnd get() = ExpectedToken.BlockEnd()
-val pipeOpen get() = ExpectedToken.PipeOpen()
-val pipeClose get() = ExpectedToken.PipeClose()
+val pipe get() = ExpectedToken.Pipe()
 val eof get() = ExpectedToken.Eof()
 
-fun stmtEnd(span: klein.SourceSpan) = ExpectedToken.StatementEnd(span)
-
-fun blockStart(span: klein.SourceSpan) = ExpectedToken.BlockStart(span)
-
-fun blockEnd(span: klein.SourceSpan) = ExpectedToken.BlockEnd(span)
+fun pipe(indent: Int) = ExpectedToken.Pipe(indent = indent)
 
 fun eof(span: klein.SourceSpan) = ExpectedToken.Eof(span)
 
@@ -223,14 +212,15 @@ fun assertTokens(
 
 private fun Token.toExpected(): ExpectedToken =
     when (kind) {
-        IDENT -> ExpectedToken.Ident(text!!, span)
-        INT, DOUBLE -> ExpectedToken.Number(text!!, span)
-        STRING -> ExpectedToken.Str(text!!, span)
-        STMT_END -> ExpectedToken.StatementEnd(span)
-        BLOCK_START -> ExpectedToken.BlockStart(span)
-        BLOCK_END -> ExpectedToken.BlockEnd(span)
-        PIPE_OPEN -> ExpectedToken.PipeOpen(span)
-        PIPE_CLOSE -> ExpectedToken.PipeClose(span)
-        EOF -> ExpectedToken.Eof(span)
-        else -> if (kind.keyword != null) ExpectedToken.Keyword(kind, span) else ExpectedToken.Symbol(kind.symbol!!, span)
+        IDENT -> ExpectedToken.Ident(text!!, span, indent)
+        INT, DOUBLE -> ExpectedToken.Number(text!!, span, indent)
+        STRING -> ExpectedToken.Str(text!!, span, indent)
+        PIPE -> ExpectedToken.Pipe(span, indent)
+        EOF -> ExpectedToken.Eof(span, indent)
+        else ->
+            if (kind.keyword != null) {
+                ExpectedToken.Keyword(kind, span, indent)
+            } else {
+                ExpectedToken.Symbol(kind.symbol!!, kind, span, indent)
+            }
     }

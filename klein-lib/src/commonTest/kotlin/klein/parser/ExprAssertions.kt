@@ -23,7 +23,6 @@ import klein.StringLiteral
 import klein.UnaryOp
 import klein.UnaryOperator
 import klein.Val
-import kotlin.test.assertEquals
 
 private val noSpan = SourceSpan.zero
 
@@ -53,12 +52,7 @@ fun call(
     vararg args: Expr,
 ) = Apply(callee, args.toList(), noSpan)
 
-fun block(
-    vararg stmts: Stmt,
-    expr: Expr,
-) = Block(stmts.toList(), expr, noSpan)
-
-fun block(expr: Expr) = Block(emptyList(), expr, noSpan)
+fun block(vararg stmts: Stmt) = Block(stmts.toList(), noSpan)
 
 fun add(
     left: Expr,
@@ -151,7 +145,7 @@ fun Expr.stripSpans(): Expr =
         is BinaryOp -> BinaryOp(left.stripSpans(), op, right.stripSpans(), noSpan)
         is Lambda -> Lambda(params, body.stripSpans(), noSpan)
         is Apply -> Apply(callee.stripSpans(), args.map { it.stripSpans() }, noSpan)
-        is Block -> Block(stmts.map { it.stripSpan() }, expr.stripSpans(), noSpan)
+        is Block -> Block(stmts.map { it.stripSpan() }, noSpan)
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
@@ -167,7 +161,7 @@ fun assertExprEquals(
     actual: Expr,
     expected: Expr,
 ) {
-    assertEquals(expected, actual.stripSpans())
+    assertEqualsPretty(expected, actual.stripSpans())
 }
 
 fun valStmt(
@@ -197,7 +191,7 @@ fun assertStmtEquals(
     actual: Stmt,
     expected: Stmt,
 ) {
-    assertEquals(expected, actual.stripSpan())
+    assertEqualsPretty(expected, actual.stripSpan())
 }
 
 fun parseProgram(source: String): List<Stmt> {
@@ -209,5 +203,22 @@ fun assertProgramEquals(
     actual: List<Stmt>,
     expected: List<Stmt>,
 ) {
-    assertEquals(expected, actual.map { it.stripSpan() })
+    assertEqualsPretty(expected, actual.map { it.stripSpan() })
 }
+
+private fun <T> assertEqualsPretty(
+    expected: T,
+    actual: T,
+) {
+    if (expected != actual) {
+        val message =
+            buildString {
+                appendLine()
+                appendLine("Expected: ${stripSpanNoise(expected.toString())}")
+                appendLine("Actual:   ${stripSpanNoise(actual.toString())}")
+            }
+        throw AssertionError(message)
+    }
+}
+
+private fun stripSpanNoise(s: String): String = s.replace(Regex(""", span=SourceSpan\(start=\d+, end=\d+\)"""), "")

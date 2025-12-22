@@ -19,8 +19,8 @@ class NewlineTest {
         """.trimIndent()
         assertTokens(
             program,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("2"), eof
+            ident("x", indent = 0), sym('='), num("1"),
+            ident("y", indent = 0), sym('='), num("2"), eof
         )
     }
 
@@ -68,8 +68,8 @@ class NewlineTest {
             y = 2
         """.trimIndent()
         assertTokens(program,
-            ident("x"), sym('='), num("1"), stmtEnd,
-            ident("y"), sym('='), num("2"), eof
+            ident("x", indent = 0), sym('='), num("1"),
+            ident("y", indent = 0), sym('='), num("2"), eof
         )
     }
 
@@ -80,8 +80,8 @@ class NewlineTest {
             y = false
         """.trimIndent()
         assertTokens(program,
-            ident("x"), sym('='), kw(TRUE), stmtEnd,
-            ident("y"), sym('='), kw(FALSE), eof
+            ident("x", indent = 0), sym('='), kw(TRUE),
+            ident("y", indent = 0), sym('='), kw(FALSE), eof
         )
     }
 
@@ -101,5 +101,24 @@ class NewlineTest {
             1
         """.trimIndent()
         assertTokens(program, ident("x"), sym('='), num("1"), eof)
+    }
+
+    @Test
+    fun commentBetweenStatements() {
+        val program = """
+            x = 1
+            # comment
+            y = 2
+        """.trimIndent()
+        assertTokens(program, ident("x", indent = 0), sym('='), num("1"), ident("y", indent = 0), sym('='), num("2"), eof)
+    }
+
+    @Test
+    fun commentAfterStatement() {
+        val program = """
+            x = 1 # comment
+            y = 2
+        """.trimIndent()
+        assertTokens(program, ident("x", indent = 0), sym('='), num("1"), ident("y", indent = 0), sym('='), num("2"), eof)
     }
 }

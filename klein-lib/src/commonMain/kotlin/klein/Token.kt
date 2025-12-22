@@ -6,19 +6,19 @@ data class Token(
     val kind: TokenKind,
     val span: SourceSpan,
     val text: String? = null,
+    val indent: Int? = null,
 ) {
+    val isNewline: Boolean get() = indent != null
+
     override fun toString(): String =
         when {
-            kind == IDENT -> "Ident(name=$text, span=$span)"
-            kind == INT || kind == DOUBLE -> "Number(text=$text, span=$span)"
-            kind == STRING -> "String($text, span=$span)"
-            kind == STMT_END -> "StatementEnd(span=$span)"
-            kind == BLOCK_START -> "BlockStart(span=$span)"
-            kind == BLOCK_END -> "BlockEnd(span=$span)"
-            kind == EOF -> "Eof(span=$span)"
-            kind.keyword != null -> "Keyword(${kind.name}, span=$span)"
-            kind.symbol != null -> "Symbol(text=${kind.symbol}, span=$span)"
-            else -> "Token($kind, span=$span)"
+            kind == IDENT -> "Ident($text)"
+            kind == INT || kind == DOUBLE -> "Number($text)"
+            kind == STRING -> "String($text)"
+            kind == EOF -> "Eof"
+            kind.keyword != null -> "Keyword(${kind.name})"
+            kind.symbol != null -> "'${kind.symbol}'"
+            else -> "Token($kind)"
         }
 }
 
@@ -47,6 +47,7 @@ enum class TokenKind(
     // Symbols
     PLUS(symbol = "+"),
     MINUS(symbol = "-"),
+    MINUS_TIGHT(symbol = "-"), // No space after - indicates unary
     STAR(symbol = "*"),
     SLASH(symbol = "/"),
     PERCENT(symbol = "%"),
@@ -74,11 +75,7 @@ enum class TokenKind(
     AMP(symbol = "&"),
 
     // Structure
-    STMT_END,
-    BLOCK_START,
-    BLOCK_END,
-    PIPE_OPEN,
-    PIPE_CLOSE,
+    PIPE,
     EOF,
     ;
 
