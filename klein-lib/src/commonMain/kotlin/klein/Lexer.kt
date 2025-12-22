@@ -132,8 +132,15 @@ class Lexer(
                 if (lastTokenAllowsStatementEnd && !isClosingDelimiter(nextChar) && !peekIsContinuationKeyword()) {
                     return listOf(Token(STMT_END, statementEndSpan()))
                 }
+            } else {
+                // More indented without block starter:
+                // - If next token is an operator or continuation keyword, it's expression continuation
+                // - Otherwise, it's a new statement (emit STMT_END)
+                val nextChar = peekNonWhitespace()
+                if (lastTokenAllowsStatementEnd && !isBinaryOperatorStart(nextChar) && !peekIsContinuationKeyword()) {
+                    return listOf(Token(STMT_END, statementEndSpan()))
+                }
             }
-            // else: More indented without block starter = expression continuation, no StatementEnd
         } else {
             // Inside brackets (expression context): may still need StatementEnd
             if (lastTokenAllowsStatementEnd) {
@@ -191,6 +198,8 @@ class Lexer(
         }
 
     private fun isClosingDelimiter(char: Char?): Boolean = char == '|' || char == ')' || char == ']' || char == '}'
+
+    private fun isBinaryOperatorStart(char: Char?): Boolean = char != null && char in "+-*/%<>=!"
 
     private fun statementEndSpan(): SourceSpan {
         val lastSpan = lastToken?.span
