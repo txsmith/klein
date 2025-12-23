@@ -7,36 +7,47 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ```
 prog        = (fun_def | stmt)*
 
-fun_def     = 'fun' IDENT '(' params? ')' '=' block
+fun_def     = 'fun' IDENT '(' params? ')' '=' block_or_expr
 
 stmt        = binding
             | expr
 
-binding     = IDENT '=' block
+binding     = IDENT '=' block_or_expr
 
-block       = INDENT stmt* expr DEDENT
-            | expr
+block_or_expr = block
+              | expr
 
-lambda      = '|' (params '->')? block '|'
+block       = NEWLINE INDENT stmt+ DEDENT
+
+lambda      = '|' (params '->')? block_or_expr '|'
 
 params      = IDENT (',' IDENT)*
 
-expr        = call_expr (binop call_expr)*
+expr        = apply (binop apply)*
 
-call_expr   = atom ( '(' args? ')' )*
+apply       = atom ( '(' args? ')' | '.' IDENT )*
 
-atom        = literal
+atom        = INT
+            | DOUBLE
+            | STRING
+            | BOOL
             | IDENT
             | unaryop atom
             | '(' expr ')'
             | lambda
             | if_expr
+            | implicit_param
+            | record
 
-if_expr     = 'if' expr 'then' block ('else' block)?
+if_expr     = 'if' expr 'then' block_or_expr ('else' block_or_expr)?
+
+implicit_param = '.' IDENT?
+
+record      = '{' (field (',' field)* ','?)? '}'
+
+field       = IDENT ('=' expr)?
 
 args        = expr (',' expr)*
-
-literal     = INT | DOUBLE | STRING | BOOL
 
 unaryop     = '-' | 'not'
 
@@ -45,19 +56,37 @@ binop       = '+' | '-' | '*' | '/' | '%'
             | 'and' | 'or'
 ```
 
-## Virtual Tokens
+## Parser Method Mapping
 
-The lexer emits these virtual tokens based on indentation:
+| Grammar rule   | Parser method         |
+|----------------|-----------------------|
+| prog           | `parseProgram()`      |
+| fun_def        | `parseFunDef()`       |
+| stmt           | `parseStmt()`         |
+| binding        | `parseBinding()`      |
+| block_or_expr  | `parseBlockOrExpr()`  |
+| block          | `parseBlock()`        |
+| lambda         | `parseLambda()`       |
+| params         | `parseLambdaParams()` / `parseFunParams()` |
+| expr           | `parseExpr()` / `parseExprAtPrecedence()` |
+| apply          | `parseApply()`        |
+| atom           | `parseAtom()`         |
+| if_expr        | `parseIfThenElse()`   |
+| implicit_param | `parseImplicitParam()` |
+| record         | `parseRecordLiteral()` |
+| args           | `parseArgs()`         |
 
-```
-INDENT      = (emitted when indentation increases after block starter)
-DEDENT      = (emitted when indentation decreases)
-STATEMENT_END = (emitted at newlines in statement context)
-```
+## Indentation Model
 
-**Block starters**: `=`, `->`, `|`, `then`, `else` at end of line trigger INDENT on next line if indented.
+The lexer stamps each token with an `indent: Int?` field:
+- `indent >= 0`: token is first on a new line at that column
+- `indent == null`: token continues on the same line
 
-**Auto-DEDENT**: DEDENT is automatically inserted before closing tokens `)`, `]`, `|`.
+The parser interprets indentation contextually:
+- `block` starts when the next token has `indent > currentLineIndent`
+- `block` ends when the next token has `indent < currentLineIndent` or is a closing delimiter
+
+No synthetic `INDENT`/`DEDENT` tokens are emitted.
 
 ## Tokens
 
@@ -89,18 +118,16 @@ From lowest to highest:
 
 Parentheses `( )` override precedence.
 
-
 ## Indentation Rules
 
-1. **Tabs or spaces, not mixed** — pick one per file, mixing is an error
-2. **Block starters** — `=`, `->`, `|` at end of line start an indented block
-3. **Inside parens/brackets** — indentation is ignored
+1. **Spaces only** — tabs are a lexer error
+2. **Block starters** — `=`, `->`, `then`, `else` followed by increased indent start a block
+3. **Closing delimiters** — `|`, `)`, `}`, `]` end the current expression regardless of indent
 4. **Braces** — reserved for record literals, not blocks
-5. **Alignment** — DEDENT must align with a previous indentation level
 
 ## Comments
 
-Comments are handled in the lexer and therefore not present in the grammar
+Comments start with `#` and extend to end of line:
 
 ```
 comment     = '#' (any char except newline)* newline
