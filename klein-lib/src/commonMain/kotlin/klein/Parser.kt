@@ -7,12 +7,6 @@ class ParseError(
     val span: SourceSpan,
 ) : Exception(message)
 
-private fun Token.startsLineBefore(column: Int) = indent != null && indent < column
-
-private fun Token.startsLineAtOrBefore(column: Int) = indent != null && indent <= column
-
-private fun Token.startsLineAfter(column: Int) = indent != null && indent > column
-
 class Parser(
     private val tokens: List<Token>,
 ) {

@@ -10,6 +10,12 @@ data class Token(
 ) {
     val isNewline: Boolean get() = indent != null
 
+    fun startsLineBefore(column: Int) = indent != null && indent < column
+
+    fun startsLineAtOrBefore(column: Int) = indent != null && indent <= column
+
+    fun startsLineAfter(column: Int) = indent != null && indent > column
+
     override fun toString(): String =
         when {
             kind == IDENT -> "Ident($text)"
