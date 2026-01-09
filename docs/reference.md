@@ -417,24 +417,40 @@ type Predicate(a) = a -> Bool
 
 ### Records with Function Fields
 
-Record types can declare function signatures:
+Record types can declare function signatures using `fun` syntax:
 
 ```klein
+type Policy = {
+  fun evaluate(customer: Customer): Decision
+  fun maxAmount(customer: Customer): Money
+}
+```
+
+Record values implement these with `fun` definitions:
+
+```klein
+standardPolicy: Policy = {
+  fun evaluate(customer) =
+    if customer.creditScore > 700 then Approved
+    else Rejected { reason = 'Credit score too low' }
+
+  fun maxAmount(customer) = customer.income * 3
+}
+```
+
+The `fun` syntax is sugar for arrow types and lambdas:
+
+```klein
+# Equivalent type (arrow syntax)
 type Policy = {
   evaluate: Customer -> Decision,
   maxAmount: Customer -> Money
 }
-```
 
-Record values can implement these:
-
-```klein
+# Equivalent value (lambda syntax)
 standardPolicy: Policy = {
-  evaluate = |customer ->
-    if customer.creditScore > 700 then Approved
-    else Rejected { reason = 'Credit score too low' }|,
-
-  maxAmount = |customer -> customer.income * 3|
+  evaluate = |customer -> ...|,
+  maxAmount = |customer -> ...|
 }
 ```
 
