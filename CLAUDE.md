@@ -6,10 +6,36 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 
 ## Documentation
 
-See [docs/](./docs/) for design docs and specifications.
+### Core Documentation
 
-Also see:
-- [README.md](./README.md) - Project overview and examples
+- **[grammar.md](./docs/grammar.md)** - Complete formal grammar for Klein expressions and types, including indentation rules, operator precedence, and parser method mappings
+- **[reference.md](./docs/reference.md)** - Complete language reference with syntax, examples, and usage patterns for all Klein features
+- **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, row polymorphism, Hindley-Milner inference, and the tilde operator
+- **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
+
+### Implementation Guides
+
+- **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and interpreter
+- **[roadmap.md](./docs/roadmap.md)** - Development roadmap with work units organized by phase (expressions, types, advanced features, type system, execution)
+- **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
+
+### Design Decisions
+
+See [docs/decisions/](./docs/decisions/) for architecture decision records:
+
+- **[positional-function-syntax.md](./docs/decisions/2026-01-09-positional-function-syntax.md)** - Why Klein uses positional function arguments instead of record-based calling
+- **[records-as-interfaces.md](./docs/decisions/2026-01-09-records-as-interfaces.md)** - How records with function fields serve as structural interfaces
+- **[fail-fast-error-handling.md](./docs/decisions/2026-01-09-fail-fast-error-handling.md)** - Fail-fast by default with opt-in recovery via `.recover`
+- **[modules-vs-records.md](./docs/decisions/2026-01-09-modules-vs-records.md)** - Design decisions around module system
+- **[no-anonymous-unions.md](./docs/decisions/2026-01-09-no-anonymous-unions.md)** - Why Klein doesn't support anonymous union types
+
+### Experimental Features
+
+- **[kleene-types-experimental.md](./docs/kleene-types-experimental.md)** - Research feature: cardinality-aware types (T, T?, T+, T\*) with Hindley-Milner inference
+
+### Other Resources
+
+- **[README.md](./README.md)** - Project overview and examples
 
 ## Running the CLI
 
@@ -102,20 +128,6 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
-## Implemented Features
+## Implementation Status
 
-### Fully Working
-- ✅ Function definitions (`fun add(x, y) = x + y`)
-- ✅ If-then-else expressions
-- ✅ Lambdas (nested, multi-param, with blocks)
-- ✅ Function application
-- ✅ Field access and implicit parameters (`user.name`, `|.price|`, `|.|`)
-- ✅ Record literals (`{ name = 'Alice', age = 30 }`, shorthand `{ name }`, trailing comma)
-- ✅ Binary operators (+, -, \*, /, %, ==, !=, <, <=, >, >=, and, or)
-- ✅ Unary operators (-, not)
-- ✅ Val bindings
-- ✅ Blocks with statements
-- ✅ String literals with escape sequences
-- ✅ Integer and double literals
-- ✅ Comments
-- ✅ Significant indentation
+See **[implementation-status.md](./docs/implementation-status.md)** for current status across parser, type system, and interpreter.
