@@ -8,23 +8,25 @@ The core insight: **records with function fields are interfaces**. A record type
 
 ```klein
 type Policy = {
-  fun evaluate { customer: Customer }: Decision
-  fun maxAmount { customer: Customer }: Money
+  evaluate: Customer -> Decision,
+  maxAmount: Customer -> Money
 }
 
 standardPolicy: Policy = {
-  fun evaluate { customer } = ...
-  fun maxAmount { customer } = ...
+  evaluate = |customer ->
+    if customer.creditScore > 700 then Approved
+    else Rejected { reason = 'Credit score too low' }|,
+  maxAmount = |customer -> customer.income * 3|
 }
 
 aggressivePolicy: Policy = {
-  fun evaluate { customer } = ...
-  fun maxAmount { customer } = ...
+  evaluate = |customer -> Approved|,
+  maxAmount = |customer -> customer.income * 5|
 }
 
 # Runtime selection
 policy = if customer.segment == Premium then aggressivePolicy else standardPolicy
-policy.evaluate { customer }
+policy.evaluate(customer)
 ```
 
 This gives us:
@@ -65,15 +67,15 @@ This gives us:
 Lambdas can reference their own binding name for recursion:
 
 ```klein
-factorial = |n -> if n <= 1 then 1 else n * factorial { n - 1 }|
+factorial = |n -> if n <= 1 then 1 else n * factorial(n - 1)|
 
 # Works in records too
 myPolicy: Policy = {
-  fun evaluate { customer } =
-    if needsEscalation { customer } then
-      evaluate { escalate { customer } }  # recursive call
+  evaluate = |customer ->
+    if needsEscalation(customer) then
+      myPolicy.evaluate(escalate(customer))  # recursive via record
     else
-      Approved
+      Approved|
 }
 ```
 
@@ -83,10 +85,9 @@ Functions in record values can access fields defined lexically prior:
 
 ```klein
 config = {
-  baseRate = 0.05
-  multiplier = 2.0
-  fun calculateRate { amount: Number }: Number = 
-    baseRate * multiplier * amount  # can see baseRate and multiplier
+  baseRate = 0.05,
+  multiplier = 2.0,
+  calculateRate = |amount -> baseRate * multiplier * amount|
 }
 ```
 
@@ -96,9 +97,9 @@ Effects handle external behavior at the host level:
 
 ```klein
 # These are effects provided by the environment
-name = ask { 'What is your name?', String }
-customer = fetch { CustomerId { 123 } }
-decision = requestApproval { loan, manager }
+name = ask('What is your name?', String)
+customer = fetch(CustomerId(123))
+decision = requestApproval(loan, manager)
 ```
 
 Different effect handlers for different contexts:
@@ -117,19 +118,19 @@ Records with type parameters can serve as explicit "type classes":
 
 ```klein
 type Monoid(a) = {
-  fun empty {}: a
-  fun combine { x: a, y: a }: a
+  empty: () -> a,
+  combine: (a, a) -> a
 }
 
 intAddMonoid: Monoid(Int) = {
-  fun empty {} = 0
-  fun combine { x, y } = x + y
+  empty = |0|,
+  combine = |x, y -> x + y|
 }
 
-fun concat { monoid: Monoid(a), on xs: List(a) }: a =
-  xs.fold { init = monoid.empty {}, f = |acc, x -> monoid.combine { acc, x }| }
+fun concat(monoid: Monoid(a), on xs: List(a)): a =
+  xs.fold(monoid.empty(), |acc, x -> monoid.combine(acc, x)|)
 
-[1, 2, 3].concat { intAddMonoid }  # 6
+[1, 2, 3].concat(intAddMonoid)  # 6
 ```
 
 Spread syntax could help with passing multiple instances:
@@ -142,7 +143,7 @@ type Instances(a) = {
 
 intInstances: Instances(Int) = { ... }
 
-[1, 2, 3].concatAndShow { ...intInstances }
+[1, 2, 3].concatAndShow~(intInstances)
 ```
 
 This remains explicit (no implicit resolution) and needs further design work.
@@ -156,7 +157,7 @@ Should Klein support anonymous unions of existing types?
 ```klein
 type Primitive = Int | String | Bool  # Union without constructors?
 
-fun foo { x: Int | String }: ...  # Inline union?
+fun foo(x: Int | String): ...  # Inline union?
 ```
 
 **Current decision:** No anonymous unions. Use explicit constructors:
