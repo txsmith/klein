@@ -82,7 +82,6 @@ klein-lang/
 │   └── build.gradle.kts
 ├── docs/                       # Design docs
 ├── README.md                   # Project overview
-└── LEXER_PARSER_GAP.md        # Implementation status
 ```
 
 ## Running Tests
@@ -120,9 +119,3 @@ klein-lang/
 - ✅ Integer and double literals
 - ✅ Comments
 - ✅ Significant indentation
-
-### Lexer Only (Parser TODO)
-- Range operator (`..`)
-- Arrays (`[]`)
-
-See [LEXER_PARSER_GAP.md](./LEXER_PARSER_GAP.md) for details.
