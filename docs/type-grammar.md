@@ -52,8 +52,13 @@ Type
   = FunctionType
 
 FunctionType
-  = AppliedType '->' FunctionType
+  = ParamTypes '->' FunctionType
   | AppliedType
+
+ParamTypes
+  = AppliedType                   # single param: Int -> Int
+  | '(' Type % ',' ')'            # multiple params: (Int, Int) -> Int
+  | '(' ')'                       # zero params: () -> Int
 
 AppliedType
   = TypeAtom TypeArgs?
@@ -217,15 +222,29 @@ TypeDef
       └─ FieldDecl: title: String
 ```
 
-### Function Type
+### Function Types
 
 ```klein
-{ x: Int, y: Int } -> Int
+Int -> Int
+(Int, Int) -> Int
+() -> Int
 ```
 
 ```
-FunctionType
-├─ AppliedType: RecordType { x: Int, y: Int }
+FunctionType (single param)
+├─ ParamTypes: Int
+├─ '->'
+└─ FunctionType
+   └─ AppliedType: Int
+
+FunctionType (multiple params)
+├─ ParamTypes: (Int, Int)
+├─ '->'
+└─ FunctionType
+   └─ AppliedType: Int
+
+FunctionType (zero params)
+├─ ParamTypes: ()
 ├─ '->'
 └─ FunctionType
    └─ AppliedType: Int
@@ -306,7 +325,12 @@ The case of the identifier disambiguates. After `...`:
 - Lowercase or nothing → row variable
 - Uppercase → spread
 
-### Parens: Tuple vs Grouping
+### Parens: Tuple vs Grouping vs Function Params
 
 - `(Type)` with single type → grouping/precedence
-- `(Type, Type, ...)` with multiple types → tuple type
+- `(Type, Type, ...)` with multiple types → tuple type OR multi-param function input
+- `()` empty parens → zero-param function input
+
+Context determines meaning:
+- Before `->` → function parameter list: `(Int, Int) -> Int`
+- Elsewhere → tuple type: `x: (Int, Int)`

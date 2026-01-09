@@ -44,10 +44,10 @@ Records are structural types with named fields:
 Records accept extra fields beyond what's specified:
 
 ```klein
-fun greet { name: String }: String = 'Hello, ${name}'
+fun greet(r: { name: String }): String = 'Hello, ${r.name}'
 
 person = { name = 'Alice', age = 30 }
-greet person  # works! extra fields ignored
+greet(person)  # works! extra fields ignored
 ```
 
 ### Row Variables
@@ -55,8 +55,8 @@ greet person  # works! extra fields ignored
 Use `...` to name a row variable when you need to preserve extra fields:
 
 ```klein
-fun addAge { name: String, ...r }: { name: String, age: Int, ...r } =
-  { name, age = 0, ...r }
+fun addAge(r: { name: String, ...rest }): { name: String, age: Int, ...rest } =
+  { ...r, age = 0 }
 ```
 
 The type-level `...` mirrors value-level spread:
@@ -87,27 +87,51 @@ type Bad = { ...A, ...B }  # Error: conflicting types for 'x'
 
 ## Function Types
 
-Function types use arrow syntax:
+Function types use arrow syntax with positional parameters:
 
 ```klein
-{ x: Int, y: Int } -> Int
-{ name: String, ...r } -> String
+Int -> Int                    # single parameter
+(Int, Int) -> Int             # multiple parameters
+() -> Int                     # no parameters (thunk)
+(a -> b, List(a)) -> List(b)  # higher-order
 ```
 
-All functions take a single record argument, so:
+Examples:
 
 ```klein
-fun add { x: Int, y: Int }: Int = x + y
+fun double(x: Int): Int = x * 2
+
+# The type of double is:
+# Int -> Int
+
+fun add(x: Int, y: Int): Int = x + y
 
 # The type of add is:
-# { x: Int, y: Int } -> Int
+# (Int, Int) -> Int
 ```
 
 Type parameters are inferred from lowercase variables:
 
 ```klein
-fun identity { x: a }: a = x
-fun map { f: a -> b, opt: Option(a) }: Option(b) = ...
+fun identity(x: a): a = x
+fun map(f: a -> b, xs: List(a)): List(b) = ...
+```
+
+### The Tilde Operator (~)
+
+The `~` operator transforms a positional function type to accept a record:
+
+```klein
+fun process(name: String, age: Int): Decision = ...
+
+process  : (String, Int) -> Decision
+process~ : { name: String, age: Int } -> Decision
+```
+
+This is useful when you have records and want to spread them into positional functions:
+
+```klein
+people.map(process~)  # process~ : { name: String, age: Int } -> Decision
 ```
 
 ### Structural Access via Spread
@@ -118,14 +142,14 @@ You can spread a nominal type in a function signature to accept its payload stru
 type Person = { name: String, age: Int }
 
 # Nominal - requires a Person
-fun greetPerson { p: Person }: String = 'Hello, ${p.name}'
+fun greetPerson(p: Person): String = 'Hello, ${p.name}'
 
 # Structural - accepts anything with Person's fields
-fun greetAnyone { ...Person }: String = 'Hello, ${name}'
+fun greetAnyone(r: { ...Person }): String = 'Hello, ${r.name}'
 
 # Structural with row variable - preserves extra fields
-fun withTitle { ...Person, ...r }: { ...Person, title: String, ...r } =
-  { name, age, title = 'Mr/Ms', ...r }
+fun withTitle(r: { ...Person, ...rest }): { ...Person, title: String, ...rest } =
+  { ...r, title = 'Mr/Ms' }
 ```
 
 This lets callers pass any structurally compatible type:
@@ -133,12 +157,12 @@ This lets callers pass any structurally compatible type:
 ```klein
 type Employee = { name: String, age: Int, department: String }
 
-greetPerson Person { name = 'Alice', age = 30 }     # works
-greetPerson Employee { ... }                         # error! Employee is not Person
+greetPerson(Person { name = 'Alice', age = 30 })      # works
+greetPerson(Employee { ... })                          # error! Employee is not Person
 
-greetAnyone Person { name = 'Alice', age = 30 }     # works
-greetAnyone Employee { name = 'Bob', age = 25, department = 'Sales' }  # works!
-greetAnyone { name = 'Charlie', age = 40 }          # works!
+greetAnyone(Person { name = 'Alice', age = 30 })      # works
+greetAnyone(Employee { name = 'Bob', age = 25, department = 'Sales' })  # works!
+greetAnyone({ name = 'Charlie', age = 40 })           # works!
 ```
 
 ## Defining Types
@@ -179,8 +203,8 @@ type Money = Double
 Usage:
 
 ```klein
-id = CustomerId { 42 }
-price = Money { 99.95 }
+id = CustomerId(42)
+price = Money(99.95)
 ```
 
 This creates distinct nominal types—`CustomerId` and `Int` are not interchangeable (see "Nominal vs Structural Interop").
@@ -237,10 +261,10 @@ type Person = { name: String, age: Int }
 This means nominal types can be passed where structural types are expected:
 
 ```klein
-fun greet { name: String }: String = 'Hello, ${name}'
+fun greet(r: { name: String }): String = 'Hello, ${r.name}'
 
 person = Person { name = 'Alice', age = 30 }
-greet person  # works! Person <: { name: String }
+greet(person)  # works! Person <: { name: String }
 ```
 
 ### One-Directional
@@ -250,10 +274,10 @@ Subtyping only works from nominal to structural, not the reverse:
 ```klein
 type CustomerId = Int
 
-fun getCustomer { id: CustomerId }: Customer = ...
+fun getCustomer(id: CustomerId): Customer = ...
 
-getCustomer { CustomerId { 42 } }   # Works
-getCustomer { 42 }                   # Error: Int is not CustomerId
+getCustomer(CustomerId(42))   # Works
+getCustomer(42)                # Error: Int is not CustomerId
 ```
 
 This lets you enforce domain boundaries:
@@ -263,7 +287,7 @@ type CustomerId = Int
 type OrderId = Int
 
 # Can't accidentally mix these up
-fun process { cid: CustomerId, oid: OrderId } = ...
+fun process(cid: CustomerId, oid: OrderId) = ...
 ```
 
 ### Nested Subtyping
@@ -274,14 +298,14 @@ Subtyping composes through nesting:
 type Address = { city: String, zip: String }
 type Person = { name: String, address: Address }
 
-fun getCity { address: { city: String } }: String = address.city
+fun getCity(r: { address: { city: String } }): String = r.address.city
 
-person = Person { 
-  name = 'Alice', 
-  address = Address { city = 'NYC', zip = '10001' } 
+person = Person {
+  name = 'Alice',
+  address = Address { city = 'NYC', zip = '10001' }
 }
 
-getCity { address = person.address }  # Works!
+getCity(person)  # Works!
 
 # Because:
 # Address <: { city: String, zip: String } <: { city: String }
@@ -299,7 +323,7 @@ type Light =
 
 # Inferred interface: { duration: Int }
 
-fun getDuration { light: Light }: Int = light.duration  # No match needed
+fun getDuration(light: Light): Int = light.duration  # No match needed
 ```
 
 ## Construction and Pattern Matching
@@ -317,7 +341,7 @@ result = None
 person = Person { name = 'Alice', age = 30 }
 result = Ok { value = 42 }
 
-# Single-field positional
+# Single-field shorthand
 result: Result(Int, String) = Ok { 42 }
 ```
 
@@ -331,7 +355,7 @@ match color
 
 match result
   Ok { value } -> value
-  Err { error } -> handleError error
+  Err { error } -> handleError(error)
 
 match person
   Person { name, age } -> 'Hello, ${name}'
@@ -356,9 +380,9 @@ Tuples are structurally typed and distinct from records. The tuple type `(String
 Klein uses Hindley-Milner type inference. Type annotations are optional in most cases:
 
 ```klein
-fun double { x } = x * 2              # inferred: { x: Int } -> Int
-fun identity { x } = x                 # inferred: { x: a } -> a
-fun compose { f, g, x } = f { g { x } } # inferred polymorphic
+fun double(x) = x * 2                  # inferred: Int -> Int
+fun identity(x) = x                    # inferred: a -> a
+fun compose(f, g, x) = f(g(x))         # inferred polymorphic
 ```
 
 Type variables are implicitly universally quantified at the function level.
@@ -372,7 +396,9 @@ Type variables are implicitly universally quantified at the function level.
 | Record (structural) | `{ field: Type }` | `{ name: String, age: Int }` |
 | Open record | `{ field: Type, ...r }` | `{ name: String, ...r }` |
 | Record intersection | `{ ...A, ...B }` | `{ ...Named, ...Aged }` |
-| Function type | `A -> B` | `{ x: Int } -> Int` |
+| Function type (1 param) | `A -> B` | `Int -> Int` |
+| Function type (n params) | `(A, B) -> C` | `(Int, Int) -> Int` |
+| Function type (0 params) | `() -> A` | `() -> Int` |
 | Single-constructor type | `type Name = { ... }` | `type Person = { name: String }` |
 | Wrapper type | `type Name = Primitive` | `type Money = Double` |
 | Sum type | `type Name = A \| B` | `type Color = Red \| Green` |
@@ -380,3 +406,4 @@ Type variables are implicitly universally quantified at the function level.
 | Type parameters | `Name(a, b)` | `Option(a)`, `Result(t, e)` |
 | Type application | `Name(Type)` | `Option(Int)`, `List(String)` |
 | Tuple type | `(A, B)` | `(String, Int)` |
+| Tilde transform | `f~` | `process~ : { name: String } -> R` |

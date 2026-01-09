@@ -6,25 +6,22 @@ Units of work to evolve Klein from current state to full language spec.
 
 Lexer and parser handle expressions, lambdas, record literals, if/then/else, and function definitions. No type system yet.
 
-**Already using new syntax:**
+**Current syntax:**
 - Comments: `#`
+- Function definitions: `fun name(params) = body`
+- Function calls: `name(args)`
 - Record literals: `{ field = value }`
 - Lambdas: `|x -> expr|`, `|.field|`, `|.|`
 
+## Design Decisions
+
+**Positional function calling** — Functions use standard positional arguments like most languages. The `~` operator transforms positional functions to accept records when needed.
+
+See `calling-conventions.md` for details on the design rationale.
+
 ## Work Units
 
-### Phase 1: Syntax Migration
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Function params `()` → `{}` | TODO | `fun f(x)` → `fun f { x }` |
-| Function calls: juxtaposition | TODO | `f(x)` → `f x` or `f { field = x }` |
-
-See `syntax-migration-plan.md` for detailed implementation plan.
-
-** NEW INSIGHT ** We'll keep function syntax the same and instead instroduce new syntax for unrolling a record into function application arguments
-
-### Phase 2: New Expression Features
+### Phase 1: Expression Features
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -33,27 +30,28 @@ See `syntax-migration-plan.md` for detailed implementation plan.
 | Arrays `[1, 2, 3]` | TODO | Lexer done, parser TODO |
 | Match expressions | TODO | Value and condition matching |
 | For comprehensions | TODO | `for x in xs yield expr` |
+| Tilde operator `~` | TODO | Record-to-positional transform |
 
-### Phase 3: Type Definitions
+### Phase 2: Type Definitions
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Record types | TODO | `type R = { field: Type }` |
 | Enum/sum types | TODO | `type E = A \| B { field: T }` |
 | Type aliases | TODO | `type Money = Double` |
-| Function types | TODO | `{ x: Int } -> Int` |
+| Function types | TODO | `Int -> Int`, `(Int, Int) -> Int` |
 | Generics `List(T)` | TODO | Parentheses, not angle brackets |
-| Type annotations | TODO | `fun f { x: Int }: Int` |
+| Type annotations | TODO | `fun f(x: Int): Int` |
 
-### Phase 4: Advanced Features
+### Phase 3: Advanced Features
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Extension methods | TODO | `on` keyword for method receiver |
 | Modules | TODO | `module Name` + imports |
-| Function fields in records | TODO | `type T = { fun f { x }: R }` |
+| Function fields in records | TODO | `type T = { f: A -> B }` |
 
-### Phase 5: Type System
+### Phase 4: Type System
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -61,7 +59,7 @@ See `syntax-migration-plan.md` for detailed implementation plan.
 | Type checking | TODO | |
 | Kleene types (`?`, `*`, `+`) | TODO | See `kleene-types-experimental.md` |
 
-### Phase 6: Execution
+### Phase 5: Execution
 
 | Item | Status | Notes |
 |------|--------|-------|
