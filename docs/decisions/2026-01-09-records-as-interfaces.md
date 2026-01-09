@@ -16,26 +16,55 @@ Klein needed a mechanism for polymorphism—allowing different implementations o
 
 ```klein
 type Policy = {
-  evaluate: Customer -> Decision,
-  maxAmount: Customer -> Money
+  fun evaluate(customer: Customer): Decision
+  fun maxAmount(customer: Customer): Money
 }
 
 standardPolicy: Policy = {
-  evaluate = |customer ->
+  fun evaluate(customer) =
     if customer.creditScore > 700 then Approved
-    else Rejected { reason = 'Credit score too low' }|,
-  maxAmount = |customer -> customer.income * 3|
+    else Rejected { reason = 'Credit score too low' }
+
+  fun maxAmount(customer) = customer.income * 3
 }
 
 aggressivePolicy: Policy = {
-  evaluate = |customer -> Approved|,
-  maxAmount = |customer -> customer.income * 5|
+  fun evaluate(customer) = Approved
+  fun maxAmount(customer) = customer.income * 5
 }
 
 # Runtime selection
 policy = if customer.segment == Premium then aggressivePolicy else standardPolicy
 policy.evaluate(customer)
 ```
+
+### Syntax
+
+The `fun` keyword inside records is sugar for arrow types and lambda values:
+
+```klein
+# Type definition with fun (preferred for interfaces)
+type Policy = {
+  fun evaluate(customer: Customer): Decision
+}
+
+# Equivalent arrow syntax
+type Policy = {
+  evaluate: Customer -> Decision
+}
+
+# Value with fun (preferred for implementations)
+myPolicy: Policy = {
+  fun evaluate(customer) = ...
+}
+
+# Equivalent lambda syntax
+myPolicy: Policy = {
+  evaluate = |customer -> ...|
+}
+```
+
+The `fun` syntax is preferred for interface-like records because it reads more naturally and mirrors top-level function definitions.
 
 ## Rationale
 
@@ -68,13 +97,13 @@ Records with type parameters can serve as explicit "type classes":
 
 ```klein
 type Monoid(a) = {
-  empty: () -> a,
-  combine: (a, a) -> a
+  fun empty(): a
+  fun combine(x: a, y: a): a
 }
 
 intAddMonoid: Monoid(Int) = {
-  empty = |0|,
-  combine = |x, y -> x + y|
+  fun empty() = 0
+  fun combine(x, y) = x + y
 }
 
 fun concat(monoid: Monoid(a), on xs: List(a)): a =
