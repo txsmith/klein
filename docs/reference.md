@@ -603,6 +603,69 @@ Total: ${total}
 fun calculateTotal(items: List(LineItem)): Money = ...
 ```
 
+## Error Handling
+
+*Status: Not yet implemented*
+
+Klein uses fail-fast error handling. Errors propagate to the host by default; use `.recover` to convert to `Result` when needed.
+
+### Raising Errors
+
+```klein
+error 'invalid input'
+error { code = 'NOT_FOUND', id = customerId }
+```
+
+### Recovering from Errors
+
+Wrap in a lambda and call `.recover`:
+
+```klein
+|parseNumber(input)|.recover    # Result(Int, Thrown)
+```
+
+### Working with Results
+
+```klein
+type Result(t, e) = Ok { value: t } | Err { error: e }
+
+# Unwrap or raise
+customer = |fetch(id)|.recover.unwrap
+
+# Unwrap with default
+count = |parseNumber(input)|.recover.orDefault(0)
+
+# Unwrap with fallback computation
+config = |loadConfig()|.recover.orElse(|defaultConfig()|)
+
+# Transform success
+name = |fetch(id)|.recover.map(|.name|)
+
+# Chain computations
+result = |fetch(id)|.recover
+  .flatMap(|customer -> |validate(customer)|.recover|)
+  .flatMap(|valid -> |save(valid)|.recover|)
+
+# Pattern match
+match |parseNumber(input)|.recover
+  Ok { value } -> value * 2
+  Err { error } ->
+    log(error.value)
+    0
+```
+
+### Summary
+
+| Want | Syntax |
+|------|--------|
+| Raise an error | `error 'message'` or `error { ... }` |
+| Convert to Result | `\|expr\|.recover` |
+| Unwrap or raise | `.unwrap` |
+| Unwrap or default | `.orDefault(value)` |
+| Unwrap or compute | `.orElse(\|fallback\|)` |
+| Transform success | `.map(\|...\|)` |
+| Chain Results | `.flatMap(\|...\|)` |
+
 ## Complete Example
 
 ```klein
