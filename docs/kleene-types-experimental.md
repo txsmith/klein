@@ -43,22 +43,22 @@ A cardinality `[n..m]` has:
 Functions express how they transform these bounds:
 
 ```klein
-fun filter { xs: a[n..m], p: a -> Bool }: a[0..m]
+fun filter(xs: a[n..m], p: a -> Bool): a[0..m]
 # 'Lower bound drops to 0 (might remove all), upper bound preserved'
 
-fun max { xs: a[n..m] }: a[n..1]
+fun max(xs: a[n..m]): a[n..1]
 # 'Lower bound preserved, upper bound capped at 1'
 
-fun map { xs: a[n..m], f: a -> b }: b[n..m]
+fun map(xs: a[n..m], f: a -> b): b[n..m]
 # 'Both bounds preserved exactly'
 
-fun identity { x: a[n..m] }: a[n..m]
+fun identity(x: a[n..m]): a[n..m]
 # 'Pass through unchanged'
 ```
 
 ### Tracing Through Examples
 
-**`max { xs: a[n..m] }: a[n..1]`** — "collapse to at most one, preserving emptiness"
+**`max(xs: a[n..m]): a[n..1]`** — "collapse to at most one, preserving emptiness"
 
 | Input | `n..m` | `n..1` | Output |
 |-------|--------|--------|--------|
@@ -67,7 +67,7 @@ fun identity { x: a[n..m] }: a[n..m]
 | `a` | `1..1` | `1..1` | `a` |
 | `a?` | `0..1` | `0..1` | `a?` |
 
-**`filter { xs: a[n..m], p: ... }: a[0..m]`** — "might become empty, but won't grow"
+**`filter(xs: a[n..m], p: ...): a[0..m]`** — "might become empty, but won't grow"
 
 | Input | `n..m` | `0..m` | Output |
 |-------|--------|--------|--------|
@@ -103,15 +103,15 @@ This gives exactly four concrete cardinalities:
 
 When you write:
 ```klein
-fun foo { xs: a[n..m] }: a[n..1]
+fun foo(xs: a[n..m]): a[n..1]
 ```
 
-And call it with `foo { myList }` where `myList: Int[1..∞]`:
+And call it with `foo(myList)` where `myList: Int[1..∞]`:
 
 1. Instantiate `n := 1`, `m := ∞`
 2. Return type becomes `Int[1..1]` = `Int`
 
-When called with `foo { maybeEmpty }` where `maybeEmpty: Int[0..∞]`:
+When called with `foo(maybeEmpty)` where `maybeEmpty: Int[0..∞]`:
 
 1. Instantiate `n := 0`, `m := ∞`
 2. Return type becomes `Int[0..1]` = `Int?`
@@ -119,17 +119,17 @@ When called with `foo { maybeEmpty }` where `maybeEmpty: Int[0..∞]`:
 ### Inference Example
 
 ```klein
-fun filter { xs: a[n..m], p: a -> Bool }: a[0..m]
-fun head { xs: a[1..m] }: a
+fun filter(xs: a[n..m], p: a -> Bool): a[0..m]
+fun head(xs: a[1..m]): a
 
 # Infer the type of:
-fun foo { xs } = head { filter { xs, p } }
+fun foo(xs) = head(filter(xs, p))
 ```
 
 Step by step:
 1. `xs` gets fresh type `a[n..m]`
-2. `filter { xs, p }` returns `a[0..m]`
-3. `head { ... }` requires lower bound `≥ 1`
+2. `filter(xs, p)` returns `a[0..m]`
+3. `head(...)` requires lower bound `≥ 1`
 4. But filter's output has lower bound `0`
 5. Type error: "filter may produce empty list, but head requires non-empty"
 
@@ -137,31 +137,31 @@ Step by step:
 
 ```klein
 # Preserve cardinality exactly
-fun map { xs: a[n..m], f: a -> b }: b[n..m]
-fun identity { x: a[n..m] }: a[n..m]
+fun map(xs: a[n..m], f: a -> b): b[n..m]
+fun identity(x: a[n..m]): a[n..m]
 
 # Collapse to at most one (reduce/aggregate)
-fun max { xs: a[n..m] }: a[n..1]
-fun reduce { xs: a[n..m], f: { a, a } -> a }: a[n..1]
-fun first { xs: a[n..m] }: a[n..1]
-fun last { xs: a[n..m] }: a[n..1]
+fun max(xs: a[n..m]): a[n..1]
+fun reduce(xs: a[n..m], f: (a, a) -> a): a[n..1]
+fun first(xs: a[n..m]): a[n..1]
+fun last(xs: a[n..m]): a[n..1]
 
 # Might become empty (filtering)
-fun filter { xs: a[n..m], p: a -> Bool }: a[0..m]
-fun take { xs: a[n..m], count: Int }: a[0..m]
-fun drop { xs: a[n..m], count: Int }: a[0..m]
+fun filter(xs: a[n..m], p: a -> Bool): a[0..m]
+fun take(xs: a[n..m], count: Int): a[0..m]
+fun drop(xs: a[n..m], count: Int): a[0..m]
 
 # Always returns exactly one
-fun fold { xs: a[n..m], init: b, f: { b, a } -> b }: b
-fun length { xs: a[n..m] }: Int
-fun isEmpty { xs: a[n..m] }: Bool
+fun fold(xs: a[n..m], init: b, f: (b, a) -> b): b
+fun length(xs: a[n..m]): Int
+fun isEmpty(xs: a[n..m]): Bool
 
 # Require non-empty input
-fun head { xs: a[1..m] }: a
-fun tail { xs: a[1..m] }: a[0..m]
+fun head(xs: a[1..m]): a
+fun tail(xs: a[1..m]): a[0..m]
 
 # Might grow (concatenation)
-fun concat { xs: a[n..m], ys: a[p..q] }: a[min(n,p)..∞]
+fun concat(xs: a[n..m], ys: a[p..q]): a[min(n,p)..∞]
 # Conservative: lower bound is min of inputs, upper bound is unbounded
 ```
 
@@ -172,7 +172,7 @@ fun concat { xs: a[n..m], ys: a[p..q] }: a[min(n,p)..∞]
 Binary operations on optionals:
 
 ```klein
-fun (+) { a: Int[n..1], b: Int[p..1] }: Int[min(n,p)..1]
+fun (+)(a: Int[n..1], b: Int[p..1]): Int[min(n,p)..1]
 ```
 
 If either operand might be absent (`n=0` or `p=0`), result might be absent.
@@ -188,19 +188,19 @@ If either operand might be absent (`n=0` or `p=0`), result might be absent.
 At most ONE collection argument per function call:
 
 ```klein
-fun f { a: Int, b: Int }: Int
+fun f(a: Int, b: Int): Int
 
-f { Int*, Int }   ✓  →  Int*
-f { Int+, Int }   ✓  →  Int+
-f { Int*, Int* }  ✗  # ambiguous: cartesian or zip?
+f(Int*, Int)   ✓  →  Int*
+f(Int+, Int)   ✓  →  Int+
+f(Int*, Int*)  ✗  # ambiguous: cartesian or zip?
 ```
 
 Map preserves cardinality:
 ```klein
-fun double { x: Int }: Int = x * 2
+fun double(x: Int): Int = x * 2
 
 xs: Int*
-double { xs }   # returns Int*, this IS map
+double(xs)   # returns Int*, this IS map
 ```
 
 ### Why Disallow Multiple Collections?
@@ -211,8 +211,8 @@ With two collections, semantics are ambiguous:
 
 Require explicit operations instead:
 ```klein
-zip { xs, ys, f }      # pairwise
-product { xs, ys, f }  # cartesian
+zip(xs, ys, f)      # pairwise
+product(xs, ys, f)  # cartesian
 ```
 
 ## Pattern Matching
@@ -233,7 +233,7 @@ match xs
 
 Exhaustiveness checking uses cardinality:
 ```klein
-fun head { xs: a+ }: a =
+fun head(xs: a+): a =
   match xs
     [h, ...t] -> h
 # No [] case needed — a+ guarantees non-empty
@@ -254,7 +254,7 @@ type Person = {
 
 With row polymorphism:
 ```klein
-fun getName { x: { name: String[n..m], ...r } }: String[n..m]
+fun getName(x: { name: String[n..m], ...r }): String[n..m]
 # Preserves cardinality of the name field
 ```
 
@@ -284,7 +284,7 @@ data class Cardinality(
 ) {
     enum class Lower { Zero, One }
     enum class Upper { One, Inf }
-    
+
     companion object {
         val One = Cardinality(Lower.One, Upper.One)    // 1..1
         val Opt = Cardinality(Lower.Zero, Upper.One)   // 0..1

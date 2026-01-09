@@ -18,16 +18,16 @@ A complete reference for Klein's syntax, covering expressions, functions, contro
 
 ## Functions
 
-Functions take a single record argument. Parameter lists use record syntax with braces.
+Functions use positional parameters in parentheses.
 
 ### Named Functions
 
 Use `fun` keyword with `=` for definition:
 
 ```klein
-fun double { x } = x * 2
+fun double(x) = x * 2
 
-fun calculate { a, b } =
+fun calculate(a, b) =
   temp = a * 2
   temp + b
 ```
@@ -35,58 +35,21 @@ fun calculate { a, b } =
 With type annotations:
 
 ```klein
-fun double { x: Int }: Int = x * 2
+fun double(x: Int): Int = x * 2
 
-fun calculate { a: Int, b: Int }: Int =
+fun calculate(a: Int, b: Int): Int =
   temp = a * 2
   temp + b
 ```
 
 ### Function Application
 
-Functions are called by passing a record argument. The syntax depends on whether you're passing an existing record or constructing one inline.
-
-**Passing an existing record:**
+Functions are called with positional arguments in parentheses:
 
 ```klein
-person = { name = 'Alice', age = 30 }
-greet person
-```
-
-**Constructing with braces (single-field functions):**
-
-For functions with one field, the value is assigned to that field regardless of variable name:
-
-```klein
-fun double { x: Int }: Int = x * 2
-fun process { person: Person }: String = ...
-
-double { 5 }              # { x = 5 }
-double { myNumber }       # { x = myNumber }
-process { somePerson }    # { person = somePerson }
-```
-
-**Constructing with braces (multi-field functions):**
-
-For functions with multiple fields, use named or shorthand syntax:
-
-```klein
-fun greet { name: String, age: Int }: String = ...
-
-greet { name = 'Alice', age = 32 }   # named
-greet { name, age }                   # shorthand (variable names match field names)
-```
-
-**Constructing with parens (positional):**
-
-Parens provide positional syntax for when named fields feel verbose:
-
-```klein
-fun add { a: Int, b: Int }: Int = a + b
-fun range { from: Int, to: Int }: List(Int) = ...
-
-add (1, 2)                # { a = 1, b = 2 }
-range (1, 100)            # { from = 1, to = 100 }
+double(5)
+calculate(10, 20)
+greet('Alice', 30)
 ```
 
 ### Anonymous Lambdas (Pipes)
@@ -95,15 +58,15 @@ Pipes delimit lambdas. Arrow for explicit params:
 
 ```klein
 # Explicit parameters
-numbers.filter { |x -> x > 100| }
-numbers.fold { init = 0, f = |acc, x -> acc + x| }
+numbers.filter(|x -> x > 100|)
+numbers.fold(0, |acc, x -> acc + x|)
 
 # Multi-statement
-items.filter { |
+items.filter(|
   p = .price
   t = .tax
   p > t
-| }
+|)
 ```
 
 ### Dot Shorthand for Implicit Parameter
@@ -112,18 +75,18 @@ Inside pipes, `.` refers to the implicit lambda parameter:
 
 ```klein
 # Field access
-items.filter { |.price > 100| }
-orders.map { |.total * taxRate| }
-users.sortBy { |.age| }
+items.filter(|.price > 100|)
+orders.map(|.total * taxRate|)
+users.sortBy(|.age|)
 
 # Multiple dots = same parameter
-items.filter { |.price > .cost| }
+items.filter(|.price > .cost|)
 
 # Bare dot = the parameter itself
-nums.filter { |. > 100| }
-nums.map { |. * 2| }
-nums.map { |-.| }              # unary minus
-bools.map { |not .| }          # boolean not
+nums.filter(|. > 100|)
+nums.map(|. * 2|)
+nums.map(|-.|)              # unary minus
+bools.map(|not .|)          # boolean not
 ```
 
 ### Nested Lambdas
@@ -131,8 +94,8 @@ bools.map { |not .| }          # boolean not
 Each pipe pair creates a new dot scope:
 
 ```klein
-items.filter { |.orders.any { |.price > 100| }| }
-#               ^-- outer dot   ^-- inner dot
+items.filter(|.orders.any(|.price > 100|)|)
+#              ^-- outer dot   ^-- inner dot
 
 # outer dot = Item
 # inner dot = Order
@@ -141,7 +104,7 @@ items.filter { |.orders.any { |.price > 100| }| }
 When you need to reference both scopes, use explicit params:
 
 ```klein
-items.filter { |item -> item.orders.any { |.price > item.budget| }| }
+items.filter(|item -> item.orders.any(|.price > item.budget|)|)
 ```
 
 ### Extension Methods
@@ -149,33 +112,63 @@ items.filter { |item -> item.orders.any { |.price > item.budget| }| }
 Use the `on` keyword to mark which parameter becomes the method receiver:
 
 ```klein
-fun map { f: a -> b, on xs: List(a) }: List(b) = ...
-fun filter { p: a -> Bool, on xs: List(a) }: List(a) = ...
-fun isAdult { on c: Customer }: Bool = c.age >= 18
+fun map(f: a -> b, on xs: List(a)): List(b) = ...
+fun filter(p: a -> Bool, on xs: List(a)): List(a) = ...
+fun isAdult(on c: Customer): Bool = c.age >= 18
 ```
 
 Both calling styles work:
 
 ```klein
 # Function call style
-map { f = double, xs = numbers }
-isAdult { c = customer }
+map(double, numbers)
+isAdult(customer)
 
 # Method syntax
-numbers.map { double }          # single remaining field
-customer.isAdult                # no remaining fields
+numbers.map(double)
+customer.isAdult
 ```
 
 Method syntax enables clean chaining:
 
 ```klein
-[1, 2, 3].map { |. * 2| }.filter { |. > 2| }
+[1, 2, 3].map(|. * 2|).filter(|. > 2|)
 ```
 
 Rules:
 - Only **one** `on` parameter per function
 - Any parameter position works
 - Must be imported to use method syntax
+
+## The Tilde Operator (~)
+
+The tilde operator transforms a positional function to accept a record with matching field names:
+
+```klein
+fun process(name: String, age: Int): Decision = ...
+
+# process takes positional args
+process : (String, Int) -> Decision
+
+# process~ takes a record with matching field names
+process~ : { name: String, age: Int } -> Decision
+```
+
+Use tilde when you have a record and want to spread it into a positional function:
+
+```klein
+person = { name = 'Alice', age = 30 }
+
+# These are equivalent:
+process(person.name, person.age)
+process~(person)
+
+# Works with HOFs
+people.map(process~)
+people.filter(isValid~)
+```
+
+This keeps function types simple (standard HM-compatible) while providing an escape hatch for record-to-positional bridging.
 
 ## Blocks vs Lambdas
 
@@ -188,15 +181,15 @@ Rules:
 
 ```klein
 # Lambdas (pipes) — work anywhere
-items.filter { |.price > 100| }         # (Item) -> Bool
-runLater { |1 + 2| }                    # () -> Int
-nums.map { |. * 2| }                    # (Int) -> Int
+items.filter(|.price > 100|)            # Item -> Bool
+runLater(|1 + 2|)                       # () -> Int
+nums.map(|. * 2|)                       # Int -> Int
 
 # Lambdas can be bound to variables
-predicate = |.price > 100|              # (Item) -> Bool
+predicate = |.price > 100|              # Item -> Bool
 thunk = |1 + 2|                         # () -> Int
 constant = |42|                         # () -> Int
-identity = |.|                          # (a) -> a
+identity = |.|                          # a -> a
 
 # Blocks via indentation — immediate evaluation
 x =
@@ -206,9 +199,9 @@ x =
 # x: Int = 3
 
 # Named functions (alternative to binding lambdas)
-fun predicate { item } = item.price > 100
-fun thunk {} = 1 + 2
-fun addOne { x } = x + 1
+fun predicate(item) = item.price > 100
+fun thunk() = 1 + 2
+fun addOne(x) = x + 1
 ```
 
 ### Constant Lambdas
@@ -216,8 +209,8 @@ fun addOne { x } = x + 1
 A lambda with no dots or params is a constant function:
 
 ```klein
-items.map { |42| }            # always returns 42
-items.filter { |true| }       # matches everything
+items.map(|42|)            # always returns 42
+items.filter(|true|)       # matches everything
 ```
 
 ## Point-Free Style
@@ -227,10 +220,10 @@ items.filter { |true| }       # matches everything
 Any named function can be passed directly:
 
 ```klein
-fun add { a: Int, b: Int }: Int = a + b
+fun add(a: Int, b: Int): Int = a + b
 
-nums.fold { init = 0, f = add }         # pass function directly
-items.map { calculateTotal }            # no lambda needed
+nums.fold(0, add)                  # pass function directly
+items.map(calculateTotal)          # no lambda needed
 ```
 
 ### Operators as Values
@@ -238,24 +231,24 @@ items.map { calculateTotal }            # no lambda needed
 Infix operators in value position become functions:
 
 ```klein
-nums.fold { init = 0, f = (+) }         # (Int, Int) -> Int
-nums.fold { init = 1, f = (*) }         # (Int, Int) -> Int
-strings.reduce { (++) }                 # (String, String) -> String
-bools.reduce { and }                    # (Bool, Bool) -> Bool
+nums.fold(0, (+))                  # (Int, Int) -> Int
+nums.fold(1, (*))                  # (Int, Int) -> Int
+strings.reduce((++))               # (String, String) -> String
+bools.reduce(and)                  # (Bool, Bool) -> Bool
 ```
 
-Note: `-` in value position is binary subtraction. For unary negation, use a lambda `|-.| ` or a `negate` function.
+Note: `-` in value position is binary subtraction. For unary negation, use a lambda `|-.|` or a `negate` function.
 
 ## Function Types
 
-Function types use arrow syntax with record parameters:
+Function types use arrow syntax with positional parameters:
 
 ```klein
-{ x: Int } -> Int                 # single field
-{ x: Int, y: Int } -> Int         # multiple fields
-{} -> Int                         # no fields (thunk)
-{ item: Item } -> Bool            # with custom types
-({ x: Int } -> Int) -> Int        # higher-order
+Int -> Int                        # single parameter
+(Int, Int) -> Int                 # multiple parameters
+() -> Int                         # no parameters (thunk)
+Item -> Bool                      # with custom types
+(Int -> Int) -> Int               # higher-order
 ```
 
 ## If/Then/Else
@@ -270,7 +263,7 @@ max = if a > b then a else b
 result =
   if score >= 90 then
     grade = 'A'
-    sendCongrats { student }
+    sendCongrats(student)
     grade
   else if score >= 80 then
     'B'
@@ -295,9 +288,9 @@ The `then` keyword makes it unambiguous where the condition ends, avoiding C-sty
 
 ```klein
 match status
-  Approved -> processLoan { application }
-  Rejected { reason } -> notifyRejection { reason }
-  Pending -> waitForReview {}
+  Approved -> processLoan(application)
+  Rejected { reason } -> notifyRejection(reason)
+  Pending -> waitForReview()
 ```
 
 ### Condition Matching
@@ -328,10 +321,10 @@ Combine value matching with additional conditions:
 
 ```klein
 match amount
-  x if x > 10000 -> requiresDirectorApproval { x }
-  x if x > 1000 -> requiresManagerApproval { x }
-  x if x > 0 -> autoApprove { x }
-  else -> reject { 'Invalid amount' }
+  x if x > 10000 -> requiresDirectorApproval(x)
+  x if x > 1000 -> requiresManagerApproval(x)
+  x if x > 0 -> autoApprove(x)
+  else -> reject('Invalid amount')
 ```
 
 ### Destructuring
@@ -339,8 +332,8 @@ match amount
 ```klein
 # Records
 match person
-  { name, age } if age >= 18 -> allowEntry { name }
-  { name, _ } -> denyEntry { name }
+  { name, age } if age >= 18 -> allowEntry(name)
+  { name, _ } -> denyEntry(name)
 
 # Lists
 match items
@@ -361,20 +354,20 @@ match items
 ```klein
 # Multi-line (standard)
 match status
-  Pending -> wait {}
-  Approved -> go {}
-  else -> stop {}
+  Pending -> wait()
+  Approved -> go()
+  else -> stop()
 
 # Single-line arms with multi-line bodies
 match status
   Pending ->
-    log { 'waiting' }
-    wait {}
+    log('waiting')
+    wait()
   Approved ->
-    log { 'going' }
-    go {}
+    log('going')
+    go()
   else ->
-    stop {}
+    stop()
 ```
 
 ## Type Definitions
@@ -419,38 +412,29 @@ match status
 ```klein
 type Money = Double
 type CustomerId = Int
-type Predicate(a) = { x: a } -> Bool
+type Predicate(a) = a -> Bool
 ```
 
 ### Records with Function Fields
 
-Record types can declare function signatures using `fun` syntax:
+Record types can declare function signatures:
 
 ```klein
 type Policy = {
-  fun evaluate { customer: Customer }: Decision
-  fun maxAmount { customer: Customer }: Money
+  evaluate: Customer -> Decision,
+  maxAmount: Customer -> Money
 }
 ```
 
-This is sugar for:
-
-```klein
-type Policy = {
-  evaluate: { customer: Customer } -> Decision,
-  maxAmount: { customer: Customer } -> Money
-}
-```
-
-Record values can implement these with `fun` syntax:
+Record values can implement these:
 
 ```klein
 standardPolicy: Policy = {
-  fun evaluate { customer } =
+  evaluate = |customer ->
     if customer.creditScore > 700 then Approved
-    else Rejected { reason = 'Credit score too low' }
-  
-  fun maxAmount { customer } = customer.income * 3
+    else Rejected { reason = 'Credit score too low' }|,
+
+  maxAmount = |customer -> customer.income * 3|
 }
 ```
 
@@ -463,11 +447,11 @@ Modules are named containers for organizing types, functions, and values.
 ```klein
 module Lending
   type Loan = { principal: Money, rate: Double }
-  
-  fun value { loan: Loan }: Money = loan.principal
-  
-  fun totalValue { on xs: List(Loan) }: Money =
-    xs.fold { init = Money { 0 }, f = |acc, l -> acc + l.principal| }
+
+  fun value(loan: Loan): Money = loan.principal
+
+  fun totalValue(on xs: List(Loan)): Money =
+    xs.fold(Money(0), |acc, l -> acc + l.principal|)
 ```
 
 Indentation defines the module boundary.
@@ -483,7 +467,7 @@ import Lending.{ Loan, value }
 
 # Qualified access (no import needed)
 Lending.Loan
-Lending.value { loan }
+Lending.value(loan)
 ```
 
 ### Smart Constructors
@@ -491,20 +475,20 @@ Lending.value { loan }
 ```klein
 module Money
   type Money = { amount: Number, currency: Currency }
-  
-  fun fromDollars { d: Number }: Money =
+
+  fun fromDollars(d: Number): Money =
     Money { amount = d, currency = USD }
-  
-  fun fromCents { c: Number }: Money =
+
+  fun fromCents(c: Number): Money =
     Money { amount = c / 100, currency = USD }
-  
-  fun zero { currency: Currency }: Money = 
+
+  fun zero(currency: Currency): Money =
     Money { amount = 0, currency }
 
 import Money._
 
-price = fromDollars { 10.50 }
-nothing = zero { USD }
+price = fromDollars(10.50)
+nothing = zero(USD)
 ```
 
 ## Iteration
@@ -578,7 +562,7 @@ pair._2                   # 30
 (x, y) = pair
 
 # In function returns
-fun divmod { a: Int, b: Int }: (Int, Int) = (a / b, a % b)
+fun divmod(a: Int, b: Int): (Int, Int) = (a / b, a % b)
 ```
 
 Tuples are distinct from records. Use records when field names are meaningful, tuples for quick positional grouping.
@@ -596,7 +580,7 @@ Strings use single quotes and support interpolation with `${}`. Multiline string
 
 ```klein
 message = 'Hello, ${customer.name}!'
-summary = 'Total: ${formatMoney { subtotal + tax }}'
+summary = 'Total: ${formatMoney(subtotal + tax)}'
 
 template = 'Dear ${name},
 
@@ -616,7 +600,7 @@ Total: ${total}
 # Doc comment for the following definition
 # @param items The line items to sum
 # @returns The total as Money
-fun calculateTotal { items: List(LineItem) }: Money = ...
+fun calculateTotal(items: List(LineItem)): Money = ...
 ```
 
 ## Complete Example
@@ -644,7 +628,7 @@ type Decision =
   | Rejected { reason: String }
 
 
-fun assessApplication { app: Application }: Decision =
+fun assessApplication(app: Application): Decision =
   customer = app.customer
   amount = app.amount
 
@@ -653,17 +637,17 @@ fun assessApplication { app: Application }: Decision =
     not customer.verified -> Rejected { reason = 'Customer not verified' }
     amount <= 0 -> Rejected { reason = 'Invalid amount' }
     customer.creditScore < 300 -> Rejected { reason = 'Credit score too low' }
-    else -> continueAssessment { app }
+    else -> continueAssessment(app)
 
-fun continueAssessment { app: Application }: Decision =
-  riskScore = calculateRisk { app }
+fun continueAssessment(app: Application): Decision =
+  riskScore = calculateRisk(app)
 
   match
     riskScore < 20 and app.amount < 5000 -> AutoApproved
-    riskScore < 50 -> NeedsReview { reviewer = assignReviewer { app } }
+    riskScore < 50 -> NeedsReview { reviewer = assignReviewer(app) }
     else -> Rejected { reason = 'Risk too high: ${riskScore}' }
 
-fun calculateRisk { app: Application }: Int =
+fun calculateRisk(app: Application): Int =
   base = match app.customer.segment
     Premium -> 0
     Standard -> 10
@@ -677,7 +661,7 @@ fun calculateRisk { app: Application }: Int =
 
   base + amountRisk
 
-fun assignReviewer { app: Application }: String =
+fun assignReviewer(app: Application): String =
   if app.amount > 20000 then 'director@company.com'
   else 'manager@company.com'
 ```
@@ -686,17 +670,17 @@ fun assignReviewer { app: Application }: String =
 
 | Want | Syntax |
 |------|--------|
-| Named function | `fun name { params } = body` |
-| Multi-line function | `fun name { params } =` + indented block |
-| Zero-param function | `fun name {} = body` |
+| Named function | `fun name(params) = body` |
+| Multi-line function | `fun name(params) =` + indented block |
+| Zero-param function | `fun name() = body` |
 | Lambda with explicit params | `\|x -> expr\|` or `\|x, y -> expr\|` |
 | Lambda with implicit param | `\|.field\|` or `\|. > 100\|` |
 | Zero-param lambda | `\|expr\|` |
 | Constant lambda | `\|42\|` |
 | Identity lambda | `\|.\|` |
-| Pass function directly | `nums.fold { init = 0, f = add }` |
-| Pass operator directly | `nums.fold { init = 0, f = (+) }` |
-| Partial application | `\|add (1, .)\|` |
+| Pass function directly | `nums.fold(0, add)` |
+| Pass operator directly | `nums.fold(0, (+))` |
+| Partial application | `\|add(1, .)\|` |
 | Block (immediate eval) | indented lines after `=` |
 | Bind a lambda | `x = \|.price > 100\|` |
 | If/else | `if cond then a else b` |
@@ -715,13 +699,13 @@ fun assignReviewer { app: Application }: String =
 | Record update | `{ ...r, field = newVal }` |
 | Tuple literal | `(a, b)` |
 | Tuple access | `tuple._1`, `tuple._2` |
-| Positional call | `f (a, b)` |
 | Range | `1..10` or `1..<10` |
 | String interpolation | `'Hello ${name}'` |
 | Comments | `#` |
 | Module definition | `module Name` + indented body |
 | Import all | `import Module._` |
 | Import specific | `import Module.{ A, B }` |
-| Extension method | `fun foo { on x: T }` |
-| Function in record type | `fun foo { params }: R` |
-| Function in record value | `fun foo { params } = body` |
+| Extension method | `fun foo(on x: T, ...)` |
+| Record-to-positional | `f~(record)` |
+| Function type (1 param) | `A -> B` |
+| Function type (n params) | `(A, B) -> C` |
