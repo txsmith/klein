@@ -30,21 +30,58 @@ klein-lib/src/commonTest/kotlin/klein/types/
 package klein.types
 
 import klein.*
+import kotlin.reflect.KClass
 
-// Parse and infer a single expression
-fun inferExpr(source: String, env: TypeEnv = TypeEnv.empty()): Type
+/**
+ * Parse and infer a single expression.
+ * Returns the inferred type, throws on parse errors.
+ */
+fun inferExpr(source: String, env: TypeEnv = TypeEnv.empty()): Type {
+    val expr = parse(source)
+    return TypeGen().infer(expr, env)
+}
 
-// Parse and infer, returning errors too
-fun inferExprWithErrors(source: String, env: TypeEnv = TypeEnv.empty()): InferResult
+/**
+ * Parse and infer, returning result with any errors.
+ * Use when testing error conditions.
+ */
+fun inferExprWithErrors(source: String, env: TypeEnv = TypeEnv.empty()): InferResult {
+    val expr = parse(source)
+    return TypeGen().inferWithErrors(expr, env)
+}
 
-// Assert type equals (using TypePrinter for readable diffs)
-fun assertType(expected: String, actual: Type)
+/**
+ * Assert type equals expected display string.
+ * Uses TypePrinter for readable error messages.
+ */
+fun assertType(expected: String, actual: Type) {
+    assertEquals(expected, TypePrinter.print(actual))
+}
 
-// Assert inference produces specific error
-fun assertTypeError(source: String, errorType: KClass<out TypeError>)
+/**
+ * Assert inference produces specific error type.
+ * Fails if no error or wrong error type.
+ */
+fun assertTypeError(source: String, errorType: KClass<out TypeError>) {
+    val result = inferExprWithErrors(source)
+    assertTrue(result.hasErrors, "Expected error but inference succeeded")
+    assertTrue(
+        result.errors.any { errorType.isInstance(it) },
+        "Expected ${errorType.simpleName} but got: ${result.errors}"
+    )
+}
 
-// Build environments for testing
-fun envWith(vararg bindings: Pair<String, String>): TypeEnv
+/**
+ * Build environment with type bindings.
+ * Types are parsed from strings: "Int", "String -> Bool", "{ a: Int }"
+ */
+fun envWith(vararg bindings: Pair<String, String>): TypeEnv {
+    val env = TypeEnv.empty()
+    for ((name, typeStr) in bindings) {
+        env.bind(name, parseType(typeStr))
+    }
+    return env
+}
 ```
 
 ---
@@ -696,28 +733,104 @@ If-without-else always returns `Unit`, regardless of the then-branch type.
 
 ## Test Execution Patterns
 
-### Positive Tests (Type Checks)
+### Test Helpers (TypeAssertions.kt)
+
+#### `inferExpr` - Infer type of a single expression
 
 ```kotlin
+@Test
+fun intLiteral() {
+    val type = inferExpr("42")
+    assertEquals(Type.TInt, type)
+}
+
 @Test
 fun lambdaIdentity() {
     val type = inferExpr("|x -> x|")
-    // Type should be 'a -> 'a (polymorphic)
     assertTrue(type is Type.TFun)
     val fn = type as Type.TFun
     assertEquals(1, fn.params.size)
-    // param and result should be same type variable
+    assertSame(fn.params[0], fn.result)  // Same type variable
 }
 ```
 
-### Negative Tests (Type Errors)
+#### `inferExprWithErrors` - Infer and capture errors
 
 ```kotlin
 @Test
-fun addIntString_fails() {
-    val result = inferExprWithErrors("1 + 'hello'")
+fun unboundVariable_reportsError() {
+    val result = inferExprWithErrors("unknownVar")
+    assertTrue(result.hasErrors)
+    assertEquals(1, result.errors.size)
+    assertTrue(result.errors[0] is TypeError.UnboundVariable)
+    assertEquals("unknownVar", (result.errors[0] as TypeError.UnboundVariable).name)
+}
+
+@Test
+fun typeMismatch_reportsError() {
+    val result = inferExprWithErrors("1 + true")
     assertTrue(result.hasErrors)
     assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+}
+```
+
+#### `assertType` - Compare types using display strings
+
+```kotlin
+@Test
+fun functionType_display() {
+    val type = inferExpr("|x, y -> x + y|")
+    assertType("(Int, Int) -> Int", type)
+}
+
+@Test
+fun recordType_display() {
+    val type = inferExpr("{ name = 'Alice', age = 30 }")
+    assertType("{ name: String, age: Int }", type)
+}
+```
+
+#### `assertTypeError` - Assert specific error type occurs
+
+```kotlin
+@Test
+fun addIntString_failsWithMismatch() {
+    assertTypeError("1 + 'hello'", TypeError.TypeMismatch::class)
+}
+
+@Test
+fun callNonFunction_failsWithNotAFunction() {
+    assertTypeError("42(1)", TypeError.NotAFunction::class)
+}
+
+@Test
+fun implicitOutsideLambda_fails() {
+    assertTypeError(".", TypeError.ImplicitParamOutsideLambda::class)
+}
+```
+
+#### `envWith` - Build test environments with bindings
+
+```kotlin
+@Test
+fun identFromEnv() {
+    val env = envWith("x" to "Int", "name" to "String")
+    val type = inferExpr("x", env)
+    assertEquals(Type.TInt, type)
+}
+
+@Test
+fun functionFromEnv() {
+    val env = envWith("f" to "Int -> String")
+    val type = inferExpr("f(42)", env)
+    assertType("String", type)
+}
+
+@Test
+fun recordFromEnv() {
+    val env = envWith("person" to "{ name: String, age: Int }")
+    val type = inferExpr("person.name", env)
+    assertType("String", type)
 }
 ```
 
@@ -730,6 +843,30 @@ fun arithmeticOperators_allReturnInt() {
     for (op in ops) {
         val type = inferExpr("1 $op 2")
         assertEquals(Type.TInt, type, "Operator $op should return Int")
+    }
+}
+
+@Test
+fun comparisonOperators_allReturnBool() {
+    val ops = listOf("<", "<=", ">", ">=", "==", "!=")
+    for (op in ops) {
+        val type = inferExpr("1 $op 2")
+        assertEquals(Type.TBool, type, "Operator $op should return Bool")
+    }
+}
+
+@Test
+fun literals_haveCorrectTypes() {
+    val cases = listOf(
+        "42" to Type.TInt,
+        "3.14" to Type.TDouble,
+        "'hello'" to Type.TString,
+        "true" to Type.TBool,
+        "false" to Type.TBool,
+    )
+    for ((input, expected) in cases) {
+        val type = inferExpr(input)
+        assertEquals(expected, type, "Literal $input should have type ${TypePrinter.print(expected)}")
     }
 }
 ```
