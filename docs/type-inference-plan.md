@@ -69,6 +69,7 @@ sealed class Type {
     object TDouble : Type()
     object TString : Type()
     object TBool : Type()
+    object TUnit : Type()  // For expressions with no meaningful value (if without else)
 
     // Type variable with bounds (SimpleSub style)
     data class TVar(
@@ -114,6 +115,7 @@ object TypePrinter {
         Type.TDouble -> "Double"
         Type.TString -> "String"
         Type.TBool -> "Bool"
+        Type.TUnit -> "Unit"
         Type.TTop -> "Top"
         Type.TBottom -> "Bottom"
         is Type.TVar -> "'${varName(type.id)}"  // 'a, 'b, 'c, etc.
@@ -154,6 +156,7 @@ object TypePrinter {
 | Double | `Double` |
 | String | `String` |
 | Boolean | `Bool` |
+| Unit | `Unit` |
 | Type variable | `'a`, `'b`, `'c` |
 | Function (1 param) | `Int -> Int` |
 | Function (n params) | `(Int, String) -> Bool` |
@@ -290,6 +293,18 @@ sealed class TypeError {
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Expected $expected arguments, got $actual"
+    }
+
+    data class ImplicitParamOutsideLambda(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Implicit parameter '.' can only be used inside a lambda"
+    }
+
+    data class MixedImplicitExplicit(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Cannot mix implicit parameter '.' with explicit parameters"
     }
 }
 ```
@@ -464,7 +479,10 @@ The implicit parameter `|.|` and `|.field|` syntax needs special handling:
 - `|.name|` → `{ name: 'a } -> 'a`
 - `|.x + .y|` → `{ x: Int, y: Int } -> Int`
 
-Must track implicit parameter scope to prevent use outside lambdas.
+**Constraints:**
+- Implicit parameters cannot be used outside lambdas (error)
+- Mixing implicit and explicit parameters is not allowed: `|x -> . + x|` is an error
+- A lambda uses either explicit parameters OR implicit parameter, not both
 
 ---
 
@@ -478,16 +496,16 @@ Must track implicit parameter scope to prevent use outside lambdas.
 - **Field access on known record**: Look up field, error if missing
 - **Field access on type variable**: Constrain variable to have at least that field
 
-### Design Question
+### Width Subtyping for Records
 
-Without row polymorphism, field access on a type variable creates a record constraint with exactly that field. This may be too restrictive for some patterns:
+Field access on a type variable creates a record constraint. Width subtyping ensures this works with larger records:
 
 ```klein
 getName = |.name|  # { name: 'a } -> 'a
-getName({ name = 'Alice', age = 30 })  # Error? Or OK via width subtyping?
+getName({ name = 'Alice', age = 30 })  # OK! { name: String, age: Int } <: { name: String }
 ```
 
-The answer depends on how we handle subtyping between inferred record constraints and concrete records. Needs careful thought during implementation.
+The subtyping rule `{ a: T, b: U } <: { a: T }` (more fields = subtype) allows functions that require certain fields to accept records with additional fields. This is the standard structural subtyping approach.
 
 ---
 
