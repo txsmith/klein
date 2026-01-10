@@ -87,6 +87,14 @@ fun envWith(vararg bindings: Pair<String, String>): TypeEnv
 | `boolLiteral_true` | `true` | `Bool` |
 | `boolLiteral_false` | `false` | `Bool` |
 
+### Unit Type
+
+Unit is used for expressions that produce no meaningful value (e.g., if-without-else).
+
+| Test | Input | Expected Type |
+|------|-------|---------------|
+| `unit_ifWithoutElse` | `if true then 1` | `Unit` |
+
 ---
 
 ## 2. Identifier Inference (IdentInferTest.kt)
@@ -488,6 +496,23 @@ fun envWith(vararg bindings: Pair<String, String>): TypeEnv
 | `field_inArithmetic` | `{ x = 1 }.x + { y = 2 }.y` | `Int` |
 | `field_inComparison` | `{ a = 1 }.a < { b = 2 }.b` | `Bool` |
 
+### Width Subtyping with Field Access
+
+Functions that access specific fields should accept records with additional fields via width subtyping.
+
+| Test | Input | Expected Type | Notes |
+|------|-------|---------------|-------|
+| `field_widthSubtype` | `\|.name\|({ name = 'Alice', age = 30 })` | `String` | Extra `age` field is OK |
+| `field_widthSubtypeMulti` | `\|.x + .y\|({ x = 1, y = 2, z = 3 })` | `Int` | Extra `z` field is OK |
+| `field_lambdaAcceptsWider` | (see below) | `String` | Function accepting wider record |
+
+```klein
+# field_lambdaAcceptsWider
+getName = |.name|
+person = { name = 'Alice', age = 30, email = 'alice@example.com' }
+getName(person)  # OK: person has 'name' field
+```
+
 ---
 
 ## 10. Implicit Parameters (ImplicitParamInferTest.kt)
@@ -517,19 +542,21 @@ fun envWith(vararg bindings: Pair<String, String>): TypeEnv
 | `implicit_twice` | `\|. + .\|` | `Int -> Int` |
 | `implicit_multiField` | `\|.a + .b + .c\|` | `{ a: Int, b: Int, c: Int } -> Int` |
 
-### Implicit vs Explicit
-
-| Test | Input | Expected Type |
-|------|-------|---------------|
-| `implicit_withExplicit` | `\|x -> . + x\|` | Should error or x shadows implicit? |
-| `implicit_nested` | `\|.\|(\|.\|)` | ? (needs careful semantics) |
-
 ### Implicit Parameter Errors
 
 | Test | Input | Expected Error |
 |------|-------|----------------|
 | `implicit_outsideLambda` | `.` | `ImplicitParamOutsideLambda` |
 | `implicit_fieldOutside` | `.name` | `ImplicitParamOutsideLambda` |
+| `implicit_mixedWithExplicit` | `\|x -> . + x\|` | `MixedImplicitExplicit` |
+| `implicit_explicitThenImplicit` | `\|x, y -> .z\|` | `MixedImplicitExplicit` |
+
+### Nested Lambdas with Implicit
+
+| Test | Input | Expected Type | Notes |
+|------|-------|---------------|-------|
+| `implicit_inNestedLambda` | `\|x -> \|.name\|\|` | `'a -> { name: 'b } -> 'b` | Inner lambda has its own implicit |
+| `implicit_outerExplicitInnerImplicit` | `\|x -> \|. + x\|\|` | `Int -> Int -> Int` | OK - different scopes |
 
 ---
 
@@ -586,9 +613,14 @@ fun envWith(vararg bindings: Pair<String, String>): TypeEnv
 
 ### If Without Else
 
+If-without-else always returns `Unit`, regardless of the then-branch type.
+
 | Test | Input | Expected Type | Notes |
 |------|-------|---------------|-------|
-| `if_noElse` | `if true then 1` | `Int` or `Int?` | Design decision needed |
+| `if_noElse_int` | `if true then 1` | `Unit` | Then-branch value is discarded |
+| `if_noElse_string` | `if true then 'hello'` | `Unit` | |
+| `if_noElse_record` | `if true then { a = 1 }` | `Unit` | |
+| `if_noElse_sideEffect` | `if flag then doSomething()` | `Unit` | Typical use case |
 
 ---
 
@@ -704,6 +736,14 @@ fun arithmeticOperators_allReturnInt() {
 
 ---
 
+## Design Decisions
+
+These decisions are reflected in the tests above:
+
+1. **Unit type**: `if-without-else` returns `Unit`, not the then-branch type
+2. **Implicit/explicit mixing**: Lambdas cannot mix implicit (`.`) and explicit (`x`) parameters - this is an error
+3. **Width subtyping**: Records with more fields are subtypes of records with fewer fields, so `|.name|` accepts `{ name, age }`
+
 ## Notes
 
 1. **Type variable naming**: Tests should not depend on specific variable names ('a vs 'b). Compare structure instead.
@@ -712,4 +752,4 @@ fun arithmeticOperators_allReturnInt() {
 
 3. **Error messages**: Test that error spans point to the right location in source.
 
-4. **Subtyping**: Record width subtyping affects what types are "compatible". Tests should reflect the chosen semantics.
+4. **Error types**: New error type `MixedImplicitExplicit` needed for implicit/explicit mixing violations.
