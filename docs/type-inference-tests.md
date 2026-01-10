@@ -352,9 +352,9 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `lambda_identity` | `\|x -> x\|` | `'a -> 'a` |
-| `lambda_constant` | `\|x -> 42\|` | `'a -> Int` |
-| `lambda_constString` | `\|x -> 'hello'\|` | `'a -> String` |
+| `lambda_identity` | `\|x -> x\|` | `a -> a` |
+| `lambda_constant` | `\|x -> 42\|` | `a -> Int` |
+| `lambda_constString` | `\|x -> 'hello'\|` | `a -> String` |
 | `lambda_useParam` | `\|x -> x + 1\|` | `Int -> Int` |
 | `lambda_boolParam` | `\|x -> not x\|` | `Bool -> Bool` |
 
@@ -363,9 +363,9 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 | Test | Input | Expected Type |
 |------|-------|---------------|
 | `lambda_twoParams` | `\|x, y -> x + y\|` | `(Int, Int) -> Int` |
-| `lambda_threeParams` | `\|x, y, z -> x\|` | `('a, 'b, 'c) -> 'a` |
-| `lambda_mixedUse` | `\|x, y -> x + 1\|` | `(Int, 'a) -> Int` |
-| `lambda_swap` | `\|x, y -> { a = y, b = x }\|` | `('a, 'b) -> { a: 'b, b: 'a }` |
+| `lambda_threeParams` | `\|x, y, z -> x\|` | `(a, b, c) -> a` |
+| `lambda_mixedUse` | `\|x, y -> x + 1\|` | `(Int, a) -> Int` |
+| `lambda_swap` | `\|x, y -> { a = y, b = x }\|` | `(a, b) -> { a: b, b: a }` |
 
 ### Zero Parameters (Thunks)
 
@@ -379,15 +379,15 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 | Test | Input | Expected Type |
 |------|-------|---------------|
 | `lambda_nested` | `\|x -> \|y -> x + y\|\|` | `Int -> Int -> Int` |
-| `lambda_curried` | `\|x -> \|y -> \|z -> x\|\|\|` | `'a -> 'b -> 'c -> 'a` |
-| `lambda_nestedUse` | `\|f -> \|x -> f(x)\|\|` | `('a -> 'b) -> 'a -> 'b` |
+| `lambda_curried` | `\|x -> \|y -> \|z -> x\|\|\|` | `a -> b -> c -> a` |
+| `lambda_nestedUse` | `\|f -> \|x -> f(x)\|\|` | `(a -> b) -> a -> b` |
 
 ### Lambda with Records
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `lambda_returnRecord` | `\|x -> { value = x }\|` | `'a -> { value: 'a }` |
-| `lambda_recordParam` | `\|r -> r.name\|` | `{ name: 'a } -> 'a` |
+| `lambda_returnRecord` | `\|x -> { value = x }\|` | `a -> { value: a }` |
+| `lambda_recordParam` | `\|r -> r.name\|` | `{ name: a } -> a` |
 
 ### Lambda with Conditionals
 
@@ -406,7 +406,7 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 |------|-------------|-------|---------------|
 | `apply_intToString` | `f: Int -> String` | `f(42)` | `String` |
 | `apply_boolToInt` | `f: Bool -> Int` | `f(true)` | `Int` |
-| `apply_identity` | `id: 'a -> 'a` | `id(42)` | `Int` |
+| `apply_identity` | `id: a -> a` | `id(42)` | `Int` |
 
 ### Multi-Argument Application
 
@@ -437,7 +437,7 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 | Test | Environment | Input | Expected Type |
 |------|-------------|-------|---------------|
 | `apply_higherOrder` | `apply: (Int -> Int, Int) -> Int` | `apply(\|x -> x + 1\|, 5)` | `Int` |
-| `apply_compose` | — | `\|f, g, x -> f(g(x))\|` | `('b -> 'c, 'a -> 'b, 'a) -> 'c` |
+| `apply_compose` | — | `\|f, g, x -> f(g(x))\|` | `(b -> c, a -> b, a) -> c` |
 
 ### Lambda Immediately Applied
 
@@ -465,7 +465,7 @@ Unit is used for expressions that produce no meaningful value (e.g., if-without-
 | Test | Input | Expected Type |
 |------|-------|---------------|
 | `record_allTypes` | `{ i = 1, d = 1.0, s = 'hi', b = true }` | `{ i: Int, d: Double, s: String, b: Bool }` |
-| `record_withFunction` | `{ f = \|x -> x\| }` | `{ f: 'a -> 'a }` |
+| `record_withFunction` | `{ f = \|x -> x\| }` | `{ f: a -> a }` |
 
 ### Nested Records
 
@@ -558,7 +558,7 @@ getName(person)  # OK: person has 'name' field
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `implicit_identity` | `\|.\|` | `'a -> 'a` |
+| `implicit_identity` | `\|.\|` | `a -> a` |
 | `implicit_arithmetic` | `\|. + 1\|` | `Int -> Int` |
 | `implicit_comparison` | `\|. > 0\|` | `Int -> Bool` |
 | `implicit_boolean` | `\|not .\|` | `Bool -> Bool` |
@@ -567,10 +567,10 @@ getName(person)  # OK: person has 'name' field
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `implicit_field` | `\|.name\|` | `{ name: 'a } -> 'a` |
+| `implicit_field` | `\|.name\|` | `{ name: a } -> a` |
 | `implicit_fieldArith` | `\|.x + .y\|` | `{ x: Int, y: Int } -> Int` |
 | `implicit_fieldCompare` | `\|.age > 18\|` | `{ age: Int } -> Bool` |
-| `implicit_nestedField` | `\|.person.name\|` | `{ person: { name: 'a } } -> 'a` |
+| `implicit_nestedField` | `\|.person.name\|` | `{ person: { name: a } } -> a` |
 
 ### Multiple Implicit Uses
 
@@ -592,7 +592,7 @@ getName(person)  # OK: person has 'name' field
 
 | Test | Input | Expected Type | Notes |
 |------|-------|---------------|-------|
-| `implicit_inNestedLambda` | `\|x -> \|.name\|\|` | `'a -> { name: 'b } -> 'b` | Inner lambda has its own implicit |
+| `implicit_inNestedLambda` | `\|x -> \|.name\|\|` | `a -> { name: b } -> b` | Inner lambda has its own implicit |
 | `implicit_outerExplicitInnerImplicit` | `\|x -> \|. + x\|\|` | `Int -> Int -> Int` | OK - different scopes |
 
 ---
@@ -620,7 +620,7 @@ getName(person)  # OK: person has 'name' field
 | Test | Input | Expected Type | Notes |
 |------|-------|---------------|-------|
 | `if_recordBranches` | `if c then {a=1} else {a=2}` | `{ a: Int }` | Same structure |
-| `if_lambdaBranches` | `if c then \|x->x\| else \|x->x\|` | `'a -> 'a` | Same type |
+| `if_lambdaBranches` | `if c then \|x->x\| else \|x->x\|` | `a -> a` | Same type |
 | `if_widthSubtype` | `if c then {a=1,b=2} else {a=3}` | `{ a: Int }` | Common fields |
 
 ### Conditional Errors
@@ -695,30 +695,30 @@ If-without-else always returns `Unit`, regardless of the then-branch type.
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `composite_higherOrder` | `\|f, x -> f(f(x))\|` | `('a -> 'a, 'a) -> 'a` |
-| `composite_flip` | `\|f, x, y -> f(y, x)\|` | `(('a, 'b) -> 'c, 'b, 'a) -> 'c` |
-| `composite_const` | `\|x, y -> x\|` | `('a, 'b) -> 'a` |
+| `composite_higherOrder` | `\|f, x -> f(f(x))\|` | `(a -> a, a) -> a` |
+| `composite_flip` | `\|f, x, y -> f(y, x)\|` | `((a, b) -> c, b, a) -> c` |
+| `composite_const` | `\|x, y -> x\|` | `(a, b) -> a` |
 
 ### Records and Functions
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
 | `composite_recordOfFunctions` | `{ inc = \|x -> x + 1\|, dec = \|x -> x - 1\| }` | `{ inc: Int -> Int, dec: Int -> Int }` |
-| `composite_functionReturningRecord` | `\|x, y -> { first = x, second = y }\|` | `('a, 'b) -> { first: 'a, second: 'b }` |
+| `composite_functionReturningRecord` | `\|x, y -> { first = x, second = y }\|` | `(a, b) -> { first: a, second: b }` |
 | `composite_applyFromRecord` | `{ f = \|x -> x + 1\| }.f(5)` | `Int` |
 
 ### Nested Everything
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `composite_nestedAll` | `\|r -> if r.flag then r.a else r.b\|` | `{ flag: Bool, a: 'a, b: 'a } -> 'a` |
+| `composite_nestedAll` | `\|r -> if r.flag then r.a else r.b\|` | `{ flag: Bool, a: a, b: a } -> a` |
 | `composite_deepPipeline` | `\|x -> { value = x + 1 }\|({ value = 0 }.value)` | `{ value: Int }` |
 
 ### Real-World Patterns
 
 | Test | Input | Expected Type |
 |------|-------|---------------|
-| `composite_map` | `\|f, r -> { x = f(r.x), y = f(r.y) }\|` | `('a -> 'b, { x: 'a, y: 'a }) -> { x: 'b, y: 'b }` |
+| `composite_map` | `\|f, r -> { x = f(r.x), y = f(r.y) }\|` | `(a -> b, { x: a, y: a }) -> { x: b, y: b }` |
 | `composite_filter` | `\|pred, value -> if pred(value) then value else 0\|` | `(Int -> Bool, Int) -> Int` |
 | `composite_fold` | — | (depends on list support) |
 
@@ -883,7 +883,7 @@ These decisions are reflected in the tests above:
 
 ## Notes
 
-1. **Type variable naming**: Tests should not depend on specific variable names ('a vs 'b). Compare structure instead.
+1. **Type variable naming**: Tests should not depend on specific variable names (a vs b). Compare structure instead.
 
 2. **Polymorphism**: Until Phase 8 (let-polymorphism), tests involving polymorphic functions like `|x -> x|` may behave differently depending on context.
 
