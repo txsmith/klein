@@ -34,6 +34,10 @@ fun main(args: Array<String>) {
             val source = getSource(useStdin, fileArg) ?: return
             parse(source, rawOutput, verbose)
         }
+        "infer", "i" -> {
+            val source = getSource(useStdin, fileArg) ?: return
+            infer(source, rawOutput)
+        }
         "help", "-h", "--help" -> printUsage()
         else -> {
             println("Unknown command: $command")
@@ -64,6 +68,7 @@ private fun printUsage() {
         Commands:
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
+          infer, i     Infer and print types
           help         Show this help
 
         Options:
@@ -116,6 +121,50 @@ private fun parse(
             println("\nCall stack:")
             printFormattedStackTrace(e)
         }
+    }
+}
+
+private fun infer(
+    source: String,
+    rawOutput: Boolean,
+) {
+    try {
+        val tokens = Lexer(source).tokenize().toList()
+        val program = Parser(tokens).parseProgram()
+        val typeGen = TypeGen()
+        val env = TypeEnv.empty()
+
+        // Infer types for each statement
+        for (stmt in program) {
+            when (stmt) {
+                is Val -> {
+                    val valueType = typeGen.infer(stmt.value, env)
+                    env.bind(stmt.name, valueType)
+                    println("${stmt.name} : ${TypePrinter.print(valueType)}")
+                }
+                is FunDef -> {
+                    // For now, just report that function definitions need more phases
+                    throw NotImplementedError("Phase 6: Function definitions")
+                }
+                is Expr -> {
+                    val exprType = typeGen.infer(stmt, env)
+                    println(": ${TypePrinter.print(exprType)}")
+                }
+            }
+        }
+
+        // Report any errors after inference
+        if (typeGen.hasErrors()) {
+            for (error in typeGen.getErrors()) {
+                printError(source, error.span, error.message, rawOutput)
+            }
+        }
+    } catch (e: LexerError) {
+        printError(source, e.span, e.message ?: "Lexer error", rawOutput)
+    } catch (e: ParseError) {
+        printError(source, e.span, e.message ?: "Parse error", rawOutput)
+    } catch (e: NotImplementedError) {
+        println("Type inference not yet implemented: ${e.message}")
     }
 }
 
