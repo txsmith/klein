@@ -383,488 +383,88 @@ fun reportsUnboundVariable() {
 
 ## Phase 3: Subtyping and Constraint Solving
 
-**Goal**: Implement SimpleSub's core subtyping algorithm.
+**Goal**: Implement SimpleSub's core subtyping and type simplification.
 
-### Files to Create/Modify
+### Overview
 
-```
-klein-lib/src/commonMain/kotlin/klein/
-└── Subtyping.kt         # Subtyping checks and constraint solving
-```
+SimpleSub requires multiple type representations:
 
-### Subtyping.kt - Core Algorithm
+1. **Simple types** (Phase 1's `Type`) - What users see in error messages and inference results
+2. **Polar types** - Internal representation tracking whether types appear in positive (output) or negative (input) positions
+3. **Compact types** - Intermediate representation for the simplification algorithm
 
-```kotlin
-package klein
+The key insight of SimpleSub is that subtyping constraints are accumulated on type variables (as bounds) rather than solved eagerly. After inference, types are *simplified* to remove redundant bounds and produce readable output.
 
-/**
- * SimpleSub-style subtyping with recursive constraint solving.
- *
- * Key insight: Instead of generating constraints and solving later,
- * we directly check subtyping relationships and accumulate bounds
- * on type variables as we go.
- */
-class Subtyping(private val inferencer: Inferencer) {
+### Key Concepts
 
-    /**
-     * Check if `sub` is a subtype of `sup`, updating type variable bounds.
-     * Returns true if subtyping holds, false otherwise.
-     */
-    fun isSubtype(sub: Type, sup: Type): Boolean {
-        // Handle identical types
-        if (sub === sup) return true
+- **Polarity**: Function parameters are negative (input), results are positive (output). This affects how bounds propagate.
+- **Co-inductive subtyping**: The subtyping check must handle recursive types without infinite loops (using a "seen" set).
+- **Occurs check**: Prevent infinite types like `'a = 'a -> Int`.
 
-        // Handle Top and Bottom
-        if (sup is Type.TTop) return true
-        if (sub is Type.TBottom) return true
-        if (sub is Type.TTop) return false
-        if (sup is Type.TBottom) return false
+### Subtyping Rules
 
-        // Handle type variables (this is the SimpleSub magic)
-        if (sub is Type.TVar) {
-            sub.upperBounds.add(sup)
-            return true  // Constraint recorded, assumed satisfiable
-        }
-        if (sup is Type.TVar) {
-            sup.lowerBounds.add(sub)
-            return true  // Constraint recorded, assumed satisfiable
-        }
+| Relationship | Rule |
+|--------------|------|
+| Primitives | `Int <: Int`, etc. (reflexive only) |
+| Top/Bottom | `T <: Top`, `Bottom <: T` for all T |
+| Functions | Contravariant in params, covariant in result |
+| Records | Width subtyping (more fields = subtype) |
+| Type variables | Accumulate bounds, defer resolution |
 
-        // Structural subtyping for records
-        if (sub is Type.TRecord && sup is Type.TRecord) {
-            return isRecordSubtype(sub, sup)
-        }
+### Simplification Algorithm
 
-        // Function subtyping (contravariant in params, covariant in result)
-        if (sub is Type.TFun && sup is Type.TFun) {
-            return isFunctionSubtype(sub, sup)
-        }
+After inference completes, simplification:
+1. Computes the transitive closure of bounds
+2. Merges equivalent type variables
+3. Eliminates variables that have a single concrete bound
+4. Produces minimal, readable types
 
-        // Primitive types: exact match only
-        return sub == sup
-    }
-
-    private fun isRecordSubtype(sub: Type.TRecord, sup: Type.TRecord): Boolean {
-        // Width subtyping: sup's fields must be present in sub
-        // sub can have extra fields (they're just ignored)
-        for ((field, supType) in sup.fields) {
-            val subType = sub.fields[field] ?: return false
-            if (!isSubtype(subType, supType)) return false
-        }
-        return true
-    }
-
-    private fun isFunctionSubtype(sub: Type.TFun, sup: Type.TFun): Boolean {
-        // Arity must match
-        if (sub.params.size != sup.params.size) return false
-
-        // Contravariant in parameters
-        for ((subParam, supParam) in sub.params.zip(sup.params)) {
-            if (!isSubtype(supParam, subParam)) return false
-        }
-
-        // Covariant in result
-        return isSubtype(sub.result, sup.result)
-    }
-}
-```
-
-### Type Simplification
-
-SimpleSub's key innovation is simplifying types to keep them compact:
-
-```kotlin
-// Add to Subtyping.kt
-
-/**
- * Simplify a type by resolving type variable bounds.
- * Called after inference to produce readable output types.
- */
-fun simplify(type: Type): Type = when (type) {
-    is Type.TVar -> simplifyVar(type)
-    is Type.TFun -> Type.TFun(
-        type.params.map { simplify(it) },
-        simplify(type.result)
-    )
-    is Type.TRecord -> Type.TRecord(
-        type.fields.mapValues { simplify(it.value) },
-        type.row?.let { simplify(it) }
-    )
-    else -> type
-}
-
-private fun simplifyVar(v: Type.TVar): Type {
-    // If bounds determine a concrete type, use it
-    val lowers = v.lowerBounds.filterNot { it is Type.TBottom }
-    val uppers = v.upperBounds.filterNot { it is Type.TTop }
-
-    // Single concrete lower bound -> use it
-    if (lowers.size == 1 && uppers.isEmpty()) {
-        return simplify(lowers.first())
-    }
-
-    // Single concrete upper bound -> use it
-    if (uppers.size == 1 && lowers.isEmpty()) {
-        return simplify(uppers.first())
-    }
-
-    // Otherwise keep as variable
-    return v
-}
-```
-
-### Tests for Phase 3
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── SubtypingTest.kt     # Subtype relationship tests
-└── SimplifyTest.kt      # Type simplification tests
-```
-
-**SubtypingTest.kt examples:**
-
-```kotlin
-@Test
-fun intSubtypeOfInt() {
-    val sub = Subtyping(Inferencer())
-    assertTrue(sub.isSubtype(Type.TInt, Type.TInt))
-}
-
-@Test
-fun recordWidthSubtyping() {
-    val sub = Subtyping(Inferencer())
-    val wider = Type.TRecord(mapOf("a" to Type.TInt, "b" to Type.TString))
-    val narrower = Type.TRecord(mapOf("a" to Type.TInt))
-    assertTrue(sub.isSubtype(wider, narrower))
-    assertFalse(sub.isSubtype(narrower, wider))
-}
-
-@Test
-fun functionContravariance() {
-    val sub = Subtyping(Inferencer())
-    // (Top -> Int) <: (Int -> Int)
-    val wider = Type.TFun(listOf(Type.TTop), Type.TInt)
-    val narrower = Type.TFun(listOf(Type.TInt), Type.TInt)
-    assertTrue(sub.isSubtype(wider, narrower))
-}
-```
+This phase requires careful design of the internal type IRs before implementation.
 
 ---
 
-## Phase 4: Operators and Arithmetic
+## Phase 4: Operators
 
 **Goal**: Type inference for binary and unary operators.
 
-### Operator Type Rules
+### Operator Typing Summary
 
-| Operator | Type Rule |
-|----------|-----------|
-| `+`, `-`, `*`, `/`, `%` | `(Int, Int) -> Int` or `(Double, Double) -> Double` |
-| `==`, `!=` | `('a, 'a) -> Bool` |
-| `<`, `<=`, `>`, `>=` | `(Int, Int) -> Bool` or `(Double, Double) -> Bool` |
-| `and`, `or` | `(Bool, Bool) -> Bool` |
-| `-` (unary) | `Int -> Int` or `Double -> Double` |
-| `not` | `Bool -> Bool` |
+| Category | Operators | Type |
+|----------|-----------|------|
+| Arithmetic | `+`, `-`, `*`, `/`, `%` | `(Int, Int) -> Int` or `(Double, Double) -> Double` |
+| Comparison | `<`, `<=`, `>`, `>=` | `(Int, Int) -> Bool` or `(Double, Double) -> Bool` |
+| Equality | `==`, `!=` | `('a, 'a) -> Bool` (polymorphic) |
+| Boolean | `and`, `or` | `(Bool, Bool) -> Bool` |
+| Unary neg | `-` | `Int -> Int` or `Double -> Double` |
+| Unary not | `not` | `Bool -> Bool` |
 
-### Implementation
+### Design Considerations
 
-```kotlin
-// Add to Inferencer.kt
-
-private fun inferBinaryOp(expr: BinaryOp, env: TypeEnv): Type {
-    val leftType = infer(expr.left, env)
-    val rightType = infer(expr.right, env)
-
-    return when (expr.op) {
-        // Arithmetic operators
-        Operator.Add, Operator.Sub, Operator.Mul, Operator.Div, Operator.Mod -> {
-            inferArithmetic(expr, leftType, rightType)
-        }
-
-        // Comparison operators
-        Operator.Lt, Operator.LtEq, Operator.Gt, Operator.GtEq -> {
-            inferComparison(expr, leftType, rightType)
-        }
-
-        // Equality operators (polymorphic)
-        Operator.Eq, Operator.NotEq -> {
-            constrain(leftType, rightType, expr.span)
-            Type.TBool
-        }
-
-        // Boolean operators
-        Operator.And, Operator.Or -> {
-            constrain(leftType, Type.TBool, expr.left.span)
-            constrain(rightType, Type.TBool, expr.right.span)
-            Type.TBool
-        }
-    }
-}
-
-private fun inferArithmetic(expr: BinaryOp, left: Type, right: Type): Type {
-    // Both must be numeric and same type
-    return when {
-        left == Type.TInt && right == Type.TInt -> Type.TInt
-        left == Type.TDouble && right == Type.TDouble -> Type.TDouble
-        left == Type.TInt && right == Type.TDouble -> {
-            errors.add(TypeError.TypeMismatch(Type.TInt, right, expr.right.span))
-            Type.TDouble
-        }
-        left == Type.TDouble && right == Type.TInt -> {
-            errors.add(TypeError.TypeMismatch(Type.TDouble, right, expr.right.span))
-            Type.TDouble
-        }
-        else -> {
-            // At least one is a type variable - constrain to numeric
-            if (left is Type.TVar) {
-                subtyping.isSubtype(Type.TInt, left) // lower bound
-            }
-            if (right is Type.TVar) {
-                subtyping.isSubtype(Type.TInt, right)
-            }
-            // Return fresh var that will be resolved
-            freshVar().also { result ->
-                subtyping.isSubtype(Type.TInt, result)
-            }
-        }
-    }
-}
-
-private fun inferUnaryOp(expr: UnaryOp, env: TypeEnv): Type {
-    val operandType = infer(expr.operand, env)
-
-    return when (expr.op) {
-        UnaryOperator.Neg -> {
-            when (operandType) {
-                Type.TInt -> Type.TInt
-                Type.TDouble -> Type.TDouble
-                is Type.TVar -> {
-                    // Constrain to numeric
-                    subtyping.isSubtype(Type.TInt, operandType)
-                    operandType
-                }
-                else -> {
-                    errors.add(TypeError.TypeMismatch(Type.TInt, operandType, expr.span))
-                    Type.TInt
-                }
-            }
-        }
-        UnaryOperator.Not -> {
-            constrain(operandType, Type.TBool, expr.span)
-            Type.TBool
-        }
-    }
-}
-```
-
-### Tests for Phase 4
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── ArithmeticInferTest.kt   # Binary arithmetic operators
-├── ComparisonInferTest.kt   # Comparison operators
-└── UnaryInferTest.kt        # Unary operators
-```
-
-**ArithmeticInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersAddition() {
-    val type = inferExpr("1 + 2")
-    assertEquals(Type.TInt, type)
-}
-
-@Test
-fun infersDoubleArithmetic() {
-    val type = inferExpr("1.5 * 2.0")
-    assertEquals(Type.TDouble, type)
-}
-
-@Test
-fun reportsTypeMismatchInArithmetic() {
-    val result = inferExprWithErrors("1 + true")
-    assertTrue(result.errors.isNotEmpty())
-}
-```
+- **Numeric polymorphism**: How to handle `+` working on both Int and Double without full ad-hoc polymorphism. Options: overloading, type classes, or just require same-type operands.
+- **Equality**: Should `==` work on all types or only comparable ones?
+- **Error recovery**: When operand types don't match, what type does the expression have?
 
 ---
 
 ## Phase 5: Functions and Application
 
-**Goal**: Infer types for lambdas and function calls.
+**Goal**: Infer types for lambdas, function application, and implicit parameters.
 
-### Lambda Inference
+### Key Challenges
 
-```kotlin
-// Add to Inferencer.kt
+1. **Lambda parameters**: Create fresh type variables, constrain via body usage
+2. **Application**: Check callee is a function, constrain args against params
+3. **Implicit parameters**: Detect `|.|` and `|.field|` patterns, synthesize parameter type from usage
+4. **Higher-order functions**: Ensure type variables flow correctly through callbacks
 
-private fun inferLambda(expr: Lambda, env: TypeEnv): Type {
-    val childEnv = env.child()
+### Implicit Parameter Semantics
 
-    // Create fresh type variables for parameters
-    val paramTypes = expr.params.map { param ->
-        val paramType = freshVar()
-        childEnv.bind(param, paramType)
-        paramType
-    }
+The implicit parameter `|.|` and `|.field|` syntax needs special handling:
+- `|. + 1|` → `Int -> Int`
+- `|.name|` → `{ name: 'a } -> 'a`
+- `|.x + .y|` → `{ x: Int, y: Int } -> Int`
 
-    // Infer body type
-    val bodyType = infer(expr.body, childEnv)
-
-    return Type.TFun(paramTypes, bodyType)
-}
-```
-
-### Application Inference
-
-```kotlin
-private fun inferApply(expr: Apply, env: TypeEnv): Type {
-    val calleeType = infer(expr.callee, env)
-    val argTypes = expr.args.map { infer(it, env) }
-
-    return when (calleeType) {
-        is Type.TFun -> {
-            // Check arity
-            if (calleeType.params.size != argTypes.size) {
-                errors.add(TypeError.ArityMismatch(
-                    calleeType.params.size, argTypes.size, expr.span
-                ))
-                return calleeType.result
-            }
-
-            // Constrain arguments to parameters (args <: params)
-            for ((argType, paramType) in argTypes.zip(calleeType.params)) {
-                subtyping.isSubtype(argType, paramType)
-            }
-
-            calleeType.result
-        }
-
-        is Type.TVar -> {
-            // Callee is unknown - constrain to be a function
-            val resultVar = freshVar()
-            val expectedFn = Type.TFun(argTypes, resultVar)
-            subtyping.isSubtype(expectedFn, calleeType)
-            resultVar
-        }
-
-        else -> {
-            errors.add(TypeError.NotAFunction(calleeType, expr.callee.span))
-            freshVar()
-        }
-    }
-}
-```
-
-### Implicit Parameters
-
-```kotlin
-private var implicitParamType: Type? = null
-
-private fun inferLambda(expr: Lambda, env: TypeEnv): Type {
-    val childEnv = env.child()
-
-    // Handle explicit parameters
-    val paramTypes = if (expr.params.isEmpty()) {
-        // No explicit params - check for implicit param usage in body
-        val implicitType = freshVar()
-        val previousImplicit = implicitParamType
-        implicitParamType = implicitType
-
-        val bodyType = infer(expr.body, childEnv)
-
-        implicitParamType = previousImplicit
-
-        // If implicit param was used, it's a 1-arg function
-        // Otherwise it's a 0-arg function (thunk)
-        if (implicitType.lowerBounds.isNotEmpty() || implicitType.upperBounds.isNotEmpty()) {
-            return Type.TFun(listOf(implicitType), bodyType)
-        } else {
-            return Type.TFun(emptyList(), bodyType)
-        }
-    } else {
-        expr.params.map { param ->
-            val paramType = freshVar()
-            childEnv.bind(param, paramType)
-            paramType
-        }
-    }
-
-    val bodyType = infer(expr.body, childEnv)
-    return Type.TFun(paramTypes, bodyType)
-}
-
-private fun inferImplicitParam(expr: ImplicitParam, env: TypeEnv): Type {
-    return implicitParamType ?: run {
-        errors.add(TypeError.ImplicitParamOutsideLambda(expr.span))
-        freshVar()
-    }
-}
-```
-
-### Tests for Phase 5
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── LambdaInferTest.kt       # Lambda type inference
-├── ApplyInferTest.kt        # Function application
-└── ImplicitParamInferTest.kt # Implicit parameter inference
-```
-
-**LambdaInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersIdentityFunction() {
-    val type = inferExpr("|x -> x|")
-    // Should be 'a -> 'a
-    assertTrue(type is Type.TFun)
-    val fn = type as Type.TFun
-    assertEquals(1, fn.params.size)
-    assertEquals(fn.params[0], fn.result)  // Same type var
-}
-
-@Test
-fun infersConstantLambda() {
-    val type = inferExpr("|x -> 42|")
-    assertTrue(type is Type.TFun)
-    val fn = type as Type.TFun
-    assertEquals(Type.TInt, fn.result)
-}
-
-@Test
-fun infersImplicitParam() {
-    val type = inferExpr("|. + 1|")
-    assertTrue(type is Type.TFun)
-    val fn = type as Type.TFun
-    assertEquals(Type.TInt, fn.params[0])
-    assertEquals(Type.TInt, fn.result)
-}
-```
-
-**ApplyInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersSimpleApplication() {
-    val env = TypeEnv.builtins().child()
-    env.bind("f", Type.TFun(listOf(Type.TInt), Type.TString))
-    val type = inferExpr("f(42)", env)
-    assertEquals(Type.TString, type)
-}
-
-@Test
-fun infersPolymorphicApplication() {
-    // id = |x -> x|
-    // id(42) should be Int
-    val type = inferProgram("""
-        id = |x -> x|
-        id(42)
-    """.trimIndent())
-    assertEquals(Type.TInt, type)
-}
-```
+Must track implicit parameter scope to prevent use outside lambdas.
 
 ---
 
@@ -872,258 +472,49 @@ fun infersPolymorphicApplication() {
 
 **Goal**: Type inference for record literals and field projection.
 
-### Record Literal Inference
+### Key Behaviors
 
-```kotlin
-private fun inferRecord(expr: RecordLiteral, env: TypeEnv): Type {
-    val fieldTypes = expr.fields.associate { (name, value) ->
-        name to infer(value, env)
-    }
-    return Type.TRecord(fieldTypes)
-}
+- **Record literals**: Infer type from field values, produce closed record type
+- **Field access on known record**: Look up field, error if missing
+- **Field access on type variable**: Constrain variable to have at least that field
+
+### Design Question
+
+Without row polymorphism, field access on a type variable creates a record constraint with exactly that field. This may be too restrictive for some patterns:
+
+```klein
+getName = |.name|  # { name: 'a } -> 'a
+getName({ name = 'Alice', age = 30 })  # Error? Or OK via width subtyping?
 ```
 
-### Field Access Inference
-
-```kotlin
-private fun inferFieldAccess(expr: FieldAccess, env: TypeEnv): Type {
-    val targetType = infer(expr.target, env)
-
-    return when (targetType) {
-        is Type.TRecord -> {
-            targetType.fields[expr.field] ?: run {
-                errors.add(TypeError.MissingField(expr.field, targetType, expr.span))
-                freshVar()
-            }
-        }
-
-        is Type.TVar -> {
-            // Unknown type - constrain to be a record with at least this field
-            val fieldType = freshVar()
-            val requiredRecord = Type.TRecord(mapOf(expr.field to fieldType))
-            subtyping.isSubtype(requiredRecord, targetType)
-            fieldType
-        }
-
-        else -> {
-            errors.add(TypeError.NotARecord(targetType, expr.target.span))
-            freshVar()
-        }
-    }
-}
-```
-
-### Tests for Phase 6
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── RecordInferTest.kt       # Record literal inference
-└── FieldAccessInferTest.kt  # Field projection inference
-```
-
-**RecordInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersSimpleRecord() {
-    val type = inferExpr("{ name = 'Alice', age = 30 }")
-    assertTrue(type is Type.TRecord)
-    val rec = type as Type.TRecord
-    assertEquals(Type.TString, rec.fields["name"])
-    assertEquals(Type.TInt, rec.fields["age"])
-}
-
-@Test
-fun infersNestedRecord() {
-    val type = inferExpr("{ person = { name = 'Bob' } }")
-    assertTrue(type is Type.TRecord)
-}
-```
-
-**FieldAccessInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersFieldAccess() {
-    val type = inferExpr("{ name = 'Alice' }.name")
-    assertEquals(Type.TString, type)
-}
-
-@Test
-fun infersFieldAccessOnParameter() {
-    // |.name| should infer { name: 'a } -> 'a
-    val type = inferExpr("|.name|")
-    assertTrue(type is Type.TFun)
-}
-
-@Test
-fun reportsUnknownField() {
-    val result = inferExprWithErrors("{ name = 'Alice' }.age")
-    assertTrue(result.errors.any { it is TypeError.MissingField })
-}
-```
+The answer depends on how we handle subtyping between inferred record constraints and concrete records. Needs careful thought during implementation.
 
 ---
 
 ## Phase 7: Blocks, Bindings, and Control Flow
 
-**Goal**: Type inference for blocks, val bindings, and if/then/else.
+**Goal**: Type inference for blocks, val bindings, fun definitions, and if/then/else.
 
-### Block Inference
+### Key Behaviors
 
-```kotlin
-private fun inferBlock(expr: Block, env: TypeEnv): Type {
-    val blockEnv = env.child()
-    var lastType: Type = Type.TTop  // Empty block would be unit
+- **Blocks**: Create child scope, return type of last expression
+- **Val bindings**: Infer RHS, bind name to type in scope
+- **Fun definitions**: Support recursion by pre-binding function name to fresh var
+- **If/then/else**: Condition must be Bool, branches must be compatible
 
-    for (stmt in expr.stmts) {
-        lastType = inferStmt(stmt, blockEnv)
-    }
+### Recursion Support
 
-    return lastType
-}
+For `fun factorial(n) = ... factorial(n-1) ...`:
+1. Create fresh vars for params and result
+2. Bind `factorial` to function type before inferring body
+3. Infer body, constrain against result var
+4. Final type reflects actual usage
 
-fun inferStmt(stmt: Stmt, env: TypeEnv): Type = when (stmt) {
-    is Val -> {
-        val valueType = infer(stmt.value, env)
-        env.bind(stmt.name, valueType)
-        valueType
-    }
-    is FunDef -> inferFunDef(stmt, env)
-    is Expr -> infer(stmt, env)
-}
-```
+### Branch Compatibility
 
-### Function Definition (with Recursion)
-
-```kotlin
-private fun inferFunDef(def: FunDef, env: TypeEnv): Type {
-    // For recursion: bind function name to fresh var before inferring body
-    val resultVar = freshVar()
-    val paramVars = def.params.map { freshVar() }
-    val funType = Type.TFun(paramVars, resultVar)
-
-    // Bind in outer env for recursion
-    env.bind(def.name, funType)
-
-    // Create body env with params
-    val bodyEnv = env.child()
-    for ((param, paramType) in def.params.zip(paramVars)) {
-        bodyEnv.bind(param, paramType)
-    }
-
-    // Infer body
-    val bodyType = infer(def.body, bodyEnv)
-
-    // Constrain result
-    subtyping.isSubtype(bodyType, resultVar)
-
-    return funType
-}
-```
-
-### If/Then/Else Inference
-
-```kotlin
-private fun inferIfThenElse(expr: IfThenElse, env: TypeEnv): Type {
-    val condType = infer(expr.condition, env)
-    constrain(condType, Type.TBool, expr.condition.span)
-
-    val thenType = infer(expr.thenBranch, env)
-
-    return if (expr.elseBranch != null) {
-        val elseType = infer(expr.elseBranch, env)
-        // Both branches must be compatible - find common supertype
-        val resultVar = freshVar()
-        subtyping.isSubtype(thenType, resultVar)
-        subtyping.isSubtype(elseType, resultVar)
-        resultVar
-    } else {
-        // No else branch - result could be then-type or "nothing"
-        // For now, require else branch for non-unit results
-        thenType
-    }
-}
-```
-
-### Tests for Phase 7
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── BlockInferTest.kt        # Block and binding inference
-├── FunDefInferTest.kt       # Function definition inference
-└── IfThenElseInferTest.kt   # Conditional inference
-```
-
-**BlockInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersBlockWithBindings() {
-    val type = inferExpr("""
-        x = 1
-        y = 2
-        x + y
-    """.trimIndent())
-    assertEquals(Type.TInt, type)
-}
-
-@Test
-fun infersShadowing() {
-    val type = inferExpr("""
-        x = 1
-        x = 'hello'
-        x
-    """.trimIndent())
-    assertEquals(Type.TString, type)
-}
-```
-
-**FunDefInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersSimpleFunction() {
-    val types = inferProgram("""
-        fun double(x) = x * 2
-        double(21)
-    """.trimIndent())
-    // double: Int -> Int, result: Int
-}
-
-@Test
-fun infersRecursiveFunction() {
-    val types = inferProgram("""
-        fun factorial(n) = if n <= 1 then 1 else n * factorial(n - 1)
-        factorial(5)
-    """.trimIndent())
-    // factorial: Int -> Int
-}
-```
-
-**IfThenElseInferTest.kt examples:**
-
-```kotlin
-@Test
-fun infersSimpleConditional() {
-    val type = inferExpr("if true then 1 else 2")
-    assertEquals(Type.TInt, type)
-}
-
-@Test
-fun unifiesBranchTypes() {
-    val env = TypeEnv.builtins().child()
-    env.bind("x", Type.TInt)
-    val type = inferExpr("if x > 0 then { a = 1 } else { a = 2 }", env)
-    // Both branches are { a: Int }
-}
-
-@Test
-fun requiresBoolCondition() {
-    val result = inferExprWithErrors("if 42 then 1 else 2")
-    assertTrue(result.errors.any { it is TypeError.TypeMismatch })
-}
-```
+If branches have different types, find common supertype:
+- `if c then 1 else 2` → `Int`
+- `if c then { a = 1 } else { a = 2, b = 3 }` → `{ a: Int }` (via width subtyping)
 
 ---
 
@@ -1133,105 +524,30 @@ fun requiresBoolCondition() {
 
 ### The Problem
 
-Without generalization:
+Without generalization, the identity function gets specialized on first use:
+
 ```klein
 id = |x -> x|
-a = id(1)      # id: Int -> Int (specialized)
-b = id('hi')   # ERROR: String not Int
+a = id(1)      # id : Int -> Int
+b = id('hi')   # ERROR!
 ```
 
-With let-polymorphism:
+### The Solution
+
+At let-bindings, *generalize* free type variables not appearing in the environment:
+
 ```klein
-id = |x -> x|  # id: forall a. a -> a
-a = id(1)      # Int
-b = id('hi')   # String
+id = |x -> x|  # id : ∀a. a -> a
+a = id(1)      # instantiate: Int -> Int, result: Int
+b = id('hi')   # instantiate: String -> String, result: String
 ```
 
-### Implementation
+### Implementation Considerations
 
-```kotlin
-// Add to Type.kt
-data class TScheme(
-    val vars: List<Int>,  // Quantified variable IDs
-    val type: Type,
-)
-
-// Add to Inferencer.kt
-private fun generalize(type: Type, env: TypeEnv): TScheme {
-    val freeInEnv = freeVarsInEnv(env)
-    val freeInType = freeVars(type)
-    val generalizable = freeInType - freeInEnv
-    return TScheme(generalizable.toList(), type)
-}
-
-private fun instantiate(scheme: TScheme): Type {
-    val substitution = scheme.vars.associateWith { freshVar() }
-    return substitute(scheme.type, substitution)
-}
-
-private fun freeVars(type: Type): Set<Int> = when (type) {
-    is Type.TVar -> setOf(type.id)
-    is Type.TFun -> freeVars(type.result) + type.params.flatMap { freeVars(it) }
-    is Type.TRecord -> type.fields.values.flatMap { freeVars(it) }.toSet() +
-        (type.row?.let { freeVars(it) } ?: emptySet())
-    else -> emptySet()
-}
-```
-
-### Modified Val Binding
-
-```kotlin
-// In inferStmt for Val
-is Val -> {
-    val valueType = infer(stmt.value, env)
-    val scheme = generalize(valueType, env)
-    env.bindScheme(stmt.name, scheme)
-    valueType
-}
-
-// In inferIdent
-private fun inferIdent(expr: Ident, env: TypeEnv): Type {
-    return env.lookupScheme(expr.name)?.let { instantiate(it) }
-        ?: env.lookup(expr.name)
-        ?: run {
-            errors.add(TypeError.UnboundVariable(expr.name, expr.span))
-            freshVar()
-        }
-}
-```
-
-### Tests for Phase 8
-
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-└── PolymorphismTest.kt      # Let-polymorphism tests
-```
-
-**PolymorphismTest.kt examples:**
-
-```kotlin
-@Test
-fun polymorphicIdentity() {
-    val result = inferProgram("""
-        id = |x -> x|
-        a = id(42)
-        b = id('hello')
-        { intResult = a, stringResult = b }
-    """.trimIndent())
-    // Should succeed - id is polymorphic
-}
-
-@Test
-fun polymorphicMap() {
-    val result = inferProgram("""
-        apply = |f, x -> f(x)|
-        double = |x -> x * 2|
-        greet = |x -> 'Hello'|
-        a = apply(double, 21)
-        b = apply(greet, 'world')
-    """.trimIndent())
-}
-```
+- **Type schemes**: `TScheme(vars, type)` wraps types with quantified variables
+- **Generalization**: Collect free vars in type, subtract free vars in env
+- **Instantiation**: Replace quantified vars with fresh vars at each use site
+- **Value restriction**: May need to restrict generalization to syntactic values to maintain soundness with mutable state (not currently an issue for Klein)
 
 ---
 
@@ -1239,48 +555,30 @@ fun polymorphicMap() {
 
 **Goal**: Add `./klein infer` command to show inferred types.
 
-### Main.kt Changes
-
-```kotlin
-// Add to CLI commands in Main.kt
-"infer", "i" -> {
-    val source = readSource(args)
-    val tokens = Lexer(source).tokenize().toList()
-    val program = Parser(tokens).parseProgram()
-    val result = Inferencer().inferProgram(program, TypeEnv.builtins())
-
-    if (result.errors.isNotEmpty()) {
-        for (error in result.errors) {
-            System.err.println(error.span.formatInSource(source, message = error.message))
-        }
-        exitProcess(1)
-    }
-
-    // Print inferred types for top-level bindings
-    for ((name, type) in result.bindings) {
-        println("$name : ${TypePrinter.print(type)}")
-    }
-}
-```
-
-### Example Output
+### Interface
 
 ```bash
-$ cat example.klein
-double = |x -> x * 2|
-greet = |name -> 'Hello, ' ++ name|
-person = { name = 'Alice', age = 30 }
+# Infer types for a file
+./klein infer example.klein
 
-$ ./klein infer example.klein
+# Infer from stdin
+echo "x = 1 + 2" | ./klein infer --stdin
+
+# Short form
+./klein i example.klein
+```
+
+### Output Format
+
+```
 double : Int -> Int
 greet : String -> String
 person : { name: String, age: Int }
 ```
 
-### Error Output
+### Error Format
 
-```bash
-$ echo "x + true" | ./klein infer --stdin
+```
   1 | x + true
         ^^^^
 Error: Type mismatch: expected Int, got Bool
@@ -1288,76 +586,34 @@ Error: Type mismatch: expected Int, got Bool
 
 ---
 
-## Test Organization Summary
+## Test Strategy
 
-```
-klein-lib/src/commonTest/kotlin/klein/types/
-├── TypePrinterTest.kt       # Phase 1: Type display
-├── TypeEnvTest.kt           # Phase 2: Environment
-├── LiteralInferTest.kt      # Phase 2: Literals
-├── IdentInferTest.kt        # Phase 2: Identifiers
-├── SubtypingTest.kt         # Phase 3: Subtyping
-├── SimplifyTest.kt          # Phase 3: Simplification
-├── ArithmeticInferTest.kt   # Phase 4: Arithmetic
-├── ComparisonInferTest.kt   # Phase 4: Comparisons
-├── UnaryInferTest.kt        # Phase 4: Unary ops
-├── LambdaInferTest.kt       # Phase 5: Lambdas
-├── ApplyInferTest.kt        # Phase 5: Application
-├── ImplicitParamInferTest.kt# Phase 5: Implicit params
-├── RecordInferTest.kt       # Phase 6: Records
-├── FieldAccessInferTest.kt  # Phase 6: Field access
-├── BlockInferTest.kt        # Phase 7: Blocks
-├── FunDefInferTest.kt       # Phase 7: Fun definitions
-├── IfThenElseInferTest.kt   # Phase 7: Conditionals
-├── PolymorphismTest.kt      # Phase 8: Let-polymorphism
-└── IntegrationTest.kt       # End-to-end tests
-```
+Tests will be organized by phase in `klein-lib/src/commonTest/kotlin/klein/types/`.
 
-### Test Helpers
+Each phase should have tests covering:
+- Happy path (correct programs)
+- Error cases (type mismatches, unbound variables, etc.)
+- Edge cases (empty records, zero-arg functions, etc.)
 
-```kotlin
-// klein-lib/src/commonTest/kotlin/klein/types/TypeAssertions.kt
-
-fun inferExpr(source: String, env: TypeEnv = TypeEnv.builtins()): Type {
-    val expr = parse(source)
-    return Inferencer().infer(expr, env)
-}
-
-fun inferExprWithErrors(source: String, env: TypeEnv = TypeEnv.builtins()): InferResult {
-    val expr = parse(source)
-    return Inferencer().inferWithErrors(expr, env)
-}
-
-fun inferProgram(source: String): Type {
-    val tokens = Lexer(source).tokenize().toList()
-    val program = Parser(tokens).parseProgram()
-    return Inferencer().inferProgramType(program, TypeEnv.builtins())
-}
-
-fun assertTypeEquals(expected: Type, actual: Type) {
-    assertEquals(TypePrinter.print(expected), TypePrinter.print(actual))
-}
-```
+Test helpers in `TypeAssertions.kt` will mirror the parser test patterns.
 
 ---
 
 ## Implementation Order
 
-| Phase | Deliverable | Estimated Tests |
-|-------|-------------|-----------------|
-| 1 | Type.kt, TypePrinter.kt | ~10 tests |
-| 2 | TypeEnv.kt, TypeError.kt, basic Inferencer | ~15 tests |
-| 3 | Subtyping.kt | ~20 tests |
-| 4 | Operator inference | ~25 tests |
-| 5 | Lambda/Apply inference | ~20 tests |
-| 6 | Record/FieldAccess inference | ~15 tests |
-| 7 | Block/FunDef/IfThenElse inference | ~20 tests |
-| 8 | Let-polymorphism | ~15 tests |
-| 9 | CLI integration | ~5 integration tests |
+| Phase | Focus | Dependencies |
+|-------|-------|--------------|
+| 1 | Type representation, printing | None |
+| 2 | Environment, basic inference | Phase 1 |
+| 3 | Subtyping, simplification | Phase 1, 2 |
+| 4 | Operators | Phase 2, 3 |
+| 5 | Functions, application | Phase 2, 3 |
+| 6 | Records, field access | Phase 2, 3 |
+| 7 | Blocks, bindings, control flow | Phase 2-6 |
+| 8 | Let-polymorphism | Phase 7 |
+| 9 | CLI | All phases |
 
-**Total: ~145 tests**
-
-Each phase builds on the previous and can be completed and tested independently.
+Each phase can be developed and tested incrementally.
 
 ---
 
