@@ -309,12 +309,12 @@ sealed class TypeError {
 }
 ```
 
-### Inferencer.kt - Basic Structure
+### TypeGen.kt - Basic Structure
 
 ```kotlin
 package klein
 
-class Inferencer {
+class TypeGen {
     private var nextVarId = 0
     private val errors = mutableListOf<TypeError>()
 
@@ -326,15 +326,15 @@ class Inferencer {
         is StringLiteral -> Type.TString
         is BoolLiteral -> Type.TBool
         is Ident -> inferIdent(expr, env)
-        is BinaryOp -> inferBinaryOp(expr, env)
-        is UnaryOp -> inferUnaryOp(expr, env)
-        is Lambda -> inferLambda(expr, env)
-        is Apply -> inferApply(expr, env)
-        is Block -> inferBlock(expr, env)
-        is IfThenElse -> inferIfThenElse(expr, env)
-        is FieldAccess -> inferFieldAccess(expr, env)
-        is ImplicitParam -> inferImplicitParam(expr, env)
-        is RecordLiteral -> inferRecord(expr, env)
+        is BinaryOp -> TODO("Phase 4")
+        is UnaryOp -> TODO("Phase 4")
+        is Lambda -> TODO("Phase 5")
+        is Apply -> TODO("Phase 5")
+        is Block -> TODO("Phase 7")
+        is IfThenElse -> TODO("Phase 7")
+        is FieldAccess -> TODO("Phase 6")
+        is ImplicitParam -> TODO("Phase 5")
+        is RecordLiteral -> TODO("Phase 6")
     }
 
     private fun inferIdent(expr: Ident, env: TypeEnv): Type {
@@ -344,8 +344,11 @@ class Inferencer {
         }
     }
 
-    // ... more inference methods in later phases
+    // Inference methods added incrementally in later phases
 }
+```
+
+The `TODO()` calls allow the CLI to work immediately. Each expression form is implemented as its phase is completed, and tests can be written incrementally.
 ```
 
 ### Tests for Phase 2
@@ -363,14 +366,14 @@ klein-lib/src/commonTest/kotlin/klein/types/
 @Test
 fun infersIntLiteral() {
     val expr = parse("42")
-    val type = Inferencer().infer(expr, TypeEnv.builtins())
+    val type = TypeGen().infer(expr, TypeEnv.empty())
     assertEquals(Type.TInt, type)
 }
 
 @Test
 fun infersBoolLiteral() {
     val expr = parse("true")
-    val type = Inferencer().infer(expr, TypeEnv.builtins())
+    val type = TypeGen().infer(expr, TypeEnv.empty())
     assertEquals(Type.TBool, type)
 }
 ```
@@ -380,23 +383,96 @@ fun infersBoolLiteral() {
 ```kotlin
 @Test
 fun infersIdentFromEnv() {
-    val env = TypeEnv.builtins().child()
+    val env = TypeEnv.empty().child()
     env.bind("x", Type.TInt)
     val expr = parse("x")
-    val type = Inferencer().infer(expr, env)
+    val type = TypeGen().infer(expr, env)
     assertEquals(Type.TInt, type)
 }
 
 @Test
 fun reportsUnboundVariable() {
-    val result = Inferencer().inferWithErrors(parse("unknown"), TypeEnv.builtins())
+    val result = TypeGen().inferWithErrors(parse("unknown"), TypeEnv.empty())
     assertTrue(result.errors.any { it is TypeError.UnboundVariable })
 }
 ```
 
 ---
 
-## Phase 3: Subtyping and Constraint Solving
+## Phase 3: CLI Integration
+
+**Goal**: Add `./klein infer` command early so we can test incrementally.
+
+The CLI should work even when not all expression forms are implemented. Unimplemented forms throw `NotImplementedError` with a clear message.
+
+### Interface
+
+```bash
+# Infer types for a file
+./klein infer example.klein
+
+# Infer from stdin
+echo "42" | ./klein infer --stdin
+
+# Short form
+./klein i example.klein
+```
+
+### Main.kt Changes
+
+```kotlin
+// Add to CLI commands in Main.kt
+"infer", "i" -> {
+    val source = readSource(args)
+    val tokens = Lexer(source).tokenize().toList()
+    val program = Parser(tokens).parseProgram()
+
+    try {
+        val result = TypeGen().inferProgram(program, TypeEnv.empty())
+
+        if (result.errors.isNotEmpty()) {
+            for (error in result.errors) {
+                System.err.println(error.span.formatInSource(source, message = error.message))
+            }
+            exitProcess(1)
+        }
+
+        // Print inferred types for top-level bindings
+        for ((name, type) in result.bindings) {
+            println("$name : ${TypePrinter.print(type)}")
+        }
+    } catch (e: NotImplementedError) {
+        System.err.println("Type inference not yet implemented: ${e.message}")
+        exitProcess(2)
+    }
+}
+```
+
+### Output Format
+
+Success:
+```
+double : Int -> Int
+person : { name: String, age: Int }
+```
+
+Type error:
+```
+  1 | x + true
+        ^^^^
+Error: Type mismatch: expected Int, got Bool
+```
+
+Not yet implemented:
+```
+Type inference not yet implemented: Phase 5 (Lambda)
+```
+
+This allows us to use `./klein infer` immediately after Phase 2, with support for literals and identifiers.
+
+---
+
+## Phase 4: Subtyping and Constraint Solving
 
 **Goal**: Implement SimpleSub's core subtyping and type simplification.
 
@@ -438,7 +514,7 @@ This phase requires careful design of the internal type IRs before implementatio
 
 ---
 
-## Phase 4: Operators
+## Phase 5: Operators
 
 **Goal**: Type inference for binary and unary operators.
 
@@ -461,7 +537,7 @@ This phase requires careful design of the internal type IRs before implementatio
 
 ---
 
-## Phase 5: Functions and Application
+## Phase 6: Functions and Application
 
 **Goal**: Infer types for lambdas, function application, and implicit parameters.
 
@@ -486,7 +562,7 @@ The implicit parameter `|.|` and `|.field|` syntax needs special handling:
 
 ---
 
-## Phase 6: Records and Field Access
+## Phase 7: Records and Field Access
 
 **Goal**: Type inference for record literals and field projection.
 
@@ -509,7 +585,7 @@ The subtyping rule `{ a: T, b: U } <: { a: T }` (more fields = subtype) allows f
 
 ---
 
-## Phase 7: Blocks, Bindings, and Control Flow
+## Phase 8: Blocks, Bindings, and Control Flow
 
 **Goal**: Type inference for blocks, val bindings, fun definitions, and if/then/else.
 
@@ -536,7 +612,7 @@ If branches have different types, find common supertype:
 
 ---
 
-## Phase 8: Let-Polymorphism
+## Phase 9: Let-Polymorphism
 
 **Goal**: Generalize types at let-bindings for true polymorphism.
 
@@ -569,41 +645,6 @@ b = id('hi')   # instantiate: String -> String, result: String
 
 ---
 
-## Phase 9: CLI Integration
-
-**Goal**: Add `./klein infer` command to show inferred types.
-
-### Interface
-
-```bash
-# Infer types for a file
-./klein infer example.klein
-
-# Infer from stdin
-echo "x = 1 + 2" | ./klein infer --stdin
-
-# Short form
-./klein i example.klein
-```
-
-### Output Format
-
-```
-double : Int -> Int
-greet : String -> String
-person : { name: String, age: Int }
-```
-
-### Error Format
-
-```
-  1 | x + true
-        ^^^^
-Error: Type mismatch: expected Int, got Bool
-```
-
----
-
 ## Test Strategy
 
 Tests will be organized by phase in `klein-lib/src/commonTest/kotlin/klein/types/`.
@@ -622,16 +663,16 @@ Test helpers in `TypeAssertions.kt` will mirror the parser test patterns.
 | Phase | Focus | Dependencies |
 |-------|-------|--------------|
 | 1 | Type representation, printing | None |
-| 2 | Environment, basic inference | Phase 1 |
-| 3 | Subtyping, simplification | Phase 1, 2 |
-| 4 | Operators | Phase 2, 3 |
-| 5 | Functions, application | Phase 2, 3 |
-| 6 | Records, field access | Phase 2, 3 |
-| 7 | Blocks, bindings, control flow | Phase 2-6 |
-| 8 | Let-polymorphism | Phase 7 |
-| 9 | CLI | All phases |
+| 2 | Environment, basic inference (literals, identifiers) | Phase 1 |
+| 3 | CLI integration (`./klein infer`) | Phase 1, 2 |
+| 4 | Subtyping, simplification | Phase 1, 2 |
+| 5 | Operators | Phase 2, 4 |
+| 6 | Functions, application, implicit params | Phase 2, 4 |
+| 7 | Records, field access | Phase 2, 4 |
+| 8 | Blocks, bindings, control flow | Phase 2-7 |
+| 9 | Let-polymorphism | Phase 8 |
 
-Each phase can be developed and tested incrementally.
+CLI comes early (Phase 3) so we can test incrementally. Each expression form is added to TypeGen as its phase is completed.
 
 ---
 
