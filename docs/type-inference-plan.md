@@ -83,10 +83,10 @@ sealed class Type {
         val result: Type,
     ) : Type()
 
-    // Record type: { field1: T1, field2: T2, ...row }
+    // Record type: { field1: T1, field2: T2 }
+    // Closed records only - no row polymorphism for now
     data class TRecord(
         val fields: Map<String, Type>,
-        val row: Type? = null,  // null = closed, TVar = open (row polymorphism)
     ) : Type()
 
     // Top and Bottom for subtyping lattice
@@ -99,7 +99,7 @@ sealed class Type {
 
 1. **Mutable bounds on TVar**: SimpleSub accumulates bounds during inference rather than solving eagerly. Bounds are refined as inference progresses.
 
-2. **Row polymorphism via TVar**: Open records use a type variable for the row extension, enabling `{ name: String, ...r }` patterns.
+2. **Closed records with width subtyping**: Records have a fixed set of fields. A record with more fields is a subtype of one with fewer (width subtyping), but we don't track "extra" fields through type variables. Row polymorphism may be added later.
 
 3. **Top/Bottom types**: Needed for the subtyping lattice. `TTop` is the supertype of everything, `TBottom` is the subtype of everything.
 
@@ -141,8 +141,7 @@ object TypePrinter {
         val fields = rec.fields.entries.joinToString(", ") { (k, v) ->
             "$k: ${print(v)}"
         }
-        val row = rec.row?.let { ", ...${print(it)}" } ?: ""
-        return "{ $fields$row }"
+        return "{ $fields }"
     }
 }
 ```
@@ -159,8 +158,7 @@ object TypePrinter {
 | Function (1 param) | `Int -> Int` |
 | Function (n params) | `(Int, String) -> Bool` |
 | Function (0 params) | `() -> Int` |
-| Closed record | `{ name: String, age: Int }` |
-| Open record | `{ name: String, ...'a }` |
+| Record | `{ name: String, age: Int }` |
 | Top | `Top` |
 | Bottom | `Bottom` |
 
@@ -447,19 +445,12 @@ class Subtyping(private val inferencer: Inferencer) {
     }
 
     private fun isRecordSubtype(sub: Type.TRecord, sup: Type.TRecord): Boolean {
-        // sup's fields must be present in sub (width subtyping)
+        // Width subtyping: sup's fields must be present in sub
+        // sub can have extra fields (they're just ignored)
         for ((field, supType) in sup.fields) {
             val subType = sub.fields[field] ?: return false
             if (!isSubtype(subType, supType)) return false
         }
-
-        // If sup is open (has row var), sub's extra fields flow into row
-        if (sup.row is Type.TVar && sub.fields.keys != sup.fields.keys) {
-            val extraFields = sub.fields.filterKeys { it !in sup.fields }
-            val extraRecord = Type.TRecord(extraFields, sub.row)
-            sup.row.lowerBounds.add(extraRecord)
-        }
-
         return true
     }
 
@@ -901,25 +892,15 @@ private fun inferFieldAccess(expr: FieldAccess, env: TypeEnv): Type {
     return when (targetType) {
         is Type.TRecord -> {
             targetType.fields[expr.field] ?: run {
-                // Check if open record with row variable
-                if (targetType.row is Type.TVar) {
-                    val fieldType = freshVar()
-                    // Constrain row to have this field
-                    val requiredFields = Type.TRecord(mapOf(expr.field to fieldType))
-                    subtyping.isSubtype(requiredFields, targetType.row)
-                    fieldType
-                } else {
-                    errors.add(TypeError.MissingField(expr.field, targetType, expr.span))
-                    freshVar()
-                }
+                errors.add(TypeError.MissingField(expr.field, targetType, expr.span))
+                freshVar()
             }
         }
 
         is Type.TVar -> {
-            // Unknown type - constrain to be a record with this field
+            // Unknown type - constrain to be a record with at least this field
             val fieldType = freshVar()
-            val row = freshVar()
-            val requiredRecord = Type.TRecord(mapOf(expr.field to fieldType), row)
+            val requiredRecord = Type.TRecord(mapOf(expr.field to fieldType))
             subtyping.isSubtype(requiredRecord, targetType)
             fieldType
         }
@@ -970,7 +951,7 @@ fun infersFieldAccess() {
 
 @Test
 fun infersFieldAccessOnParameter() {
-    // |.name| should infer { name: 'a, ...'b } -> 'a
+    // |.name| should infer { name: 'a } -> 'a
     val type = inferExpr("|.name|")
     assertTrue(type is Type.TFun)
 }
@@ -1387,6 +1368,6 @@ These are documented for awareness but not part of this plan:
 - **Type annotations**: Surface syntax for type hints
 - **Nominal types**: `type Person = { name: String }` creating distinct types
 - **Sum types**: `type Option(a) = Some { value: a } | None`
-- **Row polymorphism syntax**: `{ name: String, ...r }` in annotations
+- **Row polymorphism**: `{ name: String, ...r }` for tracking extra fields through inference
 - **Match expressions**: Pattern matching with exhaustiveness
 - **Kleene types**: `T?`, `T*`, `T+` cardinality annotations
