@@ -8,12 +8,27 @@ package klein
 class TypeGen {
     private var nextVarId = 0
     private val errors = mutableListOf<TypeError>()
+    private val subtyping = Subtyping { errors.add(it) }
 
     fun freshVar(): Type.TVar = Type.TVar(nextVarId++)
 
     fun getErrors(): List<TypeError> = errors.toList()
 
     fun hasErrors(): Boolean = errors.isNotEmpty()
+
+    /**
+     * Constrain lhs to be a subtype of rhs.
+     */
+    fun constrain(lhs: Type, rhs: Type, span: SourceSpan) {
+        subtyping.constrain(lhs, rhs, span)
+    }
+
+    /**
+     * Constrain two types to be equal (both directions).
+     */
+    fun constrainEqual(lhs: Type, rhs: Type, span: SourceSpan) {
+        subtyping.constrainEqual(lhs, rhs, span)
+    }
 
     /**
      * Infer the type of an expression in the given environment.
