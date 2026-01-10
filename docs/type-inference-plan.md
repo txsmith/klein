@@ -118,7 +118,7 @@ object TypePrinter {
         Type.TUnit -> "Unit"
         Type.TTop -> "Top"
         Type.TBottom -> "Bottom"
-        is Type.TVar -> "'${varName(type.id)}"  // 'a, 'b, 'c, etc.
+        is Type.TVar -> varName(type.id)  // a, b, c, etc.
         is Type.TFun -> printFun(type)
         is Type.TRecord -> printRecord(type)
     }
@@ -157,7 +157,7 @@ object TypePrinter {
 | String | `String` |
 | Boolean | `Bool` |
 | Unit | `Unit` |
-| Type variable | `'a`, `'b`, `'c` |
+| Type variable | `a`, `b`, `c` |
 | Function (1 param) | `Int -> Int` |
 | Function (n params) | `(Int, String) -> Bool` |
 | Function (0 params) | `() -> Int` |
@@ -524,7 +524,7 @@ This phase requires careful design of the internal type IRs before implementatio
 |----------|-----------|------|
 | Arithmetic | `+`, `-`, `*`, `/`, `%` | `(Int, Int) -> Int` or `(Double, Double) -> Double` |
 | Comparison | `<`, `<=`, `>`, `>=` | `(Int, Int) -> Bool` or `(Double, Double) -> Bool` |
-| Equality | `==`, `!=` | `('a, 'a) -> Bool` (polymorphic) |
+| Equality | `==`, `!=` | `(a, a) -> Bool` (polymorphic) |
 | Boolean | `and`, `or` | `(Bool, Bool) -> Bool` |
 | Unary neg | `-` | `Int -> Int` or `Double -> Double` |
 | Unary not | `not` | `Bool -> Bool` |
@@ -552,7 +552,7 @@ This phase requires careful design of the internal type IRs before implementatio
 
 The implicit parameter `|.|` and `|.field|` syntax needs special handling:
 - `|. + 1|` → `Int -> Int`
-- `|.name|` → `{ name: 'a } -> 'a`
+- `|.name|` → `{ name: a } -> a`
 - `|.x + .y|` → `{ x: Int, y: Int } -> Int`
 
 **Constraints:**
@@ -577,7 +577,7 @@ The implicit parameter `|.|` and `|.field|` syntax needs special handling:
 Field access on a type variable creates a record constraint. Width subtyping ensures this works with larger records:
 
 ```klein
-getName = |.name|  # { name: 'a } -> 'a
+getName = |.name|  # { name: a } -> a
 getName({ name = 'Alice', age = 30 })  # OK! { name: String, age: Int } <: { name: String }
 ```
 
