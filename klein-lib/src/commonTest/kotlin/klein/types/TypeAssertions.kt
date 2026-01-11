@@ -1,19 +1,19 @@
 package klein.types
 
 import klein.SourceSpan
-import klein.parser.parse
+import klein.parser.parseProgram
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): SimpleType = Typer.infer(parse(source), env).type
+): SimpleType = Typer.infer(parseProgram(source), env).type
 
 fun inferWithErrors(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): InferResult = Typer.infer(parse(source), env)
+): ProgramResult = Typer.infer(parseProgram(source), env)
 
 fun assertType(
     expected: String,

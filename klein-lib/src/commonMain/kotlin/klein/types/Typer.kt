@@ -3,26 +3,6 @@ package klein.types
 import klein.*
 import klein.types.SimpleType.*
 
-data class InferResult(
-    val type: SimpleType,
-    val errors: List<TypeError>,
-) {
-    val hasErrors: Boolean get() = errors.isNotEmpty()
-
-    fun withType(t: SimpleType) = copy(type = t)
-
-    fun withError(e: TypeError) = copy(errors = errors + e)
-
-    companion object {
-        fun ok(type: SimpleType) = InferResult(type, emptyList())
-
-        fun err(
-            type: SimpleType,
-            error: TypeError,
-        ) = InferResult(type, listOf(error))
-    }
-}
-
 sealed class TypedStmt {
     data class TypedVal(
         val name: String,
@@ -44,50 +24,57 @@ data class ProgramResult(
     val stmts: List<TypedStmt>,
     val env: TypeEnv,
     val errors: List<TypeError>,
-)
+) {
+    val type: SimpleType
+        get() = (stmts.lastOrNull() as? TypedStmt.TypedExpr)?.type ?: TUnit
 
-object Typer {
+    val hasErrors: Boolean
+        get() = errors.isNotEmpty()
+}
+
+class Typer {
+    private val errors = mutableListOf<TypeError>()
+    private val subtyping = Subtyping()
+
+    fun getErrors(): List<TypeError> = errors + subtyping.getErrors()
+
     fun infer(
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
         val typedStmts = mutableListOf<TypedStmt>()
-        val errors = mutableListOf<TypeError>()
 
         for (stmt in program.stmts) {
             when (stmt) {
                 is Val -> {
-                    val result = infer(stmt.value, env)
-                    errors.addAll(result.errors)
-                    env.bind(stmt.name, result.type)
-                    typedStmts.add(TypedStmt.TypedVal(stmt.name, result.type))
+                    val type = infer(stmt.value, env)
+                    env.bind(stmt.name, type)
+                    typedStmts.add(TypedStmt.TypedVal(stmt.name, type))
                 }
                 is FunDef -> {
-                    val result = inferFunction(stmt.params, stmt.body, env)
-                    errors.addAll(result.errors)
-                    env.bind(stmt.name, result.type)
-                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, result.type))
+                    val type = inferFunction(stmt.params, stmt.body, env)
+                    env.bind(stmt.name, type)
+                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, type))
                 }
                 is Expr -> {
-                    val result = infer(stmt, env)
-                    errors.addAll(result.errors)
-                    typedStmts.add(TypedStmt.TypedExpr(result.type, stmt.span))
+                    val type = infer(stmt, env)
+                    typedStmts.add(TypedStmt.TypedExpr(type, stmt.span))
                 }
             }
         }
 
-        return ProgramResult(typedStmts, env, errors)
+        return ProgramResult(typedStmts, env, getErrors())
     }
 
     fun infer(
         expr: Expr,
         env: TypeEnv,
-    ): InferResult =
+    ): SimpleType =
         when (expr) {
-            is IntLiteral -> InferResult.ok(TNum)
-            is DoubleLiteral -> InferResult.ok(TNum)
-            is StringLiteral -> InferResult.ok(TString)
-            is BoolLiteral -> InferResult.ok(TBool)
+            is IntLiteral -> TNum
+            is DoubleLiteral -> TNum
+            is StringLiteral -> TString
+            is BoolLiteral -> TBool
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> inferBinaryOp(expr, env)
             is UnaryOp -> inferUnaryOp(expr, env)
@@ -103,109 +90,99 @@ object Typer {
     private fun inferIdent(
         expr: Ident,
         env: TypeEnv,
-    ): InferResult =
-        env
-            .lookup(expr.name)
-            ?.let { InferResult.ok(it) }
-            ?: InferResult.err(TVar(), TypeError.UnboundVariable(expr.name, expr.span))
+    ): SimpleType =
+        env.lookup(expr.name) ?: run {
+            errors.add(TypeError.UnboundVariable(expr.name, expr.span))
+            TVar()
+        }
 
     private fun inferLambda(
         expr: Lambda,
         env: TypeEnv,
-    ): InferResult = inferFunction(expr.params, expr.body, env)
+    ): SimpleType = inferFunction(expr.params, expr.body, env)
 
     private fun inferFunction(
         params: List<String>,
         body: Expr,
         env: TypeEnv,
-    ): InferResult {
+    ): SimpleType {
         val paramTypes = params.map { TVar() }
         val childEnv = env.child()
         params.zip(paramTypes).forEach { (name, type) ->
             childEnv.bind(name, type)
         }
-        val bodyResult = infer(body, childEnv)
-        return bodyResult.withType(TFun(paramTypes, bodyResult.type))
+        val bodyType = infer(body, childEnv)
+        return TFun(paramTypes, bodyType)
     }
 
     private fun inferApply(
         expr: Apply,
         env: TypeEnv,
-    ): InferResult {
-        val calleeResult = infer(expr.callee, env)
-        val argResults = expr.args.map { infer(it, env) }
-        val argTypes = argResults.map { it.type }
+    ): SimpleType {
+        val calleeType = infer(expr.callee, env)
+        val argTypes = expr.args.map { infer(it, env) }
         val resultType = TVar()
 
-        val subtyping = Subtyping()
         subtyping.constrain(
-            calleeResult.type,
+            calleeType,
             TFun(argTypes, resultType),
             expr.span,
         )
 
-        val allErrors =
-            calleeResult.errors +
-                argResults.flatMap { it.errors } +
-                subtyping.getErrors()
-
-        return InferResult(resultType, allErrors)
+        return resultType
     }
 
     private fun inferBinaryOp(
         expr: BinaryOp,
         env: TypeEnv,
-    ): InferResult {
-        val leftResult = infer(expr.left, env)
-        val rightResult = infer(expr.right, env)
-        val subtyping = Subtyping()
+    ): SimpleType {
+        val leftType = infer(expr.left, env)
+        val rightType = infer(expr.right, env)
 
-        val resultType =
-            when (expr.op) {
-                Operator.Add, Operator.Sub, Operator.Mul, Operator.Div, Operator.Mod -> {
-                    subtyping.constrain(leftResult.type, TNum, expr.left.span)
-                    subtyping.constrain(rightResult.type, TNum, expr.right.span)
-                    TNum
-                }
-                Operator.Lt, Operator.LtEq, Operator.Gt, Operator.GtEq -> {
-                    subtyping.constrain(leftResult.type, TNum, expr.left.span)
-                    subtyping.constrain(rightResult.type, TNum, expr.right.span)
-                    TBool
-                }
-                Operator.Eq, Operator.NotEq -> {
-                    TBool
-                }
-                Operator.And, Operator.Or -> {
-                    subtyping.constrain(leftResult.type, TBool, expr.left.span)
-                    subtyping.constrain(rightResult.type, TBool, expr.right.span)
-                    TBool
-                }
+        return when (expr.op) {
+            Operator.Add, Operator.Sub, Operator.Mul, Operator.Div, Operator.Mod -> {
+                subtyping.constrain(leftType, TNum, expr.left.span)
+                subtyping.constrain(rightType, TNum, expr.right.span)
+                TNum
             }
-
-        val allErrors = leftResult.errors + rightResult.errors + subtyping.getErrors()
-        return InferResult(resultType, allErrors)
+            Operator.Lt, Operator.LtEq, Operator.Gt, Operator.GtEq -> {
+                subtyping.constrain(leftType, TNum, expr.left.span)
+                subtyping.constrain(rightType, TNum, expr.right.span)
+                TBool
+            }
+            Operator.Eq, Operator.NotEq -> {
+                TBool
+            }
+            Operator.And, Operator.Or -> {
+                subtyping.constrain(leftType, TBool, expr.left.span)
+                subtyping.constrain(rightType, TBool, expr.right.span)
+                TBool
+            }
+        }
     }
 
     private fun inferUnaryOp(
         expr: UnaryOp,
         env: TypeEnv,
-    ): InferResult {
-        val operandResult = infer(expr.operand, env)
-        val subtyping = Subtyping()
+    ): SimpleType {
+        val operandType = infer(expr.operand, env)
 
-        val resultType =
-            when (expr.op) {
-                UnaryOperator.Neg -> {
-                    subtyping.constrain(operandResult.type, TNum, expr.operand.span)
-                    TNum
-                }
-                UnaryOperator.Not -> {
-                    subtyping.constrain(operandResult.type, TBool, expr.operand.span)
-                    TBool
-                }
+        return when (expr.op) {
+            UnaryOperator.Neg -> {
+                subtyping.constrain(operandType, TNum, expr.operand.span)
+                TNum
             }
+            UnaryOperator.Not -> {
+                subtyping.constrain(operandType, TBool, expr.operand.span)
+                TBool
+            }
+        }
+    }
 
-        val allErrors = operandResult.errors + subtyping.getErrors()
-        return InferResult(resultType, allErrors)
+    companion object {
+        fun infer(
+            program: Program,
+            env: TypeEnv = TypeEnv.empty(),
+        ): ProgramResult = Typer().infer(program, env)
     }
 }
