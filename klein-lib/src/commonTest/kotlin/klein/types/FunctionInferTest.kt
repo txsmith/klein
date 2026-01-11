@@ -62,7 +62,7 @@ class FunctionInferTest {
 
     @Test
     fun apply_lambdaDirectly() {
-        assertType("a | Num | b", infer("|x -> x|(1)"))
+        assertType("a | Num | b | Num & a", infer("|x -> x|(1)"))
     }
 
     @Test

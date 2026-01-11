@@ -31,7 +31,7 @@ class BindingInferTest {
 
     @Test
     fun funDef_single() {
-        assertType("a | Num | b", infer("fun f(x) = x\nf(1)"))
+        assertType("a | Num | b | Num & a", infer("fun f(x) = x\nf(1)"))
     }
 
     @Test

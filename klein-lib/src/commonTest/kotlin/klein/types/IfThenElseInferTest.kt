@@ -29,7 +29,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_nested() {
-        assertType("a | Num | b", infer("if true then if false then 1 else 2 else 3"))
+        assertType("a | Num | b | Num & a", infer("if true then if false then 1 else 2 else 3"))
     }
 
     @Test

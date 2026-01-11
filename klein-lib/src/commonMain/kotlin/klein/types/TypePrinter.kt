@@ -8,11 +8,9 @@ object TypePrinter {
     private class Printer {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
+        private val printingBoundsOf = mutableSetOf<TVar>()
 
-        fun print(
-            type: SimpleType,
-            printBounds: Boolean = true,
-        ): String =
+        fun print(type: SimpleType): String =
             when (type) {
                 TNum -> "Num"
                 TString -> "String"
@@ -20,38 +18,41 @@ object TypePrinter {
                 TUnit -> "Unit"
                 TTop -> "Any"
                 TBottom -> "Nothing"
-                is TVar -> printVar(type, printBounds)
-                is TFun -> printFun(type, printBounds)
-                is TRecord -> printRecord(type, printBounds)
+                is TVar -> printVar(type)
+                is TFun -> printFun(type)
+                is TRecord -> printRecord(type)
             }
 
-        private fun printVar(
-            tv: TVar,
-            printBounds: Boolean,
-        ): String {
+        private fun printVar(tv: TVar): String {
             val name = varNames.getOrPut(tv) { varName(nextVarId++) }
-            if (!printBounds) return name
 
-            val lower =
-                tv.lowerBounds
-                    .filter { it != TBottom }
-                    .map { printAsBound(it) }
-                    .sorted()
-            val upper =
-                tv.upperBounds
-                    .filter { it != TTop }
-                    .map { printAsBound(it) }
-                    .sorted()
-            return buildString {
-                append(name)
-                if (lower.isNotEmpty()) {
-                    append(" | ")
-                    append(lower.joinToString(" | "))
+            if (tv in printingBoundsOf) return name
+
+            printingBoundsOf.add(tv)
+            try {
+                val lower =
+                    tv.lowerBounds
+                        .filter { it != TBottom }
+                        .map { printAsBound(it) }
+                        .sorted()
+                val upper =
+                    tv.upperBounds
+                        .filter { it != TTop }
+                        .map { printAsBound(it) }
+                        .sorted()
+                return buildString {
+                    append(name)
+                    if (lower.isNotEmpty()) {
+                        append(" | ")
+                        append(lower.joinToString(" | "))
+                    }
+                    if (upper.isNotEmpty()) {
+                        append(" & ")
+                        append(upper.joinToString(" & "))
+                    }
                 }
-                if (upper.isNotEmpty()) {
-                    append(" & ")
-                    append(upper.joinToString(" & "))
-                }
+            } finally {
+                printingBoundsOf.remove(tv)
             }
         }
 
@@ -62,29 +63,23 @@ object TypePrinter {
         }
 
         private fun printAsBound(type: SimpleType): String {
-            val printed = print(type, printBounds = false)
+            val printed = print(type)
             return if (type is TFun) "($printed)" else printed
         }
 
-        private fun printFun(
-            fn: TFun,
-            printBounds: Boolean,
-        ): String {
-            val params = "(${fn.params.joinToString(", ") { print(it, printBounds) }})"
-            return "$params -> ${print(fn.result, printBounds)}"
+        private fun printFun(fn: TFun): String {
+            val params = "(${fn.params.joinToString(", ") { print(it) }})"
+            return "$params -> ${print(fn.result)}"
         }
 
-        private fun printRecord(
-            rec: TRecord,
-            printBounds: Boolean,
-        ): String {
+        private fun printRecord(rec: TRecord): String {
             if (rec.fields.isEmpty()) {
                 return "{}"
             }
             val fields =
                 rec.fields.entries
                     .sortedBy { it.key }
-                    .joinToString(", ") { (k, v) -> "$k: ${print(v, printBounds)}" }
+                    .joinToString(", ") { (k, v) -> "$k: ${print(v)}" }
             return "{ $fields }"
         }
     }
