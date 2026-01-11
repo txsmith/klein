@@ -295,42 +295,68 @@ class TypePrinterTest {
     }
 
     @Test
-    fun printVarWithUpperBound() {
+    fun printVarWithUpperBound_raw() {
         val v = TVar()
         v.upperBounds.add(TNum)
-        assertEquals("a & Num", TypePrinter.print(v))
+        // Raw printing shows bounds
+        assertEquals("a & Num", TypePrinter.printRaw(v))
     }
 
     @Test
-    fun printVarWithLowerBound() {
+    fun printVarWithUpperBound_simplified() {
+        val v = TVar()
+        v.upperBounds.add(TNum)
+        // Positive-only var with upper bound but no lower bound simplifies to Nothing
+        assertEquals("Nothing", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printVarWithLowerBound_raw() {
         val v = TVar()
         v.lowerBounds.add(TString)
-        assertEquals("a | String", TypePrinter.print(v))
+        assertEquals("a | String", TypePrinter.printRaw(v))
     }
 
     @Test
-    fun printVarWithBothBounds() {
+    fun printVarWithLowerBound_simplified() {
+        val v = TVar()
+        v.lowerBounds.add(TString)
+        // Positive-only var with String lower bound simplifies to String
+        assertEquals("String", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printVarWithBothBounds_raw() {
         val v = TVar()
         v.lowerBounds.add(TString)
         v.upperBounds.add(TTop)
-        // TTop is filtered out
-        assertEquals("a | String", TypePrinter.print(v))
+        // TTop is filtered out in raw printing
+        assertEquals("a | String", TypePrinter.printRaw(v))
     }
 
     @Test
-    fun printVarWithMultipleUpperBounds() {
+    fun printVarWithMultipleUpperBounds_raw() {
         val v = TVar()
         v.upperBounds.add(TNum)
         v.upperBounds.add(TString)
         // Sorted alphabetically
-        assertEquals("a & Num & String", TypePrinter.print(v))
+        assertEquals("a & Num & String", TypePrinter.printRaw(v))
     }
 
     @Test
-    fun printFunctionWithBoundedVar() {
+    fun printFunctionWithBoundedVar_raw() {
         val v = TVar()
         v.upperBounds.add(TNum)
         val fn = TFun(listOf(v), TNum)
-        assertEquals("(a & Num) -> Num", TypePrinter.print(fn))
+        assertEquals("(a & Num) -> Num", TypePrinter.printRaw(fn))
+    }
+
+    @Test
+    fun printFunctionWithBoundedVar_simplified() {
+        val v = TVar()
+        v.upperBounds.add(TNum)
+        val fn = TFun(listOf(v), TNum)
+        // Param var is negative-only with upper bound Num, simplifies to Num
+        assertEquals("(Num) -> Num", TypePrinter.print(fn))
     }
 }

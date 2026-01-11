@@ -74,7 +74,8 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        // Result simplifies to Num
+        assertType("() -> Num", infer(program))
     }
 
     @Test
@@ -114,7 +115,8 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType("a | Num", infer(program))
+        // Result simplifies to Num
+        assertType("Num", infer(program))
     }
 
     @Test
@@ -144,7 +146,8 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType("a | Num", infer(program))
+        // Result simplifies to Num
+        assertType("Num", infer(program))
     }
 
     @Test
@@ -161,7 +164,8 @@ class BlockInferTest {
               f()
             |
             """.trimIndent()
-        assertType("() -> a | Num | b | Num & a", infer(program))
+        // Nested thunk calls all return Num
+        assertType("() -> Num", infer(program))
     }
 
     @Test
@@ -173,7 +177,8 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        // Result simplifies to Num
+        assertType("() -> Num", infer(program))
     }
 
     @Test
@@ -185,7 +190,8 @@ class BlockInferTest {
               if x > 3 then 'big' else 'small'
             |
             """.trimIndent()
-        assertType("() -> a | String", infer(program))
+        // Result simplifies to String
+        assertType("() -> String", infer(program))
     }
 
     @Test
@@ -197,7 +203,8 @@ class BlockInferTest {
               person.age
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        // Result simplifies to Num
+        assertType("() -> Num", infer(program))
     }
 
     @Test

@@ -31,7 +31,8 @@ class BindingInferTest {
 
     @Test
     fun funDef_single() {
-        assertType("a | Num | b | Num & a", infer("fun f(x) = x\nf(1)"))
+        // Polymorphic function applied to Num gives Num
+        assertType("Num", infer("fun f(x) = x\nf(1)"))
     }
 
     @Test

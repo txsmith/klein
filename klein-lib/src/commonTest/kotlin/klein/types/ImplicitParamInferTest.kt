@@ -12,22 +12,26 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_fieldAccess() {
-        assertType("(a & { x: b }) -> b", infer("|.x|"))
+        // Record constraint with field access - r appears in both polarities
+        assertType("({ x: a }) -> a", infer("|.x|"))
     }
 
     @Test
     fun implicitParam_multipleFieldAccess() {
-        assertType("(a & { x: b & Num } & { y: c & Num }) -> Num", infer("|.x + .y|"))
+        // Both field types constrained to Num
+        assertType("({ x: Num, y: Num }) -> Num", infer("|.x + .y|"))
     }
 
     @Test
     fun implicitParam_comparison() {
-        assertType("(a & Num) -> Bool", infer("|. > 100|"))
+        // Param constrained to Num
+        assertType("(Num) -> Bool", infer("|. > 100|"))
     }
 
     @Test
     fun implicitParam_inCondition() {
-        assertType("(a & { active: b & Bool }) -> c | Num", infer("|if .active then 1 else 0|"))
+        // Record with Bool field, result is Num
+        assertType("({ active: Bool }) -> Num", infer("|if .active then 1 else 0|"))
     }
 
     @Test
@@ -74,12 +78,13 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_nestedLambda_separateScopes() {
-        assertType("() -> () -> (a & { x: b }) -> b", infer("|| |.x| ||"))
+        assertType("() -> () -> ({ x: a }) -> a", infer("|| |.x| ||"))
     }
 
     @Test
     fun implicitParam_nestedLambda_innerUsesImplicit() {
-        assertType("(a) -> (b & Num) -> Num", infer("|x -> |. * 2||"))
+        // x is unused (polar), inner param constrained to Num
+        assertType("(Any) -> (Num) -> Num", infer("|x -> |. * 2||"))
     }
 
     @Test
@@ -91,6 +96,7 @@ class ImplicitParamInferTest {
     fun implicitParam_passthrough() {
         val env = TypeEnv.empty()
         env.bind("inc", SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum))
-        assertType("(a & Num) -> b | Num", infer("|inc(.)|", env))
+        // Param constrained to Num, result simplifies to Num
+        assertType("(Num) -> Num", infer("|inc(.)|", env))
     }
 }

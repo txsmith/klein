@@ -18,21 +18,24 @@ class FunctionInferTest {
 
     @Test
     fun lambda_twoParams() {
-        assertType("(a, b) -> a", infer("|x, y -> x|"))
+        // y only appears negatively (parameter), simplifies to Any
+        assertType("(a, Any) -> a", infer("|x, y -> x|"))
     }
 
     @Test
     fun lambda_bodyUsesParam() {
         val env = TypeEnv.empty()
         env.bind("add", TFun(listOf(TNum, TNum), TNum))
-        assertType("(a & Num, b & Num) -> c | Num", infer("|x, y -> add(x, y)|", env))
+        // x and y have upper bounds of Num, simplify to Num
+        assertType("(Num, Num) -> Num", infer("|x, y -> add(x, y)|", env))
     }
 
     @Test
     fun apply_knownFunction() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        assertType("a | String", infer("f(1)", env))
+        // Result variable is positive-only with String lower bound
+        assertType("String", infer("f(1)", env))
     }
 
     @Test
@@ -62,26 +65,30 @@ class FunctionInferTest {
 
     @Test
     fun apply_lambdaDirectly() {
-        assertType("a | Num | b | Num & a", infer("|x -> x|(1)"))
+        // Applying identity to Num gives Num
+        assertType("Num", infer("|x -> x|(1)"))
     }
 
     @Test
     fun apply_nestedCalls() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TNum))
-        assertType("a | Num", infer("f(f(1))", env))
+        // Nested calls still give Num
+        assertType("Num", infer("f(f(1))", env))
     }
 
     @Test
     fun apply_noArgs() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(emptyList(), TNum))
-        assertType("a | Num", infer("f()", env))
+        // Thunk application gives Num
+        assertType("Num", infer("f()", env))
     }
 
     @Test
     fun lambda_nestedLambda() {
-        assertType("(a) -> (b) -> a", infer("|x -> |y -> x||"))
+        // y only appears negatively, simplifies to Any
+        assertType("(a) -> (Any) -> a", infer("|x -> |y -> x||"))
     }
 
     @Test

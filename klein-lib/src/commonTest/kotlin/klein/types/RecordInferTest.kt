@@ -49,17 +49,18 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_simple() {
-        assertType("a | Num", infer("{ x = 1 }.x"))
+        // Result var is positive-only with Num lower bound
+        assertType("Num", infer("{ x = 1 }.x"))
     }
 
     @Test
     fun fieldAccess_nested() {
-        assertType("a | Num", infer("{ inner = { x = 1 } }.inner.x"))
+        assertType("Num", infer("{ inner = { x = 1 } }.inner.x"))
     }
 
     @Test
     fun fieldAccess_fromVariable() {
-        assertType("a | String", infer("r = { name = 'alice' }\nr.name"))
+        assertType("String", infer("r = { name = 'alice' }\nr.name"))
     }
 
     @Test
@@ -71,6 +72,8 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_polymorphic() {
-        assertType("(a & { x: b }) -> b", infer("|r -> r.x|"))
+        // r appears both positively (input) and negatively (param)
+        // The record constraint should be preserved, field type is truly polymorphic
+        assertType("({ x: a }) -> a", infer("|r -> r.x|"))
     }
 }

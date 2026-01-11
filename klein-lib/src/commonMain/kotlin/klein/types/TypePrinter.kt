@@ -3,7 +3,17 @@ package klein.types
 import klein.types.SimpleType.*
 
 object TypePrinter {
-    fun print(type: SimpleType): String = Printer().print(type)
+    /**
+     * Print a type with simplification applied.
+     * This is the main entry point for user-facing type display.
+     */
+    fun print(type: SimpleType): String = Printer().print(TypeSimplifier.simplify(type))
+
+    /**
+     * Print a type without simplification.
+     * Useful for debugging and testing the raw inference output.
+     */
+    fun printRaw(type: SimpleType): String = Printer().print(type)
 
     private class Printer {
         private val varNames = mutableMapOf<TVar, String>()
