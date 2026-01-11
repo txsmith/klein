@@ -16,6 +16,7 @@ import klein.Lambda
 import klein.Lexer
 import klein.Operator
 import klein.Parser
+import klein.Program
 import klein.RecordLiteral
 import klein.SourceSpan
 import klein.Stmt
@@ -194,16 +195,16 @@ fun assertStmtEquals(
     assertEqualsPretty(expected, actual.stripSpan())
 }
 
-fun parseProgram(source: String): List<Stmt> {
+fun parseProgram(source: String): Program {
     val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseProgram()
 }
 
 fun assertProgramEquals(
-    actual: List<Stmt>,
+    actual: Program,
     expected: List<Stmt>,
 ) {
-    assertEqualsPretty(expected, actual.map { it.stripSpan() })
+    assertEqualsPretty(expected, actual.stmts.map { it.stripSpan() })
 }
 
 private fun <T> assertEqualsPretty(

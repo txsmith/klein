@@ -22,7 +22,59 @@ data class InferResult(
     }
 }
 
+sealed class TypedStmt {
+    data class TypedVal(
+        val name: String,
+        val type: Type,
+    ) : TypedStmt()
+
+    data class TypedFunDef(
+        val name: String,
+        val type: Type,
+    ) : TypedStmt()
+
+    data class TypedExpr(
+        val type: Type,
+        val span: SourceSpan,
+    ) : TypedStmt()
+}
+
+data class ProgramResult(
+    val stmts: List<TypedStmt>,
+    val env: TypeEnv,
+    val errors: List<TypeError>,
+)
+
 object TypeGen {
+    fun infer(
+        program: Program,
+        env: TypeEnv = TypeEnv.empty(),
+    ): ProgramResult {
+        val typedStmts = mutableListOf<TypedStmt>()
+        val errors = mutableListOf<TypeError>()
+
+        for (stmt in program.stmts) {
+            when (stmt) {
+                is Val -> {
+                    val result = infer(stmt.value, env)
+                    errors.addAll(result.errors)
+                    env.bind(stmt.name, result.type)
+                    typedStmts.add(TypedStmt.TypedVal(stmt.name, result.type))
+                }
+                is FunDef -> {
+                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, TVar()))
+                }
+                is Expr -> {
+                    val result = infer(stmt, env)
+                    errors.addAll(result.errors)
+                    typedStmts.add(TypedStmt.TypedExpr(result.type, stmt.span))
+                }
+            }
+        }
+
+        return ProgramResult(typedStmts, env, errors)
+    }
+
     fun infer(
         expr: Expr,
         env: TypeEnv,

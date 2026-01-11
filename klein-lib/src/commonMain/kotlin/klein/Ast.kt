@@ -2,6 +2,11 @@ package klein
 
 import kotlinx.serialization.Serializable
 
+data class Program(
+    val stmts: List<Stmt>,
+    val span: SourceSpan,
+)
+
 sealed class Stmt {
     abstract val span: SourceSpan
 }

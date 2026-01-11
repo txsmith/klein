@@ -13,13 +13,15 @@ class Parser(
     private var pos: Int = 0
     private var currentLineIndent: Int = 0
 
-    fun parseProgram(): List<Stmt> {
+    fun parseProgram(): Program {
+        val start = peek().span
         val stmts = mutableListOf<Stmt>()
         while (peek().kind != EOF) {
             val stmt = if (peek().kind == FUN) parseFunDef() else parseStmt()
             stmts.add(stmt)
         }
-        return stmts
+        val end = if (stmts.isNotEmpty()) stmts.last().span else start
+        return Program(stmts, start + end)
     }
 
     fun parseStmt(): Stmt {
