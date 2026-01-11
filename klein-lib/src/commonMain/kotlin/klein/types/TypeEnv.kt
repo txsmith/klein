@@ -1,14 +1,14 @@
-package klein
+package klein.types
 
 class TypeEnv(
     private val parent: TypeEnv? = null,
-    private val bindings: MutableMap<String, Type> = mutableMapOf(),
+    private val bindings: MutableMap<String, SimpleType> = mutableMapOf(),
 ) {
-    fun lookup(name: String): Type? = bindings[name] ?: parent?.lookup(name)
+    fun lookup(name: String): SimpleType? = bindings[name] ?: parent?.lookup(name)
 
     fun bind(
         name: String,
-        type: Type,
+        type: SimpleType,
     ) {
         bindings[name] = type
     }

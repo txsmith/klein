@@ -1,8 +1,6 @@
 package klein.types
 
-import klein.Type.*
-import klein.TypeEnv
-import klein.TypeError
+import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

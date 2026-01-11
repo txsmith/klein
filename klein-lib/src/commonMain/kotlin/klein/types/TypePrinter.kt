@@ -1,15 +1,15 @@
-package klein
+package klein.types
 
-import klein.Type.*
+import klein.types.SimpleType.*
 
 object TypePrinter {
-    fun print(type: Type): String = Printer().print(type)
+    fun print(type: SimpleType): String = Printer().print(type)
 
     private class Printer {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
 
-        fun print(type: Type): String =
+        fun print(type: SimpleType): String =
             when (type) {
                 TInt -> "Int"
                 TDouble -> "Double"

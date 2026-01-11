@@ -1,22 +1,23 @@
-package klein
+package klein.types
 
-import klein.Type.*
+import klein.*
+import klein.types.SimpleType.*
 
 data class InferResult(
-    val type: Type,
+    val type: SimpleType,
     val errors: List<TypeError>,
 ) {
     val hasErrors: Boolean get() = errors.isNotEmpty()
 
-    fun withType(t: Type) = copy(type = t)
+    fun withType(t: SimpleType) = copy(type = t)
 
     fun withError(e: TypeError) = copy(errors = errors + e)
 
     companion object {
-        fun ok(type: Type) = InferResult(type, emptyList())
+        fun ok(type: SimpleType) = InferResult(type, emptyList())
 
         fun err(
-            type: Type,
+            type: SimpleType,
             error: TypeError,
         ) = InferResult(type, listOf(error))
     }
@@ -25,16 +26,16 @@ data class InferResult(
 sealed class TypedStmt {
     data class TypedVal(
         val name: String,
-        val type: Type,
+        val type: SimpleType,
     ) : TypedStmt()
 
     data class TypedFunDef(
         val name: String,
-        val type: Type,
+        val type: SimpleType,
     ) : TypedStmt()
 
     data class TypedExpr(
-        val type: Type,
+        val type: SimpleType,
         val span: SourceSpan,
     ) : TypedStmt()
 }
@@ -45,7 +46,7 @@ data class ProgramResult(
     val errors: List<TypeError>,
 )
 
-object TypeGen {
+object Typer {
     fun infer(
         program: Program,
         env: TypeEnv = TypeEnv.empty(),

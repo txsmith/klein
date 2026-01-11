@@ -1,5 +1,8 @@
 package klein
 
+import klein.types.TypePrinter
+import klein.types.TypedStmt
+import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -131,7 +134,7 @@ private fun infer(
     try {
         val tokens = Lexer(source).tokenize().toList()
         val program = Parser(tokens).parseProgram()
-        val result = TypeGen.infer(program)
+        val result = Typer.infer(program)
 
         for (stmt in result.stmts) {
             when (stmt) {

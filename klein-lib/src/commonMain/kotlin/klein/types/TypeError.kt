@@ -1,4 +1,6 @@
-package klein
+package klein.types
+
+import klein.SourceSpan
 
 sealed class TypeError {
     abstract val span: SourceSpan
@@ -12,22 +14,22 @@ sealed class TypeError {
     }
 
     data class TypeMismatch(
-        val expected: Type,
-        val actual: Type,
+        val expected: SimpleType,
+        val actual: SimpleType,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type mismatch: expected ${TypePrinter.print(expected)}, got ${TypePrinter.print(actual)}"
     }
 
     data class NotAFunction(
-        val actual: Type,
+        val actual: SimpleType,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Not a function: ${TypePrinter.print(actual)}"
     }
 
     data class NotARecord(
-        val actual: Type,
+        val actual: SimpleType,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Not a record: ${TypePrinter.print(actual)}"
@@ -35,7 +37,7 @@ sealed class TypeError {
 
     data class MissingField(
         val field: String,
-        val recordType: Type,
+        val recordType: SimpleType,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Record ${TypePrinter.print(recordType)} has no field '$field'"
