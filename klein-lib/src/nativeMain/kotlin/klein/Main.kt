@@ -1,7 +1,5 @@
 package klein
 
-import klein.types.TypePrinter
-import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -131,24 +129,25 @@ private fun infer(
     rawOutput: Boolean,
 ) {
     try {
-        val tokens = Lexer(source).tokenize().toList()
-        val program = Parser(tokens).parseProgram()
-        val result = Typer.infer(program)
+        val result = Klein.infer(source)
 
-        for (stmt in program.stmts) {
+        for (stmt in result.program.stmts) {
             when (stmt) {
                 is Val -> {
-                    val type = result.env.lookup(stmt.name)!!
-                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                    val type = result.typeOf(stmt.name)!!
+                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
+                    println("${stmt.name} : $typeStr")
                 }
                 is FunDef -> {
-                    val type = result.env.lookup(stmt.name)!!
-                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                    val type = result.typeOf(stmt.name)!!
+                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
+                    println("${stmt.name} : $typeStr")
                 }
                 is Expr -> {
-                    val type = result.exprTypes[stmt.span] ?: result.type
+                    val type = result.typeOf(stmt.span) ?: result.type
+                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)
-                    println("$exprSource : ${TypePrinter.print(type)}")
+                    println("$exprSource : $typeStr")
                 }
             }
         }

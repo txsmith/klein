@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.types.DisplayType.*
 import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,7 +9,7 @@ import kotlin.test.assertTrue
 class FunctionInferTest {
     @Test
     fun lambda_noParams() {
-        assertType("() -> Num", infer("|1|"))
+        assertType(DFun(emptyList(), DNum), infer("|1|"))
     }
 
     @Test
@@ -18,21 +19,21 @@ class FunctionInferTest {
 
     @Test
     fun lambda_twoParams() {
-        assertType("(a, b) -> a", infer("|x, y -> x|"))
+        assertType("(a, Any) -> a", infer("|x, y -> x|"))
     }
 
     @Test
     fun lambda_bodyUsesParam() {
         val env = TypeEnv.empty()
         env.bind("add", TFun(listOf(TNum, TNum), TNum))
-        assertType("(a & Num, b & Num) -> c | Num", infer("|x, y -> add(x, y)|", env))
+        assertType(DFun(listOf(DNum, DNum), DNum), infer("|x, y -> add(x, y)|", env))
     }
 
     @Test
     fun apply_knownFunction() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        assertType("a | String", infer("f(1)", env))
+        assertType(DString, infer("f(1)", env))
     }
 
     @Test
@@ -62,26 +63,26 @@ class FunctionInferTest {
 
     @Test
     fun apply_lambdaDirectly() {
-        assertType("a | Num | b | Num & a", infer("|x -> x|(1)"))
+        assertType(DNum, infer("|x -> x|(1)"))
     }
 
     @Test
     fun apply_nestedCalls() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TNum))
-        assertType("a | Num", infer("f(f(1))", env))
+        assertType(DNum, infer("f(f(1))", env))
     }
 
     @Test
     fun apply_noArgs() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(emptyList(), TNum))
-        assertType("a | Num", infer("f()", env))
+        assertType(DNum, infer("f()", env))
     }
 
     @Test
     fun lambda_nestedLambda() {
-        assertType("(a) -> (b) -> a", infer("|x -> |y -> x||"))
+        assertType("(a) -> (Any) -> a", infer("|x -> |y -> x||"))
     }
 
     @Test
@@ -96,5 +97,61 @@ class FunctionInferTest {
         val result = inferWithErrors("|x, x, x -> x|")
         assertEquals(2, result.errors.size)
         assertTrue(result.errors.all { it is TypeError.DuplicateParameter })
+    }
+
+    @Test
+    fun higherOrder_paramAppliedToValue() {
+        assertType("((Num) -> a) -> a", infer("|x -> x(42)|"))
+    }
+
+    @Test
+    fun higherOrder_functionOverBools() {
+        assertType(DFun(listOf(DBool), DBool), infer("|x -> not x|"))
+    }
+
+    @Test
+    fun higherOrder_appliedNegation() {
+        assertType(DBool, infer("|x -> not x|(true)"))
+    }
+
+    @Test
+    fun selfApplication_basic() {
+        val result = inferWithErrors("|x -> x(x)|")
+        assertEquals(0, result.errors.size, "Self-application should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun selfApplication_basic_type() {
+        assertType("(a & ((a) -> b)) -> b", infer("|x -> x(x)|"))
+    }
+
+    @Test
+    fun selfApplication_triple() {
+        val result = inferWithErrors("|x -> x(x)(x)|")
+        assertEquals(0, result.errors.size, "Triple self-application should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun selfApplication_mixed1() {
+        val result = inferWithErrors("|x -> |y -> x(y)(x)||")
+        assertEquals(0, result.errors.size, "Mixed self-application should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun selfApplication_mixed2() {
+        val result = inferWithErrors("|x -> |y -> x(x)(y)||")
+        assertEquals(0, result.errors.size, "Mixed self-application 2 should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun selfApplication_omega() {
+        val result = inferWithErrors("|x -> x(x)|(|x -> x(x)|)")
+        assertEquals(0, result.errors.size, "Omega combinator should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun selfApplication_inRecord() {
+        val result = inferWithErrors("|x -> { l = x(x), r = x }|")
+        assertEquals(0, result.errors.size, "Self-application in record should type-check: ${result.errors}")
     }
 }

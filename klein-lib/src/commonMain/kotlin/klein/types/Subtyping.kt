@@ -1,6 +1,7 @@
 package klein.types
 
 import klein.SourceSpan
+import klein.types.SimpleType.*
 
 class Subtyping {
     private val cache = mutableSetOf<Pair<SimpleType, SimpleType>>()
@@ -11,47 +12,50 @@ class Subtyping {
     /**
      * Constrain lhs to be a subtype of rhs.
      * Accumulates bounds on type variables.
+     *
+     * Level checking: We maintain the invariant that a variable's bounds never
+     * contain types with a higher level than the variable itself. When this would
+     * be violated, we use extrusion to create a proxy at the appropriate level.
      */
     fun constrain(
         lhs: SimpleType,
         rhs: SimpleType,
         span: SourceSpan,
     ) {
-        val pair = lhs to rhs
-        if (pair in cache) return
-        cache.add(pair)
+        if (lhs is TVar || rhs is TVar) {
+            val pair = lhs to rhs
+            if (pair in cache) return
+            cache.add(pair)
+        }
 
         when {
             lhs === rhs -> return
-            rhs is SimpleType.TTop -> return
-            lhs is SimpleType.TBottom -> return
 
-            lhs is SimpleType.TVar && rhs is SimpleType.TVar && lhs !== rhs -> {
-                lhs.upperBounds.add(rhs)
-                rhs.lowerBounds.add(lhs)
-                for (lb in lhs.lowerBounds.toList()) {
-                    constrain(lb, rhs, span)
-                }
-                for (ub in rhs.upperBounds.toList()) {
-                    constrain(lhs, ub, span)
-                }
-            }
-
-            lhs is SimpleType.TVar -> {
-                lhs.upperBounds.add(rhs)
-                for (lb in lhs.lowerBounds.toList()) {
-                    constrain(lb, rhs, span)
+            lhs is TVar -> {
+                if (rhs.level <= lhs.level) {
+                    lhs.upperBounds.add(rhs)
+                    for (lb in lhs.lowerBounds.toList()) {
+                        constrain(lb, rhs, span)
+                    }
+                } else {
+                    val extruded = extrude(rhs, positive = false, targetLevel = lhs.level)
+                    constrain(lhs, extruded, span)
                 }
             }
 
-            rhs is SimpleType.TVar -> {
-                rhs.lowerBounds.add(lhs)
-                for (ub in rhs.upperBounds.toList()) {
-                    constrain(lhs, ub, span)
+            rhs is TVar -> {
+                if (lhs.level <= rhs.level) {
+                    rhs.lowerBounds.add(lhs)
+                    for (ub in rhs.upperBounds.toList()) {
+                        constrain(lhs, ub, span)
+                    }
+                } else {
+                    val extruded = extrude(lhs, positive = true, targetLevel = rhs.level)
+                    constrain(extruded, rhs, span)
                 }
             }
 
-            lhs is SimpleType.TFun && rhs is SimpleType.TFun -> {
+            lhs is TFun && rhs is TFun -> {
                 if (lhs.params.size != rhs.params.size) {
                     errors.add(TypeError.ArityMismatch(rhs.params.size, lhs.params.size, span))
                     return
@@ -62,7 +66,7 @@ class Subtyping {
                 constrain(lhs.result, rhs.result, span)
             }
 
-            lhs is SimpleType.TRecord && rhs is SimpleType.TRecord -> {
+            lhs is TRecord && rhs is TRecord -> {
                 for ((name, rhsType) in rhs.fields) {
                     val lhsType = lhs.fields[name]
                     if (lhsType == null) {
@@ -73,14 +77,77 @@ class Subtyping {
                 }
             }
 
-            lhs is SimpleType.TNum && rhs is SimpleType.TNum -> return
-            lhs is SimpleType.TString && rhs is SimpleType.TString -> return
-            lhs is SimpleType.TBool && rhs is SimpleType.TBool -> return
-            lhs is SimpleType.TUnit && rhs is SimpleType.TUnit -> return
+            lhs is TNum && rhs is TNum -> return
+            lhs is TString && rhs is TString -> return
+            lhs is TBool && rhs is TBool -> return
+            lhs is TUnit && rhs is TUnit -> return
 
             else -> {
                 errors.add(TypeError.TypeMismatch(rhs, lhs, span))
             }
+        }
+    }
+
+    /**
+     * Extrude a type to a target level.
+     *
+     * Creates a copy of the type where all type variables above the target level
+     * are replaced with fresh proxies at the target level. The proxies are connected
+     * to the original variables via bounds.
+     *
+     * @param ty The type to extrude
+     * @param positive True if in positive position (covariant), false if negative (contravariant)
+     * @param targetLevel The level to extrude to
+     * @param cache Cache of already-extruded polar variables to handle cycles
+     */
+    private fun extrude(
+        ty: SimpleType,
+        positive: Boolean,
+        targetLevel: Int,
+        cache: MutableMap<Pair<TVar, Boolean>, TVar> = mutableMapOf(),
+    ): SimpleType {
+        // If type is already at or below target level, no extrusion needed
+        if (ty.level <= targetLevel) return ty
+
+        return when (ty) {
+            is TFun ->
+                TFun(
+                    ty.params.map { extrude(it, !positive, targetLevel, cache) },
+                    extrude(ty.result, positive, targetLevel, cache),
+                )
+
+            is TRecord ->
+                TRecord(ty.fields.mapValues { (_, v) -> extrude(v, positive, targetLevel, cache) })
+
+            is TVar -> {
+                val key = ty to positive
+                cache[key]?.let { return it }
+
+                val proxy = TVar(targetLevel)
+                cache[key] = proxy
+
+                // Connect proxy to original via bounds
+                if (positive) {
+                    // In positive position: proxy is an upper bound approximation
+                    // Original flows into proxy (original <: proxy)
+                    ty.upperBounds.add(proxy)
+                    // Copy lower bounds (freshened)
+                    for (lb in ty.lowerBounds.toList()) {
+                        proxy.lowerBounds.add(extrude(lb, positive, targetLevel, cache))
+                    }
+                } else {
+                    // In negative position: proxy is a lower bound approximation
+                    // Proxy flows into original (proxy <: original)
+                    ty.lowerBounds.add(proxy)
+                    // Copy upper bounds (freshened)
+                    for (ub in ty.upperBounds.toList()) {
+                        proxy.upperBounds.add(extrude(ub, positive, targetLevel, cache))
+                    }
+                }
+
+                proxy
+            }
+            else -> ty
         }
     }
 

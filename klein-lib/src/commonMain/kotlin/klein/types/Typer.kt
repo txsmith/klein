@@ -62,7 +62,7 @@ class Typer {
                         if (env.contains(stmt.name)) {
                             errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                         }
-                        val rhsEnv = env.child(level = env.level + 1)
+                        val rhsEnv = env.enterBindingScope()
                         val type = infer(stmt.value, rhsEnv)
                         env.bindPolymorphic(stmt.name, type)
                         TUnit
@@ -71,7 +71,7 @@ class Typer {
                         if (env.contains(stmt.name)) {
                             errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                         }
-                        val rhsEnv = env.child(level = env.level + 1)
+                        val rhsEnv = env.enterBindingScope()
                         val type = inferFunction(stmt.params, stmt.body, stmt.span, rhsEnv, functionName = stmt.name)
                         env.bindPolymorphic(stmt.name, type)
                         TUnit
@@ -150,7 +150,7 @@ class Typer {
         expr: Ident,
         env: TypeEnv,
     ): SimpleType =
-        env.lookup(expr.name, env.level) ?: run {
+        env.lookupAndInstantiate(expr.name) ?: run {
             errors.add(TypeError.UnboundVariable(expr.name, expr.span))
             env.freshVar()
         }

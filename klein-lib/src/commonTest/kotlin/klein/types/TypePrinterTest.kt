@@ -31,60 +31,25 @@ class TypePrinterTest {
     }
 
     @Test
-    fun printTypeVar_firstGetsA() {
+    fun printTypeVar_positiveOnly_simplifiesToNothing() {
         val v = TVar()
-        assertEquals("a", TypePrinter.print(v))
+        assertEquals("Nothing", TypePrinter.print(v))
     }
 
     @Test
-    fun printTypeVar_sameInstanceSameName() {
+    fun printTypeVar_inBothPositions_keptAsVariable() {
         val v = TVar()
         val fn = TFun(listOf(v), v)
         assertEquals("(a) -> a", TypePrinter.print(fn))
     }
 
     @Test
-    fun printTypeVar_differentInstancesDifferentNames() {
+    fun printTypeVar_differentPositions_simplifiedSeparately() {
         val a = TVar()
         val b = TVar()
         val fn = TFun(listOf(a), b)
-        assertEquals("(a) -> b", TypePrinter.print(fn))
-    }
-
-    @Test
-    fun printTypeVar_namesAToZ() {
-        val vars = (0 until 26).map { TVar() }
-        val rec = TRecord(vars.mapIndexed { i, v -> "f$i" to v }.toMap())
-        val printed = TypePrinter.print(rec)
-        ('a'..'z').forEach { c ->
-            assert(": $c" in printed || ": $c," in printed) { "Expected '$c' in $printed" }
-        }
-    }
-
-    @Test
-    fun printTypeVar_wrapsToA1AfterZ() {
-        val vars = (0 until 27).map { TVar() }
-        val fn = TFun(vars.dropLast(1), vars.last())
-        val printed = TypePrinter.print(fn)
-        assert(printed.endsWith("-> a1")) { "Expected 'a1' for 27th var, got: $printed" }
-    }
-
-    @Test
-    fun printTypeVar_continuesB1C1() {
-        val vars = (0 until 29).map { TVar() }
-        val fn = TFun(vars.dropLast(1), vars.last())
-        val printed = TypePrinter.print(fn)
-        assert(printed.endsWith("-> c1")) { "Expected 'c1' for 29th var, got: $printed" }
-    }
-
-    @Test
-    fun printTop() {
-        assertEquals("Any", TypePrinter.print(TTop))
-    }
-
-    @Test
-    fun printBottom() {
-        assertEquals("Nothing", TypePrinter.print(TBottom))
+        // a is negative-only -> Any, b is positive-only -> Nothing
+        assertEquals("(Any) -> Nothing", TypePrinter.print(fn))
     }
 
     @Test
@@ -116,7 +81,8 @@ class TypePrinterTest {
     fun printFunctionVarToInt() {
         val v = TVar()
         val fn = TFun(listOf(v), TNum)
-        assertEquals("(a) -> Num", TypePrinter.print(fn))
+        // v is negative-only -> Any
+        assertEquals("(Any) -> Num", TypePrinter.print(fn))
     }
 
     @Test
@@ -136,7 +102,8 @@ class TypePrinterTest {
         val a = TVar()
         val b = TVar()
         val fn = TFun(listOf(a, TNum), b)
-        assertEquals("(a, Num) -> b", TypePrinter.print(fn))
+        // a negative-only -> Any, b positive-only -> Nothing
+        assertEquals("(Any, Num) -> Nothing", TypePrinter.print(fn))
     }
 
     @Test
@@ -155,7 +122,8 @@ class TypePrinterTest {
     fun printThunkVar() {
         val v = TVar()
         val fn = TFun(emptyList(), v)
-        assertEquals("() -> a", TypePrinter.print(fn))
+        // v is positive-only -> Nothing
+        assertEquals("() -> Nothing", TypePrinter.print(fn))
     }
 
     @Test
@@ -177,17 +145,25 @@ class TypePrinterTest {
         val a = TVar()
         val b = TVar()
         val outer = TFun(listOf(TFun(listOf(a), b), a), b)
+        // a: negative in outer param, positive in inner fn param -> both positions -> a
+        // b: positive in inner fn result, positive in outer result -> positive only -> Nothing
+        // Actually: inner fn is in negative position, so its param is positive, result is negative
+        // So a: outer negative + inner positive = both -> a
+        // b: inner negative + outer positive = both -> b
         assertEquals("((a) -> b, a) -> b", TypePrinter.print(outer))
     }
 
     @Test
     fun printDoublyCurried() {
-        // (a) -> b -> c -> a
+        // (a) -> (b) -> (c) -> a
         val a = TVar()
         val b = TVar()
         val c = TVar()
         val fn = TFun(listOf(a), TFun(listOf(b), TFun(listOf(c), a)))
-        assertEquals("(a) -> (b) -> (c) -> a", TypePrinter.print(fn))
+        // a: negative in outer, positive in innermost result -> both -> a
+        // b: negative only (param of middle fn which is in positive position) -> Any
+        // c: negative only (param of inner fn which is in positive position) -> Any
+        assertEquals("(a) -> (Any) -> (Any) -> a", TypePrinter.print(fn))
     }
 
     @Test
@@ -205,7 +181,6 @@ class TypePrinterTest {
     @Test
     fun printRecordTwoFields() {
         val rec = TRecord(mapOf("name" to TString, "age" to TNum))
-        // Fields are sorted alphabetically
         assertEquals("{ age: Num, name: String }", TypePrinter.print(rec))
     }
 
@@ -219,7 +194,8 @@ class TypePrinterTest {
     fun printRecordWithVarField() {
         val a = TVar()
         val rec = TRecord(mapOf("value" to a))
-        assertEquals("{ value: a }", TypePrinter.print(rec))
+        // a is positive-only -> Nothing
+        assertEquals("{ value: Nothing }", TypePrinter.print(rec))
     }
 
     @Test
@@ -240,7 +216,6 @@ class TypePrinterTest {
                     "b" to TBool,
                 ),
             )
-        // Fields are sorted alphabetically: b, d, i, s
         assertEquals("{ b: Bool, d: Num, i: Num, s: String }", TypePrinter.print(rec))
     }
 
@@ -264,6 +239,7 @@ class TypePrinterTest {
         val a = TVar()
         val rec = TRecord(mapOf("value" to a))
         val fn = TFun(listOf(a), rec)
+        // a in both positions -> a
         assertEquals("(a) -> { value: a }", TypePrinter.print(fn))
     }
 
@@ -291,39 +267,43 @@ class TypePrinterTest {
         val inputRec = TRecord(mapOf("x" to a, "y" to a))
         val outputRec = TRecord(mapOf("x" to b, "y" to b))
         val fn = TFun(listOf(paramFn, inputRec), outputRec)
+        // a: in paramFn param (neg of neg = pos), in inputRec (neg) -> both -> a
+        // b: in paramFn result (neg), in outputRec (pos) -> both -> b
         assertEquals("((a) -> b, { x: a, y: a }) -> { x: b, y: b }", TypePrinter.print(fn))
     }
 
     @Test
-    fun printVarWithUpperBound() {
+    fun printVarWithUpperBound_positiveOnly() {
         val v = TVar()
         v.upperBounds.add(TNum)
-        assertEquals("a & Num", TypePrinter.print(v))
+        // Positive-only var simplifies based on lower bounds, nothing here -> Nothing
+        assertEquals("Nothing", TypePrinter.print(v))
     }
 
     @Test
-    fun printVarWithLowerBound() {
+    fun printVarWithLowerBound_positiveOnly() {
         val v = TVar()
         v.lowerBounds.add(TString)
-        assertEquals("a | String", TypePrinter.print(v))
+        // Positive-only var with String lower bound simplifies to String
+        assertEquals("String", TypePrinter.print(v))
     }
 
     @Test
-    fun printVarWithBothBounds() {
+    fun printVarWithBothBounds_positiveOnly() {
         val v = TVar()
         v.lowerBounds.add(TString)
-        v.upperBounds.add(TTop)
-        // TTop is filtered out
-        assertEquals("a | String", TypePrinter.print(v))
+        v.upperBounds.add(TNum)
+        // Positive-only var with String lower bound and Num upper bound
+        assertEquals("String", TypePrinter.print(v))
     }
 
     @Test
-    fun printVarWithMultipleUpperBounds() {
+    fun printVarWithMultipleUpperBounds_positiveOnly() {
         val v = TVar()
         v.upperBounds.add(TNum)
         v.upperBounds.add(TString)
-        // Sorted alphabetically
-        assertEquals("a & Num & String", TypePrinter.print(v))
+        // Positive-only var with no lower bounds simplifies to Nothing
+        assertEquals("Nothing", TypePrinter.print(v))
     }
 
     @Test
@@ -331,6 +311,30 @@ class TypePrinterTest {
         val v = TVar()
         v.upperBounds.add(TNum)
         val fn = TFun(listOf(v), TNum)
-        assertEquals("(a & Num) -> Num", TypePrinter.print(fn))
+        // v is negative-only with upper bound Num -> simplifies to Num
+        assertEquals("(Num) -> Num", TypePrinter.print(fn))
+    }
+
+    @Test
+    fun printRaw_preservesTypeVariables() {
+        val a = TVar()
+        val b = TVar()
+        val fn = TFun(listOf(a), b)
+        assertEquals("(a) -> b", TypePrinter.printRaw(fn))
+    }
+
+    @Test
+    fun printRaw_preservesBounds() {
+        val v = TVar()
+        v.upperBounds.add(TNum)
+        val fn = TFun(listOf(v), TNum)
+        assertEquals(
+            """
+            |(a) -> Num
+            |  where
+            |    a <: Num
+            """.trimMargin(),
+            TypePrinter.printRaw(fn),
+        )
     }
 }

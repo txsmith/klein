@@ -1,5 +1,7 @@
 package klein.types
 
+import klein.types.DisplayType.*
+import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -12,22 +14,22 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_fieldAccess() {
-        assertType("(a & { x: b }) -> b", infer("|.x|"))
+        assertType("({ x: a }) -> a", infer("|.x|"))
     }
 
     @Test
     fun implicitParam_multipleFieldAccess() {
-        assertType("(a & { x: b & Num } & { y: c & Num }) -> Num", infer("|.x + .y|"))
+        assertType("({ x: Num, y: Num }) -> Num", infer("|.x + .y|"))
     }
 
     @Test
     fun implicitParam_comparison() {
-        assertType("(a & Num) -> Bool", infer("|. > 100|"))
+        assertType(DFun(listOf(DNum), DBool), infer("|. > 100|"))
     }
 
     @Test
     fun implicitParam_inCondition() {
-        assertType("(a & { active: b & Bool }) -> c | Num", infer("|if .active then 1 else 0|"))
+        assertType("({ active: Bool }) -> Num", infer("|if .active then 1 else 0|"))
     }
 
     @Test
@@ -74,23 +76,23 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_nestedLambda_separateScopes() {
-        assertType("() -> () -> (a & { x: b }) -> b", infer("|| |.x| ||"))
+        assertType("() -> () -> ({ x: a }) -> a", infer("|| |.x| ||"))
     }
 
     @Test
     fun implicitParam_nestedLambda_innerUsesImplicit() {
-        assertType("(a) -> (b & Num) -> Num", infer("|x -> |. * 2||"))
+        assertType("(Any) -> (Num) -> Num", infer("|x -> |. * 2||"))
     }
 
     @Test
     fun implicitParam_constantLambda_noParam() {
-        assertType("() -> Num", infer("|42|"))
+        assertType(DFun(emptyList(), DNum), infer("|42|"))
     }
 
     @Test
     fun implicitParam_passthrough() {
         val env = TypeEnv.empty()
-        env.bind("inc", SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum))
-        assertType("(a & Num) -> b | Num", infer("|inc(.)|", env))
+        env.bind("inc", TFun(listOf(TNum), TNum))
+        assertType(DFun(listOf(DNum), DNum), infer("|inc(.)|", env))
     }
 }

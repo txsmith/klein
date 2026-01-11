@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.types.DisplayType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,7 +14,7 @@ class BlockInferTest {
               42
             |
             """.trimIndent()
-        assertType("() -> Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -26,7 +27,7 @@ class BlockInferTest {
               3
             |
             """.trimIndent()
-        assertType("() -> Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -38,7 +39,7 @@ class BlockInferTest {
               x
             |
             """.trimIndent()
-        assertType("() -> Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -51,7 +52,7 @@ class BlockInferTest {
               x + y
             |
             """.trimIndent()
-        assertType("() -> Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -62,7 +63,7 @@ class BlockInferTest {
               x = 1
             |
             """.trimIndent()
-        assertType("() -> Unit", infer(program))
+        assertType(DFun(emptyList(), DUnit), infer(program))
     }
 
     @Test
@@ -74,7 +75,7 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -85,7 +86,7 @@ class BlockInferTest {
               double = |x -> x * 2|
             |
             """.trimIndent()
-        assertType("() -> Unit", infer(program))
+        assertType(DFun(emptyList(), DUnit), infer(program))
     }
 
     @Test
@@ -114,7 +115,7 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType("a | Num", infer(program))
+        assertType(DNum, infer(program))
     }
 
     @Test
@@ -144,7 +145,7 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType("a | Num", infer(program))
+        assertType(DNum, infer(program))
     }
 
     @Test
@@ -161,7 +162,7 @@ class BlockInferTest {
               f()
             |
             """.trimIndent()
-        assertType("() -> a | Num | b | Num & a", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -173,7 +174,7 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -185,7 +186,7 @@ class BlockInferTest {
               if x > 3 then 'big' else 'small'
             |
             """.trimIndent()
-        assertType("() -> a | String", infer(program))
+        assertType(DFun(emptyList(), DString), infer(program))
     }
 
     @Test
@@ -197,7 +198,7 @@ class BlockInferTest {
               person.age
             |
             """.trimIndent()
-        assertType("() -> a | Num", infer(program))
+        assertType(DFun(emptyList(), DNum), infer(program))
     }
 
     @Test
@@ -250,8 +251,6 @@ class BlockInferTest {
 
     @Test
     fun block_letPolymorphism_escapingCapture_rejectsBoolPlusNum() {
-        // escape_direct(true) returns a function that always returns true (Bool)
-        // So h(42) should return Bool, and h(42) + 1 should fail
         val program =
             """
             escape_direct = |x -> |y -> x||
@@ -267,8 +266,6 @@ class BlockInferTest {
 
     @Test
     fun block_letPolymorphism_capturedVar_preservesConnection() {
-        // When f is bound inside escape, the captured x should NOT be generalized
-        // because x comes from the outer scope (lower level)
         val program =
             """
             escape = |x ->
@@ -279,7 +276,6 @@ class BlockInferTest {
             h(42) + 1
             """.trimIndent()
         val result = inferWithErrors(program)
-        // h(42) should return Bool (captured from escape(true)), so + 1 should fail
         assertTrue(
             result.errors.any { it is TypeError.TypeMismatch },
             "Expected type mismatch error for Bool + 1, but got: ${result.errors}",
@@ -288,10 +284,6 @@ class BlockInferTest {
 
     @Test
     fun block_letPolymorphism_recordWithMixedLevels() {
-        // inner returns a record with fields at different levels:
-        // - x from outer scope (level 1)
-        // - y from inner's param (level 2)
-        // When inner is used polymorphically, y should be freshened each time
         val program =
             """
             outer = |x ->
@@ -303,11 +295,92 @@ class BlockInferTest {
             outer(42)
             """.trimIndent()
         val result = inferWithErrors(program)
-        // a.second should be Num (independent from b.second which is Bool)
         assertEquals(
             emptyList(),
             result.errors,
             "Expected no errors - each inner call should get fresh type variables",
         )
+    }
+
+    @Test
+    fun block_letPolymorphism_classic() {
+        val program =
+            """
+            f = |x -> x|
+            { a = f(0), b = f(true) }
+            """.trimIndent()
+        assertType(DRecord(mapOf("a" to DNum, "b" to DBool)), infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_withCapture() {
+        val program =
+            """
+            |y ->
+              f = |x -> x|
+              { a = f(y), b = f(true) }
+            |
+            """.trimIndent()
+        assertType("(a) -> { a: a, b: Bool }", infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_withUnionInput() {
+        val program =
+            """
+            |y ->
+              f = |x -> y(x)|
+              { a = f(0), b = f(true) }
+            |
+            """.trimIndent()
+        val result = inferWithErrors(program)
+        assertEquals(0, result.errors.size, "Let-polymorphism with union input should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun block_letPolymorphism_idAppliedToItself() {
+        val program =
+            """
+            id = |x -> x|
+            id(id)
+            """.trimIndent()
+        assertType("(a) -> a", infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_nestedLet() {
+        val program =
+            """
+            f = |x -> x|
+            g = f
+            g(42)
+            """.trimIndent()
+        assertType(DNum, infer(program))
+    }
+
+    @Test
+    fun block_twiceCombinator() {
+        val result = inferWithErrors("|f -> |x -> f(f(x))||")
+        assertEquals(0, result.errors.size, "Twice combinator should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun block_twiceCombinator_applied() {
+        val program =
+            """
+            twice = |f -> |x -> f(f(x))||
+            twice(|n -> n + 1|)(0)
+            """.trimIndent()
+        assertType(DNum, infer(program))
+    }
+
+    @Test
+    fun block_twiceCombinator_onIdentity() {
+        val program =
+            """
+            twice = |f -> |x -> f(f(x))||
+            twice(|x -> x|)
+            """.trimIndent()
+        assertType("(a) -> a", infer(program))
     }
 }

@@ -32,9 +32,10 @@ sealed class SimpleType {
                     // Create fresh TVar first (without bounds) to handle cycles
                     val fresh = TVar(currentLevel)
                     varMap[ty] = fresh
-                    // Now copy bounds - any recursive references will find fresh in varMap
-                    ty.lowerBounds.mapTo(fresh.lowerBounds) { freshen(it) }
-                    ty.upperBounds.mapTo(fresh.upperBounds) { freshen(it) }
+                    // Process bounds in order to preserve relative UID ordering
+                    // of type variables (important for simplification)
+                    ty.lowerBounds.forEach { fresh.lowerBounds.add(freshen(it)) }
+                    ty.upperBounds.forEach { fresh.upperBounds.add(freshen(it)) }
                     fresh
                 }
                 ty is TFun ->
@@ -68,19 +69,17 @@ sealed class SimpleType {
         override fun toString(): String = "TUnit"
     }
 
-    object TTop : SimpleType() {
-        override fun toString(): String = "TTop"
-    }
-
-    object TBottom : SimpleType() {
-        override fun toString(): String = "TBottom"
-    }
-
     class TVar(
         override val level: Int = 0,
         val lowerBounds: MutableSet<SimpleType> = mutableSetOf(),
         val upperBounds: MutableSet<SimpleType> = mutableSetOf(),
-    ) : SimpleType()
+    ) : SimpleType() {
+        val uid: Int = nextUid++
+
+        companion object {
+            private var nextUid = 0
+        }
+    }
 
     data class TFun(
         val params: List<SimpleType>,
