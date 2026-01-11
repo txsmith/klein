@@ -76,4 +76,37 @@ class RecordInferTest {
         // The record constraint should be preserved, field type is truly polymorphic
         assertType("({ x: a }) -> a", infer("|r -> r.x|"))
     }
+
+    // ==========================================
+    // Records with functions
+    // ==========================================
+
+    @Test
+    fun record_functionResultInField() {
+        // fun f -> { x = f 42 }.x : (int -> 'a) -> 'a
+        assertType("((Num) -> a) -> a", infer("|f -> { x = f(42) }.x|"))
+    }
+
+    @Test
+    fun record_unusedFieldResult() {
+        // fun f -> { x = f 42, y = 123 }.y : (int -> ⊤) -> int
+        // f is called but result unused (goes to Any), y is returned
+        assertType("((Num) -> Any) -> Num", infer("|f -> { x = f(42), y = 123 }.y|"))
+    }
+
+    @Test
+    fun record_polymorphicFieldAccess_applied() {
+        // (fun x -> x.f) { f = 42 } : int
+        assertType("Num", infer("|x -> x.f|({ f = 42 })"))
+    }
+
+    @Test
+    fun record_multipleFields() {
+        assertType("{ a: Num, b: Bool, c: String }", infer("{ a = 1, b = true, c = 'hello' }"))
+    }
+
+    @Test
+    fun record_deeplyNested() {
+        assertType("Num", infer("{ outer = { inner = 42 } }.outer.inner"))
+    }
 }

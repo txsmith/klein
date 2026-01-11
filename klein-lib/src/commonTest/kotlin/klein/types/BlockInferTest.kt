@@ -292,4 +292,96 @@ class BlockInferTest {
             "Expected type mismatch error for Bool + 1, but got: ${result.errors}",
         )
     }
+
+    // ==========================================
+    // Classic let-polymorphism examples
+    // ==========================================
+
+    @Test
+    fun block_letPolymorphism_classic() {
+        // let f = fun x -> x in { a = f 0, b = f true } : {a: int, b: bool}
+        val program = """
+            f = |x -> x|
+            { a = f(0), b = f(true) }
+        """.trimIndent()
+        assertType("{ a: Num, b: Bool }", infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_withCapture() {
+        // fun y -> let f = fun x -> x in { a = f y, b = f true }
+        val program = """
+            |y ->
+              f = |x -> x|
+              { a = f(y), b = f(true) }
+            |
+        """.trimIndent()
+        assertType("(a) -> { a: a, b: Bool }", infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_withUnionInput() {
+        // fun y -> let f = fun x -> y x in { a = f 0, b = f true }
+        // y is applied to both int and bool
+        val program = """
+            |y ->
+              f = |x -> y(x)|
+              { a = f(0), b = f(true) }
+            |
+        """.trimIndent()
+        val result = inferWithErrors(program)
+        assertEquals(0, result.errors.size, "Let-polymorphism with union input should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun block_letPolymorphism_idAppliedToItself() {
+        // let id = fun x -> x in id id : 'a -> 'a
+        val program = """
+            id = |x -> x|
+            id(id)
+        """.trimIndent()
+        assertType("(a) -> a", infer(program))
+    }
+
+    @Test
+    fun block_letPolymorphism_nestedLet() {
+        // let f = fun x -> x in let g = f in g 42
+        val program = """
+            f = |x -> x|
+            g = f
+            g(42)
+        """.trimIndent()
+        assertType("Num", infer(program))
+    }
+
+    // ==========================================
+    // Twice combinator
+    // ==========================================
+
+    @Test
+    fun block_twiceCombinator() {
+        // fun f -> fun x -> f (f x)
+        val result = inferWithErrors("|f -> |x -> f(f(x))||")
+        assertEquals(0, result.errors.size, "Twice combinator should type-check: ${result.errors}")
+    }
+
+    @Test
+    fun block_twiceCombinator_applied() {
+        // let twice = fun f -> fun x -> f (f x) in twice (fun n -> n + 1) 0
+        val program = """
+            twice = |f -> |x -> f(f(x))||
+            twice(|n -> n + 1|)(0)
+        """.trimIndent()
+        assertType("Num", infer(program))
+    }
+
+    @Test
+    fun block_twiceCombinator_onIdentity() {
+        // let twice = fun f -> fun x -> f (f x) in twice (fun x -> x)
+        val program = """
+            twice = |f -> |x -> f(f(x))||
+            twice(|x -> x|)
+        """.trimIndent()
+        assertType("(a) -> a", infer(program))
+    }
 }
