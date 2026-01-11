@@ -1,8 +1,6 @@
 package klein
 
-import klein.types.TypePrinter
 import klein.types.TypedStmt
-import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -132,17 +130,16 @@ private fun infer(
     rawOutput: Boolean,
 ) {
     try {
-        val tokens = Lexer(source).tokenize().toList()
-        val program = Parser(tokens).parseProgram()
-        val result = Typer.infer(program)
+        val result = Klein.infer(source)
 
-        for (stmt in result.stmts) {
+        for (stmt in result.statements) {
+            val typeStr = if (rawOutput) result.raw(stmtType(stmt)) else result.simplify(stmtType(stmt))
             when (stmt) {
-                is TypedStmt.TypedVal -> println("${stmt.name} : ${TypePrinter.print(stmt.type)}")
-                is TypedStmt.TypedFunDef -> println("${stmt.name} : ${TypePrinter.print(stmt.type)}")
+                is TypedStmt.TypedVal -> println("${stmt.name} : $typeStr")
+                is TypedStmt.TypedFunDef -> println("${stmt.name} : $typeStr")
                 is TypedStmt.TypedExpr -> {
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)
-                    println("$exprSource : ${TypePrinter.print(stmt.type)}")
+                    println("$exprSource : $typeStr")
                 }
             }
         }
@@ -157,6 +154,12 @@ private fun infer(
     } catch (e: NotImplementedError) {
         println("Type inference not yet implemented: ${e.message}")
     }
+}
+
+private fun stmtType(stmt: TypedStmt) = when (stmt) {
+    is TypedStmt.TypedVal -> stmt.type
+    is TypedStmt.TypedFunDef -> stmt.type
+    is TypedStmt.TypedExpr -> stmt.type
 }
 
 private fun printError(

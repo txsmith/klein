@@ -1,25 +1,40 @@
 package klein.types
 
+import klein.Klein
 import klein.SourceSpan
-import klein.parser.parseProgram
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Infer the type of a Klein expression.
+ * Returns the simplified type.
+ */
 fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): SimpleType = Typer.infer(parseProgram(source), env).type
+): SimpleType = Klein.infer(source, env).type
 
+/**
+ * Infer types and return full result including errors.
+ * Useful for testing error cases.
+ */
 fun inferWithErrors(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): ProgramResult = Typer.infer(parseProgram(source), env)
+): Klein.InferenceResult = Klein.infer(source, env)
 
+/**
+ * Assert that a type prints to the expected string.
+ * Uses simplified type printing.
+ */
 fun assertType(
     expected: String,
     actual: SimpleType,
-) = assertEquals(expected, TypePrinter.print(actual))
+) = assertEquals(expected, Klein.printType(actual))
 
+/**
+ * Assert that actual is a subtype of expected.
+ */
 fun assertSubtypeOf(
     actual: SimpleType,
     expected: SimpleType,
@@ -28,6 +43,6 @@ fun assertSubtypeOf(
     subtyping.constrain(actual, expected, SourceSpan.zero)
     assertTrue(
         subtyping.getErrors().isEmpty(),
-        "Expected ${TypePrinter.print(actual)} <: ${TypePrinter.print(expected)}",
+        "Expected ${Klein.printType(actual)} <: ${Klein.printType(expected)}",
     )
 }
