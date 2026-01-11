@@ -9,9 +9,6 @@ class TypeSimplifierTest {
     // Helper to create simplified type string
     private fun simplified(type: SimpleType): String = TypePrinter.print(type)
 
-    // Helper to create raw (unsimplified) type string
-    private fun raw(type: SimpleType): String = TypePrinter.printRaw(type)
-
     @Test
     fun simplify_primitives_unchanged() {
         assertEquals("Num", simplified(TNum))
@@ -163,15 +160,13 @@ class TypeSimplifierTest {
         assertEquals("(a) -> (Any) -> a", simplified(outer))
     }
 
-    // Test raw printing still works
     @Test
-    fun printRaw_showsBounds() {
+    fun simplify_varWithBothBounds_usesLowerBound() {
+        // A positive-only var with both bounds simplifies to its lower bound
         val v = TVar()
         v.lowerBounds.add(TNum)
         v.upperBounds.add(TString)
-        val rawStr = raw(v)
-        assert("Num" in rawStr) { "Expected Num in bounds: $rawStr" }
-        assert("String" in rawStr) { "Expected String in bounds: $rawStr" }
+        assertEquals("Num", simplified(v))
     }
 
     // ==========================================
