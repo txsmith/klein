@@ -88,7 +88,7 @@ class Typer {
             is Apply -> inferApply(expr, env)
             is RecordLiteral -> inferRecordLiteral(expr, env)
             is FieldAccess -> inferFieldAccess(expr, env)
-            is IfThenElse -> TODO("Phase 8: Control flow")
+            is IfThenElse -> inferIfThenElse(expr, env)
             is ImplicitParam -> TODO("Phase 6: Functions")
             is Block -> TODO("Phase 8: Blocks")
         }
@@ -216,6 +216,26 @@ class Typer {
         val fieldType = TVar()
         subtyping.constrain(targetType, TRecord(mapOf(expr.field to fieldType)), expr.span)
         return fieldType
+    }
+
+    private fun inferIfThenElse(
+        expr: IfThenElse,
+        env: TypeEnv,
+    ): SimpleType {
+        val condType = infer(expr.condition, env)
+        subtyping.constrain(condType, TBool, expr.condition.span)
+
+        val thenType = infer(expr.thenBranch, env)
+
+        return if (expr.elseBranch != null) {
+            val elseType = infer(expr.elseBranch, env)
+            val resultType = TVar()
+            subtyping.constrain(thenType, resultType, expr.thenBranch.span)
+            subtyping.constrain(elseType, resultType, expr.elseBranch.span)
+            resultType
+        } else {
+            TUnit
+        }
     }
 
     companion object {
