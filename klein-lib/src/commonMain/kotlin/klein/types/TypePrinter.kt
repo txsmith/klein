@@ -35,12 +35,12 @@ object TypePrinter {
             val lower =
                 tv.lowerBounds
                     .filter { it != TBottom }
-                    .map { print(it, printBounds = false) }
+                    .map { printAsBound(it) }
                     .sorted()
             val upper =
                 tv.upperBounds
                     .filter { it != TTop }
-                    .map { print(it, printBounds = false) }
+                    .map { printAsBound(it) }
                     .sorted()
             return buildString {
                 append(name)
@@ -61,16 +61,16 @@ object TypePrinter {
             return "$letter$suffix"
         }
 
+        private fun printAsBound(type: SimpleType): String {
+            val printed = print(type, printBounds = false)
+            return if (type is TFun) "($printed)" else printed
+        }
+
         private fun printFun(
             fn: TFun,
             printBounds: Boolean,
         ): String {
-            val params =
-                when {
-                    fn.params.isEmpty() -> "()"
-                    fn.params.size == 1 && fn.params[0] !is TFun -> print(fn.params[0], printBounds)
-                    else -> "(${fn.params.joinToString(", ") { print(it, printBounds) }})"
-                }
+            val params = "(${fn.params.joinToString(", ") { print(it, printBounds) }})"
             return "$params -> ${print(fn.result, printBounds)}"
         }
 

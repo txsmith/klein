@@ -13,7 +13,7 @@ class FunctionInferTest {
 
     @Test
     fun lambda_oneParam() {
-        assertType("a -> a", infer("|x -> x|"))
+        assertType("(a) -> a", infer("|x -> x|"))
     }
 
     @Test
@@ -81,6 +81,20 @@ class FunctionInferTest {
 
     @Test
     fun lambda_nestedLambda() {
-        assertType("a -> b -> a", infer("|x -> |y -> x||"))
+        assertType("(a) -> (b) -> a", infer("|x -> |y -> x||"))
+    }
+
+    @Test
+    fun lambda_duplicateParam() {
+        val result = inferWithErrors("|x, x -> x|")
+        assertEquals(1, result.errors.size)
+        assertTrue(result.errors[0] is TypeError.DuplicateParameter)
+    }
+
+    @Test
+    fun lambda_tripleDuplicateParam() {
+        val result = inferWithErrors("|x, x, x -> x|")
+        assertEquals(2, result.errors.size)
+        assertTrue(result.errors.all { it is TypeError.DuplicateParameter })
     }
 }

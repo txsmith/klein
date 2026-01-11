@@ -6,6 +6,8 @@ class TypeEnv(
 ) {
     fun lookup(name: String): SimpleType? = bindings[name] ?: parent?.lookup(name)
 
+    fun contains(name: String): Boolean = name in bindings
+
     fun bind(
         name: String,
         type: SimpleType,

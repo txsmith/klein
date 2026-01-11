@@ -29,6 +29,27 @@ sealed class TypeError {
         override val message = "Record ${TypePrinter.print(recordType)} has no field '$field'"
     }
 
+    data class DuplicateField(
+        val field: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Duplicate field '$field' in record"
+    }
+
+    data class DuplicateParameter(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Duplicate parameter '$name'"
+    }
+
+    data class DuplicateBinding(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "'$name' is already defined"
+    }
+
     data class ArityMismatch(
         val expected: Int,
         val actual: Int,

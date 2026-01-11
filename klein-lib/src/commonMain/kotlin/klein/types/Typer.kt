@@ -47,12 +47,18 @@ class Typer {
         for (stmt in program.stmts) {
             when (stmt) {
                 is Val -> {
+                    if (env.contains(stmt.name)) {
+                        errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
+                    }
                     val type = infer(stmt.value, env)
                     env.bind(stmt.name, type)
                     typedStmts.add(TypedStmt.TypedVal(stmt.name, type))
                 }
                 is FunDef -> {
-                    val type = inferFunction(stmt.params, stmt.body, env)
+                    if (env.contains(stmt.name)) {
+                        errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
+                    }
+                    val type = inferFunction(stmt.params, stmt.body, stmt.span, env)
                     env.bind(stmt.name, type)
                     typedStmts.add(TypedStmt.TypedFunDef(stmt.name, type))
                 }
@@ -80,11 +86,11 @@ class Typer {
             is UnaryOp -> inferUnaryOp(expr, env)
             is Lambda -> inferLambda(expr, env)
             is Apply -> inferApply(expr, env)
-            is Block -> TODO("Phase 8: Blocks")
+            is RecordLiteral -> inferRecordLiteral(expr, env)
+            is FieldAccess -> inferFieldAccess(expr, env)
             is IfThenElse -> TODO("Phase 8: Control flow")
-            is FieldAccess -> TODO("Phase 7: Records")
             is ImplicitParam -> TODO("Phase 6: Functions")
-            is RecordLiteral -> TODO("Phase 7: Records")
+            is Block -> TODO("Phase 8: Blocks")
         }
 
     private fun inferIdent(
@@ -99,13 +105,22 @@ class Typer {
     private fun inferLambda(
         expr: Lambda,
         env: TypeEnv,
-    ): SimpleType = inferFunction(expr.params, expr.body, env)
+    ): SimpleType = inferFunction(expr.params, expr.body, expr.span, env)
 
     private fun inferFunction(
         params: List<String>,
         body: Expr,
+        span: SourceSpan,
         env: TypeEnv,
     ): SimpleType {
+        val seen = mutableSetOf<String>()
+        for (name in params) {
+            if (name in seen) {
+                errors.add(TypeError.DuplicateParameter(name, span))
+            }
+            seen.add(name)
+        }
+
         val paramTypes = params.map { TVar() }
         val childEnv = env.child()
         params.zip(paramTypes).forEach { (name, type) ->
@@ -177,6 +192,30 @@ class Typer {
                 TBool
             }
         }
+    }
+
+    private fun inferRecordLiteral(
+        expr: RecordLiteral,
+        env: TypeEnv,
+    ): SimpleType {
+        val fieldTypes = mutableMapOf<String, SimpleType>()
+        for ((name, value) in expr.fields) {
+            if (name in fieldTypes) {
+                errors.add(TypeError.DuplicateField(name, expr.span))
+            }
+            fieldTypes[name] = infer(value, env)
+        }
+        return TRecord(fieldTypes)
+    }
+
+    private fun inferFieldAccess(
+        expr: FieldAccess,
+        env: TypeEnv,
+    ): SimpleType {
+        val targetType = infer(expr.target, env)
+        val fieldType = TVar()
+        subtyping.constrain(targetType, TRecord(mapOf(expr.field to fieldType)), expr.span)
+        return fieldType
     }
 
     companion object {

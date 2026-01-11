@@ -32,7 +32,7 @@ class IdentInferTest {
     fun ident_functionBinding() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        assertType("Num -> String", infer("f", env))
+        assertType("(Num) -> String", infer("f", env))
     }
 
     @Test
