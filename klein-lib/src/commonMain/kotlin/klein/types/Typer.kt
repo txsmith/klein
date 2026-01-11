@@ -51,7 +51,7 @@ class Typer {
                         errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                     }
                     val type = infer(stmt.value, env)
-                    env.bind(stmt.name, type)
+                    env.bind(stmt.name, type, isPolymorphic = true)
                     typedStmts.add(TypedStmt.TypedVal(stmt.name, type))
                 }
                 is FunDef -> {
@@ -59,7 +59,7 @@ class Typer {
                         errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                     }
                     val type = inferFunction(stmt.params, stmt.body, stmt.span, env)
-                    env.bind(stmt.name, type)
+                    env.bind(stmt.name, type, isPolymorphic = true)
                     typedStmts.add(TypedStmt.TypedFunDef(stmt.name, type))
                 }
                 is Expr -> {
