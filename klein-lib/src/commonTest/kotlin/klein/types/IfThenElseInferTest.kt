@@ -96,8 +96,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithCommonField() {
-        // Records with common field 'b' - result should have that field
-        // Note: Current simplifier picks first branch; proper intersection would give { b: Bool }
-        assertType("{ a: Num, b: Bool }", infer("if true then { a = 1, b = true } else { b = false, c = 'hi' }"))
+        // Records with common field 'b' - result is intersection of fields (only common ones)
+        assertType("{ b: Bool }", infer("if true then { a = 1, b = true } else { b = false, c = 'hi' }"))
     }
 }

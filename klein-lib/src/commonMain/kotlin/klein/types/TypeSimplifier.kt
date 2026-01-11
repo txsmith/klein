@@ -35,32 +35,43 @@ object TypeSimplifier {
         // Cache for already simplified types
         private val cache = mutableMapOf<Pair<TVar, Boolean>, SimpleType>()
 
+        // Depth limit to prevent stack overflow on complex types
+        private var depth = 0
+        private val maxDepth = 100
+
         /**
          * First pass: collect all variable occurrences to determine polarity.
          */
         fun collectOccurrences(type: SimpleType, positive: Boolean, visited: MutableSet<Pair<TVar, Boolean>> = mutableSetOf()) {
-            when (type) {
-                is TVar -> {
-                    val key = type to positive
-                    if (key in visited) return
-                    visited.add(key)
+            // Depth protection
+            if (depth >= maxDepth) return
+            depth++
+            try {
+                when (type) {
+                    is TVar -> {
+                        val key = type to positive
+                        if (key in visited) return
+                        visited.add(key)
 
-                    if (positive) seenPositive.add(type) else seenNegative.add(type)
+                        if (positive) seenPositive.add(type) else seenNegative.add(type)
 
-                    // Traverse bounds
-                    val bounds = if (positive) type.lowerBounds else type.upperBounds
-                    for (bound in bounds) {
-                        collectOccurrences(bound, positive, visited)
+                        // Copy bounds to list before iterating to avoid iterator nesting issues
+                        val bounds = (if (positive) type.lowerBounds else type.upperBounds).toList()
+                        for (bound in bounds) {
+                            collectOccurrences(bound, positive, visited)
+                        }
                     }
+                    is TFun -> {
+                        type.params.forEach { collectOccurrences(it, !positive, visited) }
+                        collectOccurrences(type.result, positive, visited)
+                    }
+                    is TRecord -> {
+                        type.fields.values.forEach { collectOccurrences(it, positive, visited) }
+                    }
+                    else -> {} // primitives
                 }
-                is TFun -> {
-                    type.params.forEach { collectOccurrences(it, !positive, visited) }
-                    collectOccurrences(type.result, positive, visited)
-                }
-                is TRecord -> {
-                    type.fields.values.forEach { collectOccurrences(it, positive, visited) }
-                }
-                else -> {} // primitives
+            } finally {
+                depth--
             }
         }
 
@@ -94,20 +105,31 @@ object TypeSimplifier {
             return doSimplify(type, positive)
         }
 
-        private fun doSimplify(type: SimpleType, positive: Boolean): SimpleType = when (type) {
-            TNum, TString, TBool, TUnit, TTop, TBottom -> type
-
-            is TVar -> simplifyVar(type, positive)
-
-            is TFun -> {
-                val simplifiedParams = type.params.map { doSimplify(it, !positive) }
-                val simplifiedResult = doSimplify(type.result, positive)
-                TFun(simplifiedParams, simplifiedResult)
+        private fun doSimplify(type: SimpleType, positive: Boolean): SimpleType {
+            // Depth limit to prevent stack overflow
+            if (depth >= maxDepth) {
+                return type // Give up simplifying at extreme depths
             }
+            depth++
+            try {
+                return when (type) {
+                    TNum, TString, TBool, TUnit, TTop, TBottom -> type
 
-            is TRecord -> {
-                val simplifiedFields = type.fields.mapValues { (_, v) -> doSimplify(v, positive) }
-                TRecord(simplifiedFields)
+                    is TVar -> simplifyVar(type, positive)
+
+                    is TFun -> {
+                        val simplifiedParams = type.params.map { doSimplify(it, !positive) }
+                        val simplifiedResult = doSimplify(type.result, positive)
+                        TFun(simplifiedParams, simplifiedResult)
+                    }
+
+                    is TRecord -> {
+                        val simplifiedFields = type.fields.mapValues { (_, v) -> doSimplify(v, positive) }
+                        TRecord(simplifiedFields)
+                    }
+                }
+            } finally {
+                depth--
             }
         }
 
@@ -115,24 +137,24 @@ object TypeSimplifier {
             val key = v to positive
             cache[key]?.let { return it }
 
-            // Detect cycles
+            // Detect cycles - return the variable immediately for recursive types
             if (key in expanding) {
-                return v // Keep the variable for recursive types
+                return v
             }
             expanding.add(key)
 
             try {
-                // Get relevant bounds based on polarity
-                val bounds = if (positive) v.lowerBounds else v.upperBounds
+                // Copy bounds to a list upfront to avoid iterator nesting issues
+                val bounds = if (positive) v.lowerBounds.toList() else v.upperBounds.toList()
 
                 // If polar variable (only appears in one polarity), try to eliminate it
                 if (isPolar(v)) {
                     val result = if (positive && isPositiveOnly(v)) {
                         // Positive-only variable: expand to its lower bounds (union)
-                        expandBounds(bounds.toList(), positive)
+                        expandBounds(bounds, positive)
                     } else if (!positive && isNegativeOnly(v)) {
                         // Negative-only variable: expand to its upper bounds (intersection)
-                        expandBounds(bounds.toList(), positive)
+                        expandBounds(bounds, positive)
                     } else {
                         v // Keep if polarity doesn't match current context
                     }
@@ -184,11 +206,20 @@ object TypeSimplifier {
         /**
          * Extract a concrete type from a bound by following variable chains.
          */
-        private fun extractConcreteBound(bound: SimpleType, positive: Boolean): SimpleType? = when (bound) {
+        private fun extractConcreteBound(
+            bound: SimpleType,
+            positive: Boolean,
+            visited: MutableSet<TVar> = mutableSetOf()
+        ): SimpleType? = when (bound) {
             is TNum, is TString, is TBool, is TUnit -> bound
             is TVar -> {
-                val innerBounds = if (positive) bound.lowerBounds else bound.upperBounds
-                innerBounds.firstNotNullOfOrNull { extractConcreteBound(it, positive) }
+                if (bound in visited) {
+                    null // Cycle detected, no concrete bound
+                } else {
+                    visited.add(bound)
+                    val innerBounds = if (positive) bound.lowerBounds else bound.upperBounds
+                    innerBounds.firstNotNullOfOrNull { extractConcreteBound(it, positive, visited) }
+                }
             }
             is TFun, is TRecord -> bound // These are "concrete" compound types
             TTop, TBottom -> null
@@ -203,7 +234,65 @@ object TypeSimplifier {
             if (prims.isNotEmpty()) {
                 return prims.first()
             }
+
+            // Handle multiple records: compute proper intersection/union
+            val records = types.filterIsInstance<TRecord>()
+            if (records.size > 1) {
+                return combineRecords(records, positive)
+            }
+
+            // Handle multiple functions: for now just take first (could improve later)
             return types.first()
+        }
+
+        /**
+         * Combine multiple record types based on polarity.
+         *
+         * For positive polarity (union/output): only keep fields common to ALL records.
+         * This is sound because the value could be any of the record types at runtime.
+         *
+         * For negative polarity (intersection/input): keep ALL fields from all records.
+         * This is sound because we need to accept any of the record types.
+         */
+        private fun combineRecords(records: List<TRecord>, positive: Boolean): TRecord {
+            if (records.isEmpty()) return TRecord(emptyMap())
+            if (records.size == 1) return records.first()
+
+            return if (positive) {
+                // Union (output): intersect field sets, keeping only common fields
+                val commonFields = records
+                    .map { it.fields.keys }
+                    .reduce { acc, keys -> acc.intersect(keys) }
+
+                val combinedFields = commonFields.associateWith { fieldName ->
+                    // For each common field, combine the field types (they form a union)
+                    val fieldTypes = records.map { it.fields[fieldName]!! }
+                    if (fieldTypes.toSet().size == 1) {
+                        fieldTypes.first()
+                    } else {
+                        // Multiple different field types - recursively combine
+                        pickBestConcrete(fieldTypes, positive)
+                    }
+                }
+                TRecord(combinedFields)
+            } else {
+                // Intersection (input): union field sets, keeping all fields
+                val allFields = mutableMapOf<String, SimpleType>()
+                for (record in records) {
+                    for ((name, type) in record.fields) {
+                        if (name in allFields) {
+                            // Field appears in multiple records - combine types
+                            val existing = allFields[name]!!
+                            if (existing != type) {
+                                allFields[name] = pickBestConcrete(listOf(existing, type), positive)
+                            }
+                        } else {
+                            allFields[name] = type
+                        }
+                    }
+                }
+                TRecord(allFields)
+            }
         }
     }
 }
