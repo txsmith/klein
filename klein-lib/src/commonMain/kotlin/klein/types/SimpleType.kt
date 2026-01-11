@@ -1,12 +1,8 @@
 package klein.types
 
 sealed class SimpleType {
-    object TInt : SimpleType() {
-        override fun toString(): String = "TInt"
-    }
-
-    object TDouble : SimpleType() {
-        override fun toString(): String = "TDouble"
+    object TNum : SimpleType() {
+        override fun toString(): String = "TNum"
     }
 
     object TString : SimpleType() {

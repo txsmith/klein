@@ -21,20 +21,6 @@ sealed class TypeError {
         override val message = "Type mismatch: expected ${TypePrinter.print(expected)}, got ${TypePrinter.print(actual)}"
     }
 
-    data class NotAFunction(
-        val actual: SimpleType,
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message = "Not a function: ${TypePrinter.print(actual)}"
-    }
-
-    data class NotARecord(
-        val actual: SimpleType,
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message = "Not a record: ${TypePrinter.print(actual)}"
-    }
-
     data class MissingField(
         val field: String,
         val recordType: SimpleType,

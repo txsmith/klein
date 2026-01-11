@@ -84,13 +84,13 @@ object Typer {
         env: TypeEnv,
     ): InferResult =
         when (expr) {
-            is IntLiteral -> InferResult.ok(TInt)
-            is DoubleLiteral -> InferResult.ok(TDouble)
+            is IntLiteral -> InferResult.ok(TNum)
+            is DoubleLiteral -> InferResult.ok(TNum)
             is StringLiteral -> InferResult.ok(TString)
             is BoolLiteral -> InferResult.ok(TBool)
             is Ident -> inferIdent(expr, env)
-            is BinaryOp -> TODO("Phase 5: Operators")
-            is UnaryOp -> TODO("Phase 5: Operators")
+            is BinaryOp -> inferBinaryOp(expr, env)
+            is UnaryOp -> inferUnaryOp(expr, env)
             is Lambda -> inferLambda(expr, env)
             is Apply -> inferApply(expr, env)
             is Block -> TODO("Phase 8: Blocks")
@@ -149,6 +149,63 @@ object Typer {
                 argResults.flatMap { it.errors } +
                 subtyping.getErrors()
 
+        return InferResult(resultType, allErrors)
+    }
+
+    private fun inferBinaryOp(
+        expr: BinaryOp,
+        env: TypeEnv,
+    ): InferResult {
+        val leftResult = infer(expr.left, env)
+        val rightResult = infer(expr.right, env)
+        val subtyping = Subtyping()
+
+        val resultType =
+            when (expr.op) {
+                Operator.Add, Operator.Sub, Operator.Mul, Operator.Div, Operator.Mod -> {
+                    subtyping.constrain(leftResult.type, TNum, expr.left.span)
+                    subtyping.constrain(rightResult.type, TNum, expr.right.span)
+                    TNum
+                }
+                Operator.Lt, Operator.LtEq, Operator.Gt, Operator.GtEq -> {
+                    subtyping.constrain(leftResult.type, TNum, expr.left.span)
+                    subtyping.constrain(rightResult.type, TNum, expr.right.span)
+                    TBool
+                }
+                Operator.Eq, Operator.NotEq -> {
+                    TBool
+                }
+                Operator.And, Operator.Or -> {
+                    subtyping.constrain(leftResult.type, TBool, expr.left.span)
+                    subtyping.constrain(rightResult.type, TBool, expr.right.span)
+                    TBool
+                }
+            }
+
+        val allErrors = leftResult.errors + rightResult.errors + subtyping.getErrors()
+        return InferResult(resultType, allErrors)
+    }
+
+    private fun inferUnaryOp(
+        expr: UnaryOp,
+        env: TypeEnv,
+    ): InferResult {
+        val operandResult = infer(expr.operand, env)
+        val subtyping = Subtyping()
+
+        val resultType =
+            when (expr.op) {
+                UnaryOperator.Neg -> {
+                    subtyping.constrain(operandResult.type, TNum, expr.operand.span)
+                    TNum
+                }
+                UnaryOperator.Not -> {
+                    subtyping.constrain(operandResult.type, TBool, expr.operand.span)
+                    TBool
+                }
+            }
+
+        val allErrors = operandResult.errors + subtyping.getErrors()
         return InferResult(resultType, allErrors)
     }
 }

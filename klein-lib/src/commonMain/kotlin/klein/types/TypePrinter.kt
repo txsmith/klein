@@ -14,8 +14,7 @@ object TypePrinter {
             printBounds: Boolean = true,
         ): String =
             when (type) {
-                TInt -> "Int"
-                TDouble -> "Double"
+                TNum -> "Num"
                 TString -> "String"
                 TBool -> "Bool"
                 TUnit -> "Unit"

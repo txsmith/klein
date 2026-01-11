@@ -10,8 +10,8 @@ class IdentInferTest {
     @Test
     fun ident_intBinding() {
         val env = TypeEnv.empty()
-        env.bind("x", TInt)
-        assertType("Int", infer("x", env))
+        env.bind("x", TNum)
+        assertType("Num", infer("x", env))
     }
 
     @Test
@@ -31,15 +31,15 @@ class IdentInferTest {
     @Test
     fun ident_functionBinding() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TInt), TString))
-        assertType("Int -> String", infer("f", env))
+        env.bind("f", TFun(listOf(TNum), TString))
+        assertType("Num -> String", infer("f", env))
     }
 
     @Test
     fun ident_recordBinding() {
         val env = TypeEnv.empty()
-        env.bind("r", TRecord(mapOf("a" to TInt)))
-        assertType("{ a: Int }", infer("r", env))
+        env.bind("r", TRecord(mapOf("a" to TNum)))
+        assertType("{ a: Num }", infer("r", env))
     }
 
     @Test

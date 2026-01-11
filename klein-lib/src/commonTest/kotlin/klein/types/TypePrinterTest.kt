@@ -7,12 +7,12 @@ import kotlin.test.assertEquals
 class TypePrinterTest {
     @Test
     fun printInt() {
-        assertEquals("Int", TypePrinter.print(TInt))
+        assertEquals("Num", TypePrinter.print(TNum))
     }
 
     @Test
-    fun printDouble() {
-        assertEquals("Double", TypePrinter.print(TDouble))
+    fun printNum() {
+        assertEquals("Num", TypePrinter.print(TNum))
     }
 
     @Test
@@ -89,14 +89,14 @@ class TypePrinterTest {
 
     @Test
     fun printFunctionIntToInt() {
-        val fn = TFun(listOf(TInt), TInt)
-        assertEquals("Int -> Int", TypePrinter.print(fn))
+        val fn = TFun(listOf(TNum), TNum)
+        assertEquals("Num -> Num", TypePrinter.print(fn))
     }
 
     @Test
     fun printFunctionIntToString() {
-        val fn = TFun(listOf(TInt), TString)
-        assertEquals("Int -> String", TypePrinter.print(fn))
+        val fn = TFun(listOf(TNum), TString)
+        assertEquals("Num -> String", TypePrinter.print(fn))
     }
 
     @Test
@@ -115,34 +115,34 @@ class TypePrinterTest {
     @Test
     fun printFunctionVarToInt() {
         val v = TVar()
-        val fn = TFun(listOf(v), TInt)
-        assertEquals("a -> Int", TypePrinter.print(fn))
+        val fn = TFun(listOf(v), TNum)
+        assertEquals("a -> Num", TypePrinter.print(fn))
     }
 
     @Test
     fun printFunctionTwoParams() {
-        val fn = TFun(listOf(TInt, TInt), TInt)
-        assertEquals("(Int, Int) -> Int", TypePrinter.print(fn))
+        val fn = TFun(listOf(TNum, TNum), TNum)
+        assertEquals("(Num, Num) -> Num", TypePrinter.print(fn))
     }
 
     @Test
     fun printFunctionThreeParams() {
-        val fn = TFun(listOf(TInt, TString, TBool), TDouble)
-        assertEquals("(Int, String, Bool) -> Double", TypePrinter.print(fn))
+        val fn = TFun(listOf(TNum, TString, TBool), TNum)
+        assertEquals("(Num, String, Bool) -> Num", TypePrinter.print(fn))
     }
 
     @Test
     fun printFunctionMixedTypeVarsAndPrimitives() {
         val a = TVar()
         val b = TVar()
-        val fn = TFun(listOf(a, TInt), b)
-        assertEquals("(a, Int) -> b", TypePrinter.print(fn))
+        val fn = TFun(listOf(a, TNum), b)
+        assertEquals("(a, Num) -> b", TypePrinter.print(fn))
     }
 
     @Test
     fun printThunkInt() {
-        val fn = TFun(emptyList(), TInt)
-        assertEquals("() -> Int", TypePrinter.print(fn))
+        val fn = TFun(emptyList(), TNum)
+        assertEquals("() -> Num", TypePrinter.print(fn))
     }
 
     @Test
@@ -160,15 +160,15 @@ class TypePrinterTest {
 
     @Test
     fun printFunctionReturningFunction() {
-        val inner = TFun(listOf(TInt), TInt)
-        val outer = TFun(listOf(TInt), inner)
-        assertEquals("Int -> Int -> Int", TypePrinter.print(outer))
+        val inner = TFun(listOf(TNum), TNum)
+        val outer = TFun(listOf(TNum), inner)
+        assertEquals("Num -> Num -> Num", TypePrinter.print(outer))
     }
 
     @Test
     fun printFunctionTakingFunction() {
-        val function = TFun(listOf(TFun(listOf(TInt), TInt)), TInt)
-        assertEquals("(Int -> Int) -> Int", TypePrinter.print(function))
+        val function = TFun(listOf(TFun(listOf(TNum), TNum)), TNum)
+        assertEquals("(Num -> Num) -> Num", TypePrinter.print(function))
     }
 
     @Test
@@ -198,21 +198,21 @@ class TypePrinterTest {
 
     @Test
     fun printRecordOneField() {
-        val rec = TRecord(mapOf("a" to TInt))
-        assertEquals("{ a: Int }", TypePrinter.print(rec))
+        val rec = TRecord(mapOf("a" to TNum))
+        assertEquals("{ a: Num }", TypePrinter.print(rec))
     }
 
     @Test
     fun printRecordTwoFields() {
-        val rec = TRecord(mapOf("name" to TString, "age" to TInt))
+        val rec = TRecord(mapOf("name" to TString, "age" to TNum))
         // Fields are sorted alphabetically
-        assertEquals("{ age: Int, name: String }", TypePrinter.print(rec))
+        assertEquals("{ age: Num, name: String }", TypePrinter.print(rec))
     }
 
     @Test
     fun printRecordThreeFields() {
-        val rec = TRecord(mapOf("x" to TInt, "y" to TInt, "z" to TInt))
-        assertEquals("{ x: Int, y: Int, z: Int }", TypePrinter.print(rec))
+        val rec = TRecord(mapOf("x" to TNum, "y" to TNum, "z" to TNum))
+        assertEquals("{ x: Num, y: Num, z: Num }", TypePrinter.print(rec))
     }
 
     @Test
@@ -224,9 +224,9 @@ class TypePrinterTest {
 
     @Test
     fun printRecordWithFunctionField() {
-        val fn = TFun(listOf(TInt), TInt)
+        val fn = TFun(listOf(TNum), TNum)
         val rec = TRecord(mapOf("f" to fn))
-        assertEquals("{ f: Int -> Int }", TypePrinter.print(rec))
+        assertEquals("{ f: Num -> Num }", TypePrinter.print(rec))
     }
 
     @Test
@@ -234,29 +234,29 @@ class TypePrinterTest {
         val rec =
             TRecord(
                 mapOf(
-                    "i" to TInt,
-                    "d" to TDouble,
+                    "i" to TNum,
+                    "d" to TNum,
                     "s" to TString,
                     "b" to TBool,
                 ),
             )
         // Fields are sorted alphabetically: b, d, i, s
-        assertEquals("{ b: Bool, d: Double, i: Int, s: String }", TypePrinter.print(rec))
+        assertEquals("{ b: Bool, d: Num, i: Num, s: String }", TypePrinter.print(rec))
     }
 
     @Test
     fun printNestedRecord() {
-        val inner = TRecord(mapOf("x" to TInt))
+        val inner = TRecord(mapOf("x" to TNum))
         val outer = TRecord(mapOf("inner" to inner))
-        assertEquals("{ inner: { x: Int } }", TypePrinter.print(outer))
+        assertEquals("{ inner: { x: Num } }", TypePrinter.print(outer))
     }
 
     @Test
     fun printDeeplyNestedRecord() {
-        val innermost = TRecord(mapOf("c" to TInt))
+        val innermost = TRecord(mapOf("c" to TNum))
         val middle = TRecord(mapOf("b" to innermost))
         val outer = TRecord(mapOf("a" to middle))
-        assertEquals("{ a: { b: { c: Int } } }", TypePrinter.print(outer))
+        assertEquals("{ a: { b: { c: Num } } }", TypePrinter.print(outer))
     }
 
     @Test
@@ -276,10 +276,10 @@ class TypePrinterTest {
 
     @Test
     fun printRecordOfFunctions() {
-        val inc = TFun(listOf(TInt), TInt)
-        val dec = TFun(listOf(TInt), TInt)
+        val inc = TFun(listOf(TNum), TNum)
+        val dec = TFun(listOf(TNum), TNum)
         val rec = TRecord(mapOf("inc" to inc, "dec" to dec))
-        assertEquals("{ dec: Int -> Int, inc: Int -> Int }", TypePrinter.print(rec))
+        assertEquals("{ dec: Num -> Num, inc: Num -> Num }", TypePrinter.print(rec))
     }
 
     @Test
@@ -297,8 +297,8 @@ class TypePrinterTest {
     @Test
     fun printVarWithUpperBound() {
         val v = TVar()
-        v.upperBounds.add(TInt)
-        assertEquals("a & Int", TypePrinter.print(v))
+        v.upperBounds.add(TNum)
+        assertEquals("a & Num", TypePrinter.print(v))
     }
 
     @Test
@@ -320,17 +320,17 @@ class TypePrinterTest {
     @Test
     fun printVarWithMultipleUpperBounds() {
         val v = TVar()
-        v.upperBounds.add(TInt)
+        v.upperBounds.add(TNum)
         v.upperBounds.add(TString)
         // Sorted alphabetically
-        assertEquals("a & Int & String", TypePrinter.print(v))
+        assertEquals("a & Num & String", TypePrinter.print(v))
     }
 
     @Test
     fun printFunctionWithBoundedVar() {
         val v = TVar()
-        v.upperBounds.add(TInt)
-        val fn = TFun(listOf(v), TInt)
-        assertEquals("a & Int -> Int", TypePrinter.print(fn))
+        v.upperBounds.add(TNum)
+        val fn = TFun(listOf(v), TNum)
+        assertEquals("a & Num -> Num", TypePrinter.print(fn))
     }
 }

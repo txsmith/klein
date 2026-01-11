@@ -73,8 +73,7 @@ class Subtyping {
                 }
             }
 
-            lhs is SimpleType.TInt && rhs is SimpleType.TInt -> return
-            lhs is SimpleType.TDouble && rhs is SimpleType.TDouble -> return
+            lhs is SimpleType.TNum && rhs is SimpleType.TNum -> return
             lhs is SimpleType.TString && rhs is SimpleType.TString -> return
             lhs is SimpleType.TBool && rhs is SimpleType.TBool -> return
             lhs is SimpleType.TUnit && rhs is SimpleType.TUnit -> return

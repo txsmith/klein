@@ -5,43 +5,47 @@ import kotlin.test.Test
 class LiteralInferTest {
     @Test
     fun intLiteral_zero() {
-        assertType("Int", infer("0"))
+        assertType("Num", infer("0"))
     }
 
     @Test
     fun intLiteral_positive() {
-        assertType("Int", infer("42"))
+        assertType("Num", infer("42"))
     }
 
-    // Note: -17 parses as UnaryOp(Neg, IntLiteral(17))
-    // This will be handled in Phase 5 (Operators)
+    @Test
+    fun intLiteral_negative() {
+        assertType("Num", infer("-17"))
+    }
 
     @Test
     fun intLiteral_large() {
-        assertType("Int", infer("9999999999"))
+        assertType("Num", infer("9999999999"))
     }
 
     @Test
     fun doubleLiteral_zero() {
-        assertType("Double", infer("0.0"))
+        assertType("Num", infer("0.0"))
     }
 
     @Test
     fun doubleLiteral_positive() {
-        assertType("Double", infer("3.14"))
+        assertType("Num", infer("3.14"))
     }
 
-    // Note: -2.718 parses as UnaryOp(Neg, DoubleLiteral(2.718))
-    // This will be handled in Phase 5 (Operators)
+    @Test
+    fun doubleLiteral_negative() {
+        assertType("Num", infer("-2.718"))
+    }
 
     @Test
     fun doubleLiteral_noFraction() {
-        assertType("Double", infer("1.0"))
+        assertType("Num", infer("1.0"))
     }
 
     @Test
     fun doubleLiteral_smallFraction() {
-        assertType("Double", infer("0.001"))
+        assertType("Num", infer("0.001"))
     }
 
     @Test

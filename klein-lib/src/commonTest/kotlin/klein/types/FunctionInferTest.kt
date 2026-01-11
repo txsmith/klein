@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class FunctionInferTest {
     @Test
     fun lambda_noParams() {
-        assertType("() -> Int", infer("|1|"))
+        assertType("() -> Num", infer("|1|"))
     }
 
     @Test
@@ -24,21 +24,21 @@ class FunctionInferTest {
     @Test
     fun lambda_bodyUsesParam() {
         val env = TypeEnv.empty()
-        env.bind("add", TFun(listOf(TInt, TInt), TInt))
-        assertType("(a & Int, b & Int) -> c | Int", infer("|x, y -> add(x, y)|", env))
+        env.bind("add", TFun(listOf(TNum, TNum), TNum))
+        assertType("(a & Num, b & Num) -> c | Num", infer("|x, y -> add(x, y)|", env))
     }
 
     @Test
     fun apply_knownFunction() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TInt), TString))
+        env.bind("f", TFun(listOf(TNum), TString))
         assertType("a | String", infer("f(1)", env))
     }
 
     @Test
     fun apply_arityMismatch() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TInt), TString))
+        env.bind("f", TFun(listOf(TNum), TString))
         val result = inferWithErrors("f(1, 2)", env)
         assertEquals(1, result.errors.size)
         assertTrue(result.errors[0] is TypeError.ArityMismatch)
@@ -47,7 +47,7 @@ class FunctionInferTest {
     @Test
     fun apply_typeMismatch() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TInt), TString))
+        env.bind("f", TFun(listOf(TNum), TString))
         val result = inferWithErrors("f('hello')", env)
         assertEquals(1, result.errors.size)
         assertTrue(result.errors[0] is TypeError.TypeMismatch)
@@ -62,21 +62,21 @@ class FunctionInferTest {
 
     @Test
     fun apply_lambdaDirectly() {
-        assertType("a | Int | b", infer("|x -> x|(1)"))
+        assertType("a | Num | b", infer("|x -> x|(1)"))
     }
 
     @Test
     fun apply_nestedCalls() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TInt), TInt))
-        assertType("a | Int", infer("f(f(1))", env))
+        env.bind("f", TFun(listOf(TNum), TNum))
+        assertType("a | Num", infer("f(f(1))", env))
     }
 
     @Test
     fun apply_noArgs() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(emptyList(), TInt))
-        assertType("a | Int", infer("f()", env))
+        env.bind("f", TFun(emptyList(), TNum))
+        assertType("a | Num", infer("f()", env))
     }
 
     @Test

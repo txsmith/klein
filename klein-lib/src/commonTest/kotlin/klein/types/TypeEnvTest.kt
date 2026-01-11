@@ -9,8 +9,8 @@ class TypeEnvTest {
     @Test
     fun lookup_returnsBoundType() {
         val env = TypeEnv.empty()
-        env.bind("x", TInt)
-        assertEquals(TInt, env.lookup("x"))
+        env.bind("x", TNum)
+        assertEquals(TNum, env.lookup("x"))
     }
 
     @Test
@@ -22,49 +22,49 @@ class TypeEnvTest {
     @Test
     fun lookup_returnsNullForDifferentName() {
         val env = TypeEnv.empty()
-        env.bind("x", TInt)
+        env.bind("x", TNum)
         assertNull(env.lookup("y"))
     }
 
     @Test
     fun child_canSeeParentBindings() {
         val parent = TypeEnv.empty()
-        parent.bind("x", TInt)
+        parent.bind("x", TNum)
 
         val child = parent.child()
-        assertEquals(TInt, child.lookup("x"))
+        assertEquals(TNum, child.lookup("x"))
     }
 
     @Test
     fun child_canShadowParentBindings() {
         val parent = TypeEnv.empty()
-        parent.bind("x", TInt)
+        parent.bind("x", TNum)
 
         val child = parent.child()
         child.bind("x", TString)
 
         assertEquals(TString, child.lookup("x"))
-        assertEquals(TInt, parent.lookup("x"))
+        assertEquals(TNum, parent.lookup("x"))
     }
 
     @Test
     fun child_bindingDoesNotAffectParent() {
         val parent = TypeEnv.empty()
         val child = parent.child()
-        child.bind("x", TInt)
+        child.bind("x", TNum)
 
         assertNull(parent.lookup("x"))
-        assertEquals(TInt, child.lookup("x"))
+        assertEquals(TNum, child.lookup("x"))
     }
 
     @Test
     fun multipleBindings() {
         val env = TypeEnv.empty()
-        env.bind("x", TInt)
+        env.bind("x", TNum)
         env.bind("y", TString)
         env.bind("z", TBool)
 
-        assertEquals(TInt, env.lookup("x"))
+        assertEquals(TNum, env.lookup("x"))
         assertEquals(TString, env.lookup("y"))
         assertEquals(TBool, env.lookup("z"))
     }
@@ -72,7 +72,7 @@ class TypeEnvTest {
     @Test
     fun rebindInSameScope() {
         val env = TypeEnv.empty()
-        env.bind("x", TInt)
+        env.bind("x", TNum)
         env.bind("x", TString)
 
         assertEquals(TString, env.lookup("x"))
@@ -81,7 +81,7 @@ class TypeEnvTest {
     @Test
     fun nestedScopes() {
         val grandparent = TypeEnv.empty()
-        grandparent.bind("x", TInt)
+        grandparent.bind("x", TNum)
 
         val parent = grandparent.child()
         parent.bind("y", TString)
@@ -89,7 +89,7 @@ class TypeEnvTest {
         val child = parent.child()
         child.bind("z", TBool)
 
-        assertEquals(TInt, child.lookup("x"))
+        assertEquals(TNum, child.lookup("x"))
         assertEquals(TString, child.lookup("y"))
         assertEquals(TBool, child.lookup("z"))
 
@@ -101,7 +101,7 @@ class TypeEnvTest {
     @Test
     fun functionTypeBinding() {
         val env = TypeEnv.empty()
-        val fnType = TFun(listOf(TInt), TString)
+        val fnType = TFun(listOf(TNum), TString)
         env.bind("f", fnType)
 
         assertEquals(fnType, env.lookup("f"))
@@ -110,7 +110,7 @@ class TypeEnvTest {
     @Test
     fun recordTypeBinding() {
         val env = TypeEnv.empty()
-        val recType = TRecord(mapOf("a" to TInt, "b" to TString))
+        val recType = TRecord(mapOf("a" to TNum, "b" to TString))
         env.bind("r", recType)
 
         assertEquals(recType, env.lookup("r"))
