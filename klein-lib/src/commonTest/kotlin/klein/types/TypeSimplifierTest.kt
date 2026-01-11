@@ -173,4 +173,115 @@ class TypeSimplifierTest {
         assert("Num" in rawStr) { "Expected Num in bounds: $rawStr" }
         assert("String" in rawStr) { "Expected String in bounds: $rawStr" }
     }
+
+    // ==========================================
+    // Integration tests for top/bottom types
+    // ==========================================
+
+    @Test
+    fun integration_unusedParam_becomesAny() {
+        // Unused parameter simplifies to Any (accepts anything)
+        assertType("(Any) -> Num", infer("|x -> 42|"))
+    }
+
+    @Test
+    fun integration_multipleUnusedParams_allBecomeAny() {
+        // All unused params become Any
+        assertType("(Any, Any, Any) -> Num", infer("|a, b, c -> 1|"))
+    }
+
+    @Test
+    fun integration_unusedParamInNestedLambda_becomesAny() {
+        // x is used, y is not
+        assertType("(a) -> (Any) -> a", infer("|x -> |y -> x||"))
+    }
+
+    @Test
+    fun integration_constantFunction_paramIsAny() {
+        // const function: always returns the same value regardless of input
+        assertType("(Any) -> String", infer("|_ -> 'hello'|"))
+    }
+
+    @Test
+    fun integration_recordWithUnusedFieldFunction() {
+        // A record field that's a function with unused param
+        assertType("{ f: (Any) -> Num }", infer("{ f = |x -> 1| }"))
+    }
+
+    @Test
+    fun integration_higherOrder_unusedFunctionParam() {
+        // Takes a function but doesn't use it
+        assertType("(Any) -> Num", infer("|f -> 42|"))
+    }
+
+    @Test
+    fun integration_thunk_noParams() {
+        // Thunk has no params, returns concrete type
+        assertType("() -> Num", infer("|42|"))
+    }
+
+    @Test
+    fun integration_nestedThunks() {
+        // Nested thunks returning concrete values
+        assertType("() -> () -> String", infer("|| 'hello' ||"))
+    }
+
+    @Test
+    fun integration_functionReturningNothing_viaPolarResult() {
+        // A function field where result is never constrained
+        // The result variable only appears positively with no lower bounds
+        val a = TVar()
+        val b = TVar() // b has no bounds, positive-only = Nothing
+        val fn = TFun(listOf(a), b)
+        assertEquals("(Any) -> Nothing", simplified(fn))
+    }
+
+    @Test
+    fun integration_topAndBottom_directTypes() {
+        // Direct top and bottom types are preserved
+        assertEquals("Any", simplified(TTop))
+        assertEquals("Nothing", simplified(TBottom))
+    }
+
+    @Test
+    fun integration_functionFromAnyToNothing() {
+        // Most general function type: accepts anything, returns nothing
+        val fn = TFun(listOf(TTop), TBottom)
+        assertEquals("(Any) -> Nothing", simplified(fn))
+    }
+
+    @Test
+    fun integration_recordWithNothingField() {
+        // A record with a Nothing field (from unused positive var)
+        val v = TVar() // no bounds, positive = Nothing
+        val rec = TRecord(mapOf("x" to v))
+        assertEquals("{ x: Nothing }", simplified(rec))
+    }
+
+    @Test
+    fun integration_apply_identity_preservesAny() {
+        // When we apply identity to Any, result is Any
+        // Actually this would need the argument to be Any, which we can't easily express
+        // in Klein surface syntax. Test via constructed types instead.
+        val a = TVar()
+        a.lowerBounds.add(TTop) // Top as lower bound
+        assertEquals("Any", simplified(a))
+    }
+
+    @Test
+    fun integration_polarNegativeVar_withNoUpperBound_becomesAny() {
+        // A negative-only variable with no upper bounds becomes Any (top)
+        val a = TVar()
+        val fn = TFun(listOf(a), TNum) // a only appears negatively
+        assertEquals("(Any) -> Num", simplified(fn))
+    }
+
+    @Test
+    fun integration_polarNegativeVar_withUpperBound_usesBound() {
+        // A negative-only variable with upper bound uses that bound
+        val a = TVar()
+        a.upperBounds.add(TNum)
+        val fn = TFun(listOf(a), TString) // a only appears negatively
+        assertEquals("(Num) -> String", simplified(fn))
+    }
 }
