@@ -9,7 +9,10 @@ object TypePrinter {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
 
-        fun print(type: SimpleType): String =
+        fun print(
+            type: SimpleType,
+            printBounds: Boolean = true,
+        ): String =
             when (type) {
                 TInt -> "Int"
                 TDouble -> "Double"
@@ -18,10 +21,40 @@ object TypePrinter {
                 TUnit -> "Unit"
                 TTop -> "Any"
                 TBottom -> "Nothing"
-                is TVar -> varNames.getOrPut(type) { varName(nextVarId++) }
-                is TFun -> printFun(type)
-                is TRecord -> printRecord(type)
+                is TVar -> printVar(type, printBounds)
+                is TFun -> printFun(type, printBounds)
+                is TRecord -> printRecord(type, printBounds)
             }
+
+        private fun printVar(
+            tv: TVar,
+            printBounds: Boolean,
+        ): String {
+            val name = varNames.getOrPut(tv) { varName(nextVarId++) }
+            if (!printBounds) return name
+
+            val lower =
+                tv.lowerBounds
+                    .filter { it != TBottom }
+                    .map { print(it, printBounds = false) }
+                    .sorted()
+            val upper =
+                tv.upperBounds
+                    .filter { it != TTop }
+                    .map { print(it, printBounds = false) }
+                    .sorted()
+            return buildString {
+                append(name)
+                if (lower.isNotEmpty()) {
+                    append(" | ")
+                    append(lower.joinToString(" | "))
+                }
+                if (upper.isNotEmpty()) {
+                    append(" & ")
+                    append(upper.joinToString(" & "))
+                }
+            }
+        }
 
         private fun varName(id: Int): String {
             val letter = 'a' + (id % 26)
@@ -29,24 +62,30 @@ object TypePrinter {
             return "$letter$suffix"
         }
 
-        private fun printFun(fn: TFun): String {
+        private fun printFun(
+            fn: TFun,
+            printBounds: Boolean,
+        ): String {
             val params =
                 when {
                     fn.params.isEmpty() -> "()"
-                    fn.params.size == 1 && fn.params[0] !is TFun -> print(fn.params[0])
-                    else -> "(${fn.params.joinToString(", ") { print(it) }})"
+                    fn.params.size == 1 && fn.params[0] !is TFun -> print(fn.params[0], printBounds)
+                    else -> "(${fn.params.joinToString(", ") { print(it, printBounds) }})"
                 }
-            return "$params -> ${print(fn.result)}"
+            return "$params -> ${print(fn.result, printBounds)}"
         }
 
-        private fun printRecord(rec: TRecord): String {
+        private fun printRecord(
+            rec: TRecord,
+            printBounds: Boolean,
+        ): String {
             if (rec.fields.isEmpty()) {
                 return "{}"
             }
             val fields =
                 rec.fields.entries
                     .sortedBy { it.key }
-                    .joinToString(", ") { (k, v) -> "$k: ${print(v)}" }
+                    .joinToString(", ") { (k, v) -> "$k: ${print(v, printBounds)}" }
             return "{ $fields }"
         }
     }

@@ -63,7 +63,10 @@ object Typer {
                     typedStmts.add(TypedStmt.TypedVal(stmt.name, result.type))
                 }
                 is FunDef -> {
-                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, TVar()))
+                    val result = inferFunction(stmt.params, stmt.body, env)
+                    errors.addAll(result.errors)
+                    env.bind(stmt.name, result.type)
+                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, result.type))
                 }
                 is Expr -> {
                     val result = infer(stmt, env)
@@ -88,8 +91,8 @@ object Typer {
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> TODO("Phase 5: Operators")
             is UnaryOp -> TODO("Phase 5: Operators")
-            is Lambda -> TODO("Phase 6: Functions")
-            is Apply -> TODO("Phase 6: Functions")
+            is Lambda -> inferLambda(expr, env)
+            is Apply -> inferApply(expr, env)
             is Block -> TODO("Phase 8: Blocks")
             is IfThenElse -> TODO("Phase 8: Control flow")
             is FieldAccess -> TODO("Phase 7: Records")
@@ -105,4 +108,47 @@ object Typer {
             .lookup(expr.name)
             ?.let { InferResult.ok(it) }
             ?: InferResult.err(TVar(), TypeError.UnboundVariable(expr.name, expr.span))
+
+    private fun inferLambda(
+        expr: Lambda,
+        env: TypeEnv,
+    ): InferResult = inferFunction(expr.params, expr.body, env)
+
+    private fun inferFunction(
+        params: List<String>,
+        body: Expr,
+        env: TypeEnv,
+    ): InferResult {
+        val paramTypes = params.map { TVar() }
+        val childEnv = env.child()
+        params.zip(paramTypes).forEach { (name, type) ->
+            childEnv.bind(name, type)
+        }
+        val bodyResult = infer(body, childEnv)
+        return bodyResult.withType(TFun(paramTypes, bodyResult.type))
+    }
+
+    private fun inferApply(
+        expr: Apply,
+        env: TypeEnv,
+    ): InferResult {
+        val calleeResult = infer(expr.callee, env)
+        val argResults = expr.args.map { infer(it, env) }
+        val argTypes = argResults.map { it.type }
+        val resultType = TVar()
+
+        val subtyping = Subtyping()
+        subtyping.constrain(
+            calleeResult.type,
+            TFun(argTypes, resultType),
+            expr.span,
+        )
+
+        val allErrors =
+            calleeResult.errors +
+                argResults.flatMap { it.errors } +
+                subtyping.getErrors()
+
+        return InferResult(resultType, allErrors)
+    }
 }

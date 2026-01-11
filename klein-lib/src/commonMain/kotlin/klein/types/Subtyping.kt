@@ -2,14 +2,15 @@ package klein.types
 
 import klein.SourceSpan
 
-class Subtyping(
-    private val onError: (TypeError) -> Unit,
-) {
+class Subtyping {
     private val cache = mutableSetOf<Pair<SimpleType, SimpleType>>()
+    private val errors = mutableListOf<TypeError>()
+
+    fun getErrors(): List<TypeError> = errors.toList()
 
     /**
      * Constrain lhs to be a subtype of rhs.
-     * This is the core operation - it accumulates bounds on type variables.
+     * Accumulates bounds on type variables.
      */
     fun constrain(
         lhs: SimpleType,
@@ -52,7 +53,7 @@ class Subtyping(
 
             lhs is SimpleType.TFun && rhs is SimpleType.TFun -> {
                 if (lhs.params.size != rhs.params.size) {
-                    onError(TypeError.ArityMismatch(rhs.params.size, lhs.params.size, span))
+                    errors.add(TypeError.ArityMismatch(rhs.params.size, lhs.params.size, span))
                     return
                 }
                 for (i in lhs.params.indices) {
@@ -65,7 +66,7 @@ class Subtyping(
                 for ((name, rhsType) in rhs.fields) {
                     val lhsType = lhs.fields[name]
                     if (lhsType == null) {
-                        onError(TypeError.MissingField(name, lhs, span))
+                        errors.add(TypeError.MissingField(name, lhs, span))
                     } else {
                         constrain(lhsType, rhsType, span)
                     }
@@ -79,7 +80,7 @@ class Subtyping(
             lhs is SimpleType.TUnit && rhs is SimpleType.TUnit -> return
 
             else -> {
-                onError(TypeError.TypeMismatch(rhs, lhs, span))
+                errors.add(TypeError.TypeMismatch(rhs, lhs, span))
             }
         }
     }

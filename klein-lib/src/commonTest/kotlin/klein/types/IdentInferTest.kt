@@ -11,47 +11,35 @@ class IdentInferTest {
     fun ident_intBinding() {
         val env = TypeEnv.empty()
         env.bind("x", TInt)
-
-        val type = infer("x", env)
-        assertEquals(TInt, type)
+        assertType("Int", infer("x", env))
     }
 
     @Test
     fun ident_stringBinding() {
         val env = TypeEnv.empty()
         env.bind("name", TString)
-
-        val type = infer("name", env)
-        assertEquals(TString, type)
+        assertType("String", infer("name", env))
     }
 
     @Test
     fun ident_boolBinding() {
         val env = TypeEnv.empty()
         env.bind("flag", TBool)
-
-        val type = infer("flag", env)
-        assertEquals(TBool, type)
+        assertType("Bool", infer("flag", env))
     }
 
     @Test
     fun ident_functionBinding() {
         val env = TypeEnv.empty()
-        val fnType = TFun(listOf(TInt), TString)
-        env.bind("f", fnType)
-
-        val type = infer("f", env)
-        assertType("Int -> String", type)
+        env.bind("f", TFun(listOf(TInt), TString))
+        assertType("Int -> String", infer("f", env))
     }
 
     @Test
     fun ident_recordBinding() {
         val env = TypeEnv.empty()
-        val recType = TRecord(mapOf("a" to TInt))
-        env.bind("r", recType)
-
-        val type = infer("r", env)
-        assertType("{ a: Int }", type)
+        env.bind("r", TRecord(mapOf("a" to TInt)))
+        assertType("{ a: Int }", infer("r", env))
     }
 
     @Test
@@ -82,7 +70,4 @@ class IdentInferTest {
         assertEquals("naem", error.name)
         assertEquals("Unbound variable: naem", error.message)
     }
-
-    // Note: ident_unbound_inExpr requires operators (x + 1)
-    // This will be handled in Phase 5 (Operators)
 }

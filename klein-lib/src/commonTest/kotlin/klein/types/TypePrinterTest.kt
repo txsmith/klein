@@ -293,4 +293,44 @@ class TypePrinterTest {
         val fn = TFun(listOf(paramFn, inputRec), outputRec)
         assertEquals("(a -> b, { x: a, y: a }) -> { x: b, y: b }", TypePrinter.print(fn))
     }
+
+    @Test
+    fun printVarWithUpperBound() {
+        val v = TVar()
+        v.upperBounds.add(TInt)
+        assertEquals("a & Int", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printVarWithLowerBound() {
+        val v = TVar()
+        v.lowerBounds.add(TString)
+        assertEquals("a | String", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printVarWithBothBounds() {
+        val v = TVar()
+        v.lowerBounds.add(TString)
+        v.upperBounds.add(TTop)
+        // TTop is filtered out
+        assertEquals("a | String", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printVarWithMultipleUpperBounds() {
+        val v = TVar()
+        v.upperBounds.add(TInt)
+        v.upperBounds.add(TString)
+        // Sorted alphabetically
+        assertEquals("a & Int & String", TypePrinter.print(v))
+    }
+
+    @Test
+    fun printFunctionWithBoundedVar() {
+        val v = TVar()
+        v.upperBounds.add(TInt)
+        val fn = TFun(listOf(v), TInt)
+        assertEquals("a & Int -> Int", TypePrinter.print(fn))
+    }
 }
