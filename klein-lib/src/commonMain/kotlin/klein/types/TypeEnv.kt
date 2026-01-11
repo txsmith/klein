@@ -14,18 +14,37 @@ sealed class ImplicitParamContext {
     ) : ImplicitParamContext()
 }
 
+/**
+ * Binding in the type environment - either a simple type or a polymorphic type scheme.
+ */
+sealed class TypeBinding {
+    data class Mono(
+        val type: SimpleType,
+    ) : TypeBinding()
+
+    data class Poly(
+        val scheme: PolymorphicType,
+    ) : TypeBinding()
+}
+
 class TypeEnv(
     private val parent: TypeEnv? = null,
-    private val bindings: MutableMap<String, SimpleType> = mutableMapOf(),
-    private val polymorphic: MutableSet<String> = mutableSetOf(),
+    private val bindings: MutableMap<String, TypeBinding> = mutableMapOf(),
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
+    val level: Int = 0,
 ) {
-    fun lookup(name: String): SimpleType? {
-        val type = bindings[name]
-        if (type != null) {
-            return if (name in polymorphic) type.instantiate() else type
+    fun lookup(
+        name: String,
+        currentLevel: Int = this.level,
+    ): SimpleType? {
+        val binding = bindings[name]
+        if (binding != null) {
+            return when (binding) {
+                is TypeBinding.Mono -> binding.type
+                is TypeBinding.Poly -> binding.scheme.instantiate(currentLevel)
+            }
         }
-        return parent?.lookup(name)
+        return parent?.lookup(name, currentLevel)
     }
 
     fun contains(name: String): Boolean = name in bindings
@@ -33,15 +52,22 @@ class TypeEnv(
     fun bind(
         name: String,
         type: SimpleType,
-        isPolymorphic: Boolean = false,
     ) {
-        bindings[name] = type
-        if (isPolymorphic) {
-            polymorphic.add(name)
-        }
+        bindings[name] = TypeBinding.Mono(type)
     }
 
-    fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam)
+    fun bindPolymorphic(
+        name: String,
+        type: SimpleType,
+        generalizationLevel: Int,
+    ) {
+        bindings[name] = TypeBinding.Poly(PolymorphicType(generalizationLevel, type))
+    }
+
+    fun child(
+        implicitParam: ImplicitParamContext = this.implicitParam,
+        level: Int = this.level,
+    ): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam, level = level)
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()
