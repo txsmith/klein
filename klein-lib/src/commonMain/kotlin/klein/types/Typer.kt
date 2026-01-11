@@ -58,7 +58,7 @@ class Typer {
                     if (env.contains(stmt.name)) {
                         errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                     }
-                    val type = inferFunction(stmt.params, stmt.body, stmt.span, env)
+                    val type = inferFunction(stmt.params, stmt.body, stmt.span, env, functionName = stmt.name)
                     env.bind(stmt.name, type, isPolymorphic = true)
                     typedStmts.add(TypedStmt.TypedFunDef(stmt.name, type))
                 }
@@ -89,7 +89,7 @@ class Typer {
             is RecordLiteral -> inferRecordLiteral(expr, env)
             is FieldAccess -> inferFieldAccess(expr, env)
             is IfThenElse -> inferIfThenElse(expr, env)
-            is ImplicitParam -> TODO("Phase 6: Functions")
+            is ImplicitParam -> inferImplicitParam(expr, env)
             is Block -> TODO("Phase 8: Blocks")
         }
 
@@ -102,6 +102,26 @@ class Typer {
             TVar()
         }
 
+    private fun inferImplicitParam(
+        expr: ImplicitParam,
+        env: TypeEnv,
+    ): SimpleType =
+        when (val ctx = env.implicitParam) {
+            is ImplicitParamContext.Available -> ctx.type
+            is ImplicitParamContext.BlockedByNamedFunction -> {
+                errors.add(TypeError.ImplicitParamInNamedFunction(expr.span))
+                TVar()
+            }
+            is ImplicitParamContext.BlockedByExplicitParams -> {
+                errors.add(TypeError.ImplicitParamWithExplicitParams(ctx.params, expr.span))
+                TVar()
+            }
+            is ImplicitParamContext.None -> {
+                errors.add(TypeError.ImplicitParamOutsideLambda(expr.span))
+                TVar()
+            }
+        }
+
     private fun inferLambda(
         expr: Lambda,
         env: TypeEnv,
@@ -112,6 +132,7 @@ class Typer {
         body: Expr,
         span: SourceSpan,
         env: TypeEnv,
+        functionName: String? = null,
     ): SimpleType {
         val seen = mutableSetOf<String>()
         for (name in params) {
@@ -121,13 +142,31 @@ class Typer {
             seen.add(name)
         }
 
-        val paramTypes = params.map { TVar() }
-        val childEnv = env.child()
-        params.zip(paramTypes).forEach { (name, type) ->
-            childEnv.bind(name, type)
+        val isLambda = functionName == null
+        return if (params.isEmpty() && isLambda) {
+            val implicitType = SimpleType.TVar()
+            val childEnv = env.child(ImplicitParamContext.Available(implicitType))
+            val bodyType = infer(body, childEnv)
+            if (body.usesImplicitParam) {
+                TFun(listOf(implicitType), bodyType)
+            } else {
+                TFun(emptyList(), bodyType)
+            }
+        } else {
+            val blockedContext =
+                if (functionName != null) {
+                    ImplicitParamContext.BlockedByNamedFunction
+                } else {
+                    ImplicitParamContext.BlockedByExplicitParams(params)
+                }
+            val paramTypes = params.map { SimpleType.TVar() }
+            val childEnv = env.child(blockedContext)
+            params.zip(paramTypes).forEach { (name, type) ->
+                childEnv.bind(name, type)
+            }
+            val bodyType = infer(body, childEnv)
+            TFun(paramTypes, bodyType)
         }
-        val bodyType = infer(body, childEnv)
-        return TFun(paramTypes, bodyType)
     }
 
     private fun inferApply(

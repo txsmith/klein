@@ -1,9 +1,24 @@
 package klein.types
 
+sealed class ImplicitParamContext {
+    data object None : ImplicitParamContext()
+
+    data object BlockedByNamedFunction : ImplicitParamContext()
+
+    data class BlockedByExplicitParams(
+        val params: List<String>,
+    ) : ImplicitParamContext()
+
+    data class Available(
+        val type: SimpleType,
+    ) : ImplicitParamContext()
+}
+
 class TypeEnv(
     private val parent: TypeEnv? = null,
     private val bindings: MutableMap<String, SimpleType> = mutableMapOf(),
     private val polymorphic: MutableSet<String> = mutableSetOf(),
+    val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
 ) {
     fun lookup(name: String): SimpleType? {
         val type = bindings[name]
@@ -26,7 +41,7 @@ class TypeEnv(
         }
     }
 
-    fun child(): TypeEnv = TypeEnv(parent = this)
+    fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam)
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()

@@ -61,12 +61,23 @@ sealed class TypeError {
     data class ImplicitParamOutsideLambda(
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Implicit parameter '.' can only be used inside anonymous functions"
+        override val message = "Implicit dot parameter '.' can only be used inside anonymous functions"
     }
 
-    data class MixedImplicitExplicit(
+    data class ImplicitParamInNamedFunction(
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Implicit parameter '.' can only be used in functions without named parameters"
+        override val message = "Implicit dot parameter '.' cannot be used in named functions"
+    }
+
+    data class ImplicitParamWithExplicitParams(
+        val params: List<String>,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message: String
+            get() {
+                val paramList = params.joinToString(", ") { "'$it'" }
+                return "Implicit dot parameter '.' cannot be used here, you've declared named ones: $paramList"
+            }
     }
 }
