@@ -39,8 +39,33 @@ object TypeSimplifier {
         private var depth = 0
         private val maxDepth = 100
 
+        // Union-find for equivalent type variables (co-occurrence analysis)
+        private val parent = mutableMapOf<TVar, TVar>()
+
         /**
-         * First pass: collect all variable occurrences to determine polarity.
+         * Find the representative of a variable's equivalence class.
+         */
+        private fun find(v: TVar): TVar {
+            val p = parent[v] ?: return v
+            val root = find(p)
+            if (p !== root) parent[v] = root // Path compression
+            return root
+        }
+
+        /**
+         * Union two variables into the same equivalence class.
+         */
+        private fun union(v1: TVar, v2: TVar) {
+            val r1 = find(v1)
+            val r2 = find(v2)
+            if (r1 !== r2) {
+                parent[r2] = r1
+            }
+        }
+
+        /**
+         * First pass: collect all variable occurrences to determine polarity,
+         * and detect equivalent variables via co-occurrence analysis.
          */
         fun collectOccurrences(type: SimpleType, positive: Boolean, visited: MutableSet<Pair<TVar, Boolean>> = mutableSetOf()) {
             // Depth protection
@@ -57,6 +82,21 @@ object TypeSimplifier {
 
                         // Copy bounds to list before iterating to avoid iterator nesting issues
                         val bounds = (if (positive) type.lowerBounds else type.upperBounds).toList()
+
+                        // Co-occurrence analysis: detect equivalent variables
+                        // Two vars are equivalent if they mutually constrain each other (α <: β AND β <: α)
+                        // This means each appears in both bounds of the other
+                        for (bound in type.lowerBounds.toList()) {
+                            if (bound is TVar && type in bound.lowerBounds) {
+                                union(type, bound)
+                            }
+                        }
+                        for (bound in type.upperBounds.toList()) {
+                            if (bound is TVar && type in bound.upperBounds) {
+                                union(type, bound)
+                            }
+                        }
+
                         for (bound in bounds) {
                             collectOccurrences(bound, positive, visited)
                         }
@@ -95,11 +135,28 @@ object TypeSimplifier {
         fun isNegativeOnly(v: TVar): Boolean = v !in seenPositive && v in seenNegative
 
         /**
+         * Propagate polarity info to representatives after co-occurrence analysis.
+         * If α and β are equivalent, and α appears positively and β negatively,
+         * then the representative should appear at both polarities.
+         */
+        private fun propagatePolarity() {
+            val allVars = seenPositive + seenNegative
+            for (v in allVars) {
+                val rep = find(v)
+                if (v in seenPositive) seenPositive.add(rep)
+                if (v in seenNegative) seenNegative.add(rep)
+            }
+        }
+
+        /**
          * Simplify a type at a given polarity.
          */
         fun simplify(type: SimpleType, positive: Boolean): SimpleType {
-            // First collect all occurrences
+            // First collect all occurrences and detect equivalences
             collectOccurrences(type, positive)
+
+            // Propagate polarity to representatives
+            propagatePolarity()
 
             // Then simplify
             return doSimplify(type, positive)
@@ -134,29 +191,31 @@ object TypeSimplifier {
         }
 
         private fun simplifyVar(v: TVar, positive: Boolean): SimpleType {
-            val key = v to positive
+            // Use the representative variable from co-occurrence analysis
+            val rep = find(v)
+            val key = rep to positive
             cache[key]?.let { return it }
 
-            // Detect cycles - return the variable immediately for recursive types
+            // Detect cycles - return the representative for recursive types
             if (key in expanding) {
-                return v
+                return rep
             }
             expanding.add(key)
 
             try {
                 // Copy bounds to a list upfront to avoid iterator nesting issues
-                val bounds = if (positive) v.lowerBounds.toList() else v.upperBounds.toList()
+                val bounds = if (positive) rep.lowerBounds.toList() else rep.upperBounds.toList()
 
                 // If polar variable (only appears in one polarity), try to eliminate it
-                if (isPolar(v)) {
-                    val result = if (positive && isPositiveOnly(v)) {
+                if (isPolar(rep)) {
+                    val result = if (positive && isPositiveOnly(rep)) {
                         // Positive-only variable: expand to its lower bounds (union)
                         expandBounds(bounds, positive)
-                    } else if (!positive && isNegativeOnly(v)) {
+                    } else if (!positive && isNegativeOnly(rep)) {
                         // Negative-only variable: expand to its upper bounds (intersection)
                         expandBounds(bounds, positive)
                     } else {
-                        v // Keep if polarity doesn't match current context
+                        rep // Keep if polarity doesn't match current context
                     }
                     cache[key] = result
                     return result
@@ -170,9 +229,9 @@ object TypeSimplifier {
                     return concrete
                 }
 
-                // Keep the variable - it's truly polymorphic
-                cache[key] = v
-                return v
+                // Keep the representative variable - it's truly polymorphic
+                cache[key] = rep
+                return rep
             } finally {
                 expanding.remove(key)
             }

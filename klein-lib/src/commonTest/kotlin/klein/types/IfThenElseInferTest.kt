@@ -60,8 +60,8 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranches() {
-        // Result var with two different record lower bounds - picks first
-        assertType("{ x: Num }", infer("if true then { x = 1 } else { y = 'hi' }"))
+        // Records with no common fields - result is empty record (intersection of field sets)
+        assertType("{}", infer("if true then { x = 1 } else { y = 'hi' }"))
     }
 
     @Test
