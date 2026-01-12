@@ -2,36 +2,55 @@ package klein.types
 
 sealed class SimpleType {
     /**
-     * Create a fresh copy of this type with all type variables replaced by new ones.
-     * This is used for let polymorphism - each use of a polymorphic binding gets
-     * fresh type variables so constraints don't pollute the original.
+     * Get the level of this type. For TVars, returns the level.
+     * For compound types, returns the minimum level of all contained TVars.
+     * For ground types, returns 0 (always safe to use).
      */
-    fun instantiate(): SimpleType {
-        val varMap = mutableMapOf<TVar, TVar>()
-        // First pass: create structure with fresh TVars (no bounds yet)
-        val result = instantiateStructure(varMap)
-        // Second pass: copy bounds (instantiating any TVars within bounds)
-        for ((original, fresh) in varMap) {
-            original.lowerBounds.mapTo(fresh.lowerBounds) { it.instantiateStructure(varMap) }
-            original.upperBounds.mapTo(fresh.upperBounds) { it.instantiateStructure(varMap) }
-        }
-        return result
-    }
+    open val level: Int
+        get() = 0
 
-    private fun instantiateStructure(varMap: MutableMap<TVar, TVar>): SimpleType =
-        when (this) {
-            is TVar -> varMap.getOrPut(this) { TVar() }
-            is TFun ->
-                TFun(
-                    params.map { it.instantiateStructure(varMap) },
-                    result.instantiateStructure(varMap),
-                )
-            is TRecord ->
-                TRecord(
-                    fields.mapValues { it.value.instantiateStructure(varMap) },
-                )
-            else -> this
-        }
+    /**
+     * Create a fresh copy of this type, only freshening TVars above the given level.
+     * TVars at or below the limit are kept as-is (they're from outer scope).
+     * This is used for let polymorphism - only generalize variables created in the binding.
+     *
+     * @param above Only freshen TVars with level > above
+     * @param currentLevel The level to assign to fresh TVars
+     */
+    fun freshenAbove(
+        above: Int,
+        currentLevel: Int,
+    ): SimpleType {
+        val varMap = mutableMapOf<TVar, TVar>()
+
+        fun freshen(ty: SimpleType): SimpleType =
+            when {
+                ty.level <= above -> ty
+                ty is TVar -> {
+                    // Check if we've already started processing this TVar
+                    varMap[ty]?.let { return it }
+                    // Create fresh TVar first (without bounds) to handle cycles
+                    val fresh = TVar(currentLevel)
+                    varMap[ty] = fresh
+                    // Now copy bounds - any recursive references will find fresh in varMap
+                    ty.lowerBounds.mapTo(fresh.lowerBounds) { freshen(it) }
+                    ty.upperBounds.mapTo(fresh.upperBounds) { freshen(it) }
+                    fresh
+                }
+                ty is TFun ->
+                    TFun(
+                        ty.params.map { freshen(it) },
+                        freshen(ty.result),
+                    )
+                ty is TRecord ->
+                    TRecord(
+                        ty.fields.mapValues { freshen(it.value) },
+                    )
+                else -> ty
+            }
+
+        return freshen(this)
+    }
 
     object TNum : SimpleType() {
         override fun toString(): String = "TNum"
@@ -58,6 +77,7 @@ sealed class SimpleType {
     }
 
     class TVar(
+        override val level: Int = 0,
         val lowerBounds: MutableSet<SimpleType> = mutableSetOf(),
         val upperBounds: MutableSet<SimpleType> = mutableSetOf(),
     ) : SimpleType()
@@ -65,9 +85,15 @@ sealed class SimpleType {
     data class TFun(
         val params: List<SimpleType>,
         val result: SimpleType,
-    ) : SimpleType()
+    ) : SimpleType() {
+        override val level: Int
+            get() = (params.map { it.level } + result.level).maxOrNull() ?: 0
+    }
 
     data class TRecord(
         val fields: Map<String, SimpleType>,
-    ) : SimpleType()
+    ) : SimpleType() {
+        override val level: Int
+            get() = fields.values.maxOfOrNull { it.level } ?: 0
+    }
 }

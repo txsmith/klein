@@ -1,7 +1,6 @@
 package klein
 
 import klein.types.TypePrinter
-import klein.types.TypedStmt
 import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
@@ -136,13 +135,20 @@ private fun infer(
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program)
 
-        for (stmt in result.stmts) {
+        for (stmt in program.stmts) {
             when (stmt) {
-                is TypedStmt.TypedVal -> println("${stmt.name} : ${TypePrinter.print(stmt.type)}")
-                is TypedStmt.TypedFunDef -> println("${stmt.name} : ${TypePrinter.print(stmt.type)}")
-                is TypedStmt.TypedExpr -> {
+                is Val -> {
+                    val type = result.env.lookup(stmt.name)!!
+                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                }
+                is FunDef -> {
+                    val type = result.env.lookup(stmt.name)!!
+                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                }
+                is Expr -> {
+                    val type = result.exprTypes[stmt.span] ?: result.type
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)
-                    println("$exprSource : ${TypePrinter.print(stmt.type)}")
+                    println("$exprSource : ${TypePrinter.print(type)}")
                 }
             }
         }

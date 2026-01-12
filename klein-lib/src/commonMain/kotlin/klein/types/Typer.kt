@@ -3,31 +3,12 @@ package klein.types
 import klein.*
 import klein.types.SimpleType.*
 
-sealed class TypedStmt {
-    data class TypedVal(
-        val name: String,
-        val type: SimpleType,
-    ) : TypedStmt()
-
-    data class TypedFunDef(
-        val name: String,
-        val type: SimpleType,
-    ) : TypedStmt()
-
-    data class TypedExpr(
-        val type: SimpleType,
-        val span: SourceSpan,
-    ) : TypedStmt()
-}
-
 data class ProgramResult(
-    val stmts: List<TypedStmt>,
+    val type: SimpleType,
     val env: TypeEnv,
     val errors: List<TypeError>,
+    val exprTypes: Map<SourceSpan, SimpleType> = emptyMap(),
 ) {
-    val type: SimpleType
-        get() = (stmts.lastOrNull() as? TypedStmt.TypedExpr)?.type ?: TUnit
-
     val hasErrors: Boolean
         get() = errors.isNotEmpty()
 }
@@ -42,34 +23,8 @@ class Typer {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
-        val typedStmts = mutableListOf<TypedStmt>()
-
-        for (stmt in program.stmts) {
-            when (stmt) {
-                is Val -> {
-                    if (env.contains(stmt.name)) {
-                        errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
-                    }
-                    val type = infer(stmt.value, env)
-                    env.bind(stmt.name, type, isPolymorphic = true)
-                    typedStmts.add(TypedStmt.TypedVal(stmt.name, type))
-                }
-                is FunDef -> {
-                    if (env.contains(stmt.name)) {
-                        errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
-                    }
-                    val type = inferFunction(stmt.params, stmt.body, stmt.span, env, functionName = stmt.name)
-                    env.bind(stmt.name, type, isPolymorphic = true)
-                    typedStmts.add(TypedStmt.TypedFunDef(stmt.name, type))
-                }
-                is Expr -> {
-                    val type = infer(stmt, env)
-                    typedStmts.add(TypedStmt.TypedExpr(type, stmt.span))
-                }
-            }
-        }
-
-        return ProgramResult(typedStmts, env, getErrors())
+        val (type, exprTypes) = inferStmts(program.stmts, env)
+        return ProgramResult(type, env, getErrors(), exprTypes)
     }
 
     fun infer(
@@ -84,48 +39,53 @@ class Typer {
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> inferBinaryOp(expr, env)
             is UnaryOp -> inferUnaryOp(expr, env)
-            is Lambda -> inferLambda(expr, env)
+            is Lambda -> inferFunction(expr.params, expr.body, expr.span, env)
             is Apply -> inferApply(expr, env)
             is RecordLiteral -> inferRecordLiteral(expr, env)
             is FieldAccess -> inferFieldAccess(expr, env)
             is IfThenElse -> inferIfThenElse(expr, env)
             is ImplicitParam -> inferImplicitParam(expr, env)
-            is Block -> TODO("Phase 8: Blocks")
+            is Block -> inferStmts(expr.stmts, env.child()).first
         }
 
-    private fun inferIdent(
-        expr: Ident,
+    private fun inferStmts(
+        stmts: List<Stmt>,
         env: TypeEnv,
-    ): SimpleType =
-        env.lookup(expr.name) ?: run {
-            errors.add(TypeError.UnboundVariable(expr.name, expr.span))
-            TVar()
+    ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
+        var lastType: SimpleType = TUnit
+        val exprTypes = mutableMapOf<SourceSpan, SimpleType>()
+
+        for (stmt in stmts) {
+            lastType =
+                when (stmt) {
+                    is Val -> {
+                        if (env.contains(stmt.name)) {
+                            errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
+                        }
+                        val rhsEnv = env.child(level = env.level + 1)
+                        val type = infer(stmt.value, rhsEnv)
+                        env.bindPolymorphic(stmt.name, type)
+                        TUnit
+                    }
+                    is FunDef -> {
+                        if (env.contains(stmt.name)) {
+                            errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
+                        }
+                        val rhsEnv = env.child(level = env.level + 1)
+                        val type = inferFunction(stmt.params, stmt.body, stmt.span, rhsEnv, functionName = stmt.name)
+                        env.bindPolymorphic(stmt.name, type)
+                        TUnit
+                    }
+                    is Expr -> {
+                        val type = infer(stmt, env)
+                        exprTypes[stmt.span] = type
+                        type
+                    }
+                }
         }
 
-    private fun inferImplicitParam(
-        expr: ImplicitParam,
-        env: TypeEnv,
-    ): SimpleType =
-        when (val ctx = env.implicitParam) {
-            is ImplicitParamContext.Available -> ctx.type
-            is ImplicitParamContext.BlockedByNamedFunction -> {
-                errors.add(TypeError.ImplicitParamInNamedFunction(expr.span))
-                TVar()
-            }
-            is ImplicitParamContext.BlockedByExplicitParams -> {
-                errors.add(TypeError.ImplicitParamWithExplicitParams(ctx.params, expr.span))
-                TVar()
-            }
-            is ImplicitParamContext.None -> {
-                errors.add(TypeError.ImplicitParamOutsideLambda(expr.span))
-                TVar()
-            }
-        }
-
-    private fun inferLambda(
-        expr: Lambda,
-        env: TypeEnv,
-    ): SimpleType = inferFunction(expr.params, expr.body, expr.span, env)
+        return Pair(lastType, exprTypes)
+    }
 
     private fun inferFunction(
         params: List<String>,
@@ -144,7 +104,7 @@ class Typer {
 
         val isLambda = functionName == null
         return if (params.isEmpty() && isLambda) {
-            val implicitType = SimpleType.TVar()
+            val implicitType = env.freshVar()
             val childEnv = env.child(ImplicitParamContext.Available(implicitType))
             val bodyType = infer(body, childEnv)
             if (body.usesImplicitParam) {
@@ -159,7 +119,7 @@ class Typer {
                 } else {
                     ImplicitParamContext.BlockedByExplicitParams(params)
                 }
-            val paramTypes = params.map { SimpleType.TVar() }
+            val paramTypes = params.map { env.freshVar() }
             val childEnv = env.child(blockedContext)
             params.zip(paramTypes).forEach { (name, type) ->
                 childEnv.bind(name, type)
@@ -175,7 +135,7 @@ class Typer {
     ): SimpleType {
         val calleeType = infer(expr.callee, env)
         val argTypes = expr.args.map { infer(it, env) }
-        val resultType = TVar()
+        val resultType = env.freshVar()
 
         subtyping.constrain(
             calleeType,
@@ -185,6 +145,35 @@ class Typer {
 
         return resultType
     }
+
+    private fun inferIdent(
+        expr: Ident,
+        env: TypeEnv,
+    ): SimpleType =
+        env.lookup(expr.name, env.level) ?: run {
+            errors.add(TypeError.UnboundVariable(expr.name, expr.span))
+            env.freshVar()
+        }
+
+    private fun inferImplicitParam(
+        expr: ImplicitParam,
+        env: TypeEnv,
+    ): SimpleType =
+        when (val ctx = env.implicitParam) {
+            is ImplicitParamContext.Available -> ctx.type
+            is ImplicitParamContext.BlockedByNamedFunction -> {
+                errors.add(TypeError.ImplicitParamInNamedFunction(expr.span))
+                env.freshVar()
+            }
+            is ImplicitParamContext.BlockedByExplicitParams -> {
+                errors.add(TypeError.ImplicitParamWithExplicitParams(ctx.params, expr.span))
+                env.freshVar()
+            }
+            is ImplicitParamContext.None -> {
+                errors.add(TypeError.ImplicitParamOutsideLambda(expr.span))
+                env.freshVar()
+            }
+        }
 
     private fun inferBinaryOp(
         expr: BinaryOp,
@@ -252,7 +241,7 @@ class Typer {
         env: TypeEnv,
     ): SimpleType {
         val targetType = infer(expr.target, env)
-        val fieldType = TVar()
+        val fieldType = env.freshVar()
         subtyping.constrain(targetType, TRecord(mapOf(expr.field to fieldType)), expr.span)
         return fieldType
     }
@@ -268,7 +257,7 @@ class Typer {
 
         return if (expr.elseBranch != null) {
             val elseType = infer(expr.elseBranch, env)
-            val resultType = TVar()
+            val resultType = env.freshVar()
             subtyping.constrain(thenType, resultType, expr.thenBranch.span)
             subtyping.constrain(elseType, resultType, expr.elseBranch.span)
             resultType
