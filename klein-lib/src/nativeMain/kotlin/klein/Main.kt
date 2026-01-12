@@ -1,5 +1,7 @@
 package klein
 
+import klein.types.TypePrinter
+import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -34,6 +36,10 @@ fun main(args: Array<String>) {
             val source = getSource(useStdin, fileArg) ?: return
             parse(source, rawOutput, verbose)
         }
+        "infer", "i" -> {
+            val source = getSource(useStdin, fileArg) ?: return
+            infer(source, rawOutput)
+        }
         "help", "-h", "--help" -> printUsage()
         else -> {
             println("Unknown command: $command")
@@ -64,6 +70,7 @@ private fun printUsage() {
         Commands:
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
+          infer, i     Infer and print types
           help         Show this help
 
         Options:
@@ -101,7 +108,7 @@ private fun parse(
     try {
         val tokens = Lexer(source).tokenize().toList()
         val program = Parser(tokens).parseProgram()
-        for (stmt in program) {
+        for (stmt in program.stmts) {
             println(stmt.prettyPrint())
         }
     } catch (e: LexerError) {
@@ -116,6 +123,45 @@ private fun parse(
             println("\nCall stack:")
             printFormattedStackTrace(e)
         }
+    }
+}
+
+private fun infer(
+    source: String,
+    rawOutput: Boolean,
+) {
+    try {
+        val tokens = Lexer(source).tokenize().toList()
+        val program = Parser(tokens).parseProgram()
+        val result = Typer.infer(program)
+
+        for (stmt in program.stmts) {
+            when (stmt) {
+                is Val -> {
+                    val type = result.env.lookup(stmt.name)!!
+                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                }
+                is FunDef -> {
+                    val type = result.env.lookup(stmt.name)!!
+                    println("${stmt.name} : ${TypePrinter.print(type)}")
+                }
+                is Expr -> {
+                    val type = result.exprTypes[stmt.span] ?: result.type
+                    val exprSource = source.substring(stmt.span.start, stmt.span.end)
+                    println("$exprSource : ${TypePrinter.print(type)}")
+                }
+            }
+        }
+
+        for (error in result.errors) {
+            printError(source, error.span, error.message, rawOutput)
+        }
+    } catch (e: LexerError) {
+        printError(source, e.span, e.message ?: "Lexer error", rawOutput)
+    } catch (e: ParseError) {
+        printError(source, e.span, e.message ?: "Parse error", rawOutput)
+    } catch (e: NotImplementedError) {
+        println("Type inference not yet implemented: ${e.message}")
     }
 }
 

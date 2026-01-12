@@ -56,11 +56,11 @@ class IntegrationTest {
             hasGoodCustomer = |.customer.creditScore > 700|
             """.trimIndent()
 
-        val stmts = parseProgram(program)
-        assertEquals(8, stmts.size)
+        val parsed = parseProgram(program)
+        assertEquals(8, parsed.stmts.size)
 
         assertProgramEquals(
-            stmts,
+            parsed,
             listOf(
                 isEligibleFun(),
                 calculateRateFun(),

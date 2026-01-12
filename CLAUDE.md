@@ -88,6 +88,22 @@ echo "f = |x -> x + 1|" | ./klein parse --stdin
 ./klein parse --raw example.klein
 ```
 
+### Infer Types
+
+```bash
+# From a file
+./klein infer example.klein
+
+# From stdin
+echo "x = 1 + 2" | ./klein infer --stdin
+
+# Short form
+./klein i example.klein
+
+# Raw output (for tooling)
+./klein infer --raw example.klein
+```
+
 ## Project Structure
 
 ```

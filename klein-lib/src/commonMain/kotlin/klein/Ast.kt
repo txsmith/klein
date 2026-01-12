@@ -2,6 +2,11 @@ package klein
 
 import kotlinx.serialization.Serializable
 
+data class Program(
+    val stmts: List<Stmt>,
+    val span: SourceSpan,
+)
+
 sealed class Stmt {
     abstract val span: SourceSpan
 }
@@ -95,6 +100,31 @@ data class FieldAccess(
 data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
+
+val Expr.usesImplicitParam: Boolean
+    get() =
+        when (this) {
+            is ImplicitParam -> true
+            is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is Ident -> false
+            is BinaryOp -> left.usesImplicitParam || right.usesImplicitParam
+            is UnaryOp -> operand.usesImplicitParam
+            is Lambda -> false
+            is Apply -> callee.usesImplicitParam || args.any { it.usesImplicitParam }
+            is RecordLiteral -> fields.any { it.second.usesImplicitParam }
+            is FieldAccess -> target.usesImplicitParam
+            is IfThenElse ->
+                condition.usesImplicitParam ||
+                    thenBranch.usesImplicitParam ||
+                    (elseBranch?.usesImplicitParam ?: false)
+            is Block ->
+                stmts.any { stmt ->
+                    when (stmt) {
+                        is Expr -> stmt.usesImplicitParam
+                        is Val -> stmt.value.usesImplicitParam
+                        is FunDef -> false
+                    }
+                }
+        }
 
 data class RecordLiteral(
     val fields: List<Pair<String, Expr>>,
