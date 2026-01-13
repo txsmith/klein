@@ -91,6 +91,112 @@ data class CompactType(
             val term = go(ty, pol = true, parents = emptySet(), inProgress = emptySet())
             return CompactTypeScheme(term, recVars)
         }
+
+        /**
+         * Canonicalizing version of fromSimpleType.
+         *
+         * Unlike fromSimpleType which tracks (TVar, pol) pairs to detect recursion,
+         * this tracks (CompactType, pol) pairs. This allows merging co-occurring
+         * recursive types with different cycle lengths by finding their LCD.
+         *
+         * The algorithm uses two phases:
+         * - go0: Convert outermost layer without expanding variable bounds
+         * - go1: Merge bounds of all variables and recursively process
+         *
+         * This is akin to NFA-to-DFA powerset construction.
+         */
+        fun canonicalizeType(ty: SimpleType): CompactTypeScheme {
+            val recursive = mutableMapOf<Pair<CompactType, Boolean>, TVar>()
+            val recVars = mutableMapOf<TVar, CompactType>()
+
+            // Transitively close over variables reachable through bounds
+            fun closeOver(
+                initial: Set<TVar>,
+                pol: Boolean,
+            ): Set<TVar> {
+                val result = initial.toMutableSet()
+                val worklist = initial.toMutableList()
+                while (worklist.isNotEmpty()) {
+                    val tv = worklist.removeLast()
+                    val bounds = if (pol) tv.lowerBounds else tv.upperBounds
+                    for (bound in bounds) {
+                        if (bound is TVar && bound !in result) {
+                            result.add(bound)
+                            worklist.add(bound)
+                        }
+                    }
+                }
+                return result
+            }
+
+            // Convert outermost layer of SimpleType to CompactType,
+            // leaving type variables untransformed (just close over them)
+            fun go0(
+                ty: SimpleType,
+                pol: Boolean,
+            ): CompactType =
+                when (ty) {
+                    TNum -> CompactType.prim(PrimType.Num)
+                    TString -> CompactType.prim(PrimType.String)
+                    TBool -> CompactType.prim(PrimType.Bool)
+                    TUnit -> CompactType.prim(PrimType.Unit)
+                    is TFun ->
+                        CompactType.function(
+                            ty.params.map { go0(it, !pol) },
+                            go0(ty.result, pol),
+                        )
+                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
+                    is TVar -> CompactType(vars = closeOver(setOf(ty), pol))
+                }
+
+            // Merge bounds of all variables in a CompactType and recursively traverse
+            fun go1(
+                ty: CompactType,
+                pol: Boolean,
+                inProgress: Set<Pair<CompactType, Boolean>>,
+            ): CompactType {
+                if (ty.isEmpty()) return ty
+
+                val key = ty to pol
+                if (key in inProgress) {
+                    val recVar = recursive.getOrPut(key) { TVar() }
+                    return CompactType.variable(recVar)
+                }
+
+                // Merge bounds of all variables (excluding variable-to-variable bounds)
+                val boundMerge =
+                    ty.vars
+                        .flatMap { tv ->
+                            val bounds = if (pol) tv.lowerBounds else tv.upperBounds
+                            bounds.filter { it !is TVar }.map { go0(it, pol) }
+                        }.fold(CompactType.empty) { acc, t -> acc.merge(t, pol) }
+
+                val merged = ty.merge(boundMerge, pol)
+                val newInProgress = inProgress + key
+
+                val adapted =
+                    CompactType(
+                        vars = merged.vars,
+                        prims = merged.prims,
+                        rec = merged.rec?.mapValues { (_, v) -> go1(v, pol, newInProgress) },
+                        func =
+                            merged.func?.let { (params, result) ->
+                                params.map { go1(it, !pol, newInProgress) } to go1(result, pol, newInProgress)
+                            },
+                    )
+
+                val recVar = recursive[key]
+                return if (recVar != null) {
+                    recVars[recVar] = adapted
+                    CompactType.variable(recVar)
+                } else {
+                    adapted
+                }
+            }
+
+            val term = go1(go0(ty, pol = true), pol = true, inProgress = emptySet())
+            return CompactTypeScheme(term, recVars)
+        }
     }
 
     fun merge(

@@ -19,6 +19,17 @@ object TypeSimplifier {
     }
 
     /**
+     * Like simplify, but uses canonicalization to merge co-occurring recursive types.
+     * This produces simpler types when multiple recursive types with different cycle
+     * lengths are merged (e.g., in a union).
+     */
+    fun simplifyCanonical(type: SimpleType): DisplayType {
+        val scheme = CompactType.canonicalizeType(type)
+        val simplified = simplifyType(scheme)
+        return coalesceType(simplified)
+    }
+
+    /**
      * Simplifies a CompactTypeScheme by performing co-occurrence analysis.
      *
      * Two simplifications:

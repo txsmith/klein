@@ -184,10 +184,10 @@ class RecursiveFunctionTest {
 
     @Test
     fun recursive_joinWithRecursive() {
-        // Without canonicalization we get a union of two recursive types
+        // With canonicalization, identical recursive types merge
         assertType(
-            "(Any) -> (Any) -> a as a | (Any) -> b as b",
-            infer(
+            "(Any) -> a as a",
+            inferCanonical(
                 """
                 fun r(a) = r
                 fun join(a, b) = if true then a else b
@@ -199,11 +199,10 @@ class RecursiveFunctionTest {
 
     @Test
     fun recursive_twoRecursiveSameCycle() {
-        // simple-sub with canonicalization: (⊤ -> ⊤ -> 'a) as 'a
-        // Without canonicalization we get a union of two recursive types with different arities
+        // With canonicalization, recursive types with different arities merge
         assertType(
-            "(Any) -> (Any) -> b as b | (Any, Any) -> a as a",
-            infer(
+            "(Any) -> a as a",
+            inferCanonical(
                 """
                 fun l(a) = l
                 fun r(a, b) = r

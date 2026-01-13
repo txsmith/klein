@@ -16,6 +16,15 @@ fun infer(
 ): DisplayType = Klein.simplify(Klein.infer(source, env).type)
 
 /**
+ * Infer the type with canonicalization (merges co-occurring recursive types).
+ * This produces simpler types for unions of recursive types with different cycle lengths.
+ */
+fun inferCanonical(
+    source: String,
+    env: TypeEnv = TypeEnv.empty(),
+): DisplayType = TypeSimplifier.simplifyCanonical(Klein.infer(source, env).type)
+
+/**
  * Infer types and return full result including errors.
  * Useful for testing error cases.
  */
