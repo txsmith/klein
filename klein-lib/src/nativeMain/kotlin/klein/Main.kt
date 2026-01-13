@@ -1,5 +1,10 @@
 package klein
 
+import klein.types.SimpleType
+import klein.types.TypeEnv
+import klein.types.TypePrinter
+import klein.types.TypeSimplifier
+import klein.types.Typer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -13,6 +18,8 @@ import platform.posix.ftell
 import platform.posix.rewind
 import platform.posix.stdin
 
+enum class TypeFormat { CANONICAL, PRE_CANONICAL, IR_COMPACT, IR_BOUNDS }
+
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
         printUsage()
@@ -20,23 +27,32 @@ fun main(args: Array<String>) {
     }
 
     val command = args[0]
-    val rawOutput = "--raw" in args
+    val rawErrors = "--raw" in args
     val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
     val fileArg = args.drop(1).firstOrNull { !it.startsWith("--") }
 
+    val typeFormat =
+        when {
+            "--canonical" in args -> TypeFormat.CANONICAL
+            "--pre-canonical" in args -> TypeFormat.PRE_CANONICAL
+            "--ir-compact" in args -> TypeFormat.IR_COMPACT
+            "--ir-bounds" in args -> TypeFormat.IR_BOUNDS
+            else -> TypeFormat.CANONICAL
+        }
+
     when (command) {
         "tokens", "t" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            tokenize(source, rawOutput, verbose)
+            tokenize(source, rawErrors, verbose)
         }
         "parse", "p" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            parse(source, rawOutput, verbose)
+            parse(source, rawErrors, verbose)
         }
         "infer", "i" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            infer(source, rawOutput)
+            infer(source, rawErrors, typeFormat)
         }
         "help", "-h", "--help" -> printUsage()
         else -> {
@@ -75,6 +91,12 @@ private fun printUsage() {
           --stdin      Read from stdin instead of file
           --raw        Print raw errors with SourceSpan (for tooling)
           --verbose    Show nesting stack on lexer errors
+
+        Type output format (for infer):
+          --canonical      Canonical type (default, merges recursive types)
+          --pre-canonical  Simplified type before canonicalization
+          --ir-compact     Internal CompactType representation
+          --ir-bounds      Internal SimpleType with bounds
         """.trimIndent(),
     )
 }
@@ -126,39 +148,47 @@ private fun parse(
 
 private fun infer(
     source: String,
-    rawOutput: Boolean,
+    rawErrors: Boolean,
+    format: TypeFormat,
 ) {
     try {
-        val result = Klein.infer(source)
+        val tokens = Lexer(source).tokenize().toList()
+        val program = Parser(tokens).parseProgram()
+        val result = Typer.infer(program, TypeEnv.empty())
 
-        for (stmt in result.program.stmts) {
+        fun formatType(type: SimpleType): String =
+            when (format) {
+                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type))
+                TypeFormat.PRE_CANONICAL -> Type.print(TypeSimplifier.simplify(type))
+                TypeFormat.IR_COMPACT -> TypeSimplifier.simplify(type).toString()
+                TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
+            }
+
+        for (stmt in program.stmts) {
             when (stmt) {
                 is Val -> {
-                    val type = result.typeOf(stmt.name)!!
-                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
-                    println("${stmt.name} : $typeStr")
+                    val type = result.env.lookupAndInstantiate(stmt.name)!!
+                    println("${stmt.name} : ${formatType(type)}")
                 }
                 is FunDef -> {
-                    val type = result.typeOf(stmt.name)!!
-                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
-                    println("${stmt.name} : $typeStr")
+                    val type = result.env.lookupAndInstantiate(stmt.name)!!
+                    println("${stmt.name} : ${formatType(type)}")
                 }
                 is Expr -> {
-                    val type = result.typeOf(stmt.span) ?: result.type
-                    val typeStr = if (rawOutput) result.raw(type) else result.simplify(type)
+                    val type = result.exprTypes[stmt.span] ?: result.type
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)
-                    println("$exprSource : $typeStr")
+                    println("$exprSource : ${formatType(type)}")
                 }
             }
         }
 
         for (error in result.errors) {
-            printError(source, error.span, error.message, rawOutput)
+            printError(source, error.span, error.message, rawErrors)
         }
     } catch (e: LexerError) {
-        printError(source, e.span, e.message ?: "Lexer error", rawOutput)
+        printError(source, e.span, e.message ?: "Lexer error", rawErrors)
     } catch (e: ParseError) {
-        printError(source, e.span, e.message ?: "Parse error", rawOutput)
+        printError(source, e.span, e.message ?: "Parse error", rawErrors)
     } catch (e: NotImplementedError) {
         println("Type inference not yet implemented: ${e.message}")
     }

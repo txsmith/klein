@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class FunctionInferTest {
     @Test
     fun lambda_noParams() {
-        assertType(DFun(emptyList(), DNum), infer("|1|"))
+        assertType(Type.Fun(emptyList(), Type.Num), infer("|1|"))
     }
 
     @Test
@@ -26,14 +26,14 @@ class FunctionInferTest {
     fun lambda_bodyUsesParam() {
         val env = TypeEnv.empty()
         env.bind("add", TFun(listOf(TNum, TNum), TNum))
-        assertType(DFun(listOf(DNum, DNum), DNum), infer("|x, y -> add(x, y)|", env))
+        assertType(Type.Fun(listOf(Type.Num, Type.Num), Type.Num), infer("|x, y -> add(x, y)|", env))
     }
 
     @Test
     fun apply_knownFunction() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        assertType(DString, infer("f(1)", env))
+        assertType(Type.Str, infer("f(1)", env))
     }
 
     @Test
@@ -63,21 +63,21 @@ class FunctionInferTest {
 
     @Test
     fun apply_lambdaDirectly() {
-        assertType(DNum, infer("|x -> x|(1)"))
+        assertType(Type.Num, infer("|x -> x|(1)"))
     }
 
     @Test
     fun apply_nestedCalls() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TNum))
-        assertType(DNum, infer("f(f(1))", env))
+        assertType(Type.Num, infer("f(f(1))", env))
     }
 
     @Test
     fun apply_noArgs() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(emptyList(), TNum))
-        assertType(DNum, infer("f()", env))
+        assertType(Type.Num, infer("f()", env))
     }
 
     @Test
@@ -106,12 +106,12 @@ class FunctionInferTest {
 
     @Test
     fun higherOrder_functionOverBools() {
-        assertType(DFun(listOf(DBool), DBool), infer("|x -> not x|"))
+        assertType(Type.Fun(listOf(Type.Bool), Type.Bool), infer("|x -> not x|"))
     }
 
     @Test
     fun higherOrder_appliedNegation() {
-        assertType(DBool, infer("|x -> not x|(true)"))
+        assertType(Type.Bool, infer("|x -> not x|(true)"))
     }
 
     @Test

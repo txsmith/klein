@@ -187,7 +187,7 @@ class RecursiveFunctionTest {
         // With canonicalization, identical recursive types merge
         assertType(
             "(Any) -> a as a",
-            inferCanonical(
+            infer(
                 """
                 fun r(a) = r
                 fun join(a, b) = if true then a else b
@@ -202,7 +202,7 @@ class RecursiveFunctionTest {
         // With canonicalization, recursive types with different arities merge
         assertType(
             "(Any) -> a as a",
-            inferCanonical(
+            infer(
                 """
                 fun l(a) = l
                 fun r(a, b) = r
@@ -301,10 +301,23 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_ySelfApp() {
         assertType(
-            "((a) -> a & b as b) -> a",
+            "((a) -> a & ((a) -> b) as b) -> a",
             infer(
                 """
                 fun x(y) = y(x(x))
+                x
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun recursive_yXX() {
+        assertType(
+            "((a) -> (a) -> b) -> b as a",
+            infer(
+                """
+                fun x(y) = y(x)(x)
                 x
                 """.trimIndent(),
             ),
@@ -342,7 +355,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_recordUWithY() {
         assertType(
-            "(a) -> { u: a | ((a) -> b), v: b } as b",
+            "(a) -> { u: a | ((a) -> b), v: c } as c as b",
             infer(
                 """
                 fun x(y) = { u = y, v = x(x) }
@@ -355,7 +368,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_recordVWithY() {
         assertType(
-            "(a) -> { u: b, v: a | ((a) -> b) } as b",
+            "(a) -> { u: b, v: a | ((a) -> c) } as b as c",
             infer(
                 """
                 fun x(y) = { u = x(x), v = y }

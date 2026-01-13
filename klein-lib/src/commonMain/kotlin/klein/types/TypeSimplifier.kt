@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.Type
 import klein.types.CompactType.PrimType
 import klein.types.SimpleType.TVar
 
@@ -7,12 +8,12 @@ import klein.types.SimpleType.TVar
  * Type simplification following the SimpleSub algorithm.
  *
  * Pipeline:
- *   SimpleType → CompactType (fromSimpleType) → simplified CompactType → DisplayType
+ *   SimpleType → CompactType (fromSimpleType) → simplified CompactType → Type
  *
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
 object TypeSimplifier {
-    fun simplify(type: SimpleType): DisplayType {
+    fun simplify(type: SimpleType): Type {
         val scheme = CompactType.fromSimpleType(type)
         val simplified = simplifyType(scheme)
         return coalesceType(simplified)
@@ -23,7 +24,7 @@ object TypeSimplifier {
      * This produces simpler types when multiple recursive types with different cycle
      * lengths are merged (e.g., in a union).
      */
-    fun simplifyCanonical(type: SimpleType): DisplayType {
+    fun simplifyCanonical(type: SimpleType): Type {
         val scheme = CompactType.canonicalizeType(type)
         val simplified = simplifyType(scheme)
         return coalesceType(simplified)
@@ -180,11 +181,11 @@ object TypeSimplifier {
     }
 
     /**
-     * Coalesces a CompactTypeScheme into a DisplayType.
+     * Coalesces a CompactTypeScheme into a Type.
      * Uses hash-consing to tie recursive type knots tighter.
      * Variable names are assigned on first encounter during traversal.
      */
-    fun coalesceType(cty: CompactTypeScheme): DisplayType {
+    fun coalesceType(cty: CompactTypeScheme): Type {
         val varNames = mutableMapOf<TVar, String>()
 
         fun varName(v: TVar): String =
@@ -198,25 +199,25 @@ object TypeSimplifier {
         fun go(
             ty: CompactType,
             pol: Boolean,
-            inProcess: Map<Pair<CompactType, Boolean>, () -> DisplayType.DVar>,
-        ): DisplayType {
+            inProcess: Map<Pair<CompactType, Boolean>, () -> Type.Var>,
+        ): Type {
             val key = ty to pol
             inProcess[key]?.let { return it() }
 
             if (ty.isEmpty()) {
-                return if (pol) DisplayType.DBottom else DisplayType.DTop
+                return if (pol) Type.Bottom else Type.Top
             }
 
             var isRecursive = false
             val recVar by lazy {
                 isRecursive = true
                 val v = TVar()
-                DisplayType.DVar(varName(v))
+                Type.Var(varName(v))
             }
 
             val newInProcess = inProcess + (key to { recVar })
 
-            val components = mutableListOf<DisplayType>()
+            val components = mutableListOf<Type>()
 
             // Process in same order as simple-sub: vars, prims, rec, func
             // This ensures variables at the current level are named before
@@ -229,7 +230,7 @@ object TypeSimplifier {
                 if (bound != null) {
                     components.add(go(bound, pol, newInProcess))
                 } else {
-                    components.add(DisplayType.DVar(varName(v)))
+                    components.add(Type.Var(varName(v)))
                 }
             }
 
@@ -237,42 +238,42 @@ object TypeSimplifier {
             for (prim in ty.prims) {
                 components.add(
                     when (prim) {
-                        PrimType.Num -> DisplayType.DNum
-                        PrimType.String -> DisplayType.DString
-                        PrimType.Bool -> DisplayType.DBool
-                        PrimType.Unit -> DisplayType.DUnit
+                        PrimType.Num -> Type.Num
+                        PrimType.String -> Type.Str
+                        PrimType.Bool -> Type.Bool
+                        PrimType.Unit -> Type.Unit
                     },
                 )
             }
 
             // Add record
             ty.rec?.let { fields ->
-                val displayFields = fields.mapValues { (_, v) -> go(v, pol, newInProcess) }
-                components.add(DisplayType.DRecord(displayFields))
+                val typeFields = fields.mapValues { (_, v) -> go(v, pol, newInProcess) }
+                components.add(Type.Record(typeFields))
             }
 
             // Add function last
             ty.func?.let { (params, result) ->
-                val displayParams = params.map { go(it, !pol, newInProcess) }
-                val displayResult = go(result, pol, newInProcess)
-                components.add(DisplayType.DFun(displayParams, displayResult))
+                val typeParams = params.map { go(it, !pol, newInProcess) }
+                val typeResult = go(result, pol, newInProcess)
+                components.add(Type.Fun(typeParams, typeResult))
             }
 
             val result =
                 if (components.isEmpty()) {
-                    if (pol) DisplayType.DBottom else DisplayType.DTop
+                    if (pol) Type.Bottom else Type.Top
                 } else if (components.size == 1) {
                     components[0]
                 } else {
                     if (pol) {
-                        components.reduce { acc, t -> DisplayType.DUnion(acc, t) }
+                        components.reduce { acc, t -> Type.Union(acc, t) }
                     } else {
-                        components.reduce { acc, t -> DisplayType.DInter(acc, t) }
+                        components.reduce { acc, t -> Type.Inter(acc, t) }
                     }
                 }
 
             return if (isRecursive) {
-                DisplayType.DRec(recVar.name, result)
+                Type.Rec(recVar.name, result)
             } else {
                 result
             }

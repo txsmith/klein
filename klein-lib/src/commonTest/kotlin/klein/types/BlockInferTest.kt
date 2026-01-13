@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -14,7 +14,7 @@ class BlockInferTest {
               42
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -27,7 +27,7 @@ class BlockInferTest {
               3
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -39,7 +39,7 @@ class BlockInferTest {
               x
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -52,7 +52,7 @@ class BlockInferTest {
               x + y
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -63,7 +63,7 @@ class BlockInferTest {
               x = 1
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DUnit), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Unit), infer(program))
     }
 
     @Test
@@ -75,7 +75,7 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -86,7 +86,7 @@ class BlockInferTest {
               double = |x -> x * 2|
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DUnit), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Unit), infer(program))
     }
 
     @Test
@@ -115,7 +115,7 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType(DNum, infer(program))
+        assertType(Type.Num, infer(program))
     }
 
     @Test
@@ -145,7 +145,7 @@ class BlockInferTest {
             |
             f()
             """.trimIndent()
-        assertType(DNum, infer(program))
+        assertType(Type.Num, infer(program))
     }
 
     @Test
@@ -162,7 +162,7 @@ class BlockInferTest {
               f()
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -174,7 +174,7 @@ class BlockInferTest {
               double(21)
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -186,7 +186,7 @@ class BlockInferTest {
               if x > 3 then 'big' else 'small'
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DString), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Str), infer(program))
     }
 
     @Test
@@ -198,7 +198,7 @@ class BlockInferTest {
               person.age
             |
             """.trimIndent()
-        assertType(DFun(emptyList(), DNum), infer(program))
+        assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
     @Test
@@ -309,7 +309,7 @@ class BlockInferTest {
             f = |x -> x|
             { a = f(0), b = f(true) }
             """.trimIndent()
-        assertType(DRecord(mapOf("a" to DNum, "b" to DBool)), infer(program))
+        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Bool)), infer(program))
     }
 
     @Test
@@ -355,7 +355,7 @@ class BlockInferTest {
             g = f
             g(42)
             """.trimIndent()
-        assertType(DNum, infer(program))
+        assertType(Type.Num, infer(program))
     }
 
     @Test
@@ -371,7 +371,7 @@ class BlockInferTest {
             twice = |f -> |x -> f(f(x))||
             twice(|n -> n + 1|)(0)
             """.trimIndent()
-        assertType(DNum, infer(program))
+        assertType(Type.Num, infer(program))
     }
 
     @Test

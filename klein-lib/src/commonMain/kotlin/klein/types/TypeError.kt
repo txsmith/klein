@@ -1,6 +1,7 @@
 package klein.types
 
 import klein.SourceSpan
+import klein.Type
 
 sealed class TypeError {
     abstract val span: SourceSpan
@@ -14,19 +15,19 @@ sealed class TypeError {
     }
 
     data class TypeMismatch(
-        val expected: SimpleType,
-        val actual: SimpleType,
+        val expected: Type,
+        val actual: Type,
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Type mismatch: expected ${TypePrinter.print(expected)}, got ${TypePrinter.print(actual)}"
+        override val message = "Type mismatch: expected ${Type.print(expected)}, got ${Type.print(actual)}"
     }
 
     data class MissingField(
         val field: String,
-        val recordType: SimpleType,
+        val recordType: Type,
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Record ${TypePrinter.print(recordType)} has no field '$field'"
+        override val message = "Record ${Type.print(recordType)} has no field '$field'"
     }
 
     data class DuplicateField(

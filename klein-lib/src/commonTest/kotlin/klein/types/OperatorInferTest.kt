@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -8,92 +8,92 @@ import kotlin.test.assertTrue
 class OperatorInferTest {
     @Test
     fun add_intPlusInt() {
-        assertType(DNum, infer("1 + 2"))
+        assertType(Type.Num, infer("1 + 2"))
     }
 
     @Test
     fun add_doublePlusDouble() {
-        assertType(DNum, infer("1.0 + 2.0"))
+        assertType(Type.Num, infer("1.0 + 2.0"))
     }
 
     @Test
     fun sub_intMinusInt() {
-        assertType(DNum, infer("5 - 3"))
+        assertType(Type.Num, infer("5 - 3"))
     }
 
     @Test
     fun mul_intTimesInt() {
-        assertType(DNum, infer("2 * 3"))
+        assertType(Type.Num, infer("2 * 3"))
     }
 
     @Test
     fun div_intDivInt() {
-        assertType(DNum, infer("10 / 2"))
+        assertType(Type.Num, infer("10 / 2"))
     }
 
     @Test
     fun mod_intModInt() {
-        assertType(DNum, infer("10 % 3"))
+        assertType(Type.Num, infer("10 % 3"))
     }
 
     @Test
     fun lt_intLtInt() {
-        assertType(DBool, infer("1 < 2"))
+        assertType(Type.Bool, infer("1 < 2"))
     }
 
     @Test
     fun lteq_intLteqInt() {
-        assertType(DBool, infer("1 <= 2"))
+        assertType(Type.Bool, infer("1 <= 2"))
     }
 
     @Test
     fun gt_intGtInt() {
-        assertType(DBool, infer("1 > 2"))
+        assertType(Type.Bool, infer("1 > 2"))
     }
 
     @Test
     fun gteq_intGteqInt() {
-        assertType(DBool, infer("1 >= 2"))
+        assertType(Type.Bool, infer("1 >= 2"))
     }
 
     @Test
     fun eq_intEqInt() {
-        assertType(DBool, infer("1 == 2"))
+        assertType(Type.Bool, infer("1 == 2"))
     }
 
     @Test
     fun eq_stringEqString() {
-        assertType(DBool, infer("'a' == 'b'"))
+        assertType(Type.Bool, infer("'a' == 'b'"))
     }
 
     @Test
     fun neq_intNeqInt() {
-        assertType(DBool, infer("1 != 2"))
+        assertType(Type.Bool, infer("1 != 2"))
     }
 
     @Test
     fun and_boolAndBool() {
-        assertType(DBool, infer("true and false"))
+        assertType(Type.Bool, infer("true and false"))
     }
 
     @Test
     fun or_boolOrBool() {
-        assertType(DBool, infer("true or false"))
+        assertType(Type.Bool, infer("true or false"))
     }
 
     @Test
     fun neg_int() {
-        assertType(DNum, infer("-1"))
+        assertType(Type.Num, infer("-1"))
     }
 
     @Test
     fun neg_double() {
-        assertType(DNum, infer("-1.0"))
+        assertType(Type.Num, infer("-1.0"))
     }
 
     @Test
     fun not_bool() {
-        assertType(DBool, infer("not true"))
+        assertType(Type.Bool, infer("not true"))
     }
 
     @Test
@@ -125,16 +125,16 @@ class OperatorInferTest {
 
     @Test
     fun complexArithmetic() {
-        assertType(DNum, infer("1 + 2 * 3"))
+        assertType(Type.Num, infer("1 + 2 * 3"))
     }
 
     @Test
     fun comparisonChain() {
-        assertType(DBool, infer("1 < 2 == true"))
+        assertType(Type.Bool, infer("1 < 2 == true"))
     }
 
     @Test
     fun booleanChain() {
-        assertType(DBool, infer("true and false or true"))
+        assertType(Type.Bool, infer("true and false or true"))
     }
 }

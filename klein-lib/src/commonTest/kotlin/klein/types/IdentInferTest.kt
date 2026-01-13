@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,35 +12,35 @@ class IdentInferTest {
     fun ident_intBinding() {
         val env = TypeEnv.empty()
         env.bind("x", TNum)
-        assertType(DNum, infer("x", env))
+        assertType(Type.Num, infer("x", env))
     }
 
     @Test
     fun ident_stringBinding() {
         val env = TypeEnv.empty()
         env.bind("name", TString)
-        assertType(DString, infer("name", env))
+        assertType(Type.Str, infer("name", env))
     }
 
     @Test
     fun ident_boolBinding() {
         val env = TypeEnv.empty()
         env.bind("flag", TBool)
-        assertType(DBool, infer("flag", env))
+        assertType(Type.Bool, infer("flag", env))
     }
 
     @Test
     fun ident_functionBinding() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        assertType(DFun(listOf(DNum), DString), infer("f", env))
+        assertType(Type.Fun(listOf(Type.Num), Type.Str), infer("f", env))
     }
 
     @Test
     fun ident_recordBinding() {
         val env = TypeEnv.empty()
         env.bind("r", TRecord(mapOf("a" to TNum)))
-        assertType(DRecord(mapOf("a" to DNum)), infer("r", env))
+        assertType(Type.Record(mapOf("a" to Type.Num)), infer("r", env))
     }
 
     @Test

@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,7 +24,7 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_comparison() {
-        assertType(DFun(listOf(DNum), DBool), infer("|. > 100|"))
+        assertType(Type.Fun(listOf(Type.Num), Type.Bool), infer("|. > 100|"))
     }
 
     @Test
@@ -86,13 +86,13 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_constantLambda_noParam() {
-        assertType(DFun(emptyList(), DNum), infer("|42|"))
+        assertType(Type.Fun(emptyList(), Type.Num), infer("|42|"))
     }
 
     @Test
     fun implicitParam_passthrough() {
         val env = TypeEnv.empty()
         env.bind("inc", TFun(listOf(TNum), TNum))
-        assertType(DFun(listOf(DNum), DNum), infer("|inc(.)|", env))
+        assertType(Type.Fun(listOf(Type.Num), Type.Num), infer("|inc(.)|", env))
     }
 }

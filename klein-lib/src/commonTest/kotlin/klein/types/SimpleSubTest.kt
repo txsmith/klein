@@ -1,6 +1,5 @@
 package klein.types
 
-import klein.types.DisplayType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

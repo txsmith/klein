@@ -1,6 +1,6 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class IfThenElseInferTest {
     @Test
     fun ifThenElse_sameBranchTypes() {
-        assertType(DNum, infer("if true then 1 else 2"))
+        assertType(Type.Num, infer("if true then 1 else 2"))
     }
 
     @Test
@@ -25,27 +25,27 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_withVariable() {
-        assertType(DNum, infer("x = true\nif x then 1 else 2"))
+        assertType(Type.Num, infer("x = true\nif x then 1 else 2"))
     }
 
     @Test
     fun ifThenElse_nested() {
-        assertType(DNum, infer("if true then if false then 1 else 2 else 3"))
+        assertType(Type.Num, infer("if true then if false then 1 else 2 else 3"))
     }
 
     @Test
     fun ifThenElse_inFunction() {
-        assertType(DFun(listOf(DBool), DNum), infer("|x -> if x then 1 else 2|"))
+        assertType(Type.Fun(listOf(Type.Bool), Type.Num), infer("|x -> if x then 1 else 2|"))
     }
 
     @Test
     fun ifThenElse_withComparison() {
-        assertType(DString, infer("if 1 < 2 then 'yes' else 'no'"))
+        assertType(Type.Str, infer("if 1 < 2 then 'yes' else 'no'"))
     }
 
     @Test
     fun ifThenElse_noElse_returnsUnit() {
-        assertType(DUnit, infer("if true then 1"))
+        assertType(Type.Unit, infer("if true then 1"))
     }
 
     @Test
@@ -57,7 +57,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranches() {
-        assertType(DRecord(emptyMap()), infer("if true then { x = 1 } else { y = 'hi' }"))
+        assertType(Type.Record(emptyMap()), infer("if true then { x = 1 } else { y = 'hi' }"))
     }
 
     @Test
@@ -83,7 +83,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithCommonField() {
-        assertType(DRecord(mapOf("b" to DBool)), infer("if true then { a = 1, b = true } else { b = false, c = 'hi' }"))
+        assertType(Type.Record(mapOf("b" to Type.Bool)), infer("if true then { a = 1, b = true } else { b = false, c = 'hi' }"))
     }
 
     @Test
@@ -98,7 +98,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithNestedRecords() {
-        assertType(DRecord(mapOf("r" to DRecord(emptyMap()))), infer("if true then { r = { x = 1 } } else { r = { y = 2 } }"))
+        assertType(Type.Record(mapOf("r" to Type.Record(emptyMap()))), infer("if true then { r = { x = 1 } } else { r = { y = 2 } }"))
     }
 
     @Test

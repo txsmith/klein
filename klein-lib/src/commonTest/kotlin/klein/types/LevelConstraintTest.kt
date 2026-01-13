@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -390,7 +391,7 @@ class LevelConstraintTest {
 
         // The result should be Num (from myK returning g(42)), not Nothing
         assertTrue(
-            resultType !is DisplayType.DBottom,
+            resultType !is Type.Bottom,
             "result should be Num, not Nothing. Got: $resultType",
         )
     }

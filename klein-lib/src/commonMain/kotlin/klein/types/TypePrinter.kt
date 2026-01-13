@@ -1,21 +1,13 @@
 package klein.types
 
+import klein.Type
 import klein.types.SimpleType.*
 
 object TypePrinter {
     /**
-     * Print a type with simplification applied.
-     * This is the main entry point for user-facing type display.
+     * Print a Type directly.
      */
-    fun print(type: SimpleType): String {
-        val displayType = TypeSimplifier.simplify(type)
-        return DisplayTypePrinter.print(displayType)
-    }
-
-    /**
-     * Print a DisplayType directly.
-     */
-    fun print(type: DisplayType): String = DisplayTypePrinter.print(type)
+    fun print(type: Type): String = Type.print(type)
 
     /**
      * Print a type without simplification, showing bounds in a clean format.

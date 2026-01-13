@@ -1,53 +1,53 @@
 package klein.types
 
-import klein.types.DisplayType.*
+import klein.Type
 import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class TypeSimplifierTest {
-    private fun simplified(type: SimpleType): DisplayType = TypeSimplifier.simplify(type)
+    private fun simplified(type: SimpleType): Type = TypeSimplifier.simplify(type)
 
     @Test
     fun simplify_primitives_unchanged() {
-        assertEquals(DNum, simplified(TNum))
-        assertEquals(DString, simplified(TString))
-        assertEquals(DBool, simplified(TBool))
-        assertEquals(DUnit, simplified(TUnit))
+        assertEquals(Type.Num, simplified(TNum))
+        assertEquals(Type.Str, simplified(TString))
+        assertEquals(Type.Bool, simplified(TBool))
+        assertEquals(Type.Unit, simplified(TUnit))
     }
 
     @Test
     fun simplify_polarPositiveVar_withNumLowerBound_becomesNum() {
         val v = TVar()
         v.lowerBounds.add(TNum)
-        assertEquals(DNum, simplified(v))
+        assertEquals(Type.Num, simplified(v))
     }
 
     @Test
     fun simplify_polarPositiveVar_withStringLowerBound_becomesString() {
         val v = TVar()
         v.lowerBounds.add(TString)
-        assertEquals(DString, simplified(v))
+        assertEquals(Type.Str, simplified(v))
     }
 
     @Test
     fun simplify_polarPositiveVar_noBounds_becomesNothing() {
         val v = TVar()
-        assertEquals(DBottom, simplified(v))
+        assertEquals(Type.Bottom, simplified(v))
     }
 
     @Test
     fun simplify_function_identity_staysPolymorphic() {
         val a = TVar()
         val fn = TFun(listOf(a), a)
-        assertEquals(DFun(listOf(DVar("a")), DVar("a")), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Var("a")), simplified(fn))
     }
 
     @Test
     fun simplify_function_constNum_paramsSimplified() {
         val a = TVar()
         val fn = TFun(listOf(a), TNum)
-        assertEquals(DFun(listOf(DTop), DNum), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Top), Type.Num), simplified(fn))
     }
 
     @Test
@@ -55,7 +55,7 @@ class TypeSimplifierTest {
         val a = TVar()
         val b = TVar()
         val fn = TFun(listOf(a, b), a)
-        assertEquals(DFun(listOf(DVar("a"), DTop), DVar("a")), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("a"), Type.Top), Type.Var("a")), simplified(fn))
     }
 
     @Test
@@ -63,13 +63,13 @@ class TypeSimplifierTest {
         val a = TVar()
         a.upperBounds.add(TNum)
         val fn = TFun(listOf(a), TNum)
-        assertEquals(DFun(listOf(DNum), DNum), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Num), Type.Num), simplified(fn))
     }
 
     @Test
     fun simplify_record_unchanged() {
         val rec = TRecord(mapOf("x" to TNum, "y" to TString))
-        assertEquals(DRecord(mapOf("x" to DNum, "y" to DString)), simplified(rec))
+        assertEquals(Type.Record(mapOf("x" to Type.Num, "y" to Type.Str)), simplified(rec))
     }
 
     @Test
@@ -77,7 +77,7 @@ class TypeSimplifierTest {
         val v = TVar()
         v.lowerBounds.add(TNum)
         val rec = TRecord(mapOf("value" to v))
-        assertEquals(DRecord(mapOf("value" to DNum)), simplified(rec))
+        assertEquals(Type.Record(mapOf("value" to Type.Num)), simplified(rec))
     }
 
     @Test
@@ -86,7 +86,7 @@ class TypeSimplifierTest {
         val result = TVar()
         result.lowerBounds.add(a)
         a.lowerBounds.add(TNum)
-        assertEquals(DNum, simplified(result))
+        assertEquals(Type.Num, simplified(result))
     }
 
     @Test
@@ -97,7 +97,7 @@ class TypeSimplifierTest {
         a.lowerBounds.add(TNum)
         b.lowerBounds.add(a)
         c.lowerBounds.add(b)
-        assertEquals(DNum, simplified(c))
+        assertEquals(Type.Num, simplified(c))
     }
 
     @Test
@@ -107,7 +107,7 @@ class TypeSimplifierTest {
         val innerFn = TFun(listOf(a), b)
         val fn = TFun(listOf(innerFn), TFun(listOf(a), b))
         assertEquals(
-            DFun(listOf(DFun(listOf(DVar("a")), DVar("b"))), DFun(listOf(DVar("a")), DVar("b"))),
+            Type.Fun(listOf(Type.Fun(listOf(Type.Var("a")), Type.Var("b"))), Type.Fun(listOf(Type.Var("a")), Type.Var("b"))),
             simplified(fn),
         )
     }
@@ -117,7 +117,7 @@ class TypeSimplifierTest {
         val a = TVar()
         val rec = TRecord(mapOf("value" to a))
         val fn = TFun(listOf(a), rec)
-        assertEquals(DFun(listOf(DVar("a")), DRecord(mapOf("value" to DVar("a")))), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Record(mapOf("value" to Type.Var("a")))), simplified(fn))
     }
 
     @Test
@@ -126,7 +126,7 @@ class TypeSimplifierTest {
         val b = TVar()
         val fn = TFun(listOf(a), b)
         val rec = TRecord(mapOf("f" to fn))
-        assertEquals(DRecord(mapOf("f" to DFun(listOf(DTop), DBottom))), simplified(rec))
+        assertEquals(Type.Record(mapOf("f" to Type.Fun(listOf(Type.Top), Type.Bottom))), simplified(rec))
     }
 
     @Test
@@ -135,7 +135,7 @@ class TypeSimplifierTest {
         val b = TVar()
         val inner = TFun(listOf(b), a)
         val outer = TFun(listOf(a), inner)
-        assertEquals(DFun(listOf(DVar("a")), DFun(listOf(DTop), DVar("a"))), simplified(outer))
+        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Fun(listOf(Type.Top), Type.Var("a"))), simplified(outer))
     }
 
     @Test
@@ -143,17 +143,17 @@ class TypeSimplifierTest {
         val v = TVar()
         v.lowerBounds.add(TNum)
         v.upperBounds.add(TString)
-        assertEquals(DNum, simplified(v))
+        assertEquals(Type.Num, simplified(v))
     }
 
     @Test
     fun integration_unusedParam_becomesAny() {
-        assertType(DFun(listOf(DTop), DNum), infer("|x -> 42|"))
+        assertType(Type.Fun(listOf(Type.Top), Type.Num), infer("|x -> 42|"))
     }
 
     @Test
     fun integration_multipleUnusedParams_allBecomeAny() {
-        assertType(DFun(listOf(DTop, DTop, DTop), DNum), infer("|a, b, c -> 1|"))
+        assertType(Type.Fun(listOf(Type.Top, Type.Top, Type.Top), Type.Num), infer("|a, b, c -> 1|"))
     }
 
     @Test
@@ -163,27 +163,27 @@ class TypeSimplifierTest {
 
     @Test
     fun integration_constantFunction_paramIsAny() {
-        assertType(DFun(listOf(DTop), DString), infer("|_ -> 'hello'|"))
+        assertType(Type.Fun(listOf(Type.Top), Type.Str), infer("|_ -> 'hello'|"))
     }
 
     @Test
     fun integration_recordWithUnusedFieldFunction() {
-        assertType(DRecord(mapOf("f" to DFun(listOf(DTop), DNum))), infer("{ f = |x -> 1| }"))
+        assertType(Type.Record(mapOf("f" to Type.Fun(listOf(Type.Top), Type.Num))), infer("{ f = |x -> 1| }"))
     }
 
     @Test
     fun integration_higherOrder_unusedFunctionParam() {
-        assertType(DFun(listOf(DTop), DNum), infer("|f -> 42|"))
+        assertType(Type.Fun(listOf(Type.Top), Type.Num), infer("|f -> 42|"))
     }
 
     @Test
     fun integration_thunk_noParams() {
-        assertType(DFun(emptyList(), DNum), infer("|42|"))
+        assertType(Type.Fun(emptyList(), Type.Num), infer("|42|"))
     }
 
     @Test
     fun integration_nestedThunks() {
-        assertType(DFun(emptyList(), DFun(emptyList(), DString)), infer("|| 'hello' ||"))
+        assertType(Type.Fun(emptyList(), Type.Fun(emptyList(), Type.Str)), infer("|| 'hello' ||"))
     }
 
     @Test
@@ -191,21 +191,21 @@ class TypeSimplifierTest {
         val a = TVar()
         val b = TVar()
         val fn = TFun(listOf(a), b)
-        assertEquals(DFun(listOf(DTop), DBottom), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Top), Type.Bottom), simplified(fn))
     }
 
     @Test
     fun integration_recordWithNothingField() {
         val v = TVar()
         val rec = TRecord(mapOf("x" to v))
-        assertEquals(DRecord(mapOf("x" to DBottom)), simplified(rec))
+        assertEquals(Type.Record(mapOf("x" to Type.Bottom)), simplified(rec))
     }
 
     @Test
     fun integration_polarNegativeVar_withNoUpperBound_becomesAny() {
         val a = TVar()
         val fn = TFun(listOf(a), TNum)
-        assertEquals(DFun(listOf(DTop), DNum), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Top), Type.Num), simplified(fn))
     }
 
     @Test
@@ -213,6 +213,6 @@ class TypeSimplifierTest {
         val a = TVar()
         a.upperBounds.add(TNum)
         val fn = TFun(listOf(a), TString)
-        assertEquals(DFun(listOf(DNum), DString), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Num), Type.Str), simplified(fn))
     }
 }

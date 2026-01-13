@@ -28,6 +28,7 @@ See [docs/decisions/](./docs/decisions/) for architecture decision records:
 - **[fail-fast-error-handling.md](./docs/decisions/2026-01-09-fail-fast-error-handling.md)** - Fail-fast by default with opt-in recovery via `.recover`
 - **[modules-vs-records.md](./docs/decisions/2026-01-09-modules-vs-records.md)** - Design decisions around module system
 - **[no-anonymous-unions.md](./docs/decisions/2026-01-09-no-anonymous-unions.md)** - Why Klein doesn't support anonymous union types
+- **[simplesub-type-inference.md](./docs/decisions/2026-01-14-simplesub-type-inference.md)** - Direct port of SimpleSub reference implementation for type inference
 
 ### Experimental Features
 
@@ -102,6 +103,12 @@ echo "x = 1 + 2" | ./klein infer --stdin
 
 # Raw output (for tooling)
 ./klein infer --raw example.klein
+
+# Type format options (for debugging)
+./klein infer --canonical example.klein      # default: canonicalized types
+./klein infer --pre-canonical example.klein  # non-canonicalized types
+./klein infer --ir-compact example.klein     # CompactTypeScheme representation
+./klein infer --ir-bounds example.klein      # SimpleType with bounds
 ```
 
 ## Project Structure

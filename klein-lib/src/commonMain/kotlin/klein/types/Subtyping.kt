@@ -2,6 +2,7 @@ package klein.types
 
 import klein.SourceSpan
 import klein.types.SimpleType.*
+import klein.types.TypeSimplifier.simplifyCanonical
 
 class Subtyping {
     private val cache = mutableSetOf<Pair<SimpleType, SimpleType>>()
@@ -70,7 +71,7 @@ class Subtyping {
                 for ((name, rhsType) in rhs.fields) {
                     val lhsType = lhs.fields[name]
                     if (lhsType == null) {
-                        errors.add(TypeError.MissingField(name, lhs, span))
+                        errors.add(TypeError.MissingField(name, simplifyCanonical(lhs), span))
                     } else {
                         constrain(lhsType, rhsType, span)
                     }
@@ -83,7 +84,7 @@ class Subtyping {
             lhs is TUnit && rhs is TUnit -> return
 
             else -> {
-                errors.add(TypeError.TypeMismatch(rhs, lhs, span))
+                errors.add(TypeError.TypeMismatch(simplifyCanonical(rhs), simplifyCanonical(lhs), span))
             }
         }
     }

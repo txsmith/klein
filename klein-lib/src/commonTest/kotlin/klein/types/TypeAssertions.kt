@@ -1,28 +1,16 @@
 package klein.types
 
 import klein.Klein
-import klein.SourceSpan
-import klein.types.DisplayType.*
+import klein.Type
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * Infer the type of a Klein expression and simplify it.
- * Returns the simplified DisplayType.
+ * Infer the type of a Klein expression with canonicalization.
  */
 fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): DisplayType = Klein.simplify(Klein.infer(source, env).type)
-
-/**
- * Infer the type with canonicalization (merges co-occurring recursive types).
- * This produces simpler types for unions of recursive types with different cycle lengths.
- */
-fun inferCanonical(
-    source: String,
-    env: TypeEnv = TypeEnv.empty(),
-): DisplayType = TypeSimplifier.simplifyCanonical(Klein.infer(source, env).type)
+): Type = Klein.infer(source, env).type
 
 /**
  * Infer types and return full result including errors.
@@ -34,11 +22,11 @@ fun inferWithErrors(
 ): Klein.InferenceResult = Klein.infer(source, env)
 
 /**
- * Assert that two DisplayTypes are equal.
+ * Assert that two Types are equal.
  */
 fun assertType(
-    expected: DisplayType,
-    actual: DisplayType,
+    expected: Type,
+    actual: Type,
 ) = assertEquals(expected, actual)
 
 /**
@@ -47,20 +35,5 @@ fun assertType(
  */
 fun assertType(
     expected: String,
-    actual: DisplayType,
-) = assertEquals(expected, TypePrinter.print(actual))
-
-/**
- * Assert that actual is a subtype of expected.
- */
-fun assertSubtypeOf(
-    actual: SimpleType,
-    expected: SimpleType,
-) {
-    val subtyping = Subtyping()
-    subtyping.constrain(actual, expected, SourceSpan.zero)
-    assertTrue(
-        subtyping.getErrors().isEmpty(),
-        "Expected ${Klein.printType(actual)} <: ${Klein.printType(expected)}",
-    )
-}
+    actual: Type,
+) = assertEquals(expected, Type.print(actual))
