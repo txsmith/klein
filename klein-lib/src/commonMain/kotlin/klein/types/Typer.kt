@@ -72,8 +72,11 @@ class Typer {
                             errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
                         }
                         val rhsEnv = env.enterBindingScope()
+                        val recVar = rhsEnv.freshVar()
+                        rhsEnv.bind(stmt.name, recVar)
                         val type = inferFunction(stmt.params, stmt.body, stmt.span, rhsEnv, functionName = stmt.name)
-                        env.bindPolymorphic(stmt.name, type)
+                        subtyping.constrain(type, recVar, stmt.span)
+                        env.bindPolymorphic(stmt.name, recVar)
                         TUnit
                     }
                     is Expr -> {

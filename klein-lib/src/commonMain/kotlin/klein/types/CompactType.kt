@@ -35,10 +35,13 @@ data class CompactType(
 
         fun record(fields: Map<String, CompactType>) = CompactType(rec = fields)
 
-        fun fromSimpleType(ty: SimpleType): CompactType {
+        fun fromSimpleType(ty: SimpleType): CompactTypeScheme {
+            val recursive = mutableMapOf<Pair<TVar, Boolean>, TVar>()
+            val recVars = mutableMapOf<TVar, CompactType>()
+
             fun go(
                 ty: SimpleType,
-                positive: Boolean,
+                pol: Boolean,
                 parents: Set<TVar>,
                 inProgress: Set<Pair<TVar, Boolean>>,
             ): CompactType =
@@ -49,34 +52,44 @@ data class CompactType(
                     TUnit -> CompactType.prim(PrimType.Unit)
                     is TFun ->
                         CompactType.function(
-                            ty.params.map { go(it, !positive, parents, inProgress) },
-                            go(ty.result, positive, parents, inProgress),
+                            ty.params.map { go(it, !pol, emptySet(), inProgress) },
+                            go(ty.result, pol, emptySet(), inProgress),
                         )
-                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go(v, positive, parents, inProgress) })
+                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go(v, pol, emptySet(), inProgress) })
                     is TVar -> {
-                        val key = ty to positive
+                        val key = ty to pol
 
                         if (key in inProgress) {
-                            if (parents.contains(ty)) {
+                            if (ty in parents) {
                                 CompactType.empty
                             } else {
-                                CompactType.variable(ty)
+                                val recVar = recursive.getOrPut(key) { TVar() }
+                                CompactType.variable(recVar)
                             }
                         } else {
-                            val bounds = if (positive) ty.lowerBounds.toList() else ty.upperBounds.toList()
+                            val bounds = if (pol) ty.lowerBounds.toList() else ty.upperBounds.toList()
+                            val newInProgress = inProgress + key
+                            val bound =
+                                if (bounds.isEmpty()) {
+                                    CompactType.variable(ty)
+                                } else {
+                                    val boundTypes = bounds.map { go(it, pol, parents + ty, newInProgress) }
+                                    boundTypes.fold(CompactType.variable(ty)) { acc, t -> acc.merge(t, pol) }
+                                }
 
-                            if (bounds.isEmpty()) {
-                                CompactType.variable(ty)
+                            val recVar = recursive[key]
+                            if (recVar != null) {
+                                recVars[recVar] = bound
+                                CompactType.variable(recVar)
                             } else {
-                                val boundTypes = bounds.map { go(it, positive, parents, inProgress + key) }
-                                val merged = boundTypes.fold(CompactType.variable(ty)) { acc, t -> acc.merge(t, positive) }
-                                merged
+                                bound
                             }
                         }
                     }
                 }
 
-            return go(ty, positive = true, parents = setOf(), inProgress = setOf())
+            val term = go(ty, pol = true, parents = emptySet(), inProgress = emptySet())
+            return CompactTypeScheme(term, recVars)
         }
     }
 

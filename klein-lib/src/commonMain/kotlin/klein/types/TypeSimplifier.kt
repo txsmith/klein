@@ -13,8 +13,7 @@ import klein.types.SimpleType.TVar
  */
 object TypeSimplifier {
     fun simplify(type: SimpleType): DisplayType {
-        val compact = CompactType.fromSimpleType(type)
-        val scheme = CompactTypeScheme(compact)
+        val scheme = CompactType.fromSimpleType(type)
         val simplified = simplifyType(scheme)
         return coalesceType(simplified)
     }
@@ -172,45 +171,17 @@ object TypeSimplifier {
     /**
      * Coalesces a CompactTypeScheme into a DisplayType.
      * Uses hash-consing to tie recursive type knots tighter.
+     * Variable names are assigned on first encounter during traversal.
      */
     fun coalesceType(cty: CompactTypeScheme): DisplayType {
-        // First pass: collect all variables in traversal order to assign consistent names
-        // Sort vars by uid within each CompactType for consistent ordering
-        val varOrder = mutableListOf<TVar>()
-
-        fun collectVars(
-            ty: CompactType,
-            visited: MutableSet<CompactType> = mutableSetOf(),
-        ) {
-            if (ty in visited) return
-            visited.add(ty)
-            // Sort by descending uid for consistent ordering (later vars = more "central", get earlier names)
-            for (v in ty.vars.sortedByDescending { it.uid }) {
-                if (v !in varOrder) varOrder.add(v)
-                cty.recVars[v]?.let { collectVars(it, visited) }
-            }
-            ty.rec?.values?.forEach { collectVars(it, visited) }
-            ty.func?.let { (params, result) ->
-                params.forEach { collectVars(it, visited) }
-                collectVars(result, visited)
-            }
-        }
-        collectVars(cty.term)
-
         val varNames = mutableMapOf<TVar, String>()
-        varOrder.forEachIndexed { idx, v ->
-            val letter = 'a' + (idx % 26)
-            val suffix = if (idx >= 26) "${idx / 26}" else ""
-            varNames[v] = "$letter$suffix"
-        }
 
         fun varName(v: TVar): String =
-            varNames[v] ?: run {
+            varNames.getOrPut(v) {
                 val idx = varNames.size
                 val letter = 'a' + (idx % 26)
                 val suffix = if (idx >= 26) "${idx / 26}" else ""
-                varNames[v] = "$letter$suffix"
-                varNames[v]!!
+                "$letter$suffix"
             }
 
         fun go(
@@ -236,8 +207,13 @@ object TypeSimplifier {
 
             val components = mutableListOf<DisplayType>()
 
-            // Add variables in consistent order (by their assigned name)
-            for (v in ty.vars.sortedBy { varNames[it] ?: "zzz" }) {
+            // Process in same order as simple-sub: vars, prims, rec, func
+            // This ensures variables at the current level are named before
+            // descending into nested function types
+
+            // Add variables (non-recursive ones become type vars, recursive ones expand)
+            // Process in descending uid order to match simple-sub's variable naming
+            for (v in ty.vars.sortedByDescending { it.uid }) {
                 val bound = cty.recVars[v]
                 if (bound != null) {
                     components.add(go(bound, pol, newInProcess))
@@ -264,7 +240,7 @@ object TypeSimplifier {
                 components.add(DisplayType.DRecord(displayFields))
             }
 
-            // Add function
+            // Add function last
             ty.func?.let { (params, result) ->
                 val displayParams = params.map { go(it, !pol, newInProcess) }
                 val displayResult = go(result, pol, newInProcess)

@@ -69,7 +69,7 @@ object DisplayTypePrinter {
             is DisplayType.DVar -> type.name
             is DisplayType.DFun -> printFun(type)
             is DisplayType.DRecord -> printRecord(type)
-            is DisplayType.DRec -> "μ${type.varName}.${print(type.body)}"
+            is DisplayType.DRec -> "${print(type.body)} as ${type.varName}"
             is DisplayType.DUnion -> printUnion(type)
             is DisplayType.DInter -> printInter(type)
         }
