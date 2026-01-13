@@ -95,11 +95,11 @@ No synthetic `INDENT`/`DEDENT` tokens are emitted.
 ```
 INT         = digit+
 DOUBLE      = digit+ '.' digit+
-STRING      = '\'' (char | escape)* '\''
+STRING      = '"' (char | escape)* '"'
 BOOL        = 'true' | 'false'
 IDENT       = (letter | '_') (letter | digit | '_')*
 
-escape      = '\\' ('\'' | '\\' | 'n' | 't')
+escape      = '\\' ('"' | '\\' | 'n' | 't')
 digit       = '0'..'9'
 letter      = 'a'..'z' | 'A'..'Z'
 ```

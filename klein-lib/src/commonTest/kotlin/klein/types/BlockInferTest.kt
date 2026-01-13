@@ -138,7 +138,7 @@ class BlockInferTest {
     fun block_shadowsOuterBinding() {
         val program =
             """
-            x = 'outer'
+            x = "outer"
             f = |
               x = 42
               x
@@ -183,7 +183,7 @@ class BlockInferTest {
             """
             |
               x = 5
-              if x > 3 then 'big' else 'small'
+              if x > 3 then "big" else "small"
             |
             """.trimIndent()
         assertType(Type.Fun(emptyList(), Type.Str), infer(program))
@@ -194,7 +194,7 @@ class BlockInferTest {
         val program =
             """
             |
-              person = { name = 'Alice', age = 30 }
+              person = { name = "Alice", age = 30 }
               person.age
             |
             """.trimIndent()

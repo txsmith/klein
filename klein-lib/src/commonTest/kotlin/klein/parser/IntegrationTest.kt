@@ -28,11 +28,11 @@ class IntegrationTest {
               score = customer.creditScore
               years = customer.yearsEmployed
               if score >= 700 and years >= 2 then
-                'low'
+                "low"
               else if score >= 600 then
-                'medium'
+                "medium"
               else
-                'high'
+                "high"
 
             fun process(application) =
               customer = application.customer
@@ -41,7 +41,7 @@ class IntegrationTest {
               eligible = isEligible(customer.creditScore, amount)
 
               if not eligible then
-                { approved = false, reason = 'Not eligible' }
+                { approved = false, reason = "Not eligible" }
               else
                 rate = calculateRate(customer.creditScore)
                 risk = assessRisk(customer)

@@ -13,7 +13,7 @@ class RecordTest {
     @Test
     fun singleField() {
         assertTokens(
-            "{ name = 'Alice' }",
+            "{ name = \"Alice\" }",
             sym('{'), ident("name"), sym('='), str("Alice"), sym('}'),
             eof
         )
@@ -22,7 +22,7 @@ class RecordTest {
     @Test
     fun multipleFields() {
         assertTokens(
-            "{ name = 'Alice', age = 30 }",
+            "{ name = \"Alice\", age = 30 }",
             sym('{'), ident("name"), sym('='), str("Alice"), sym(','),
             ident("age"), sym('='), num("30"), sym('}'),
             eof
@@ -50,7 +50,7 @@ class RecordTest {
     @Test
     fun nestedRecord() {
         assertTokens(
-            "{ person = { name = 'Bob' } }",
+            "{ person = { name = \"Bob\" } }",
             sym('{'), ident("person"), sym('='),
             sym('{'), ident("name"), sym('='), str("Bob"), sym('}'),
             sym('}'),
@@ -70,7 +70,7 @@ class RecordTest {
     @Test
     fun recordAssignment() {
         assertTokens(
-            "person = { name = 'Alice' }",
+            "person = { name = \"Alice\" }",
             ident("person"), sym('='),
             sym('{'), ident("name"), sym('='), str("Alice"), sym('}'),
             eof
@@ -81,7 +81,7 @@ class RecordTest {
     fun recordInBlock() {
         val program = """
             result =
-              { name = 'Alice' }
+              { name = "Alice" }
         """.trimIndent() + "\n"
         assertTokens(
             program,
@@ -113,7 +113,7 @@ class RecordTest {
         val program = """
             person =
               {
-                name = 'Alice',
+                name = "Alice",
                 age = 30
               }
         """.trimIndent() + "\n"
@@ -197,7 +197,7 @@ class RecordTest {
     @Test
     fun stringAsKey() {
         assertTokens(
-            "{ 'key' = 1 }",
+            "{ \"key\" = 1 }",
             sym('{'), str("key"), sym('='), num("1"), sym('}'),
             eof
         )

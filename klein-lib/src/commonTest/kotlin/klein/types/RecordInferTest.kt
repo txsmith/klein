@@ -18,7 +18,7 @@ class RecordInferTest {
 
     @Test
     fun twoFields() {
-        assertType(Type.Record(mapOf("x" to Type.Num, "y" to Type.Str)), infer("{ x = 1, y = 'hello' }"))
+        assertType(Type.Record(mapOf("x" to Type.Num, "y" to Type.Str)), infer("{ x = 1, y = \"hello\" }"))
     }
 
     @Test
@@ -33,7 +33,7 @@ class RecordInferTest {
 
     @Test
     fun mixedTypes() {
-        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Str, "c" to Type.Bool)), infer("{ a = 1, b = 'hi', c = true }"))
+        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Str, "c" to Type.Bool)), infer("{ a = 1, b = \"hi\", c = true }"))
     }
 
     @Test
@@ -45,7 +45,7 @@ class RecordInferTest {
 
     @Test
     fun duplicateField_usesLastValue() {
-        assertType(Type.Record(mapOf("x" to Type.Str)), infer("{ x = 1, x = 'hello' }"))
+        assertType(Type.Record(mapOf("x" to Type.Str)), infer("{ x = 1, x = \"hello\" }"))
     }
 
     @Test
@@ -60,7 +60,7 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_fromVariable() {
-        assertType(Type.Str, infer("r = { name = 'alice' }\nr.name"))
+        assertType(Type.Str, infer("r = { name = \"alice\" }\nr.name"))
     }
 
     @Test
@@ -92,7 +92,7 @@ class RecordInferTest {
 
     @Test
     fun record_multipleFields() {
-        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Bool, "c" to Type.Str)), infer("{ a = 1, b = true, c = 'hello' }"))
+        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Bool, "c" to Type.Str)), infer("{ a = 1, b = true, c = \"hello\" }"))
     }
 
     @Test

@@ -51,9 +51,9 @@ A record with more fields is a subtype of a record with fewer fields:
 This means functions accepting records work with any record that has at least the required fields:
 
 ```klein
-fun greet(r: { name: String }): String = 'Hello, ${r.name}'
+fun greet(r: { name: String }): String = "Hello, ${r.name}"
 
-person = { name = 'Alice', age = 30 }
+person = { name = "Alice", age = 30 }
 greet(person)  # works! { name, age } <: { name }
 ```
 
@@ -141,11 +141,11 @@ Usage:
 
 ```klein
 # Construction
-p = Person { name = 'Alice', age = 30 }
+p = Person { name = "Alice", age = 30 }
 
 # Pattern matching
 match p
-  Person { name, age } -> 'Hello, ${name}'
+  Person { name, age } -> "Hello, ${name}"
 ```
 
 `Person` and `Point` are distinct nominal types, even if their fields happen to match.
@@ -219,9 +219,9 @@ type Person = { name: String, age: Num }
 This means nominal types can be passed where structural types are expected:
 
 ```klein
-fun greet(r: { name: String }): String = 'Hello, ${r.name}'
+fun greet(r: { name: String }): String = "Hello, ${r.name}"
 
-person = Person { name = 'Alice', age = 30 }
+person = Person { name = "Alice", age = 30 }
 greet(person)  # works! Person <: { name: String }
 ```
 
@@ -236,8 +236,8 @@ type Person = { name: String, address: Address }
 fun getCity(r: { address: { city: String } }): String = r.address.city
 
 person = Person {
-  name = 'Alice',
-  address = Address { city = 'NYC', zip = '10001' }
+  name = "Alice",
+  address = Address { city = "NYC", zip = "10001" }
 }
 
 getCity(person)  # Works!
@@ -308,16 +308,16 @@ result: Result(Num, String) = Ok { 42 }
 
 ```klein
 match color
-  Red -> 'stop'
-  Yellow -> 'slow'
-  Green -> 'go'
+  Red -> "stop"
+  Yellow -> "slow"
+  Green -> "go"
 
 match result
   Ok { value } -> value
   Err { error } -> handleError(error)
 
 match person
-  Person { name, age } -> 'Hello, ${name}'
+  Person { name, age } -> "Hello, ${name}"
 ```
 
 ## Tuples
@@ -325,10 +325,10 @@ match person
 Tuples use parentheses and have positional field names `_1`, `_2`, etc:
 
 ```klein
-pair = ('Alice', 30)
+pair = ("Alice", 30)
 triple = (1, 2, 3)
 
-pair._1                   # 'Alice'
+pair._1                   # "Alice"
 pair._2                   # 30
 ```
 

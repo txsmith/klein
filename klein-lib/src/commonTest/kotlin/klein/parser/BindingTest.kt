@@ -63,7 +63,7 @@ class BindingTest {
 
     @Test
     fun bindingWithString() {
-        val stmt = parseStmt("name = 'hello'")
+        val stmt = parseStmt("name = \"hello\"")
         assertStmtEquals(stmt, valStmt("name", string("hello")))
     }
 

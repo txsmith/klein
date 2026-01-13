@@ -10,7 +10,7 @@
 |---------|-------|
 | Int literals | `42`, `123` |
 | Double literals | `3.14` |
-| String literals | `'hello'` with escapes `\'`, `\\`, `\n`, `\t` |
+| String literals | `"hello"` with escapes `\"`, `\\`, `\n`, `\t` |
 | Bool literals | `true`, `false` |
 | Identifiers | `foo`, `myVar` |
 | Binary operators | `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or` |
@@ -46,7 +46,7 @@
 | Record spread | `{ ...r, x = 1 }` - no `...` token |
 | Tuple literals | `(a, b)` - parens exist but parsed as grouping |
 | Tuple accessors | `pair._1` |
-| String interpolation | `'Hello ${name}'` |
+| String interpolation | `"Hello ${name}"` |
 | String concatenation | `++` operator |
 | Match expressions | `match x` with arms |
 | For comprehensions | `for x in xs yield expr` |
@@ -76,7 +76,7 @@
 
 | Feature | Notes |
 |---------|-------|
-| Error keyword | `error 'message'` |
+| Error keyword | `error "message"` |
 | Recover | `\|expr\|.recover` |
 
 ## Type System

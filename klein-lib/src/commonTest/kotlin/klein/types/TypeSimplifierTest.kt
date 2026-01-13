@@ -163,7 +163,7 @@ class TypeSimplifierTest {
 
     @Test
     fun integration_constantFunction_paramIsAny() {
-        assertType(Type.Fun(listOf(Type.Top), Type.Str), infer("|_ -> 'hello'|"))
+        assertType(Type.Fun(listOf(Type.Top), Type.Str), infer("|_ -> \"hello\"|"))
     }
 
     @Test
@@ -183,7 +183,7 @@ class TypeSimplifierTest {
 
     @Test
     fun integration_nestedThunks() {
-        assertType(Type.Fun(emptyList(), Type.Fun(emptyList(), Type.Str)), infer("|| 'hello' ||"))
+        assertType(Type.Fun(emptyList(), Type.Fun(emptyList(), Type.Str)), infer("|| \"hello\" ||"))
     }
 
     @Test

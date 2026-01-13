@@ -9,7 +9,7 @@ Functions take positional arguments. This is the standard model used by most pro
 Records use braces with `=` for field assignment:
 
 ```klein
-person = { name = 'Alice', age = 30 }
+person = { name = "Alice", age = 30 }
 point = { x = 1, y = 2 }
 ```
 
@@ -18,7 +18,7 @@ point = { x = 1, y = 2 }
 When a variable name matches the field name, you can omit the assignment:
 
 ```klein
-name = 'Alice'
+name = "Alice"
 age = 30
 person = { name, age }  # same as { name = name, age = age }
 ```
@@ -30,8 +30,8 @@ This is purely syntactic sugar—bare identifiers in braces become `name = name`
 Copy fields from an existing record:
 
 ```klein
-person = { name = 'Alice', age = 30 }
-employee = { ...person, role = 'Engineer' }  # adds field
+person = { name = "Alice", age = 30 }
+employee = { ...person, role = "Engineer" }  # adds field
 older = { ...person, age = 31 }              # overrides field
 merged = { ...defaults, ...overrides }       # merge records
 ```
@@ -41,10 +41,10 @@ merged = { ...defaults, ...overrides }       # merge records
 Tuples use parentheses and always infer with positional field names `_1`, `_2`, `_3`, etc:
 
 ```klein
-pair = ('Alice', 30)          # (String, Int), fields _1, _2
+pair = ("Alice", 30)          # (String, Int), fields _1, _2
 triple = (1, 2, 3)            # (Int, Int, Int), fields _1, _2, _3
 
-pair._1                       # 'Alice'
+pair._1                       # "Alice"
 pair._2                       # 30
 ```
 
@@ -56,7 +56,7 @@ Functions are defined with `fun`, listing parameters in parentheses:
 
 ```klein
 fun greet(name: String, age: Int): String =
-  'Hello, ${name}, you are ${age} years old'
+  "Hello, ${name}, you are ${age} years old"
 ```
 
 Parameters are positional and available in the function body by name.
@@ -81,7 +81,7 @@ fun map(f: a -> b, xs: List(a)): List(b) = ...
 Function application uses parentheses with positional arguments:
 
 ```klein
-greet('Alice', 30)
+greet("Alice", 30)
 double(5)
 map(double, numbers)
 ```
@@ -93,7 +93,7 @@ When passing records to functions that expect them, extra fields are allowed:
 ```klein
 fun getName(r: { name: String }): String = r.name
 
-person = { name = 'Alice', age = 30, email = 'alice@example.com' }
+person = { name = "Alice", age = 30, email = "alice@example.com" }
 getName(person)  # works! extra fields ignored
 ```
 
@@ -162,7 +162,7 @@ process~ : { name: String, age: Int } -> Decision
 Use `~` when you have a record and want to spread it into a positional function:
 
 ```klein
-person = { name = 'Alice', age = 30 }
+person = { name = "Alice", age = 30 }
 
 # Without tilde - extract fields manually:
 process(person.name, person.age)
@@ -217,10 +217,10 @@ The field names in the resulting record type come from the parameter names in th
 
 | Syntax | Result |
 |--------|--------|
-| `{ name = 'Alice', age = 30 }` | Record with named fields |
+| `{ name = "Alice", age = 30 }` | Record with named fields |
 | `{ name, age }` | Shorthand: `{ name = name, age = age }` |
 | `{ ...r, field = val }` | Spread record, add/override field |
-| `('Alice', 30)` | Tuple with fields `_1`, `_2` |
+| `("Alice", 30)` | Tuple with fields `_1`, `_2` |
 
 ## Design Rationale
 
