@@ -345,7 +345,9 @@ class Parser(
 
     private fun isBlockEnd(): Boolean {
         val next = peek()
-        if (next.kind in setOf(PIPE, RPAREN, RBRACE, RBRACKET, ELSE, EOF)) return true
+        if (next.kind in setOf(RPAREN, RBRACE, RBRACKET, ELSE, EOF)) return true
+        // PIPE ends block unless it's indented further than the block (starting a nested lambda)
+        if (next.kind == PIPE && !next.startsLineAfter(currentLineIndent)) return true
         return next.startsLineBefore(currentLineIndent)
     }
 

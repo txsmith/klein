@@ -2,15 +2,18 @@ package klein
 
 import klein.TokenKind.*
 
-fun Token.prettyPrint(): String =
-    when (kind) {
-        INT, DOUBLE -> "Number($text)"
-        IDENT -> "Ident($text)"
-        STRING -> "String(\"$text\")"
-        PIPE -> "Pipe"
-        EOF -> "Eof"
-        else -> if (kind.keyword != null) "Keyword($kind)" else "Symbol($kind)"
-    }
+fun Token.prettyPrint(): String {
+    val base =
+        when (kind) {
+            INT, DOUBLE -> "Number($text)"
+            IDENT -> "Ident($text)"
+            STRING -> "String(\"$text\")"
+            PIPE -> "Pipe"
+            EOF -> "Eof"
+            else -> if (kind.keyword != null) "Keyword($kind)" else "Symbol($kind)"
+        }
+    return if (indent != null) "$base @$indent" else base
+}
 
 fun Stmt.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)

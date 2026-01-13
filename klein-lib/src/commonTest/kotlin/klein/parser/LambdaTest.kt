@@ -400,6 +400,20 @@ class LambdaTest {
     }
 
     @Test
+    fun nestedLambdaOnIndentedLine() {
+        val program =
+            """
+            |a ->
+              |q|
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda("a", body = block(lambda(body = id("q")))),
+        )
+    }
+
+    @Test
     fun tripleNestedNoParamLambda() {
         val expr = parse("|||42|||")
         assertExprEquals(expr, lambda(body = lambda(body = lambda(body = int(42)))))
