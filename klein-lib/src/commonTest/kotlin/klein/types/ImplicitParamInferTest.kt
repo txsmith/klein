@@ -9,12 +9,12 @@ import kotlin.test.assertTrue
 class ImplicitParamInferTest {
     @Test
     fun implicitParam_bareIdentity() {
-        assertType("(a) -> a", infer("|.|"))
+        assertType("('A) -> 'A", infer("|.|"))
     }
 
     @Test
     fun implicitParam_fieldAccess() {
-        assertType("({ x: a }) -> a", infer("|.x|"))
+        assertType("({ x: 'A }) -> 'A", infer("|.x|"))
     }
 
     @Test
@@ -76,7 +76,7 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_nestedLambda_separateScopes() {
-        assertType("() -> () -> ({ x: a }) -> a", infer("|| |.x| ||"))
+        assertType("() -> () -> ({ x: 'A }) -> 'A", infer("|| |.x| ||"))
     }
 
     @Test

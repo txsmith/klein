@@ -40,7 +40,7 @@ class TypeSimplifierTest {
     fun simplify_function_identity_staysPolymorphic() {
         val a = TVar()
         val fn = TFun(listOf(a), a)
-        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Var("a")), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("'A")), Type.Var("'A")), simplified(fn))
     }
 
     @Test
@@ -55,7 +55,7 @@ class TypeSimplifierTest {
         val a = TVar()
         val b = TVar()
         val fn = TFun(listOf(a, b), a)
-        assertEquals(Type.Fun(listOf(Type.Var("a"), Type.Top), Type.Var("a")), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("'A"), Type.Top), Type.Var("'A")), simplified(fn))
     }
 
     @Test
@@ -107,7 +107,7 @@ class TypeSimplifierTest {
         val innerFn = TFun(listOf(a), b)
         val fn = TFun(listOf(innerFn), TFun(listOf(a), b))
         assertEquals(
-            Type.Fun(listOf(Type.Fun(listOf(Type.Var("a")), Type.Var("b"))), Type.Fun(listOf(Type.Var("a")), Type.Var("b"))),
+            Type.Fun(listOf(Type.Fun(listOf(Type.Var("'A")), Type.Var("'B"))), Type.Fun(listOf(Type.Var("'A")), Type.Var("'B"))),
             simplified(fn),
         )
     }
@@ -117,7 +117,7 @@ class TypeSimplifierTest {
         val a = TVar()
         val rec = TRecord(mapOf("value" to a))
         val fn = TFun(listOf(a), rec)
-        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Record(mapOf("value" to Type.Var("a")))), simplified(fn))
+        assertEquals(Type.Fun(listOf(Type.Var("'A")), Type.Record(mapOf("value" to Type.Var("'A")))), simplified(fn))
     }
 
     @Test
@@ -135,7 +135,7 @@ class TypeSimplifierTest {
         val b = TVar()
         val inner = TFun(listOf(b), a)
         val outer = TFun(listOf(a), inner)
-        assertEquals(Type.Fun(listOf(Type.Var("a")), Type.Fun(listOf(Type.Top), Type.Var("a"))), simplified(outer))
+        assertEquals(Type.Fun(listOf(Type.Var("'A")), Type.Fun(listOf(Type.Top), Type.Var("'A"))), simplified(outer))
     }
 
     @Test
@@ -158,7 +158,7 @@ class TypeSimplifierTest {
 
     @Test
     fun integration_unusedParamInNestedLambda_becomesAny() {
-        assertType("(a) -> (Any) -> a", infer("|x -> |y -> x||"))
+        assertType("('A) -> (Any) -> 'A", infer("|x -> |y -> x||"))
     }
 
     @Test

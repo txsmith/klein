@@ -28,7 +28,7 @@ class RecordInferTest {
 
     @Test
     fun fieldWithFunction() {
-        assertType("{ f: (a) -> a }", infer("{ f = |x -> x| }"))
+        assertType("{ f: ('A) -> 'A }", infer("{ f = |x -> x| }"))
     }
 
     @Test
@@ -72,12 +72,12 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_polymorphic() {
-        assertType("({ x: a }) -> a", infer("|r -> r.x|"))
+        assertType("({ x: 'A }) -> 'A", infer("|r -> r.x|"))
     }
 
     @Test
     fun record_functionResultInField() {
-        assertType("((Num) -> a) -> a", infer("|f -> { x = f(42) }.x|"))
+        assertType("((Num) -> 'A) -> 'A", infer("|f -> { x = f(42) }.x|"))
     }
 
     @Test

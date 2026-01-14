@@ -321,7 +321,7 @@ class BlockInferTest {
               { a = f(y), b = f(true) }
             |
             """.trimIndent()
-        assertType("(a) -> { a: a, b: Bool }", infer(program))
+        assertType("('A) -> { a: 'A, b: Bool }", infer(program))
     }
 
     @Test
@@ -344,7 +344,7 @@ class BlockInferTest {
             id = |x -> x|
             id(id)
             """.trimIndent()
-        assertType("(a) -> a", infer(program))
+        assertType("('A) -> 'A", infer(program))
     }
 
     @Test
@@ -381,6 +381,6 @@ class BlockInferTest {
             twice = |f -> |x -> f(f(x))||
             twice(|x -> x|)
             """.trimIndent()
-        assertType("(a) -> a", infer(program))
+        assertType("('A) -> 'A", infer(program))
     }
 }

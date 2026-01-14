@@ -62,7 +62,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_functionBranches() {
-        assertType("(a) -> a | Num", infer("if true then |x -> x| else |y -> 1|"))
+        assertType("('A) -> 'A | Num", infer("if true then |x -> x| else |y -> 1|"))
     }
 
     @Test
@@ -72,7 +72,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_polymorphicBranches() {
-        assertType("(Bool) -> (a) -> (a) -> a", infer("|x -> |y -> |z -> if x then y else z|||"))
+        assertType("(Bool) -> ('A) -> ('A) -> 'A", infer("|x -> |y -> |z -> if x then y else z|||"))
     }
 
     @Test

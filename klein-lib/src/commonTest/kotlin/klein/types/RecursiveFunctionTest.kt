@@ -7,7 +7,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_selfCall() {
         assertType(
-            "({ u: a } as a) -> Nothing",
+            "({ u: 'A } as 'A) -> Nothing",
             infer(
                 """
                 fun f(x) = f(x.u)
@@ -20,7 +20,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_y_combinator() {
         assertType(
-            "((a) -> a) -> a",
+            "(('A) -> 'A) -> 'A",
             infer(
                 """
               fun fix(f) = f(fix(f))
@@ -33,7 +33,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_constantRecursion() {
         assertType(
-            "(Any) -> a as a",
+            "(Any) -> 'A as 'A",
             infer(
                 """
                 fun r(a) = r
@@ -46,7 +46,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_monster() {
         assertType(
-            "(a) -> { self: b, thing: a } as b",
+            "('A) -> { self: 'B, thing: 'A } as 'B",
             infer(
                 """
                 fun monster(x) = { thing = x, self = monster(x) }
@@ -59,7 +59,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_trutru() {
         assertType(
-            "((Bool) -> a as a) -> Nothing",
+            "((Bool) -> 'A as 'A) -> Nothing",
             infer(
                 """
                 fun trutru(g) = trutru(g(true))
@@ -72,7 +72,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_produce() {
         assertType(
-            "(Num) -> { head: Num, tail: a } as a",
+            "(Num) -> { head: Num, tail: 'A } as 'A",
             infer(
                 """
                 fun produce(arg) = { head = arg, tail = produce(arg + 1) }
@@ -85,7 +85,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_consume() {
         assertType(
-            "({ head: Num, tail: a } as a) -> Num",
+            "({ head: Num, tail: 'A } as 'A) -> Num",
             infer(
                 """
                 fun consume(strm) = strm.head + consume(strm.tail)
@@ -98,7 +98,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_selfRecordBounds() {
         assertType(
-            "({ tail: a } as a, Any) -> Num",
+            "({ tail: 'A } as 'A, Any) -> Num",
             infer(
                 """
                 fun f(x, y) = f(x.tail, y) + f(x, y)
@@ -111,7 +111,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_twoRecursiveParams() {
         assertType(
-            "({ tail: a } as a, { tail: b } as b) -> Num",
+            "({ tail: 'A } as 'A, { tail: 'B } as 'B) -> Num",
             infer(
                 """
                 fun f(x, y) = f(x.tail, y) + f(y, x)
@@ -124,7 +124,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_bothParamsTails() {
         assertType(
-            "({ tail: a } as a, { tail: b } as b) -> Num",
+            "({ tail: 'A } as 'A, { tail: 'B } as 'B) -> Num",
             infer(
                 """
                 fun f(x, y) = f(x.tail, y) + f(x, y.tail)
@@ -137,7 +137,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_ifBranching() {
         assertType(
-            "(a & { t: b } as b, { t: c } as c) -> a | { t: d } as d",
+            "('A & { t: 'B } as 'B, { t: 'C } as 'C) -> 'A | { t: 'D } as 'D",
             infer(
                 """
                 fun f(x, y) = if true then x else { t = f(x.t, y.t) }
@@ -177,7 +177,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_join() {
         assertType(
-            "(a) -> (a) -> a",
+            "('A) -> ('A) -> 'A",
             infer("|a -> |b -> if true then a else b||"),
         )
     }
@@ -186,7 +186,7 @@ class RecursiveFunctionTest {
     fun recursive_joinWithRecursive() {
         // With canonicalization, identical recursive types merge
         assertType(
-            "(Any) -> a as a",
+            "(Any) -> 'A as 'A",
             infer(
                 """
                 fun r(a) = r
@@ -201,7 +201,7 @@ class RecursiveFunctionTest {
     fun recursive_twoRecursiveSameCycle() {
         // With canonicalization, recursive types with different arities merge
         assertType(
-            "(Any) -> a as a",
+            "(Any) -> 'A as 'A",
             infer(
                 """
                 fun l(a) = l
@@ -216,7 +216,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_nestedRecordSelfReference() {
         assertType(
-            "{ a: a, b: a } as a",
+            "{ a: 'A, b: 'A } as 'A",
             infer(
                 """
                 fun x() = { a = x(), b = x() }
@@ -229,7 +229,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_functionReturningRecursive() {
         assertType(
-            "(Any) -> { a: a, b: a } as a",
+            "(Any) -> { a: 'A, b: 'A } as 'A",
             infer(
                 """
                 fun x(v) = { a = x(v), b = x(v) }
@@ -242,7 +242,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_mutuallyRecursiveStyle() {
         assertType(
-            "(a) -> { l: b, r: a } as b",
+            "('A) -> { l: 'B, r: 'A } as 'B",
             infer(
                 """
                 fun f(x) = { l = f(x), r = x }
@@ -255,7 +255,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_yCombinatorStyle() {
         assertType(
-            "((a) -> a) -> a",
+            "(('A) -> 'A) -> 'A",
             infer("|f -> |x -> f(x(x))|(|x -> f(x(x))|)|"),
         )
     }
@@ -263,7 +263,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_selfAppWithLetResult() {
         assertType(
-            "(a & ((a) -> b)) -> b",
+            "('A & (('A) -> 'B)) -> 'B",
             infer(
                 """
                 fun x(y) =
@@ -278,7 +278,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_recordFieldSelfApp() {
         assertType(
-            "({ v: a } & ((a) -> Any)) -> Num",
+            "({ v: 'A } & (('A) -> Any)) -> Num",
             infer(
                 """
                 |x ->
@@ -293,7 +293,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_omegaAppliedToIdentity() {
         assertType(
-            "a | ((a) -> b) as b",
+            "'A | (('A) -> 'B) as 'B",
             infer("|x -> x(x)|(|x -> x|)"),
         )
     }
@@ -301,7 +301,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_ySelfApp() {
         assertType(
-            "((a) -> a & ((a) -> b) as b) -> a",
+            "(('A) -> 'A & (('A) -> 'B) as 'B) -> 'A",
             infer(
                 """
                 fun x(y) = y(x(x))
@@ -314,7 +314,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_yXX() {
         assertType(
-            "((a) -> (a) -> b) -> b as a",
+            "(('A) -> ('A) -> 'B) -> 'B as 'A",
             infer(
                 """
                 fun x(y) = y(x)(x)
@@ -327,7 +327,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_xYY() {
         assertType(
-            "(a & ((a) -> b) as b) -> Nothing",
+            "('A & (('A) -> 'B) as 'B) -> Nothing",
             infer(
                 """
                 fun x(y) = x(y(y))
@@ -340,7 +340,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_letThenIdentity() {
         assertType(
-            "(a) -> a | ((a) -> b) as b",
+            "('A) -> 'A | (('A) -> 'B) as 'B",
             infer(
                 """
                 fun x(y) =
@@ -355,7 +355,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_recordUWithY() {
         assertType(
-            "(a) -> { u: a | ((a) -> b), v: c } as c as b",
+            "('A) -> { u: 'A | (('A) -> 'B), v: 'C } as 'C as 'B",
             infer(
                 """
                 fun x(y) = { u = y, v = x(x) }
@@ -368,7 +368,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_recordVWithY() {
         assertType(
-            "(a) -> { u: b, v: a | ((a) -> c) } as b as c",
+            "('A) -> { u: 'B, v: 'A | (('A) -> 'C) } as 'B as 'C",
             infer(
                 """
                 fun x(y) = { u = x(x), v = y }
@@ -381,7 +381,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_yXPattern() {
         assertType(
-            "(a & ((b) -> Any)) -> a as b",
+            "('A & (('B) -> Any)) -> 'A as 'B",
             infer(
                 """
                 fun x(y) =
@@ -396,7 +396,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_fixpointStyle() {
         assertType(
-            "((a) -> b) -> (c & ((c) -> a)) -> b",
+            "(('A) -> 'B) -> ('C & (('C) -> 'A)) -> 'B",
             infer("|x -> |y -> x(y(y))||"),
         )
     }
@@ -404,7 +404,7 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_arbitraryArgs() {
         assertType(
-            "(Any) -> (Any) -> a as a",
+            "(Any) -> (Any) -> 'A as 'A",
             infer("|f -> |x -> f(|v -> x(x)(v)|)|(|x -> f(|v -> x(x)(v)|)|)|(|f -> |x -> f||)"),
         )
     }

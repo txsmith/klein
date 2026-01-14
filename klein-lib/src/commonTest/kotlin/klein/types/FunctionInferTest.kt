@@ -14,12 +14,12 @@ class FunctionInferTest {
 
     @Test
     fun lambda_oneParam() {
-        assertType("(a) -> a", infer("|x -> x|"))
+        assertType("('A) -> 'A", infer("|x -> x|"))
     }
 
     @Test
     fun lambda_twoParams() {
-        assertType("(a, Any) -> a", infer("|x, y -> x|"))
+        assertType("('A, Any) -> 'A", infer("|x, y -> x|"))
     }
 
     @Test
@@ -82,7 +82,7 @@ class FunctionInferTest {
 
     @Test
     fun lambda_nestedLambda() {
-        assertType("(a) -> (Any) -> a", infer("|x -> |y -> x||"))
+        assertType("('A) -> (Any) -> 'A", infer("|x -> |y -> x||"))
     }
 
     @Test
@@ -101,7 +101,7 @@ class FunctionInferTest {
 
     @Test
     fun higherOrder_paramAppliedToValue() {
-        assertType("((Num) -> a) -> a", infer("|x -> x(42)|"))
+        assertType("((Num) -> 'A) -> 'A", infer("|x -> x(42)|"))
     }
 
     @Test
@@ -122,7 +122,7 @@ class FunctionInferTest {
 
     @Test
     fun selfApplication_basic_type() {
-        assertType("(a & ((a) -> b)) -> b", infer("|x -> x(x)|"))
+        assertType("('A & (('A) -> 'B)) -> 'B", infer("|x -> x(x)|"))
     }
 
     @Test

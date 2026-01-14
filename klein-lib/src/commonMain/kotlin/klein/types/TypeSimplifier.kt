@@ -191,9 +191,9 @@ object TypeSimplifier {
         fun varName(v: TVar): String =
             varNames.getOrPut(v) {
                 val idx = varNames.size
-                val letter = 'a' + (idx % 26)
+                val letter = 'A' + (idx % 26)
                 val suffix = if (idx >= 26) "${idx / 26}" else ""
-                "$letter$suffix"
+                "'$letter$suffix"
             }
 
         fun go(

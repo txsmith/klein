@@ -82,9 +82,9 @@ object TypePrinter {
         private fun varName(tv: TVar): String = varNames.getOrPut(tv) { generateVarName(nextVarId++) }
 
         private fun generateVarName(id: Int): String {
-            val letter = 'a' + (id % 26)
+            val letter = 'A' + (id % 26)
             val suffix = if (id >= 26) "${id / 26}" else ""
-            return "$letter$suffix"
+            return "'$letter$suffix"
         }
 
         private fun printFun(fn: TFun): String {

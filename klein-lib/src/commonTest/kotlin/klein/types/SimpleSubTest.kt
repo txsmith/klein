@@ -17,12 +17,12 @@ class SimpleSubTest {
 
     @Test
     fun basic_identity() {
-        assertType("(a) -> a", infer("|x -> x|"))
+        assertType("('A) -> 'A", infer("|x -> x|"))
     }
 
     @Test
     fun basic_applyToInt() {
-        assertType("((Num) -> a) -> a", infer("|x -> x(42)|"))
+        assertType("((Num) -> 'A) -> 'A", infer("|x -> x(42)|"))
     }
 
     @Test
@@ -32,13 +32,13 @@ class SimpleSubTest {
 
     @Test
     fun basic_twice() {
-        assertType("((a | b) -> a) -> (b) -> a", infer("|f -> |x -> f(f(x))||"))
+        assertType("(('A | 'B) -> 'A) -> ('B) -> 'A", infer("|f -> |x -> f(f(x))||"))
     }
 
     @Test
     fun basic_twiceWithLet() {
         assertType(
-            "((a | b) -> a) -> (b) -> a",
+            "(('A | 'B) -> 'A) -> ('B) -> 'A",
             infer(
                 """
                 twice = |f -> |x -> f(f(x))||
@@ -70,12 +70,12 @@ class SimpleSubTest {
 
     @Test
     fun booleans_ifThenElse() {
-        assertType("(Bool) -> (a) -> (a) -> a", infer("|x -> |y -> |z -> if x then y else z|||"))
+        assertType("(Bool) -> ('A) -> ('A) -> 'A", infer("|x -> |y -> |z -> if x then y else z|||"))
     }
 
     @Test
     fun booleans_ifWithSameVarInElse() {
-        assertType("(a & Bool) -> (a) -> a", infer("|x -> |y -> if x then y else x||"))
+        assertType("('A & Bool) -> ('A) -> 'A", infer("|x -> |y -> if x then y else x||"))
     }
 
     @Test
@@ -101,7 +101,7 @@ class SimpleSubTest {
 
     @Test
     fun records_fieldAccess() {
-        assertType("({ f: a }) -> a", infer("|x -> x.f|"))
+        assertType("({ f: 'A }) -> 'A", infer("|x -> x.f|"))
     }
 
     @Test
@@ -126,7 +126,7 @@ class SimpleSubTest {
 
     @Test
     fun records_functionInField() {
-        assertType("((Num) -> a) -> a", infer("|f -> { x = f(42) }.x|"))
+        assertType("((Num) -> 'A) -> 'A", infer("|f -> { x = f(42) }.x|"))
     }
 
     @Test
@@ -155,22 +155,22 @@ class SimpleSubTest {
 
     @Test
     fun selfApp_basic() {
-        assertType("(a & ((a) -> b)) -> b", infer("|x -> x(x)|"))
+        assertType("('A & (('A) -> 'B)) -> 'B", infer("|x -> x(x)|"))
     }
 
     @Test
     fun selfApp_triple() {
-        assertType("(a & ((a) -> (a) -> b)) -> b", infer("|x -> x(x)(x)|"))
+        assertType("('A & (('A) -> ('A) -> 'B)) -> 'B", infer("|x -> x(x)(x)|"))
     }
 
     @Test
     fun selfApp_twoParams() {
-        assertType("(a & ((b) -> (a) -> c)) -> (b) -> c", infer("|x -> |y -> x(y)(x)||"))
+        assertType("('A & (('B) -> ('A) -> 'C)) -> ('B) -> 'C", infer("|x -> |y -> x(y)(x)||"))
     }
 
     @Test
     fun selfApp_twoParamsReversed() {
-        assertType("(a & ((a) -> (b) -> c)) -> (b) -> c", infer("|x -> |y -> x(x)(y)||"))
+        assertType("('A & (('A) -> ('B) -> 'C)) -> ('B) -> 'C", infer("|x -> |y -> x(x)(y)||"))
     }
 
     @Test
@@ -180,18 +180,18 @@ class SimpleSubTest {
 
     @Test
     fun selfApp_recordWithSelfApp() {
-        assertType("(a & ((a) -> b)) -> { l: b, r: a }", infer("|x -> { l = x(x), r = x }|"))
+        assertType("('A & (('A) -> 'B)) -> { l: 'B, r: 'A }", infer("|x -> { l = x(x), r = x }|"))
     }
 
     @Test
     fun selfApp_yCombinator() {
-        assertType("((a) -> a) -> a", infer("|f -> |x -> f(x(x))|(|x -> f(x(x))|)|"))
+        assertType("(('A) -> 'A) -> 'A", infer("|f -> |x -> f(x(x))|(|x -> f(x(x))|)|"))
     }
 
     @Test
     fun selfApp_zCombinator() {
         assertType(
-            "(((a) -> b) -> c & ((a) -> b)) -> c",
+            "((('A) -> 'B) -> 'C & (('A) -> 'B)) -> 'C",
             infer(
                 "|f -> |x -> f(|v -> x(x)(v)|)|(|x -> f(|v -> x(x)(v)|)|)|",
             ),
@@ -200,7 +200,7 @@ class SimpleSubTest {
 
     @Test
     fun selfApp_ifWithSelfApp() {
-        assertType("(a & ((a) -> (Bool) -> Bool)) -> Bool", infer("|i -> if i(i)(true) then true else true|"))
+        assertType("('A & (('A) -> (Bool) -> Bool)) -> Bool", infer("|i -> if i(i)(true) then true else true|"))
     }
 
     @Test
@@ -219,7 +219,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_withParam() {
         assertType(
-            "(a) -> { a: a, b: Bool }",
+            "('A) -> { a: 'A, b: Bool }",
             infer(
                 """
                 |y ->
@@ -234,7 +234,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_functionUsingParam() {
         assertType(
-            "((Bool | Num) -> a) -> { a: a, b: a }",
+            "((Bool | Num) -> 'A) -> { a: 'A, b: 'A }",
             infer(
                 """
                 |y ->
@@ -249,7 +249,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_applyParamToIdentities() {
         assertType(
-            "(a) -> { a: a, b: Bool }",
+            "('A) -> { a: 'A, b: Bool }",
             infer(
                 """
                 |y ->
@@ -264,7 +264,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_applyParamToIdentityAndSucc() {
         assertType(
-            "(a & Num) -> { a: a, b: Num }",
+            "('A & Num) -> { a: 'A, b: Num }",
             infer(
                 """
                 |y ->
@@ -279,7 +279,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_constrainedWithIf() {
         assertType(
-            "(((Num) -> Num) -> a) -> a",
+            "(((Num) -> Num) -> 'A) -> 'A",
             infer(
                 """
                 |k ->
@@ -297,7 +297,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_functionWithTwoHOFParams() {
         assertType(
-            "((a) -> b) -> (a) -> ((a) -> c) -> { a: b, b: c }",
+            "(('A) -> 'B) -> ('A) -> (('A) -> 'C) -> { a: 'B, b: 'C }",
             infer(
                 """
                 |f ->
@@ -327,7 +327,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_twoFunctionsWithSharedParam() {
         assertType(
-            "((Bool | Num) -> a) -> { u: { a: Num, b: a }, v: { a: Bool, b: a } }",
+            "((Bool | Num) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
             infer(
                 """
                 |f ->
@@ -342,7 +342,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_withRecordParam() {
         assertType(
-            "((Num | { t: Bool }) -> a) -> { u: { a: Num, b: a }, v: { a: Bool, b: a } }",
+            "((Num | { t: Bool }) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
             infer(
                 """
                 |f ->
@@ -363,7 +363,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_constrainedIdentity() {
         assertType(
-            "(((a & Num) -> a) -> b) -> b",
+            "((('A & Num) -> 'A) -> 'B) -> 'B",
             infer(
                 """
                 |k ->
@@ -381,7 +381,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_extrusionLossOfPolymorphism() {
         assertType(
-            "(((a) -> a | Bool | Num) -> Any) -> { u: a | Num, v: a | Bool }",
+            "((('A) -> 'A | Bool | Num) -> Any) -> { u: 'A | Num, v: 'A | Bool }",
             infer(
                 """
                 |k ->
@@ -396,7 +396,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_noExtrusionWithSeparateIdentity() {
         assertType(
-            "(((a) -> a) -> Any) -> { u: Num, v: Bool }",
+            "((('A) -> 'A) -> Any) -> { u: Num, v: Bool }",
             infer(
                 """
                 |k ->
@@ -411,7 +411,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_extrusionWithThefun() {
         assertType(
-            "(((a & Num) -> a | Num) -> b) -> { l: b, r: Num }",
+            "((('A & Num) -> 'A | Num) -> 'B) -> { l: 'B, r: Num }",
             infer(
                 """
                 |k ->
@@ -429,7 +429,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_constrainedIdentityWithOuterParam() {
         assertType(
-            "(a & Num) -> a",
+            "('A & Num) -> 'A",
             infer(
                 """
                 |a ->
@@ -449,7 +449,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_nestedLetWithAdd() {
         assertType(
-            "(((a & Num) -> a) -> b) -> b",
+            "((('A & Num) -> 'A) -> 'B) -> 'B",
             infer(
                 """
                 |k ->
@@ -467,7 +467,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_deeplyNestedLetWithAdd() {
         assertType(
-            "(((a & Num) -> a) -> b) -> b",
+            "((('A & Num) -> 'A) -> 'B) -> 'B",
             infer(
                 """
                 |k ->
@@ -487,7 +487,7 @@ class SimpleSubTest {
     @Test
     fun random_selfAppWithLetResult() {
         assertType(
-            "(a & ((a) -> Any)) -> Num",
+            "('A & (('A) -> Any)) -> Num",
             infer(
                 """
                 |x ->
@@ -502,7 +502,7 @@ class SimpleSubTest {
     @Test
     fun random_nestedSelfApp() {
         assertType(
-            "((a) -> b) -> (c & ((c) -> a)) -> b",
+            "(('A) -> 'B) -> ('C & (('C) -> 'A)) -> 'B",
             infer("|x -> |y -> x(y(y))||"),
         )
     }
@@ -510,7 +510,7 @@ class SimpleSubTest {
     @Test
     fun random_recordFieldSelfApp() {
         assertType(
-            "({ v: a } & ((a) -> Any)) -> Num",
+            "({ v: 'A } & (('A) -> Any)) -> Num",
             infer(
                 """
                 |x ->
@@ -526,7 +526,7 @@ class SimpleSubTest {
     fun mlsub_pickAnObject() {
         // From mlsub website: "bool -> {x: int, y: bool ∨ ('a -> 'a)}"
         assertType(
-            "(Bool) -> { x: Num, y: Bool | ((a) -> a) }",
+            "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
             infer(
                 """
                 object1 = { x = 42, y = |x -> x| }
@@ -554,7 +554,7 @@ class SimpleSubTest {
     @Test
     fun misc_join() {
         assertType(
-            "(a) -> (a) -> a",
+            "('A) -> ('A) -> 'A",
             infer("|a -> |b -> if true then a else b||"),
         )
     }
@@ -562,7 +562,7 @@ class SimpleSubTest {
     @Test
     fun misc_twoCrown() {
         assertType(
-            "(a) -> (a) -> { l: a, r: a }",
+            "('A) -> ('A) -> { l: 'A, r: 'A }",
             infer("|x -> |y -> if true then { l = x, r = y } else { l = y, r = x }||"),
         )
     }
@@ -570,7 +570,7 @@ class SimpleSubTest {
     @Test
     fun mlsub_recordWithPolymorphicField() {
         assertType(
-            "{ x: Num, y: (a) -> a }",
+            "{ x: Num, y: ('A) -> 'A }",
             infer("{ x = 42, y = |x -> x| }"),
         )
     }
@@ -587,7 +587,7 @@ class SimpleSubTest {
     fun mlsub_fullProgram() {
         // From mlsub website - full program with multiple bindings
         assertType(
-            "(Bool) -> { x: Num, y: Bool | ((a) -> a) }",
+            "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
             infer(
                 """
                 id = |x -> x|
