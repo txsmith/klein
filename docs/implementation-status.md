@@ -57,17 +57,17 @@
 
 | Feature | Notes |
 |---------|-------|
-| Parameter types | `fun f(x: Int)` |
-| Return types | `fun f(x): Int` |
-| Val types | `x: Int = 1` |
+| Parameter types | `fun f(x: Num)` |
+| Return types | `fun f(x): Num` |
+| Val types | `x: Num = 1` |
 
 **Definitions:**
 
 | Feature | Notes |
 |---------|-------|
-| Type definitions | `type Person = { name: String }` |
+| Type definitions | `type Person = Person { name: String }` |
 | Sum types | `type Color = Red \| Green \| Blue` |
-| Type aliases | `type Money = Double` |
+| Type aliases | `type Money = Num` |
 | Extension methods | `fun f(on x: T)` |
 | Modules | `module Name` |
 | Imports | `import Module._` |
@@ -101,8 +101,8 @@ See [type-system.md](type-system.md) for design and [simplesub-type-inference.md
 | Feature | Notes |
 |---------|-------|
 | Sum types | `Ok { value: t } \| Err { error: e }` |
-| Generics | `List(a)`, `Option(a)` |
-| Nominal types | `type Person = { ... }` creates nominal type |
+| Generics | `List<'A>`, `Option<'A>` |
+| Nominal types | `type Person = Person { ... }` creates nominal type |
 | Kleene types | `T?`, `T*`, `T+` (experimental) |
 
 ## Interpreter

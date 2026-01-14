@@ -70,10 +70,10 @@ Subtyping is covariant in field types:
 Function types use arrow syntax with positional parameters:
 
 ```klein
-Num -> Num                    # single parameter
-(Num, Num) -> Num             # multiple parameters
-() -> Num                     # no parameters (thunk)
-(a -> b, List(a)) -> List(b)  # higher-order
+Num -> Num                          # single parameter
+(Num, Num) -> Num                   # multiple parameters
+() -> Num                           # no parameters (thunk)
+('A -> 'B, List<'A>) -> List<'B>    # higher-order
 ```
 
 ### Variance
@@ -100,11 +100,11 @@ fun add(x: Num, y: Num): Num = x + y
 # (Num, Num) -> Num
 ```
 
-Type parameters are inferred from lowercase variables:
+Type parameters use tick-prefixed variables:
 
 ```klein
-fun identity(x: a): a = x
-fun map(f: a -> b, xs: List(a)): List(b) = ...
+fun identity(x: 'A): 'A = x
+fun map(f: 'A -> 'B, xs: List<'A>): List<'B> = ...
 ```
 
 ### The Tilde Operator (~)
@@ -126,47 +126,25 @@ people.map(process~)  # process~ : { name: String, age: Num } -> Decision
 
 ## Defining Types
 
-All type definitions use the `type` keyword and create nominal types with constructors.
+All type definitions use the `type` keyword and create nominal types with constructors. Constructors are first-class functions with named parameters.
 
 ### Single-Constructor Types
 
-When the right-hand side is a record, a constructor with the same name as the type is created:
-
 ```klein
-type Person = { name: String, age: Num }
-type Point = { x: Num, y: Num }
+type Money = Money { value: Num }
+type Person = Person { name: String, age: Num }
+type Point = Point { x: Num, y: Num }
 ```
 
-Usage:
+Constructors are called positionally:
 
 ```klein
-# Construction
-p = Person { name = "Alice", age = 30 }
-
-# Pattern matching
-match p
-  Person { name, age } -> "Hello, ${name}"
+p = Person("Alice", 30)
+m = Money(99.95)
+pt = Point(10, 20)
 ```
 
 `Person` and `Point` are distinct nominal types, even if their fields happen to match.
-
-### Wrapper Types
-
-Wrapping a non-record type works the same way:
-
-```klein
-type CustomerId = Num
-type Money = Num
-```
-
-Usage:
-
-```klein
-id = CustomerId(42)
-price = Money(99.95)
-```
-
-This creates distinct nominal types—`CustomerId` and `Num` are not interchangeable.
 
 ### Sum Types
 
@@ -175,12 +153,12 @@ Use pipe (`|`) to introduce multiple constructors:
 ```klein
 type Color = Red | Green | Blue
 
-type Option(a) = Some { value: a } | None
+type Option<'A> = Some { value: 'A } | None
 
-type Result(t, e) = Ok { value: t } | Err { error: e }
+type Result<'T, 'E> = Ok { value: 'T } | Err { error: 'E }
 ```
 
-Payloads are always records:
+Constructors can have parameters or be bare:
 
 ```klein
 type Light =
@@ -191,24 +169,33 @@ type Light =
 
 ### Type Parameters
 
-Type definitions take explicit parameter lists:
+Type definitions take explicit parameter lists with tick-prefixed variables:
 
 ```klein
-type Option(a) = Some { value: a } | None
-type Result(t, e) = Ok { value: t } | Err { error: e }
-type Pair(a, b) = { first: a, second: b }
+type Option<'A> = Some { value: 'A } | None
+type Result<'T, 'E> = Ok { value: 'T } | Err { error: 'E }
+type Pair<'A, 'B> = Pair { first: 'A, second: 'B }
 ```
 
-Apply type arguments with parens:
+Apply type arguments with angle brackets:
 
 ```klein
-x: Option(Num) = Some { value = 42 }
-y: Result(String, Error) = Ok { value = 'hello' }
+x: Option<Num> = Some(42)
+y: Result<String, Error> = Ok("hello")
+```
+
+### Constructors as First-Class Functions
+
+Constructors are functions and can be passed around:
+
+```klein
+nums.map(Some)           # List<Num> -> List<Option<Num>>
+nums.map(Money)          # List<Num> -> List<Money>
 ```
 
 ## Nominal vs Structural Interop
 
-A nominal type is a subtype of its structural payload:
+A nominal type is a subtype of its structural equivalent:
 
 ```klein
 type Person = Person { name: String, age: Num }
@@ -221,7 +208,7 @@ This means nominal types can be passed where structural types are expected:
 ```klein
 fun greet(r: { name: String }): String = "Hello, ${r.name}"
 
-person = Person { name = "Alice", age = 30 }
+person = Person("Alice", 30)
 greet(person)  # works! Person <: { name: String }
 ```
 
@@ -230,15 +217,12 @@ greet(person)  # works! Person <: { name: String }
 Subtyping composes through nesting:
 
 ```klein
-type Address = { city: String, zip: String }
-type Person = { name: String, address: Address }
+type Address = Address { city: String, zip: String }
+type Person = Person { name: String, address: Address }
 
 fun getCity(r: { address: { city: String } }): String = r.address.city
 
-person = Person {
-  name = "Alice",
-  address = Address { city = "NYC", zip = "10001" }
-}
+person = Person("Alice", Address("NYC", "10001"))
 
 getCity(person)  # Works!
 
@@ -289,16 +273,16 @@ fun getDuration(light: Light): Num = light.duration  # No match needed
 
 ### Construction
 
-Just use the constructor name:
+Constructors are called positionally:
 
 ```klein
 # Bare constructors
 color = Red
 result = None
 
-# With payload (named fields)
-person = Person { name = 'Alice', age = 30 }
-result = Ok { value = 42 }
+# With parameters
+person = Person("Alice", 30)
+result = Ok(42)
 ```
 
 ### Pattern Matching
@@ -310,11 +294,11 @@ match color
   Green -> "go"
 
 match result
-  Ok { value } -> value
-  Err { error } -> handleError(error)
+  Ok(value) -> value
+  Err(error) -> handleError(error)
 
 match person
-  Person { name, age } -> "Hello, ${name}"
+  Person(name, age) -> "Hello, ${name}"
 ```
 
 ## Tuples
@@ -418,21 +402,21 @@ SimpleSub can infer recursive types—types that refer to themselves. These aris
 
 ```klein
 fun produce(n) = { head = n, tail = produce(n + 1) }
-# Inferred: (Num) -> { head: Num, tail: a } as a
+# Inferred: (Num) -> { head: Num, tail: 'A } as 'A
 
 fun consume(stream) = stream.head + consume(stream.tail)
-# Inferred: ({ head: Num, tail: a } as a) -> Num
+# Inferred: ({ head: Num, tail: 'A } as 'A) -> Num
 ```
 
-The `as a` syntax indicates that the type variable `a` refers back to the enclosing type, creating an infinite structure.
+The `as 'A` syntax indicates that the type variable `'A` refers back to the enclosing type, creating an infinite structure.
 
 **These types exist for completeness of type inference, not for direct use.** They ensure the type system can assign principal types to all valid programs, including self-referential patterns like Y combinators or infinite stream processors.
 
 For practical recursive data structures, use nominal types instead:
 
 ```klein
-type List(a) = Cons { head: a, tail: List(a) } | Nil
-type Tree(a) = Node { value: a, left: Tree(a), right: Tree(a) } | Leaf
+type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
+type Tree<'A> = Node { value: 'A, left: Tree<'A>, right: Tree<'A> } | Leaf
 ```
 
 Nominal types are clearer, provide better error messages, and support pattern matching. If you see inferred recursive types in your code (the `as` notation), consider whether a nominal type would better express your intent.
@@ -442,22 +426,23 @@ Nominal types are clearer, provide better error messages, and support pattern ma
 | Construct | Syntax | Example |
 |-----------|--------|---------|
 | Primitive | `Name` | `Num`, `String`, `Bool` |
-| Type variable | `name` | `a`, `t`, `key` |
+| Type variable | `'Name` | `'A`, `'T`, `'Key` |
 | Record (structural) | `{ field: Type }` | `{ name: String, age: Num }` |
 | Function type (1 param) | `A -> B` | `Num -> Num` |
 | Function type (n params) | `(A, B) -> C` | `(Num, Num) -> Num` |
 | Function type (0 params) | `() -> A` | `() -> Num` |
-| Single-constructor type | `type Name = { ... }` | `type Person = { name: String }` |
-| Wrapper type | `type Name = Primitive` | `type Money = Num` |
-| Sum type | `type Name = A \| B` | `type Color = Red \| Green` |
-| Constructor with payload | `Name { fields }` | `Ok { value: t }` |
-| Type parameters | `Name(a, b)` | `Option(a)`, `Result(t, e)` |
-| Type application | `Name(Type)` | `Option(Num)`, `List(String)` |
+| Single-constructor type | `type N = N { ... }` | `type Money = Money { value: Num }` |
+| Sum type | `type N = A \| B` | `type Color = Red \| Green` |
+| Constructor with params | `Name { fields }` | `Ok { value: 'T }` |
+| Bare constructor | `Name` | `None`, `Nil` |
+| Type parameters | `Name<'A, 'B>` | `Option<'A>`, `Result<'T, 'E>` |
+| Type application | `Name<Type>` | `Option<Num>`, `List<String>` |
+| Positional construction | `Name(args)` | `Person("Alice", 30)` |
 | Tuple type | `(A, B)` | `(String, Num)` |
 | Tilde transform | `f~` | `process~ : { name: String } -> R` |
 | Union type (inferred) | `A \| B` | `Num \| String` |
 | Intersection type (inferred) | `A & B` | `Bool & Num` |
-| Recursive type (inferred) | `T as a` | `{ head: Num, tail: a } as a` |
+| Recursive type (inferred) | `T as 'A` | `{ head: Num, tail: 'A } as 'A` |
 
 ## References
 

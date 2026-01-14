@@ -252,10 +252,10 @@ type Person = {
 }
 ```
 
-With row polymorphism:
+With width subtyping:
 ```klein
-fun getName(x: { name: String[n..m], ...r }): String[n..m]
-# Preserves cardinality of the name field
+fun getName(x: { name: String[n..m] }): String[n..m]
+# Accepts any record with at least a name field, preserves cardinality
 ```
 
 ## No Nesting

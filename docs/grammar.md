@@ -7,7 +7,19 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ## Expression Grammar
 
 ```
-prog        = (fun_def | stmt)*
+prog        = (type_def | fun_def | stmt)*
+
+type_def    = 'type' UPPER_IDENT type_params? '=' constructors
+
+type_params = '<' TYPE_VAR (',' TYPE_VAR)* '>'
+
+constructors = constructor ('|' constructor)*
+
+constructor = UPPER_IDENT constructor_params?
+
+constructor_params = '{' field_decl (',' field_decl)* '}'
+
+field_decl  = IDENT ':' type
 
 fun_def     = 'fun' IDENT '(' params? ')' '=' block_or_expr
 
@@ -63,6 +75,10 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | Grammar rule   | Parser method         |
 |----------------|-----------------------|
 | prog           | `parseProgram()`      |
+| type_def       | `parseTypeDef()` (TODO) |
+| type_params    | `parseTypeParams()` (TODO) |
+| constructors   | `parseConstructors()` (TODO) |
+| constructor    | `parseConstructor()` (TODO) |
 | fun_def        | `parseFunDef()`       |
 | stmt           | `parseStmt()`         |
 | binding        | `parseBinding()`      |
@@ -98,10 +114,13 @@ DOUBLE      = digit+ '.' digit+
 STRING      = '"' (char | escape)* '"'
 BOOL        = 'true' | 'false'
 IDENT       = (letter | '_') (letter | digit | '_')*
+UPPER_IDENT = upper (letter | digit | '_')*
+TYPE_VAR    = '\'' upper (letter | digit | '_')*
 
 escape      = '\\' ('"' | '\\' | 'n' | 't')
 digit       = '0'..'9'
 letter      = 'a'..'z' | 'A'..'Z'
+upper       = 'A'..'Z'
 ```
 
 ## Operator Precedence
@@ -158,28 +177,25 @@ X % sep  one or more X separated by sep
 
 ```
 TypeDef
-  = 'type' TypeName TypeParams? '=' TypeBody
+  = 'type' TypeName TypeParams? '=' Constructors
 
 TypeName
   = UpperIdent
 
 TypeParams
-  = '(' LowerIdent % ',' ')'
+  = '<' TypeVar % ',' '>'
 
-TypeBody
-  = RecordType                    # single-constructor: type Person = { ... }
-  | PrimitiveOrTypeName           # wrapper: type Money = Double
-  | Constructors                  # sum type: type Color = Red | Green | Blue
-```
+TypeVar
+  = '\'' UpperIdent               # 'A, 'B, 'T
 
-### Constructors (Sum Types)
-
-```
 Constructors
   = Constructor % '|'
 
 Constructor
-  = UpperIdent RecordType?        # no ticks: Ok { value: t }
+  = UpperIdent ConstructorParams?
+
+ConstructorParams
+  = '{' FieldDecl % ',' '}'       # Money { value: Num }, Some { value: 'A }
 ```
 
 ### Types (used in annotations, fields, etc.)
@@ -201,7 +217,7 @@ AppliedType
   = TypeAtom TypeArgs?
 
 TypeArgs
-  = '(' Type % ',' ')'
+  = '<' Type % ',' '>'
 
 TypeAtom
   = UpperIdent                    # concrete type: Num, String, Person
@@ -218,21 +234,10 @@ RecordType
   = '{' RecordFields? '}'
 
 RecordFields
-  = RecordField % ','
-
-RecordField
-  = FieldDecl                     # name: String
-  | RowVariable                   # ...r or ...
-  | SpreadType                    # ...Person
+  = FieldDecl % ','
 
 FieldDecl
   = LowerIdent ':' Type
-
-RowVariable
-  = '...' LowerIdent?             # ...r (named) or ... (anonymous)
-
-SpreadType
-  = '...' UpperIdent              # ...Person, ...Named
 ```
 
 ### Tuple Types
@@ -266,49 +271,14 @@ type Person = Person { name: String, age: Num }
 ```
 TypeDef
 ├─ 'type'
-├─ TypeName: "Person"
+├─ TypeName: "Money"
 ├─ TypeParams: (none)
 ├─ '='
-└─ TypeBody: RecordType
-   └─ RecordFields
-      ├─ FieldDecl: name: String
-      └─ FieldDecl: age: Int
-```
-
-### Wrapper Type
-
-```klein
-type Money = Double
-```
-
-```
-TypeDef
-├─ 'type'
-├─ TypeName: "Money"
-├─ '='
-└─ TypeBody: PrimitiveOrTypeName
-   └─ "Double"
-```
-
-### Sum Type
-
-```klein
-type Result(t, e) = Ok { value: t } | Err { error: e }
-```
-
-```
-TypeDef
-├─ 'type'
-├─ TypeName: "Result"
-├─ TypeParams: (t, e)
-├─ '='
-└─ TypeBody: Constructors
-   ├─ Constructor
-   │  ├─ UpperIdent: "Ok"
-   │  └─ RecordType: { value: t }
+└─ Constructors
    └─ Constructor
-      ├─ UpperIdent: "Err"
-      └─ RecordType: { error: e }
+      ├─ UpperIdent: "Money"
+      └─ ConstructorParams
+         └─ FieldDecl: value: Num
 ```
 
 ### Bare Constructors
@@ -322,42 +292,87 @@ TypeDef
 ├─ 'type'
 ├─ TypeName: "Color"
 ├─ '='
-└─ TypeBody: Constructors
-   ├─ Constructor: "Red" (no payload)
-   ├─ Constructor: "Green" (no payload)
-   └─ Constructor: "Blue" (no payload)
+└─ Constructors
+   ├─ Constructor: "Red" (no params)
+   ├─ Constructor: "Green" (no params)
+   └─ Constructor: "Blue" (no params)
 ```
 
-### Record with Row Variable
+### Sum Type with Parameters
 
 ```klein
-{ name: String, age: Int, ...r }
+type Result<'T, 'E> = Ok { value: 'T } | Err { error: 'E }
+```
+
+```
+TypeDef
+├─ 'type'
+├─ TypeName: "Result"
+├─ TypeParams: <'T, 'E>
+├─ '='
+└─ Constructors
+   ├─ Constructor
+   │  ├─ UpperIdent: "Ok"
+   │  └─ ConstructorParams
+   │     └─ FieldDecl: value: 'T
+   └─ Constructor
+      ├─ UpperIdent: "Err"
+      └─ ConstructorParams
+         └─ FieldDecl: error: 'E
+```
+
+### Mixed Constructors
+
+```klein
+type Option<'A> = Some { value: 'A } | None
+```
+
+```
+TypeDef
+├─ 'type'
+├─ TypeName: "Option"
+├─ TypeParams: <'A>
+├─ '='
+└─ Constructors
+   ├─ Constructor
+   │  ├─ UpperIdent: "Some"
+   │  └─ ConstructorParams
+   │     └─ FieldDecl: value: 'A
+   └─ Constructor: "None" (no params)
+```
+
+### Recursive Type
+
+```klein
+type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
+```
+
+```
+TypeDef
+├─ 'type'
+├─ TypeName: "List"
+├─ TypeParams: <'A>
+├─ '='
+└─ Constructors
+   ├─ Constructor
+   │  ├─ UpperIdent: "Cons"
+   │  └─ ConstructorParams
+   │     ├─ FieldDecl: head: 'A
+   │     └─ FieldDecl: tail: List<'A>
+   └─ Constructor: "Nil" (no params)
+```
+
+### Structural Record Type (in annotations)
+
+```klein
+{ name: String, age: Num }
 ```
 
 ```
 RecordType
 └─ RecordFields
    ├─ FieldDecl: name: String
-   ├─ FieldDecl: age: Int
-   └─ RowVariable: r
-```
-
-### Record Intersection (Spread)
-
-```klein
-type Person = { ...Named, ...Aged, title: String }
-```
-
-```
-TypeDef
-├─ 'type'
-├─ TypeName: "Person"
-├─ '='
-└─ TypeBody: RecordType
-   └─ RecordFields
-      ├─ SpreadType: ...Named
-      ├─ SpreadType: ...Aged
-      └─ FieldDecl: title: String
+   └─ FieldDecl: age: Num
 ```
 
 ### Function Types
@@ -391,9 +406,9 @@ FunctionType (zero params)
 ### Applied Type
 
 ```klein
-Option(Int)
-Result(String, Error)
-List(a)
+Option<Num>
+Result<String, Error>
+List<'A>
 ```
 
 ```
@@ -426,42 +441,20 @@ TupleType
 ├─ '('
 ├─ Type: String
 ├─ ','
-├─ Type: Int
+├─ Type: Num
 └─ ')'
 
 TupleType
 ├─ '('
-├─ Type: a
+├─ Type: 'A
 ├─ ','
-├─ Type: b
+├─ Type: 'B
 ├─ ','
-├─ Type: c
+├─ Type: 'C
 └─ ')'
 ```
 
 ## Type Grammar Disambiguation
-
-### TypeBody Variants
-
-When parsing `TypeBody` after `=`:
-
-1. Starts with `{` → `RecordType` (single-constructor)
-2. Contains `|` → `Constructors` (sum type)
-3. Otherwise → `PrimitiveOrTypeName` (wrapper)
-
-### Row Variable vs Spread
-
-Both use `...` prefix but are distinguished by what follows:
-
-| Syntax | What follows | Meaning |
-|--------|--------------|---------|
-| `...r` | LowerIdent | Row variable (captures extra fields) |
-| `...` | nothing | Anonymous row variable |
-| `...Person` | UpperIdent | Spread (expands type's fields) |
-
-The case of the identifier disambiguates. After `...`:
-- Lowercase or nothing → row variable
-- Uppercase → spread
 
 ### Parens: Tuple vs Grouping vs Function Params
 

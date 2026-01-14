@@ -72,8 +72,8 @@ fun double(x) = x * 2
 Type variables are implicitly universally quantified at the function level:
 
 ```klein
-fun identity(x: a): a = x
-fun map(f: a -> b, xs: List(a)): List(b) = ...
+fun identity(x: 'A): 'A = x
+fun map(f: 'A -> 'B, xs: List<'A>): List<'B> = ...
 ```
 
 ## Function Application
@@ -86,9 +86,9 @@ double(5)
 map(double, numbers)
 ```
 
-### Row Polymorphism for Records
+### Width Subtyping for Records
 
-When passing records to functions that expect them, extra fields are allowed:
+When passing records to functions that expect them, extra fields are allowed (a record with more fields is a subtype of one with fewer):
 
 ```klein
 fun getName(r: { name: String }): String = r.name
@@ -102,7 +102,7 @@ getName(person)  # works! extra fields ignored
 Use lambdas with the dot shorthand to create partially applied functions:
 
 ```klein
-fun filter(predicate: a -> Bool, xs: List(a)): List(a) = ...
+fun filter(predicate: 'A -> Bool, xs: List<'A>): List<'A> = ...
 
 # Partial application via lambda:
 filterEvens = |filter(isEven, .)|
@@ -113,8 +113,8 @@ filterEvens = |filter(isEven, .)|
 Use the `on` keyword to mark which parameter becomes the method receiver:
 
 ```klein
-fun map(f: a -> b, on xs: List(a)): List(b) = ...
-fun filter(p: a -> Bool, on xs: List(a)): List(a) = ...
+fun map(f: 'A -> 'B, on xs: List<'A>): List<'B> = ...
+fun filter(p: 'A -> Bool, on xs: List<'A>): List<'A> = ...
 fun isAdult(on c: Customer): Bool = c.age >= 18
 ```
 

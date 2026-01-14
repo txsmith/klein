@@ -112,8 +112,8 @@ items.filter(|item -> item.orders.any(|.price > item.budget|)|)
 Use the `on` keyword to mark which parameter becomes the method receiver:
 
 ```klein
-fun map(f: a -> b, on xs: List(a)): List(b) = ...
-fun filter(p: a -> Bool, on xs: List(a)): List(a) = ...
+fun map(f: 'A -> 'B, on xs: List<'A>): List<'B> = ...
+fun filter(p: 'A -> Bool, on xs: List<'A>): List<'A> = ...
 fun isAdult(on c: Customer): Bool = c.age >= 18
 ```
 
@@ -145,14 +145,16 @@ Rules:
 The tilde operator transforms a positional function to accept a record with matching field names:
 
 ```klein
-fun process(name: String, age: Int): Decision = ...
+fun process(name: String, age: Num): Decision = ...
 
 # process takes positional args
-process : (String, Int) -> Decision
+process : (String, Num) -> Decision
 
 # process~ takes a record with matching field names
-process~ : { name: String, age: Int } -> Decision
+process~ : { name: String, age: Num } -> Decision
 ```
+
+*Status: Not yet implemented*
 
 Use tilde when you have a record and want to spread it into a positional function:
 
@@ -289,7 +291,7 @@ The `then` keyword makes it unambiguous where the condition ends, avoiding C-sty
 ```klein
 match status
   Approved -> processLoan(application)
-  Rejected { reason } -> notifyRejection(reason)
+  Rejected(reason) -> notifyRejection(reason)
   Pending -> waitForReview()
 ```
 
@@ -372,22 +374,24 @@ match status
 
 ## Type Definitions
 
-### Records
+Type definitions create nominal types with constructors. Constructors are first-class functions.
+
+### Single-Constructor Types
 
 ```klein
-type Customer = { id: Int, name: String, creditLimit: Double, region: Region, spouse: Customer? }
-
-# Multi-line for readability
-type Customer = {
-  id: Int,
-  name: String,
-  creditLimit: Double,
-  region: Region,
-  spouse: Customer?
-}
+type Money = Money { value: Num }
+type CustomerId = CustomerId { value: Num }
+type Customer = Customer { id: Num, name: String, creditLimit: Num, region: Region }
 ```
 
-### Enums / Sum Types
+Constructors are called positionally:
+
+```klein
+price = Money(99.95)
+customer = Customer(1, "Alice", 5000, Nairobi)
+```
+
+### Sum Types
 
 ```klein
 type Region = Nakuru | Kisumu | Nairobi
@@ -399,58 +403,44 @@ type PaymentStatus =
   | Cancelled
 
 # Usage
-status = Approved { approver = "Jane", date = today }
+status = Approved("Jane", today)
 
 match status
-  Approved { approver, date } -> "Approved by " ++ approver
-  Rejected { reason } -> "Rejected: " ++ reason
+  Approved(approver, date) -> "Approved by " ++ approver
+  Rejected(reason) -> "Rejected: " ++ reason
   else -> "Other"
 ```
 
-### Type Aliases
+### Type Parameters
 
 ```klein
-type Money = Double
-type CustomerId = Int
-type Predicate(a) = a -> Bool
+type Option<'A> = Some { value: 'A } | None
+type Result<'T, 'E> = Ok { value: 'T } | Err { error: 'E }
+type Predicate<'A> = Predicate { test: 'A -> Bool }
 ```
 
-### Records with Function Fields
-
-Record types can declare function signatures using `fun` syntax:
+### Constructors as First-Class Functions
 
 ```klein
-type Policy = {
-  fun evaluate(customer: Customer): Decision
-  fun maxAmount(customer: Customer): Money
-}
+nums.map(Some)           # List<Num> -> List<Option<Num>>
+nums.map(Money)          # List<Num> -> List<Money>
 ```
 
-Record values implement these with `fun` definitions:
+### Structural Record Types (in annotations)
+
+Structural records still exist for type annotations and interfaces:
 
 ```klein
-standardPolicy: Policy = {
-  fun evaluate(customer) =
-    if customer.creditScore > 700 then Approved
-    else Rejected { reason = "Credit score too low" }
-
-  fun maxAmount(customer) = customer.income * 3
-}
-```
-
-The `fun` syntax is sugar for arrow types and lambdas:
-
-```klein
-# Equivalent type (arrow syntax)
 type Policy = {
   evaluate: Customer -> Decision,
   maxAmount: Customer -> Money
 }
 
-# Equivalent value (lambda syntax)
 standardPolicy: Policy = {
-  evaluate = |customer -> ...|,
-  maxAmount = |customer -> ...|
+  evaluate = |customer ->
+    if customer.creditScore > 700 then Approved
+    else Rejected("Credit score too low")|,
+  maxAmount = |customer -> customer.income * 3|
 }
 ```
 
@@ -462,11 +452,11 @@ Modules are named containers for organizing types, functions, and values.
 
 ```klein
 module Lending
-  type Loan = { principal: Money, rate: Double }
+  type Loan = Loan { principal: Money, rate: Num }
 
   fun value(loan: Loan): Money = loan.principal
 
-  fun totalValue(on xs: List(Loan)): Money =
+  fun totalValue(on xs: List<Loan>): Money =
     xs.fold(Money(0), |acc, l -> acc + l.principal|)
 ```
 
@@ -490,16 +480,16 @@ Lending.value(loan)
 
 ```klein
 module Money
-  type Money = { amount: Number, currency: Currency }
+  type Money = Money { amount: Num, currency: Currency }
 
-  fun fromDollars(d: Number): Money =
-    Money { amount = d, currency = USD }
+  fun fromDollars(d: Num): Money =
+    Money(d, USD)
 
-  fun fromCents(c: Number): Money =
-    Money { amount = c / 100, currency = USD }
+  fun fromCents(c: Num): Money =
+    Money(c / 100, USD)
 
   fun zero(currency: Currency): Money =
-    Money { amount = 0, currency }
+    Money(0, currency)
 
 import Money._
 
@@ -616,7 +606,7 @@ Total: ${total}
 # Doc comment for the following definition
 # @param items The line items to sum
 # @returns The total as Money
-fun calculateTotal(items: List(LineItem)): Money = ...
+fun calculateTotal(items: List<LineItem>): Money = ...
 ```
 
 ## Error Handling
@@ -637,13 +627,13 @@ error { code = "NOT_FOUND", id = customerId }
 Wrap in a lambda and call `.recover`:
 
 ```klein
-|parseNumber(input)|.recover    # Result(Int, Thrown)
+|parseNumber(input)|.recover    # Result<Num, Thrown>
 ```
 
 ### Working with Results
 
 ```klein
-type Result(t, e) = Ok { value: t } | Err { error: e }
+type Result<'T, 'E> = Ok { value: 'T } | Err { error: 'E }
 
 # Unwrap or raise
 customer = |fetch(id)|.recover.unwrap
@@ -664,8 +654,8 @@ result = |fetch(id)|.recover
 
 # Pattern match
 match |parseNumber(input)|.recover
-  Ok { value } -> value * 2
-  Err { error } ->
+  Ok(value) -> value * 2
+  Err(error) ->
     log(error.value)
     0
 ```
@@ -695,7 +685,7 @@ type Customer = Customer {
 
 type Segment = Premium | Standard | New
 
-type Application = {
+type Application = Application {
   customer: Customer,
   amount: Num,
   purpose: String
@@ -713,9 +703,9 @@ fun assessApplication(app: Application): Decision =
 
   # Early rejection using condition match
   match
-    not customer.verified -> Rejected { reason = "Customer not verified" }
-    amount <= 0 -> Rejected { reason = "Invalid amount" }
-    customer.creditScore < 300 -> Rejected { reason = "Credit score too low" }
+    not customer.verified -> Rejected("Customer not verified")
+    amount <= 0 -> Rejected("Invalid amount")
+    customer.creditScore < 300 -> Rejected("Credit score too low")
     else -> continueAssessment(app)
 
 fun continueAssessment(app: Application): Decision =
