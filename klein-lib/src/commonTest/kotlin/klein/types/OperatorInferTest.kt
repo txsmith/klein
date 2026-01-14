@@ -63,7 +63,7 @@ class OperatorInferTest {
 
     @Test
     fun eq_stringEqString() {
-        assertType(Type.Bool, infer("'a' == 'b'"))
+        assertType(Type.Bool, infer("\"a\" == \"b\""))
     }
 
     @Test
@@ -98,7 +98,7 @@ class OperatorInferTest {
 
     @Test
     fun add_stringPlusString_fails() {
-        val result = inferWithErrors("'a' + 'b'")
+        val result = inferWithErrors("\"a\" + \"b\"")
         assertTrue(result.errors[0] is TypeError.TypeMismatch)
     }
 

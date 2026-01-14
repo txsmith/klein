@@ -51,27 +51,27 @@ class LiteralInferTest {
 
     @Test
     fun stringLiteral_empty() {
-        assertType(Type.Str, infer("''"))
+        assertType(Type.Str, infer("\"\""))
     }
 
     @Test
     fun stringLiteral_simple() {
-        assertType(Type.Str, infer("'hello'"))
+        assertType(Type.Str, infer("\"hello\""))
     }
 
     @Test
     fun stringLiteral_withSpaces() {
-        assertType(Type.Str, infer("'hello world'"))
+        assertType(Type.Str, infer("\"hello world\""))
     }
 
     @Test
     fun stringLiteral_withEscapes() {
-        assertType(Type.Str, infer("'line1\\nline2'"))
+        assertType(Type.Str, infer("\"line1\\nline2\""))
     }
 
     @Test
     fun stringLiteral_withQuotes() {
-        assertType(Type.Str, infer("'say \\'hi\\''"))
+        assertType(Type.Str, infer("\"say \\\"hi\\\"\""))
     }
 
     @Test

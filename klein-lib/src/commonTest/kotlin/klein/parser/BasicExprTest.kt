@@ -20,7 +20,7 @@ class BasicExprTest {
 
     @Test
     fun stringLiteral() {
-        val expr = parse("'hello'")
+        val expr = parse("\"hello\"")
         assertExprEquals(expr, string("hello"))
     }
 

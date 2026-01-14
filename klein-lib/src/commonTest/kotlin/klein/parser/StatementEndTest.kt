@@ -225,8 +225,8 @@ class StatementEndTest {
     fun newlineAfterStringLiteralEndsStatement() {
         val program =
             """
-            x = 'hello'
-            y = 'world'
+            x = "hello"
+            y = "world"
             """.trimIndent()
         assertProgramEquals(parseProgram(program), listOf(valStmt("x", string("hello")), valStmt("y", string("world"))))
     }

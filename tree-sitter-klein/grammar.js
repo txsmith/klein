@@ -168,15 +168,15 @@ module.exports = grammar({
     double: $ => /\d+\.\d+/,
 
     string: $ => seq(
-      "'",
+      '"',
       repeat(choice(
-        /[^'\\]+/,
+        /[^"\\]+/,
         $.escape_sequence,
       )),
-      "'",
+      '"',
     ),
 
-    escape_sequence: $ => /\\[nrt'\\]/,
+    escape_sequence: $ => /\\[nrt"\\]/,
 
     boolean: $ => choice('true', 'false'),
 

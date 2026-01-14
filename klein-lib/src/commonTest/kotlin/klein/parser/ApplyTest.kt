@@ -164,7 +164,7 @@ class ApplyTest {
 
     @Test
     fun stringLiteralAsCallee() {
-        val expr = parse("'hello'(1)")
+        val expr = parse("\"hello\"(1)")
         assertExprEquals(expr, call(string("hello"), int(1)))
     }
 
@@ -212,7 +212,7 @@ class ApplyTest {
 
     @Test
     fun callWithStringArg() {
-        val expr = parse("f('hello')")
+        val expr = parse("f(\"hello\")")
         assertExprEquals(expr, call(id("f"), string("hello")))
     }
 

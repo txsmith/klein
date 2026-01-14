@@ -16,7 +16,7 @@ class RecordTest {
     @Test
     fun singleField() {
         assertExprEquals(
-            parse("{ name = 'Alice' }"),
+            parse("{ name = \"Alice\" }"),
             record("name" to string("Alice")),
         )
     }
@@ -24,7 +24,7 @@ class RecordTest {
     @Test
     fun multipleFields() {
         assertExprEquals(
-            parse("{ name = 'Alice', age = 30 }"),
+            parse("{ name = \"Alice\", age = 30 }"),
             record(
                 "name" to string("Alice"),
                 "age" to int(30),
@@ -57,7 +57,7 @@ class RecordTest {
     @Test
     fun nestedRecord() {
         assertExprEquals(
-            parse("{ person = { name = 'Bob' } }"),
+            parse("{ person = { name = \"Bob\" } }"),
             record(
                 "person" to record("name" to string("Bob")),
             ),
@@ -75,7 +75,7 @@ class RecordTest {
     @Test
     fun recordAssignment() {
         assertStmtEquals(
-            parseStmt("person = { name = 'Alice' }"),
+            parseStmt("person = { name = \"Alice\" }"),
             valStmt("person", record("name" to string("Alice"))),
         )
     }
@@ -103,7 +103,7 @@ class RecordTest {
     @Test
     fun recordInFunctionCall() {
         assertExprEquals(
-            parse("process({ name = 'test' })"),
+            parse("process({ name = \"test\" })"),
             call(id("process"), record("name" to string("test"))),
         )
     }
@@ -111,7 +111,7 @@ class RecordTest {
     @Test
     fun fieldAccessOnRecord() {
         assertExprEquals(
-            parse("{ name = 'Alice' }.name"),
+            parse("{ name = \"Alice\" }.name"),
             fieldAccess(record("name" to string("Alice")), "name"),
         )
     }
@@ -128,7 +128,7 @@ class RecordTest {
 
     @Test
     fun stringAsKey() {
-        assertFailsWith<ParseError> { parse("{ 'key' = 1 }") }
+        assertFailsWith<ParseError> { parse("{ \"key\" = 1 }") }
     }
 
     @Test

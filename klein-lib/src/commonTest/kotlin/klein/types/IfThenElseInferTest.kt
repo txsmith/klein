@@ -13,7 +13,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_differentBranchTypes() {
-        assertType("Num | String", infer("if true then 1 else 'hello'"))
+        assertType("Num | String", infer("if true then 1 else \"hello\""))
     }
 
     @Test
@@ -40,7 +40,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_withComparison() {
-        assertType(Type.Str, infer("if 1 < 2 then 'yes' else 'no'"))
+        assertType(Type.Str, infer("if 1 < 2 then \"yes\" else \"no\""))
     }
 
     @Test
@@ -57,7 +57,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranches() {
-        assertType(Type.Record(emptyMap()), infer("if true then { x = 1 } else { y = 'hi' }"))
+        assertType(Type.Record(emptyMap()), infer("if true then { x = 1 } else { y = \"hi\" }"))
     }
 
     @Test
@@ -83,17 +83,17 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithCommonField() {
-        assertType(Type.Record(mapOf("b" to Type.Bool)), infer("if true then { a = 1, b = true } else { b = false, c = 'hi' }"))
+        assertType(Type.Record(mapOf("b" to Type.Bool)), infer("if true then { a = 1, b = true } else { b = false, c = \"hi\" }"))
     }
 
     @Test
     fun ifThenElse_recordBranchesWithCommonFieldIncompatibleTypes() {
-        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = 'hello' }"))
+        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = \"hello\" }"))
     }
 
     @Test
     fun ifThenElse_recordBranchesWithMixedCompatibility() {
-        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = 'hi' }"))
+        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"))
     }
 
     @Test
@@ -103,7 +103,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithNestedIncompatiblePrim() {
-        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = 'hi' } }"))
+        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"))
     }
 
     @Test
@@ -132,13 +132,13 @@ class IfThenElseInferTest {
     @Test
     fun ifThenElse_functionBranches_appliedToString() {
         // f could be identity (returning String) or constant (returning Num)
-        // So f('hello') could be String or Num - result is Num | String
+        // So f("hello") could be String or Num - result is Num | String
         assertType(
             "Num | String",
             infer(
                 """
                 f = if true then |x -> x| else |y -> 1|
-                f('hello')
+                f("hello")
                 """.trimIndent(),
             ),
         )

@@ -49,7 +49,7 @@ class FunctionInferTest {
     fun apply_typeMismatch() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        val result = inferWithErrors("f('hello')", env)
+        val result = inferWithErrors("f(\"hello\")", env)
         assertEquals(1, result.errors.size)
         assertTrue(result.errors[0] is TypeError.TypeMismatch)
     }

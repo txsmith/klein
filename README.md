@@ -15,7 +15,7 @@ if riskScore < 20 and amount < 5000 then
 else if riskScore < 50 then
     requestReview(assignReviewer(amount))
 else
-    reject('Risk score too high')
+    reject("Risk score too high")
 ```
 
 ## The Key Idea
@@ -36,12 +36,12 @@ This separation means:
 
 ## Suspendable Effects
 
-Effects in Klein can *suspend*. When a program calls `ask('How many acres?', double)`, execution pauses and your application takes over — showing a UI, waiting for input, even persisting state to a database. When the user responds, execution resumes exactly where it left off.
+Effects in Klein can *suspend*. When a program calls `ask("How many acres?", double)`, execution pauses and your application takes over — showing a UI, waiting for input, even persisting state to a database. When the user responds, execution resumes exactly where it left off.
 
 This enables:
 
 - **Multi-step forms** that span sessions
-- **Approval workflows** that wait days for human decisions  
+- **Approval workflows** that wait days for human decisions
 - **Interactive wizards** driven by business logic
 
 ## Use Cases
@@ -65,8 +65,8 @@ This enables:
 # Calculate shipping cost based on order
 
 baseRate =
-    if customer.tier == 'Premium' then 0
-    else if customer.tier == 'Standard' then 5.99
+    if customer.tier == "Premium" then 0
+    else if customer.tier == "Standard" then 5.99
     else 7.99
 
 weightSurcharge = if totalWeight > 50 then 15.00 else 0

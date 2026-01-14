@@ -167,7 +167,7 @@ class LevelConstraintTest {
             |
             f = maker(0)
             a = f(42)
-            b = f('hello')
+            b = f("hello")
             a
             """.trimIndent()
 
@@ -218,7 +218,7 @@ class LevelConstraintTest {
               level2 = |
                 _ = id(true)
                 level3 = |
-                  _ = id('hello')
+                  _ = id("hello")
                   id
                 |
                 level3()

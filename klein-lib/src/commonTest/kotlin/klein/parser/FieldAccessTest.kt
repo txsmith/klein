@@ -22,7 +22,7 @@ class FieldAccessTest {
     @Test
     fun fieldAccessOnStringLiteral() {
         assertExprEquals(
-            parse("""'hello'.length"""),
+            parse(""""hello".length"""),
             fieldAccess(string("hello"), "length"),
         )
     }
@@ -54,7 +54,7 @@ class FieldAccessTest {
     @Test
     fun methodCallOnStringLiteral() {
         assertExprEquals(
-            parse("""'hello'.toUpperCase()"""),
+            parse(""""hello".toUpperCase()"""),
             call(fieldAccess(string("hello"), "toUpperCase")),
         )
     }
@@ -70,7 +70,7 @@ class FieldAccessTest {
     @Test
     fun chainedFieldAccessOnLiteral() {
         assertExprEquals(
-            parse("""'hello'.chars.count"""),
+            parse(""""hello".chars.count"""),
             fieldAccess(fieldAccess(string("hello"), "chars"), "count"),
         )
     }

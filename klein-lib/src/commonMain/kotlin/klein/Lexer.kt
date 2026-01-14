@@ -70,7 +70,7 @@ class Lexer(
                 listOf(identOrKeyword())
             }
 
-            c == '\'' -> {
+            c == '"' -> {
                 listOf(string())
             }
 
@@ -166,21 +166,21 @@ class Lexer(
 
     private fun string(): Token {
         val start = pos
-        advance('\'')
+        advance('"')
         val content = StringBuilder()
-        while (peekIfNot("'")) {
-            content.append(consumeWhileNot("'\\"))
+        while (peekIfNot("\"")) {
+            content.append(consumeWhileNot("\"\\"))
             if (consumeChar("\\") != null) {
                 content.append(escapeChar())
             }
         }
-        if (consumeChar("'") == null) {
+        if (consumeChar("\"") == null) {
             throw LexerError("Unterminated string", SourceSpan(start, pos))
         }
         return token(STRING, SourceSpan(start, pos), content.toString())
     }
 
-    private val escapes = mapOf('\'' to '\'', '\\' to '\\', 'n' to '\n', 't' to '\t')
+    private val escapes = mapOf('"' to '"', '\\' to '\\', 'n' to '\n', 't' to '\t')
 
     private fun escapeChar(): Char {
         val c = consumeChar(escapes.keys.joinToString(""))

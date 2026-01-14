@@ -49,7 +49,7 @@ Functions are called with positional arguments in parentheses:
 ```klein
 double(5)
 calculate(10, 20)
-greet('Alice', 30)
+greet("Alice", 30)
 ```
 
 ### Anonymous Lambdas (Pipes)
@@ -157,7 +157,7 @@ process~ : { name: String, age: Int } -> Decision
 Use tilde when you have a record and want to spread it into a positional function:
 
 ```klein
-person = { name = 'Alice', age = 30 }
+person = { name = "Alice", age = 30 }
 
 # These are equivalent:
 process(person.name, person.age)
@@ -262,20 +262,20 @@ max = if a > b then a else b
 # Multi-line with indentation
 result =
   if score >= 90 then
-    grade = 'A'
+    grade = "A"
     sendCongrats(student)
     grade
   else if score >= 80 then
-    'B'
+    "B"
   else
-    'C'
+    "C"
 
 # Nested
 status =
   if approved then
-    if amount > 1000 then 'LargeApproved' else 'SmallApproved'
+    if amount > 1000 then "LargeApproved" else "SmallApproved"
   else
-    'Rejected'
+    "Rejected"
 ```
 
 The `then` keyword makes it unambiguous where the condition ends, avoiding C-style parsing issues and reading naturally as English.
@@ -299,20 +299,20 @@ When no subject is provided, branches are boolean expressions:
 
 ```klein
 match
-  score >= 90 -> 'A'
-  score >= 80 -> 'B'
-  score >= 70 -> 'C'
-  else -> 'F'
+  score >= 90 -> "A"
+  score >= 80 -> "B"
+  score >= 70 -> "C"
+  else -> "F"
 ```
 
 This reads like a decision table—exactly how non-engineers think about business rules:
 
 ```klein
 riskCategory = match
-  customer.creditScore < 500 -> 'High'
-  customer.yearsWithUs < 1 -> 'Medium'
-  customer.outstandingLoans > 3 -> 'Medium'
-  else -> 'Low'
+  customer.creditScore < 500 -> "High"
+  customer.yearsWithUs < 1 -> "Medium"
+  customer.outstandingLoans > 3 -> "Medium"
+  else -> "Low"
 ```
 
 ### Guards
@@ -324,7 +324,7 @@ match amount
   x if x > 10000 -> requiresDirectorApproval(x)
   x if x > 1000 -> requiresManagerApproval(x)
   x if x > 0 -> autoApprove(x)
-  else -> reject('Invalid amount')
+  else -> reject("Invalid amount")
 ```
 
 ### Destructuring
@@ -337,9 +337,9 @@ match person
 
 # Lists
 match items
-  [] -> 'empty'
-  [only] -> 'just one: ' ++ only
-  [first, ...rest] -> 'first is ' ++ first
+  [] -> "empty"
+  [only] -> "just one: " ++ only
+  [first, ...rest] -> "first is " ++ first
 ```
 
 ### Match Syntax Details
@@ -399,12 +399,12 @@ type PaymentStatus =
   | Cancelled
 
 # Usage
-status = Approved { approver = 'Jane', date = today }
+status = Approved { approver = "Jane", date = today }
 
 match status
-  Approved { approver, date } -> 'Approved by ' ++ approver
-  Rejected { reason } -> 'Rejected: ' ++ reason
-  else -> 'Other'
+  Approved { approver, date } -> "Approved by " ++ approver
+  Rejected { reason } -> "Rejected: " ++ reason
+  else -> "Other"
 ```
 
 ### Type Aliases
@@ -432,7 +432,7 @@ Record values implement these with `fun` definitions:
 standardPolicy: Policy = {
   fun evaluate(customer) =
     if customer.creditScore > 700 then Approved
-    else Rejected { reason = 'Credit score too low' }
+    else Rejected { reason = "Credit score too low" }
 
   fun maxAmount(customer) = customer.income * 3
 }
@@ -552,10 +552,10 @@ single = [42]
 ### Records
 
 ```klein
-person = { name = 'Alice', age = 30 }
+person = { name = "Alice", age = 30 }
 
 # Shorthand when variable name matches field
-name = 'Bob'
+name = "Bob"
 age = 25
 person = { name, age }  # same as { name = name, age = age }
 
@@ -568,10 +568,10 @@ updated = { ...person, age = 26 }
 Tuples use parentheses and have positional field names `_1`, `_2`, etc:
 
 ```klein
-pair = ('Alice', 30)
+pair = ("Alice", 30)
 triple = (1, 2, 3)
 
-pair._1                   # 'Alice'
+pair._1                   # "Alice"
 pair._2                   # 30
 
 # Destructuring
@@ -592,17 +592,17 @@ Tuples are distinct from records. Use records when field names are meaningful, t
 
 ## Strings
 
-Strings use single quotes and support interpolation with `${}`. Multiline strings use the same syntax—just include newlines:
+Strings use double quotes and support interpolation with `${}`. Multiline strings use the same syntax—just include newlines:
 
 ```klein
-message = 'Hello, ${customer.name}!'
-summary = 'Total: ${formatMoney(subtotal + tax)}'
+message = "Hello, ${customer.name}!"
+summary = "Total: ${formatMoney(subtotal + tax)}"
 
-template = 'Dear ${name},
+template = "Dear ${name},
 
 Your order of ${itemCount} items is confirmed.
 Total: ${total}
-'
+"
 ```
 
 ## Comments
@@ -628,8 +628,8 @@ Klein uses fail-fast error handling. Errors propagate to the host by default; us
 ### Raising Errors
 
 ```klein
-error 'invalid input'
-error { code = 'NOT_FOUND', id = customerId }
+error "invalid input"
+error { code = "NOT_FOUND", id = customerId }
 ```
 
 ### Recovering from Errors
@@ -674,7 +674,7 @@ match |parseNumber(input)|.recover
 
 | Want | Syntax |
 |------|--------|
-| Raise an error | `error 'message'` or `error { ... }` |
+| Raise an error | `error "message"` or `error { ... }` |
 | Convert to Result | `\|expr\|.recover` |
 | Unwrap or raise | `.unwrap` |
 | Unwrap or default | `.orDefault(value)` |
@@ -713,9 +713,9 @@ fun assessApplication(app: Application): Decision =
 
   # Early rejection using condition match
   match
-    not customer.verified -> Rejected { reason = 'Customer not verified' }
-    amount <= 0 -> Rejected { reason = 'Invalid amount' }
-    customer.creditScore < 300 -> Rejected { reason = 'Credit score too low' }
+    not customer.verified -> Rejected { reason = "Customer not verified" }
+    amount <= 0 -> Rejected { reason = "Invalid amount" }
+    customer.creditScore < 300 -> Rejected { reason = "Credit score too low" }
     else -> continueAssessment(app)
 
 fun continueAssessment(app: Application): Decision =
@@ -724,7 +724,7 @@ fun continueAssessment(app: Application): Decision =
   match
     riskScore < 20 and app.amount < 5000 -> AutoApproved
     riskScore < 50 -> NeedsReview { reviewer = assignReviewer(app) }
-    else -> Rejected { reason = 'Risk too high: ${riskScore}' }
+    else -> Rejected { reason = "Risk too high: ${riskScore}" }
 
 fun calculateRisk(app: Application): Int =
   base = match app.customer.segment
@@ -741,8 +741,8 @@ fun calculateRisk(app: Application): Int =
   base + amountRisk
 
 fun assignReviewer(app: Application): String =
-  if app.amount > 20000 then 'director@company.com'
-  else 'manager@company.com'
+  if app.amount > 20000 then "director@company.com"
+  else "manager@company.com"
 ```
 
 ## Summary Table
@@ -779,7 +779,7 @@ fun assignReviewer(app: Application): String =
 | Tuple literal | `(a, b)` |
 | Tuple access | `tuple._1`, `tuple._2` |
 | Range | `1..10` or `1..<10` |
-| String interpolation | `'Hello ${name}'` |
+| String interpolation | `"Hello ${name}"` |
 | Comments | `#` |
 | Module definition | `module Name` + indented body |
 | Import all | `import Module._` |
