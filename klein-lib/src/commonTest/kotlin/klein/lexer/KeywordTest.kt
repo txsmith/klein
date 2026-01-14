@@ -52,10 +52,15 @@ class KeywordTest {
     }
 
     @Test
+    fun nullKeyword() {
+        assertTokens("null", kw(NULL), eof)
+    }
+
+    @Test
     fun keywordLikePrefixIsIdent() {
         assertTokens(
-            "iffy trueish falsey andy oracle funky notty",
-            ident("iffy"), ident("trueish"), ident("falsey"), ident("andy"), ident("oracle"), ident("funky"), ident("notty"), eof,
+            "iffy trueish falsey andy oracle funky notty nullable",
+            ident("iffy"), ident("trueish"), ident("falsey"), ident("andy"), ident("oracle"), ident("funky"), ident("notty"), ident("nullable"), eof,
         )
     }
 }

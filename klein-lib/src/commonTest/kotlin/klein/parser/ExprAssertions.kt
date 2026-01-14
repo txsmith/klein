@@ -14,6 +14,7 @@ import klein.ImplicitParam
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
+import klein.NullLiteral
 import klein.Operator
 import klein.Parser
 import klein.Program
@@ -36,6 +37,8 @@ fun double(value: Double) = DoubleLiteral(value, noSpan)
 fun string(value: String) = StringLiteral(value, noSpan)
 
 fun bool(value: Boolean) = BoolLiteral(value, noSpan)
+
+fun nullLit() = NullLiteral(noSpan)
 
 fun id(name: String) = Ident(name, noSpan)
 
@@ -141,6 +144,7 @@ fun Expr.stripSpans(): Expr =
         is DoubleLiteral -> DoubleLiteral(value, noSpan)
         is StringLiteral -> StringLiteral(value, noSpan)
         is BoolLiteral -> BoolLiteral(value, noSpan)
+        is NullLiteral -> NullLiteral(noSpan)
         is Ident -> Ident(name, noSpan)
         is UnaryOp -> UnaryOp(op, operand.stripSpans(), noSpan)
         is BinaryOp -> BinaryOp(left.stripSpans(), op, right.stripSpans(), noSpan)
