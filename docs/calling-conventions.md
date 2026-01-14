@@ -55,7 +55,7 @@ Tuples are structurally typed and scale to any arity. The field names `_1`, `_2`
 Functions are defined with `fun`, listing parameters in parentheses:
 
 ```klein
-fun greet(name: String, age: Int): String =
+fun greet(name: String, age: Num): String =
   "Hello, ${name}, you are ${age} years old"
 ```
 
@@ -150,11 +150,11 @@ The tilde operator bridges records to positional functions. It transforms a func
 ### Basic Usage
 
 ```klein
-fun process(name: String, age: Int): Decision = ...
+fun process(name: String, age: Num): Decision = ...
 
 # Types:
 process  : (String, Int) -> Decision
-process~ : { name: String, age: Int } -> Decision
+process~ : { name: String, age: Num } -> Decision
 ```
 
 ### When to Use Tilde
@@ -176,13 +176,13 @@ process~(person)
 Tilde is particularly useful with HOFs when processing collections of records:
 
 ```klein
-people: List({ name: String, age: Int }) = [...]
+people: List<{ name: String, age: Num }> = [...]
 
 # Map over records
 people.map(process~)
 
 # Filter with a predicate
-fun isAdult(name: String, age: Int): Bool = age >= 18
+fun isAdult(name: String, age: Num): Bool = age >= 18
 people.filter(isAdult~)
 ```
 

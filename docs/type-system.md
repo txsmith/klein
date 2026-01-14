@@ -23,13 +23,13 @@ Unit
 
 ## Type Variables
 
-Type variables are lowercase and implicitly universally quantified:
+Type variables use a tick prefix with uppercase letters:
 
 ```klein
-a, b, t, e, key, value
+'A, 'B, 'T, 'E, 'Key, 'Value
 ```
 
-The rule: **uppercase = concrete type, lowercase = type variable**.
+The rule: **uppercase = concrete type, tick + uppercase = type variable**.
 
 ## Records
 
@@ -211,7 +211,7 @@ y: Result(String, Error) = Ok { value = 'hello' }
 A nominal type is a subtype of its structural payload:
 
 ```klein
-type Person = { name: String, age: Num }
+type Person = Person { name: String, age: Num }
 
 # Person <: { name: String, age: Num } <: { name: String }
 ```
@@ -252,7 +252,7 @@ getCity(person)  # Works!
 Subtyping only works from nominal to structural, not the reverse:
 
 ```klein
-type CustomerId = Num
+type CustomerId = CustomerId { value: Num }
 
 fun getCustomer(id: CustomerId): Customer = ...
 
@@ -263,8 +263,8 @@ getCustomer(42)                # Error: Num is not CustomerId
 This lets you enforce domain boundaries:
 
 ```klein
-type CustomerId = Num
-type OrderId = Num
+type CustomerId = CustomerId { value: Num }
+type OrderId = OrderId { value: Num }
 
 # Can't accidentally mix these up
 fun process(cid: CustomerId, oid: OrderId) = ...
@@ -299,9 +299,6 @@ result = None
 # With payload (named fields)
 person = Person { name = 'Alice', age = 30 }
 result = Ok { value = 42 }
-
-# Single-field shorthand
-result: Result(Num, String) = Ok { 42 }
 ```
 
 ### Pattern Matching
@@ -346,7 +343,7 @@ Type annotations are optional in most cases:
 
 ```klein
 fun double(x) = x * 2                  # inferred: Num -> Num
-fun identity(x) = x                    # inferred: a -> a
+fun identity(x) = x                    # inferred: 'A -> 'A
 fun compose(f, g, x) = f(g(x))         # inferred polymorphic
 ```
 
@@ -361,8 +358,8 @@ fun getX(r) = r.x
 # r is in negative position (input): must have at least { x }
 # result is in positive position (output): exactly the type of x
 
-# Inferred type: { x: a } -> a
-# But { x: a } here means "any record with at least an x field"
+# Inferred type: { x: 'A } -> 'A
+# But { x: 'A } here means "any record with at least an x field"
 ```
 
 The subtyping is implicit in how types are used, not in explicit syntax.
@@ -387,15 +384,15 @@ fun pick(b) = if b then 42 else "hello"
 object1 = { x = 42, y = |x -> x| }
 object2 = { x = 17, y = false }
 fun choose(b) = if b then object1 else object2
-# Inferred: (Bool) -> { x: Num, y: Bool | ((a) -> a) }
+# Inferred: (Bool) -> { x: Num, y: Bool | (('A) -> 'A) }
 ```
 
 **Intersection types** (`A & B`) appear in input positions:
 
 ```klein
 fun selfApply(x) = x(x)
-# Inferred: (a & ((a) -> b)) -> b
-# x must be both a value (a) and a function that accepts it ((a) -> b)
+# Inferred: ('A & (('A) -> 'B)) -> 'B
+# x must be both a value ('A) and a function that accepts it (('A) -> 'B)
 ```
 
 **What you cannot do.** Because of the polarity restriction, you cannot write a function that accepts `Num | String` as input—unions are illegal in negative position. This means Klein (like MLsub) cannot express "a function that takes either a number or a string." If you need that, use a nominal sum type:
@@ -404,15 +401,15 @@ fun selfApply(x) = x(x)
 type NumOrString = N { value: Num } | S { value: String }
 
 fun process(x: NumOrString) = match x
-  N { value } -> ...
-  S { value } -> ...
+  N(value) -> ...
+  S(value) -> ...
 ```
 
 **Why this matters.** When you see an inferred union like `(Bool) -> Num | String`, you can produce such values but you cannot consume them in a type-safe way without knowing which variant you have. The type system tracks what flows where, but unions in outputs are essentially "information lost"—useful for record field polymorphism, less useful as return types.
 
 **Simplification.** The type inferencer simplifies where possible:
 - `Num | Num` becomes `Num`
-- `a & a` becomes `a`
+- `'A & 'A` becomes `'A`
 - `Num & String` in an input usually indicates a type error (no value satisfies both)
 
 ### Recursive Types

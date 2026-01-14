@@ -4,61 +4,62 @@ Units of work to evolve Klein from current state to full language spec.
 
 ## Current State
 
-Lexer and parser handle expressions, lambdas, record literals, if/then/else, and function definitions. No type system yet.
-
-**Current syntax:**
-- Comments: `#`
-- Function definitions: `fun name(params) = body`
-- Function calls: `name(args)`
-- Record literals: `{ field = value }`
-- Lambdas: `|x -> expr|`, `|.field|`, `|.|`
-
-## Design Decisions
-
-**SimpleSub-style type system** — Using subtyping with type inference (à la SimpleSub/MLSub) rather than row polymorphism. Records have width subtyping: `{ x, y }` is a subtype of `{ x }`.
-
-**Positional function calling** — Functions use standard positional arguments. The `~` operator transforms positional functions to accept records when needed.
-
-See `calling-conventions.md` for details on the design rationale.
+Lexer and parser handle expressions, lambdas, record literals, if/then/else, and function definitions. SimpleSub type inference complete with recursive types and canonicalization.
 
 ## Work Units
 
-### Phase 1: Type System
+### Phase 1: Type System ✓
 
-Build SimpleSub-style type inference before adding more syntax.
+SimpleSub-style type inference with subtyping.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Type representation | TODO | Internal types for inference |
-| Subtyping | TODO | Width subtyping for records |
-| Type inference | TODO | Bidirectional or constraint-based |
+| Type representation | Done | `SimpleType`, `CompactType`, `Type` |
+| Subtyping | Done | Width subtyping for records |
+| Type inference | Done | SimpleSub with bisubstitution |
+| Primitive types | Done | `Num`, `String`, `Bool`, `Unit` |
+| Function types | Done | `(a) -> b`, `(a, b) -> c` |
+| Record types | Done | `{ name: String, age: Num }` |
+| Recursive types | Done | `{ head: Num, tail: a } as a` |
+| Union/intersection | Done | `a \| b`, `a & b` |
 | Type annotations | TODO | `fun f(x: Int): Int`, `x: T = ...` |
-| Primitive types | TODO | `Int`, `Double`, `String`, `Bool` |
-| Function types | TODO | `Int -> Int`, `(Int, Int) -> Int` |
-| Record types | TODO | `{ name: String, age: Int }` |
 
-### Phase 2: Pattern Matching
+### Phase 2: Type Definitions
 
-Add pattern matching as the next syntax feature.
+Constructors are first-class functions with named parameters, called positionally or structurally.
+
+```klein
+type Money = Money(value: Num)
+type Color = Red(intensity: Num) | Green(intensity: Num) | Blue(intensity: Num)
+type Option('A) = Some(value: 'A) | None
+type List('A) = Cons(head: 'A, tail: List('A)) | Nil
+```
+
+Nominal types subsume their structural equivalents: `Money <: { value: Num }`.
+
+
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Constructor definitions | TODO | `type T = C(field: Type)` |
+| Sum types | TODO | `type T = A(...) \| B(...)` |
+| Bare constructors | TODO | `None`, `Nil` (no params) |
+| Type parameters | TODO | `type Option('A) = ...` |
+| First-class constructors | TODO | `nums.map(Some)` |
+| Nominal subtyping | TODO | `Money <: { value: Num }` |
+
+### Phase 3: Pattern Matching
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Match keyword | TODO | `match expr` with arms |
-| Literal patterns | TODO | `42`, `'hello'`, `true` |
+| Literal patterns | TODO | `42`, `"hello"`, `true` |
 | Variable patterns | TODO | `x` binds the value |
 | Record patterns | TODO | `{ name, age }` destructuring |
+| Constructor patterns | TODO | `Some(x)`, `None` |
 | Wildcard | TODO | `_` matches anything |
 | Guards | TODO | `pattern if cond -> expr` |
 | Exhaustiveness | TODO | Warn on non-exhaustive matches |
-
-### Phase 3: Type Definitions
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Record types | TODO | `type R = { field: Type }` |
-| Enum/sum types | TODO | `type E = A \| B { field: T }` |
-| Type aliases | TODO | `type Money = Double` |
-| Generics `List(T)` | TODO | Parentheses, not angle brackets |
 
 ### Phase 4: Additional Syntax (deferred)
 
@@ -70,8 +71,9 @@ Lower priority. Add as needed.
 | Ranges `..` and `..<` | TODO | Lexer done (`DOTDOT`), parser TODO |
 | Tuple accessors `._1` | TODO | New field access pattern |
 | For comprehensions | TODO | `for x in xs yield expr` |
-| Tilde operator `~` | TODO | Record-to-positional transform |
-| Record spread `...` | TODO | `{ ...r, x = 1 }` |
+| Tilde operator `~` | TODO | `f~` transforms to record-accepting |
+| Structural calls | TODO | `f { x = 1 }` desugars to `f~({ x = 1 })` |
+| Record spread `...` | TODO | `{ ...r, x = 1 }`, `f { ...r }` |
 
 ### Phase 5: Advanced Features
 

@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** Parser complete for core expression features. No type system or interpreter.
+**Current state:** Parser complete for core expression features. Type inference implemented (SimpleSub). No interpreter.
 
 ## Parser
 
@@ -81,18 +81,28 @@
 
 ## Type System
 
-Not started. See [type-system.md](type-system.md) for design.
+See [type-system.md](type-system.md) for design and [simplesub-type-inference.md](decisions/2026-01-14-simplesub-type-inference.md) for implementation decisions.
+
+### Complete
 
 | Feature | Notes |
 |---------|-------|
-| Type inference | Hindley-Milner |
-| Type checking | Validate expressions against types |
-| Record types | `{ name: String, age: Int }` |
-| Function types | `Int -> Int`, `(Int, Int) -> Int` |
+| Type inference | SimpleSub algorithm with subtyping |
+| Primitive types | `Num`, `String`, `Bool`, `Unit` |
+| Function types | `(a) -> b`, `(a, b) -> c` |
+| Record types | `{ name: String, age: Num }` |
+| Width subtyping | `{ a, b } <: { a }` |
+| Recursive types | `{ head: Num, tail: a } as a` |
+| Union/intersection | `a \| b`, `a & b` |
+| Type simplification | Canonicalization of recursive types |
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
 | Sum types | `Ok { value: t } \| Err { error: e }` |
 | Generics | `List(a)`, `Option(a)` |
-| Row polymorphism | `{ name: String, ...r }` |
-| Nominal vs structural | `type Person = { ... }` creates nominal type |
+| Nominal types | `type Person = { ... }` creates nominal type |
 | Kleene types | `T?`, `T*`, `T+` (experimental) |
 
 ## Interpreter

@@ -204,8 +204,8 @@ TypeArgs
   = '(' Type % ',' ')'
 
 TypeAtom
-  = UpperIdent                    # concrete type: Int, String, Person
-  | LowerIdent                    # type variable: a, b, t
+  = UpperIdent                    # concrete type: Num, String, Person
+  | TypeVar                       # type variable: 'A, 'B, 'T
   | RecordType                    # structural record
   | TupleType                     # tuple
   | '(' Type ')'                  # parenthesized
@@ -259,7 +259,8 @@ LowerIdent
 ### Single-Constructor Type
 
 ```klein
-type Person = { name: String, age: Int }
+type Money = Money { value: Num }
+type Person = Person { name: String, age: Num }
 ```
 
 ```
@@ -362,29 +363,29 @@ TypeDef
 ### Function Types
 
 ```klein
-Int -> Int
-(Int, Int) -> Int
-() -> Int
+Num -> Num
+(Num, Num) -> Num
+() -> Num
 ```
 
 ```
 FunctionType (single param)
-├─ ParamTypes: Int
+├─ ParamTypes: Num
 ├─ '->'
 └─ FunctionType
-   └─ AppliedType: Int
+   └─ AppliedType: Num
 
 FunctionType (multiple params)
-├─ ParamTypes: (Int, Int)
+├─ ParamTypes: (Num, Num)
 ├─ '->'
 └─ FunctionType
-   └─ AppliedType: Int
+   └─ AppliedType: Num
 
 FunctionType (zero params)
 ├─ ParamTypes: ()
 ├─ '->'
 └─ FunctionType
-   └─ AppliedType: Int
+   └─ AppliedType: Num
 ```
 
 ### Applied Type
@@ -399,7 +400,7 @@ List(a)
 AppliedType
 ├─ TypeAtom: "Option"
 └─ TypeArgs
-   └─ Type: Int
+   └─ Type: Num
 
 AppliedType
 ├─ TypeAtom: "Result"
@@ -410,14 +411,14 @@ AppliedType
 AppliedType
 ├─ TypeAtom: "List"
 └─ TypeArgs
-   └─ Type: a (LowerIdent, type variable)
+   └─ Type: 'A (TypeVar)
 ```
 
 ### Tuple Type
 
 ```klein
-(String, Int)
-(a, b, c)
+(String, Num)
+('A, 'B, 'C)
 ```
 
 ```
@@ -469,5 +470,5 @@ The case of the identifier disambiguates. After `...`:
 - `()` empty parens → zero-param function input
 
 Context determines meaning:
-- Before `->` → function parameter list: `(Int, Int) -> Int`
-- Elsewhere → tuple type: `x: (Int, Int)`
+- Before `->` → function parameter list: `(Num, Num) -> Num`
+- Elsewhere → tuple type: `x: (Num, Num)`

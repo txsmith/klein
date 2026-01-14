@@ -14,7 +14,7 @@ A complete reference for Klein's syntax, covering expressions, functions, contro
 | Equality test | `==` | Double equals |
 | Boolean operators | `and`, `or`, `not` | Keywords, not symbols |
 | Record field assignment | `{ x = 1 }` | Equals in literals |
-| Record field types | `{ x: Int }` | Colon in type annotations |
+| Record field types | `{ x: Num }` | Colon in type annotations |
 
 ## Functions
 
@@ -35,9 +35,9 @@ fun calculate(a, b) =
 With type annotations:
 
 ```klein
-fun double(x: Int): Int = x * 2
+fun double(x: Num): Num = x * 2
 
-fun calculate(a: Int, b: Int): Int =
+fun calculate(a: Num, b: Num): Num =
   temp = a * 2
   temp + b
 ```
@@ -220,7 +220,7 @@ items.filter(|true|)       # matches everything
 Any named function can be passed directly:
 
 ```klein
-fun add(a: Int, b: Int): Int = a + b
+fun add(a: Num, b: Num): Num = a + b
 
 nums.fold(0, add)                  # pass function directly
 items.map(calculateTotal)          # no lambda needed
@@ -231,8 +231,8 @@ items.map(calculateTotal)          # no lambda needed
 Infix operators in value position become functions:
 
 ```klein
-nums.fold(0, (+))                  # (Int, Int) -> Int
-nums.fold(1, (*))                  # (Int, Int) -> Int
+nums.fold(0, (+))                  # (Num, Num) -> Num
+nums.fold(1, (*))                  # (Num, Num) -> Num
 strings.reduce((++))               # (String, String) -> String
 bools.reduce(and)                  # (Bool, Bool) -> Bool
 ```
@@ -244,11 +244,11 @@ Note: `-` in value position is binary subtraction. For unary negation, use a lam
 Function types use arrow syntax with positional parameters:
 
 ```klein
-Int -> Int                        # single parameter
-(Int, Int) -> Int                 # multiple parameters
-() -> Int                         # no parameters (thunk)
+Num -> Num                        # single parameter
+(Num, Num) -> Num                 # multiple parameters
+() -> Num                         # no parameters (thunk)
 Item -> Bool                      # with custom types
-(Int -> Int) -> Int               # higher-order
+(Num -> Num) -> Num               # higher-order
 ```
 
 ## If/Then/Else
@@ -578,7 +578,7 @@ pair._2                   # 30
 (x, y) = pair
 
 # In function returns
-fun divmod(a: Int, b: Int): (Int, Int) = (a / b, a % b)
+fun divmod(a: Num, b: Num): (Num, Num) = (a / b, a % b)
 ```
 
 Tuples are distinct from records. Use records when field names are meaningful, tuples for quick positional grouping.
@@ -685,10 +685,10 @@ match |parseNumber(input)|.recover
 ## Complete Example
 
 ```klein
-type Customer = {
-  id: Int,
+type Customer = Customer {
+  id: Num,
   name: String,
-  creditScore: Int,
+  creditScore: Num,
   segment: Segment,
   verified: Bool
 }
@@ -697,7 +697,7 @@ type Segment = Premium | Standard | New
 
 type Application = {
   customer: Customer,
-  amount: Double,
+  amount: Num,
   purpose: String
 }
 
@@ -723,10 +723,10 @@ fun continueAssessment(app: Application): Decision =
 
   match
     riskScore < 20 and app.amount < 5000 -> AutoApproved
-    riskScore < 50 -> NeedsReview { reviewer = assignReviewer(app) }
-    else -> Rejected { reason = "Risk too high: ${riskScore}" }
+    riskScore < 50 -> NeedsReview(assignReviewer(app))
+    else -> Rejected("Risk too high: ${riskScore}")
 
-fun calculateRisk(app: Application): Int =
+fun calculateRisk(app: Application): Num =
   base = match app.customer.segment
     Premium -> 0
     Standard -> 10
