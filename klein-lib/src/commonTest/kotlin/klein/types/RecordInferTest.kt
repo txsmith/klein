@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -7,22 +8,22 @@ import kotlin.test.assertTrue
 class RecordInferTest {
     @Test
     fun emptyRecord() {
-        assertType("{}", infer("{}"))
+        assertType(Type.Record(emptyMap()), infer("{}"))
     }
 
     @Test
     fun singleField() {
-        assertType("{ x: Num }", infer("{ x = 1 }"))
+        assertType(Type.Record(mapOf("x" to Type.Num)), infer("{ x = 1 }"))
     }
 
     @Test
     fun twoFields() {
-        assertType("{ x: Num, y: String }", infer("{ x = 1, y = 'hello' }"))
+        assertType(Type.Record(mapOf("x" to Type.Num, "y" to Type.Str)), infer("{ x = 1, y = 'hello' }"))
     }
 
     @Test
     fun nestedRecord() {
-        assertType("{ inner: { x: Num } }", infer("{ inner = { x = 1 } }"))
+        assertType(Type.Record(mapOf("inner" to Type.Record(mapOf("x" to Type.Num)))), infer("{ inner = { x = 1 } }"))
     }
 
     @Test
@@ -32,7 +33,7 @@ class RecordInferTest {
 
     @Test
     fun mixedTypes() {
-        assertType("{ a: Num, b: String, c: Bool }", infer("{ a = 1, b = 'hi', c = true }"))
+        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Str, "c" to Type.Bool)), infer("{ a = 1, b = 'hi', c = true }"))
     }
 
     @Test
@@ -44,22 +45,22 @@ class RecordInferTest {
 
     @Test
     fun duplicateField_usesLastValue() {
-        assertType("{ x: String }", infer("{ x = 1, x = 'hello' }"))
+        assertType(Type.Record(mapOf("x" to Type.Str)), infer("{ x = 1, x = 'hello' }"))
     }
 
     @Test
     fun fieldAccess_simple() {
-        assertType("a | Num", infer("{ x = 1 }.x"))
+        assertType(Type.Num, infer("{ x = 1 }.x"))
     }
 
     @Test
     fun fieldAccess_nested() {
-        assertType("a | Num", infer("{ inner = { x = 1 } }.inner.x"))
+        assertType(Type.Num, infer("{ inner = { x = 1 } }.inner.x"))
     }
 
     @Test
     fun fieldAccess_fromVariable() {
-        assertType("a | String", infer("r = { name = 'alice' }\nr.name"))
+        assertType(Type.Str, infer("r = { name = 'alice' }\nr.name"))
     }
 
     @Test
@@ -71,6 +72,31 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_polymorphic() {
-        assertType("(a & { x: b }) -> b", infer("|r -> r.x|"))
+        assertType("({ x: a }) -> a", infer("|r -> r.x|"))
+    }
+
+    @Test
+    fun record_functionResultInField() {
+        assertType("((Num) -> a) -> a", infer("|f -> { x = f(42) }.x|"))
+    }
+
+    @Test
+    fun record_unusedFieldResult() {
+        assertType("((Num) -> Any) -> Num", infer("|f -> { x = f(42), y = 123 }.y|"))
+    }
+
+    @Test
+    fun record_polymorphicFieldAccess_applied() {
+        assertType(Type.Num, infer("|x -> x.f|({ f = 42 })"))
+    }
+
+    @Test
+    fun record_multipleFields() {
+        assertType(Type.Record(mapOf("a" to Type.Num, "b" to Type.Bool, "c" to Type.Str)), infer("{ a = 1, b = true, c = 'hello' }"))
+    }
+
+    @Test
+    fun record_deeplyNested() {
+        assertType(Type.Num, infer("{ outer = { inner = 42 } }.outer.inner"))
     }
 }

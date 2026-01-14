@@ -36,7 +36,7 @@ class TypeEnv(
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
     val level: Int = 0,
 ) {
-    fun lookup(
+    fun lookupAndInstantiate(
         name: String,
         currentLevel: Int = this.level,
     ): SimpleType? {
@@ -47,7 +47,7 @@ class TypeEnv(
                 is TypeBinding.Poly -> binding.instantiate(currentLevel)
             }
         }
-        return parent?.lookup(name, currentLevel)
+        return parent?.lookupAndInstantiate(name, currentLevel)
     }
 
     fun contains(name: String): Boolean = name in bindings
@@ -68,10 +68,10 @@ class TypeEnv(
 
     fun freshVar(): SimpleType.TVar = SimpleType.TVar(level)
 
-    fun child(
-        implicitParam: ImplicitParamContext = this.implicitParam,
-        level: Int = this.level,
-    ): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam, level = level)
+    fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
+        TypeEnv(parent = this, implicitParam = implicitParam, level = level)
+
+    fun enterBindingScope(): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam, level = level + 1)
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()

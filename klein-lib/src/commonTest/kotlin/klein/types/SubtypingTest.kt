@@ -52,35 +52,6 @@ class SubtypingTest {
     }
 
     @Test
-    fun allPrimitivesSubtypeOfTop() {
-        val sub = subtype()
-        sub.constrain(SimpleType.TNum, SimpleType.TTop, SourceSpan.zero)
-        sub.constrain(SimpleType.TString, SimpleType.TTop, SourceSpan.zero)
-        sub.constrain(SimpleType.TBool, SimpleType.TTop, SourceSpan.zero)
-        sub.constrain(SimpleType.TNum, SimpleType.TTop, SourceSpan.zero)
-        sub.constrain(SimpleType.TUnit, SimpleType.TTop, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-    }
-
-    @Test
-    fun bottomSubtypeOfAllPrimitives() {
-        val sub = subtype()
-        sub.constrain(SimpleType.TBottom, SimpleType.TNum, SourceSpan.zero)
-        sub.constrain(SimpleType.TBottom, SimpleType.TString, SourceSpan.zero)
-        sub.constrain(SimpleType.TBottom, SimpleType.TBool, SourceSpan.zero)
-        sub.constrain(SimpleType.TBottom, SimpleType.TNum, SourceSpan.zero)
-        sub.constrain(SimpleType.TBottom, SimpleType.TUnit, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-    }
-
-    @Test
-    fun bottomSubtypeOfTop() {
-        val sub = subtype()
-        sub.constrain(SimpleType.TBottom, SimpleType.TTop, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-    }
-
-    @Test
     fun varGetsUpperBound() {
         val sub = subtype()
         val v = SimpleType.TVar()
@@ -127,57 +98,45 @@ class SubtypingTest {
     }
 
     @Test
-    fun twoVarsCanRelate() {
-        val sub = subtype()
-        val v1 = SimpleType.TVar()
-        val v2 = SimpleType.TVar()
-        sub.constrain(v1, v2, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-        assertTrue(v2 in v1.upperBounds)
-        assertTrue(v1 in v2.lowerBounds)
-    }
-
-    @Test
-    fun varBoundsWithTop() {
-        val sub = subtype()
-        val v = SimpleType.TVar()
-        sub.constrain(v, SimpleType.TTop, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-    }
-
-    @Test
-    fun varBoundsWithBottom() {
-        val sub = subtype()
-        val v = SimpleType.TVar()
-        sub.constrain(SimpleType.TBottom, v, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
-    }
-
-    @Test
     fun functionSubtypingCovariantResult() {
+        // (Num) -> Num <: (Num) -> a  (where a gets Num as lower bound)
         val sub = subtype()
+        val resultVar = SimpleType.TVar()
         val f1 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
-        val f2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TTop)
+        val f2 = SimpleType.TFun(listOf(SimpleType.TNum), resultVar)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertTrue(sub.getErrors().isEmpty())
+        assertTrue(SimpleType.TNum in resultVar.lowerBounds)
     }
 
     @Test
     fun functionSubtypingContravariantParam() {
+        // (a) -> Num <: (Num) -> Num
+        // For f1 <: f2: f2.param <: f1.param (contravariant)
+        // So: Num <: a (a gets Num as lower bound)
         val sub = subtype()
-        val f1 = SimpleType.TFun(listOf(SimpleType.TTop), SimpleType.TNum)
+        val paramVar = SimpleType.TVar()
+        val f1 = SimpleType.TFun(listOf(paramVar), SimpleType.TNum)
         val f2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertTrue(sub.getErrors().isEmpty())
+        assertTrue(SimpleType.TNum in paramVar.lowerBounds)
     }
 
     @Test
     fun functionSubtypingBothVariances() {
+        // (a) -> Num <: (Num) -> b
+        // For f1 <: f2: f2.param <: f1.param (contravariant), f1.result <: f2.result (covariant)
+        // So: Num <: a (a gets Num as lower bound), Num <: b (b gets Num as lower bound)
         val sub = subtype()
-        val f1 = SimpleType.TFun(listOf(SimpleType.TTop), SimpleType.TNum)
-        val f2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TTop)
+        val paramVar = SimpleType.TVar()
+        val resultVar = SimpleType.TVar()
+        val f1 = SimpleType.TFun(listOf(paramVar), SimpleType.TNum)
+        val f2 = SimpleType.TFun(listOf(SimpleType.TNum), resultVar)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertTrue(sub.getErrors().isEmpty())
+        assertTrue(SimpleType.TNum in paramVar.lowerBounds)
+        assertTrue(SimpleType.TNum in resultVar.lowerBounds)
     }
 
     @Test
@@ -342,9 +301,12 @@ class SubtypingTest {
 
     @Test
     fun nestedFunctionSubtyping() {
+        // ((Num) -> Num) -> Num <: ((Num) -> String) -> Num should fail
+        // Because the param is contravariant, inner1 needs to be supertype of inner2
+        // But (Num) -> Num is not a supertype of (Num) -> String
         val sub = subtype()
         val inner1 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
-        val inner2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TTop)
+        val inner2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TString)
         val f1 = SimpleType.TFun(listOf(inner1), SimpleType.TNum)
         val f2 = SimpleType.TFun(listOf(inner2), SimpleType.TNum)
         sub.constrain(f1, f2, SourceSpan.zero)

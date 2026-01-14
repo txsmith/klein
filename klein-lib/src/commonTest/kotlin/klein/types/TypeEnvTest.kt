@@ -10,20 +10,20 @@ class TypeEnvTest {
     fun lookup_returnsBoundType() {
         val env = TypeEnv.empty()
         env.bind("x", TNum)
-        assertEquals(TNum, env.lookup("x"))
+        assertEquals(TNum, env.lookupAndInstantiate("x"))
     }
 
     @Test
     fun lookup_returnsNullForUnbound() {
         val env = TypeEnv.empty()
-        assertNull(env.lookup("x"))
+        assertNull(env.lookupAndInstantiate("x"))
     }
 
     @Test
     fun lookup_returnsNullForDifferentName() {
         val env = TypeEnv.empty()
         env.bind("x", TNum)
-        assertNull(env.lookup("y"))
+        assertNull(env.lookupAndInstantiate("y"))
     }
 
     @Test
@@ -32,7 +32,7 @@ class TypeEnvTest {
         parent.bind("x", TNum)
 
         val child = parent.child()
-        assertEquals(TNum, child.lookup("x"))
+        assertEquals(TNum, child.lookupAndInstantiate("x"))
     }
 
     @Test
@@ -43,8 +43,8 @@ class TypeEnvTest {
         val child = parent.child()
         child.bind("x", TString)
 
-        assertEquals(TString, child.lookup("x"))
-        assertEquals(TNum, parent.lookup("x"))
+        assertEquals(TString, child.lookupAndInstantiate("x"))
+        assertEquals(TNum, parent.lookupAndInstantiate("x"))
     }
 
     @Test
@@ -53,8 +53,8 @@ class TypeEnvTest {
         val child = parent.child()
         child.bind("x", TNum)
 
-        assertNull(parent.lookup("x"))
-        assertEquals(TNum, child.lookup("x"))
+        assertNull(parent.lookupAndInstantiate("x"))
+        assertEquals(TNum, child.lookupAndInstantiate("x"))
     }
 
     @Test
@@ -64,9 +64,9 @@ class TypeEnvTest {
         env.bind("y", TString)
         env.bind("z", TBool)
 
-        assertEquals(TNum, env.lookup("x"))
-        assertEquals(TString, env.lookup("y"))
-        assertEquals(TBool, env.lookup("z"))
+        assertEquals(TNum, env.lookupAndInstantiate("x"))
+        assertEquals(TString, env.lookupAndInstantiate("y"))
+        assertEquals(TBool, env.lookupAndInstantiate("z"))
     }
 
     @Test
@@ -75,7 +75,7 @@ class TypeEnvTest {
         env.bind("x", TNum)
         env.bind("x", TString)
 
-        assertEquals(TString, env.lookup("x"))
+        assertEquals(TString, env.lookupAndInstantiate("x"))
     }
 
     @Test
@@ -89,13 +89,13 @@ class TypeEnvTest {
         val child = parent.child()
         child.bind("z", TBool)
 
-        assertEquals(TNum, child.lookup("x"))
-        assertEquals(TString, child.lookup("y"))
-        assertEquals(TBool, child.lookup("z"))
+        assertEquals(TNum, child.lookupAndInstantiate("x"))
+        assertEquals(TString, child.lookupAndInstantiate("y"))
+        assertEquals(TBool, child.lookupAndInstantiate("z"))
 
-        assertNull(parent.lookup("z"))
-        assertNull(grandparent.lookup("y"))
-        assertNull(grandparent.lookup("z"))
+        assertNull(parent.lookupAndInstantiate("z"))
+        assertNull(grandparent.lookupAndInstantiate("y"))
+        assertNull(grandparent.lookupAndInstantiate("z"))
     }
 
     @Test
@@ -104,7 +104,7 @@ class TypeEnvTest {
         val fnType = TFun(listOf(TNum), TString)
         env.bind("f", fnType)
 
-        assertEquals(fnType, env.lookup("f"))
+        assertEquals(fnType, env.lookupAndInstantiate("f"))
     }
 
     @Test
@@ -113,6 +113,6 @@ class TypeEnvTest {
         val recType = TRecord(mapOf("a" to TNum, "b" to TString))
         env.bind("r", recType)
 
-        assertEquals(recType, env.lookup("r"))
+        assertEquals(recType, env.lookupAndInstantiate("r"))
     }
 }

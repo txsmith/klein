@@ -1,5 +1,6 @@
 package klein.types
 
+import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -7,12 +8,12 @@ import kotlin.test.assertTrue
 class BindingInferTest {
     @Test
     fun val_single() {
-        assertType("Num", infer("x = 1\nx"))
+        assertType(Type.Num, infer("x = 1\nx"))
     }
 
     @Test
     fun val_multiple() {
-        assertType("Num", infer("x = 1\ny = 2\nx + y"))
+        assertType(Type.Num, infer("x = 1\ny = 2\nx + y"))
     }
 
     @Test
@@ -31,7 +32,7 @@ class BindingInferTest {
 
     @Test
     fun funDef_single() {
-        assertType("a | Num | b | Num & a", infer("fun f(x) = x\nf(1)"))
+        assertType(Type.Num, infer("fun f(x) = x\nf(1)"))
     }
 
     @Test
