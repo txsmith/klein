@@ -362,6 +362,7 @@ class Parser(
         when (stmt) {
             is Val -> endsWithBlockExpr(stmt.value)
             is FunDef -> endsWithBlockExpr(stmt.body)
+            is TypeDef -> false
             is Expr -> endsWithBlockExpr(stmt)
         }
 

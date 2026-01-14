@@ -110,6 +110,7 @@ class Typer {
                         exprTypes[stmt.span] = type
                         type
                     }
+                    is TypeDef -> TUnit
                 }
         }
         return Pair(lastType, exprTypes)

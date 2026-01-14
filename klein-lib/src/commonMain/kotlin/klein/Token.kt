@@ -19,6 +19,7 @@ data class Token(
     override fun toString(): String =
         when {
             kind == IDENT -> "Ident($text)"
+            kind == TYPE_VAR -> "TypeVar($text)"
             kind == INT || kind == DOUBLE -> "Number($text)"
             kind == STRING -> "String($text)"
             kind == EOF -> "Eof"
@@ -35,6 +36,7 @@ enum class TokenKind(
 ) {
     // Literals
     IDENT,
+    TYPE_VAR,
     INT,
     DOUBLE,
     STRING,
@@ -50,6 +52,7 @@ enum class TokenKind(
     AND(keyword = "and"),
     OR(keyword = "or"),
     NOT(keyword = "not"),
+    TYPE(keyword = "type"),
 
     // Symbols
     PLUS(symbol = "+"),

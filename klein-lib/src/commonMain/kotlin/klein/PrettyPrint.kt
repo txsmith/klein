@@ -23,9 +23,30 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val paramsStr = params.joinToString(", ")
             "${pad}Fun $name($paramsStr) =\n${body.prettyPrint(indent + 1)}"
         }
+        is TypeDef -> {
+            val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
+            val constructorsStr =
+                constructors.joinToString(" | ") { c ->
+                    if (c.fields.isEmpty()) {
+                        c.name
+                    } else {
+                        "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
+                    }
+                }
+            "${pad}type $name$typeParamsStr = $constructorsStr"
+        }
         is Expr -> prettyPrint(indent)
     }
 }
+
+fun TypeExpr.prettyPrint(): String =
+    when (this) {
+        is TypeName -> name
+        is TypeVar -> "'$name"
+        is FunctionTypeExpr -> "(${paramType.prettyPrint()} -> ${returnType.prettyPrint()})"
+        is TupleTypeExpr -> "(${elements.joinToString(", ") { it.prettyPrint() }})"
+        is RecordTypeExpr -> "{ ${fields.joinToString(", ") { (n, t) -> "$n: ${t.prettyPrint()}" }} }"
+    }
 
 fun Expr.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
