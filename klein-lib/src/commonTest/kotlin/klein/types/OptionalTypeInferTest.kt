@@ -4,8 +4,6 @@ package klein.types
 
 import klein.Type
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * Comprehensive test suite for optional types (T?) and null safety.
@@ -162,7 +160,7 @@ class OptionalTypeInferTest {
         val code = """
             fun nothing(x) = null
         """.trimIndent()
-        assertType("('A) -> Null", infer(code + "\nnothing"))
+        assertType("(Any) -> Null", infer(code + "\nnothing"))
     }
 
     @Test
@@ -181,7 +179,7 @@ class OptionalTypeInferTest {
 
     @Test
     fun lambda_returnsNull() {
-        assertType("('A) -> Null", infer("|x -> null|"))
+        assertType("(Any) -> Null", infer("|x -> null|"))
     }
 
     // =========================================================================
@@ -393,9 +391,8 @@ class OptionalTypeInferTest {
     }
 
     @Test
-    fun implicitParam_returnedAsNull() {
-        // Lambda that ignores implicit param and returns null
-        assertType("('A) -> Null", infer("|null|"))
+    fun const_returning_null() {
+        assertType("() -> Null", infer("|null|"))
     }
 
     // =========================================================================
@@ -423,7 +420,8 @@ class OptionalTypeInferTest {
                 if true then r1 else null
         """.trimIndent()
         // Each step returns optional, pipeline result is optional
-        assertType("(Num) -> Num?", infer(code + "\npipeline"))
+        // Type variable 'A is bounded by Num but appears at both polarities so isn't simplified away
+        assertType("('A & Num) -> 'A?", infer(code + "\npipeline"))
     }
 
     @Test

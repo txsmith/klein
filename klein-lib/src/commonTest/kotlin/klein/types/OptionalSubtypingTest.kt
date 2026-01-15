@@ -374,26 +374,45 @@ class OptionalSubtypingTest {
     // =========================================================================
     // SECTION 8: Function Types with Optional Parameters/Results
     // =========================================================================
-
     @Test
-    fun functionWithOptionalParam_acceptsNonOptional() {
+    fun functionWithOptionalParam_contravariance() {
         // (Num?) -> String should accept Num as argument
-        // i.e., (Num) -> String <: (Num?) -> String (contravariant param)
+        // i.e., (Num?) -> String <: (Num) -> String (contravariant param)
         val sub = subtype()
-        val f1 = TFun(listOf(TNum), TString)
-        val f2 = TFun(listOf(TOptional(TNum)), TString)
+        val f1 = TFun(listOf(TOptional(TNum)), TString)
+        val f2 = TFun(listOf(TNum), TString)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertTrue(sub.getErrors().isEmpty())
     }
 
     @Test
-    fun functionWithOptionalParam_acceptsNull() {
+    fun functionWithOptionalParam_null_contravariance() {
+        // (Num?) -> String <: (Null) -> String (Null <: Num?)
+        val sub = subtype()
+        val f1 = TFun(listOf(TOptional(TNum)), TString)
+        val f2 = TFun(listOf(TNull), TString)
+        sub.constrain(f1, f2, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun functionWithOptionalParam_notSubtypeOfNonOptionalParam() {
+        // (Num) -> String is NOT subtype of (Num?) -> String
+        val sub = subtype()
+        val f1 = TFun(listOf(TNum), TString)
+        val f2 = TFun(listOf(TOptional(TNum)), TString)
+        sub.constrain(f1, f2, SourceSpan.zero)
+        assertTrue(sub.getErrors().size == 1)
+    }
+
+    @Test
+    fun functionWithNullParam_notSubtypeOfOptionalParam() {
         // (Null) -> String <: (Num?) -> String (Null <: Num?)
         val sub = subtype()
         val f1 = TFun(listOf(TNull), TString)
         val f2 = TFun(listOf(TOptional(TNum)), TString)
         sub.constrain(f1, f2, SourceSpan.zero)
-        assertTrue(sub.getErrors().isEmpty())
+        assertTrue(sub.getErrors().size == 1)
     }
 
     @Test

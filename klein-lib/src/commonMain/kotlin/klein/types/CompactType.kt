@@ -18,6 +18,7 @@ data class CompactType(
     val prims: Set<PrimType> = emptySet(),
     val rec: Map<String, CompactType>? = null,
     val func: Pair<List<CompactType>, CompactType>? = null,
+    val optional: CompactType? = null,
 ) {
     enum class PrimType { Num, String, Bool, Null, Unit }
 
@@ -35,6 +36,8 @@ data class CompactType(
 
         fun record(fields: Map<String, CompactType>) = CompactType(rec = fields)
 
+        fun optional(inner: CompactType) = CompactType(optional = inner)
+
         fun fromSimpleType(ty: SimpleType): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<TVar, Boolean>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
@@ -51,7 +54,7 @@ data class CompactType(
                     TBool -> CompactType.prim(PrimType.Bool)
                     TNull -> CompactType.prim(PrimType.Null)
                     TUnit -> CompactType.prim(PrimType.Unit)
-                    is TOptional -> TODO("TOptional not yet implemented")
+                    is TOptional -> CompactType.optional(go(ty.inner, pol, parents, inProgress))
                     is TFun ->
                         CompactType.function(
                             ty.params.map { go(it, !pol, emptySet(), inProgress) },
@@ -143,7 +146,7 @@ data class CompactType(
                     TBool -> CompactType.prim(PrimType.Bool)
                     TNull -> CompactType.prim(PrimType.Null)
                     TUnit -> CompactType.prim(PrimType.Unit)
-                    is TOptional -> TODO("TOptional not yet implemented")
+                    is TOptional -> CompactType.optional(go0(ty.inner, pol))
                     is TFun ->
                         CompactType.function(
                             ty.params.map { go0(it, !pol) },
@@ -187,6 +190,7 @@ data class CompactType(
                             merged.func?.let { (params, result) ->
                                 params.map { go1(it, !pol, newInProgress) } to go1(result, pol, newInProgress)
                             },
+                        optional = merged.optional?.let { go1(it, pol, newInProgress) },
                     )
 
                 val recVar = recursive[key]
@@ -250,15 +254,23 @@ data class CompactType(
                 }
             }
 
+        val mergedOptional =
+            when {
+                this.optional == null -> other.optional
+                other.optional == null -> this.optional
+                else -> this.optional.merge(other.optional, positive)
+            }
+
         return CompactType(
             vars = mergedVars,
             prims = mergedPrims,
             rec = mergedRec,
             func = mergedFun,
+            optional = mergedOptional,
         )
     }
 
-    fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null
+    fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null
 }
 
 data class CompactTypeScheme(

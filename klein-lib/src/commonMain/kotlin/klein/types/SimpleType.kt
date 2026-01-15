@@ -47,6 +47,7 @@ sealed class SimpleType {
                     TRecord(
                         ty.fields.mapValues { freshen(it.value) },
                     )
+                ty is TOptional -> TOptional(freshen(ty.inner))
                 else -> ty
             }
 

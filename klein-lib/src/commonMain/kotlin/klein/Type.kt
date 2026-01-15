@@ -43,6 +43,10 @@ sealed class Type {
         val rhs: Type,
     ) : Type()
 
+    data class Optional(
+        val inner: Type,
+    ) : Type()
+
     override fun toString(): String = print(this)
 
     companion object {
@@ -61,6 +65,7 @@ sealed class Type {
                 is Rec -> "${print(type.body)} as ${type.varName}"
                 is Union -> printUnion(type)
                 is Inter -> printInter(type)
+                is Optional -> "${printWithParensIfNeeded(type.inner, isUnionOrInter = false)}?"
             }
 
         private fun printFun(fn: Fun): String {
@@ -113,14 +118,15 @@ sealed class Type {
                 Num -> 2
                 Str -> 3
                 Null -> 4
-                Unit -> 5
-                is Record -> 6
-                is Fun -> 7
-                Top -> 8
-                Bottom -> 9
-                is Union -> 10
-                is Inter -> 11
-                is Rec -> 12
+                is Optional -> 5
+                Unit -> 6
+                is Record -> 7
+                is Fun -> 8
+                Top -> 9
+                Bottom -> 10
+                is Union -> 11
+                is Inter -> 12
+                is Rec -> 13
             }
 
         private fun printWithParensIfNeeded(
