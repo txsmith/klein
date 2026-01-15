@@ -241,6 +241,7 @@ object TypeSimplifier {
                         PrimType.Num -> Type.Num
                         PrimType.String -> Type.Str
                         PrimType.Bool -> Type.Bool
+                        PrimType.Null -> Type.Null
                         PrimType.Unit -> Type.Unit
                     },
                 )

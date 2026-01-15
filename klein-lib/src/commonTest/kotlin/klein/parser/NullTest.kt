@@ -363,13 +363,13 @@ class NullTest {
 
     @Test
     fun functionReturningNull() {
-        val stmt = parseStmt("fun nothing(x) = null")
+        val stmt = parseTopLevel("fun nothing(x) = null")
         assertStmtEquals(stmt, funDef("nothing", "x", body = nullLit()))
     }
 
     @Test
     fun functionReturningNullConditionally() {
-        val stmt = parseStmt("fun maybeDouble(x, b) = if b then x * 2 else null")
+        val stmt = parseTopLevel("fun maybeDouble(x, b) = if b then x * 2 else null")
         assertStmtEquals(
             stmt,
             funDef(
@@ -482,17 +482,19 @@ class NullTest {
     @Test
     fun nullInMultilineBlock() {
         val expr = parse("""
-            x = null
-            y = if true then 1 else null
-            y
+            |
+              x = null
+              y = if true then 1 else null
+              y
+            |
         """.trimIndent())
         assertExprEquals(
             expr,
-            block(
+            lambda(body = block(
                 valStmt("x", nullLit()),
                 valStmt("y", ifThenElse(bool(true), int(1), nullLit())),
                 id("y")
-            )
+            ))
         )
     }
 
@@ -548,7 +550,7 @@ class NullTest {
 
     @Test
     fun nullAsFunctionName_fails() {
-        val error = assertFailsWith<ParseError> { parseStmt("fun null(x) = x") }
+        val error = assertFailsWith<ParseError> { parseTopLevel("fun null(x) = x") }
         // Expects identifier for function name, got keyword
         assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
@@ -569,7 +571,7 @@ class NullTest {
 
     @Test
     fun nullAsFunctionParameter_fails() {
-        val error = assertFailsWith<ParseError> { parseStmt("fun f(null) = 42") }
+        val error = assertFailsWith<ParseError> { parseTopLevel("fun f(null) = 42") }
         // Expects identifier for parameter, got keyword
         assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }

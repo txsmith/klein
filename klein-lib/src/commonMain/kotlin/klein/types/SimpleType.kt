@@ -65,8 +65,19 @@ sealed class SimpleType {
         override fun toString(): String = "TBool"
     }
 
+    object TNull : SimpleType() {
+        override fun toString(): String = "TNull"
+    }
+
     object TUnit : SimpleType() {
         override fun toString(): String = "TUnit"
+    }
+
+    data class TOptional(
+        val inner: SimpleType,
+    ) : SimpleType() {
+        override val level: Int
+            get() = inner.level
     }
 
     class TVar(

@@ -36,6 +36,7 @@ class Typer {
             is DoubleLiteral -> TNum
             is StringLiteral -> TString
             is BoolLiteral -> TBool
+            is NullLiteral -> TNull
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> inferBinaryOp(expr, env)
             is UnaryOp -> inferUnaryOp(expr, env)

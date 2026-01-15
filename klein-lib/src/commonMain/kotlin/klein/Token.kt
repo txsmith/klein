@@ -46,6 +46,7 @@ enum class TokenKind(
     FUN(keyword = "fun"),
     TRUE(keyword = "true"),
     FALSE(keyword = "false"),
+    NULL(keyword = "null"),
     AND(keyword = "and"),
     OR(keyword = "or"),
     NOT(keyword = "not"),

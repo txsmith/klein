@@ -34,6 +34,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         is DoubleLiteral -> "${pad}Double($value)"
         is StringLiteral -> "${pad}String(\"$value\")"
         is BoolLiteral -> "${pad}Bool($value)"
+        is NullLiteral -> "${pad}Null"
         is Ident -> "${pad}Ident($name)"
         is UnaryOp -> "${pad}$op\n${operand.prettyPrint(indent + 1)}"
         is BinaryOp -> "${pad}$op\n${left.prettyPrint(indent + 1)}\n${right.prettyPrint(indent + 1)}"

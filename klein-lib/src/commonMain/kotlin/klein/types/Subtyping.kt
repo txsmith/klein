@@ -81,6 +81,7 @@ class Subtyping {
             lhs is TNum && rhs is TNum -> return
             lhs is TString && rhs is TString -> return
             lhs is TBool && rhs is TBool -> return
+            lhs is TNull && rhs is TNull -> return
             lhs is TUnit && rhs is TUnit -> return
 
             else -> {
