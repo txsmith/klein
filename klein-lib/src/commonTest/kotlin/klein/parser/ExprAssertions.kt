@@ -185,6 +185,11 @@ fun parseStmt(source: String): Stmt {
     return Parser(tokens).parseStmt()
 }
 
+fun parseTopLevel(source: String): Stmt {
+    val tokens = Lexer(source).tokenize().toList()
+    return Parser(tokens).parseProgram().stmts.first()
+}
+
 fun Stmt.stripSpan(): Stmt =
     when (this) {
         is Val -> Val(name, value.stripSpans(), noSpan)

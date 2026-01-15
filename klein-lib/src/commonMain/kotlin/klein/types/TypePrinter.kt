@@ -57,6 +57,9 @@ object TypePrinter {
                         }
                     }
                 }
+                is TOptional -> {
+                    collectVars(type.inner)
+                }
                 is TFun -> {
                     type.params.forEach { collectVars(it) }
                     collectVars(type.result)
@@ -73,7 +76,9 @@ object TypePrinter {
                 TNum -> "Num"
                 TString -> "String"
                 TBool -> "Bool"
+                TNull -> "Null"
                 TUnit -> "Unit"
+                is TOptional -> "${printType(type.inner)}?"
                 is TVar -> varName(type)
                 is TFun -> printFun(type)
                 is TRecord -> printRecord(type)

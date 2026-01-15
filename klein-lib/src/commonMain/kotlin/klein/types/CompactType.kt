@@ -19,7 +19,7 @@ data class CompactType(
     val rec: Map<String, CompactType>? = null,
     val func: Pair<List<CompactType>, CompactType>? = null,
 ) {
-    enum class PrimType { Num, String, Bool, Unit }
+    enum class PrimType { Num, String, Bool, Null, Unit }
 
     companion object {
         val empty = CompactType()
@@ -49,7 +49,9 @@ data class CompactType(
                     TNum -> CompactType.prim(PrimType.Num)
                     TString -> CompactType.prim(PrimType.String)
                     TBool -> CompactType.prim(PrimType.Bool)
+                    TNull -> CompactType.prim(PrimType.Null)
                     TUnit -> CompactType.prim(PrimType.Unit)
+                    is TOptional -> TODO("TOptional not yet implemented")
                     is TFun ->
                         CompactType.function(
                             ty.params.map { go(it, !pol, emptySet(), inProgress) },
@@ -139,7 +141,9 @@ data class CompactType(
                     TNum -> CompactType.prim(PrimType.Num)
                     TString -> CompactType.prim(PrimType.String)
                     TBool -> CompactType.prim(PrimType.Bool)
+                    TNull -> CompactType.prim(PrimType.Null)
                     TUnit -> CompactType.prim(PrimType.Unit)
+                    is TOptional -> TODO("TOptional not yet implemented")
                     is TFun ->
                         CompactType.function(
                             ty.params.map { go0(it, !pol) },

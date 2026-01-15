@@ -49,6 +49,10 @@ data class BoolLiteral(
     override val span: SourceSpan,
 ) : Expr()
 
+data class NullLiteral(
+    override val span: SourceSpan,
+) : Expr()
+
 data class Ident(
     val name: String,
     override val span: SourceSpan,
@@ -105,7 +109,7 @@ val Expr.usesImplicitParam: Boolean
     get() =
         when (this) {
             is ImplicitParam -> true
-            is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is Ident -> false
+            is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is NullLiteral, is Ident -> false
             is BinaryOp -> left.usesImplicitParam || right.usesImplicitParam
             is UnaryOp -> operand.usesImplicitParam
             is Lambda -> false

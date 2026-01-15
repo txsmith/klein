@@ -118,7 +118,7 @@ class BindingTest {
     @Test
     fun keywordAsName() {
         val error = assertFailsWith<ParseError> { parseStmt("true = 1") }
-        assertTrue(error.message!!.startsWith("Expected newline but got '='"))
+        assertEquals("Expected identifier, got keyword 'true'", error.message)
     }
 
     @Test

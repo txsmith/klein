@@ -7,6 +7,8 @@ sealed class Type {
 
     data object Bool : Type()
 
+    data object Null : Type()
+
     data object Unit : Type()
 
     data object Top : Type()
@@ -49,6 +51,7 @@ sealed class Type {
                 Num -> "Num"
                 Str -> "String"
                 Bool -> "Bool"
+                Null -> "Null"
                 Unit -> "Unit"
                 Top -> "Any"
                 Bottom -> "Nothing"
@@ -109,14 +112,15 @@ sealed class Type {
                 Bool -> 1
                 Num -> 2
                 Str -> 3
-                Unit -> 4
-                is Record -> 5
-                is Fun -> 6
-                Top -> 7
-                Bottom -> 8
-                is Union -> 9
-                is Inter -> 10
-                is Rec -> 11
+                Null -> 4
+                Unit -> 5
+                is Record -> 6
+                is Fun -> 7
+                Top -> 8
+                Bottom -> 9
+                is Union -> 10
+                is Inter -> 11
+                is Rec -> 12
             }
 
         private fun printWithParensIfNeeded(

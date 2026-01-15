@@ -81,4 +81,11 @@ sealed class TypeError {
                 return "Implicit dot parameter '.' cannot be used here, you've declared named ones: $paramList"
             }
     }
+
+    data class NullNotAllowed(
+        val expected: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Null is not allowed here: expected ${Type.print(expected)}"
+    }
 }
