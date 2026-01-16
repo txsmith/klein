@@ -198,6 +198,8 @@ class Typer {
                 TBool
             }
             Operator.Eq, Operator.NotEq -> {
+                subtyping.constrain(leftType, rightType, expr.left.span)
+                subtyping.constrain(rightType, leftType, expr.right.span)
                 TBool
             }
             Operator.And, Operator.Or -> {

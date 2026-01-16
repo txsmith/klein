@@ -16,8 +16,8 @@ object TypePrinter {
      * ```
      * (a) -> b
      *   where
-     *     Num :> a
-     *     a :> b <: String
+     *     Num <: a
+     *     a <: b <: String
      * ```
      */
     fun printRaw(type: SimpleType): String = RawPrinter().print(type)
@@ -127,7 +127,7 @@ object TypePrinter {
                             append("    ")
                             if (lower.isNotEmpty()) {
                                 append(lower.joinToString(", "))
-                                append(" :> ")
+                                append(" <: ")
                             }
                             append(name)
                             if (upper.isNotEmpty()) {
