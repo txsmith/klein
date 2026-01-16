@@ -36,6 +36,7 @@ class Typer {
             is DoubleLiteral -> TNum
             is StringLiteral -> TString
             is BoolLiteral -> TBool
+            is NullLiteral -> TNull
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> inferBinaryOp(expr, env)
             is UnaryOp -> inferUnaryOp(expr, env)
@@ -43,6 +44,7 @@ class Typer {
             is Apply -> inferApply(expr, env)
             is RecordLiteral -> inferRecordLiteral(expr, env)
             is FieldAccess -> inferFieldAccess(expr, env)
+            is SafeFieldAccess -> inferSafeFieldAccess(expr, env)
             is IfThenElse -> inferIfThenElse(expr, env)
             is ImplicitParam -> inferImplicitParam(expr, env)
             is Block -> inferStmts(expr.stmts, env.child()).first
@@ -136,6 +138,10 @@ class Typer {
         expr: Apply,
         env: TypeEnv,
     ): SimpleType {
+        if (expr.callee is SafeFieldAccess) {
+            return inferSafeMethodCall(expr.callee, expr.args, expr.span, env)
+        }
+
         val calleeType = infer(expr.callee, env)
         val argTypes = expr.args.map { infer(it, env) }
         val resultType = env.freshVar()
@@ -147,6 +153,22 @@ class Typer {
         )
 
         return resultType
+    }
+
+    private fun inferSafeMethodCall(
+        callee: SafeFieldAccess,
+        args: List<Expr>,
+        span: SourceSpan,
+        env: TypeEnv,
+    ): SimpleType {
+        val targetType = infer(callee.target, env)
+        val argTypes = args.map { infer(it, env) }
+        val returnType = env.freshVar()
+
+        val funType = TFun(argTypes, returnType)
+        subtyping.constrain(targetType, TOptional(TRecord(mapOf(callee.field to funType))), span)
+
+        return TOptional(returnType)
     }
 
     private fun inferIdent(
@@ -197,6 +219,8 @@ class Typer {
                 TBool
             }
             Operator.Eq, Operator.NotEq -> {
+                subtyping.constrain(leftType, rightType, expr.left.span)
+                subtyping.constrain(rightType, leftType, expr.right.span)
                 TBool
             }
             Operator.And, Operator.Or -> {
@@ -247,6 +271,16 @@ class Typer {
         val fieldType = env.freshVar()
         subtyping.constrain(targetType, TRecord(mapOf(expr.field to fieldType)), expr.span)
         return fieldType
+    }
+
+    private fun inferSafeFieldAccess(
+        expr: SafeFieldAccess,
+        env: TypeEnv,
+    ): SimpleType {
+        val targetType = infer(expr.target, env)
+        val fieldType = env.freshVar()
+        subtyping.constrain(targetType, TOptional(TRecord(mapOf(expr.field to fieldType))), expr.span)
+        return TOptional(fieldType)
     }
 
     private fun inferIfThenElse(

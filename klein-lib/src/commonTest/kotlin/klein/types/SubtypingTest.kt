@@ -347,4 +347,21 @@ class SubtypingTest {
         assertEquals(1, sub.getErrors().size)
         assertTrue(sub.getErrors()[0] is TypeError.MissingField)
     }
+
+    @Test
+    fun functionWithIndependentParams_subtypeOfSameParamVar() {
+        // (Any, Any) -> Num <: ('A, 'A) -> Num
+        // A function that accepts any two arguments should be usable
+        // where a function expecting same-typed arguments is needed.
+        // This models: fun wide(a, b) = 1; restrict(wide)
+        // where restrict expects ('A, 'A) -> Num
+        val sub = subtype()
+        val a = SimpleType.TVar()
+        val b = SimpleType.TVar()
+        val c = SimpleType.TVar()
+        val wide = SimpleType.TFun(listOf(a, b), SimpleType.TNum)
+        val restricted = SimpleType.TFun(listOf(c, c), SimpleType.TNum)
+        sub.constrain(wide, restricted, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
 }

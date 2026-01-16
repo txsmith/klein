@@ -49,6 +49,10 @@ data class BoolLiteral(
     override val span: SourceSpan,
 ) : Expr()
 
+data class NullLiteral(
+    override val span: SourceSpan,
+) : Expr()
+
 data class Ident(
     val name: String,
     override val span: SourceSpan,
@@ -97,6 +101,12 @@ data class FieldAccess(
     override val span: SourceSpan,
 ) : Expr()
 
+data class SafeFieldAccess(
+    val target: Expr,
+    val field: String,
+    override val span: SourceSpan,
+) : Expr()
+
 data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
@@ -105,13 +115,14 @@ val Expr.usesImplicitParam: Boolean
     get() =
         when (this) {
             is ImplicitParam -> true
-            is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is Ident -> false
+            is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is NullLiteral, is Ident -> false
             is BinaryOp -> left.usesImplicitParam || right.usesImplicitParam
             is UnaryOp -> operand.usesImplicitParam
             is Lambda -> false
             is Apply -> callee.usesImplicitParam || args.any { it.usesImplicitParam }
             is RecordLiteral -> fields.any { it.second.usesImplicitParam }
             is FieldAccess -> target.usesImplicitParam
+            is SafeFieldAccess -> target.usesImplicitParam
             is IfThenElse ->
                 condition.usesImplicitParam ||
                     thenBranch.usesImplicitParam ||

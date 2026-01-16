@@ -165,7 +165,7 @@ class LambdaTest {
     @Test
     fun trailingCommaInParams() {
         val error = assertFailsWith<ParseError> { parse("|x, y, -> x|") }
-        assertEquals("Expected '->', got ','", error.message)
+        assertEquals("Expected parameter name, got '->'", error.message)
     }
 
     @Test
@@ -183,19 +183,19 @@ class LambdaTest {
     @Test
     fun keywordTrueAsParam() {
         val error = assertFailsWith<ParseError> { parse("|true -> 1|") }
-        assertEquals("Expected '|', got '->'", error.message)
+        assertEquals("Expected parameter name, got keyword 'true'", error.message)
     }
 
     @Test
     fun keywordIfAsParam() {
         val error = assertFailsWith<ParseError> { parse("|if -> 1|") }
-        assertEquals("Expected expression, got '->'", error.message)
+        assertEquals("Expected parameter name, got keyword 'if'", error.message)
     }
 
     @Test
     fun keywordAndAsParam() {
         val error = assertFailsWith<ParseError> { parse("|and -> 1|") }
-        assertEquals("Expected expression, got Keyword(AND)", error.message)
+        assertEquals("Expected parameter name, got keyword 'and'", error.message)
     }
 
     @Test

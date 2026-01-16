@@ -14,10 +14,12 @@ import klein.ImplicitParam
 import klein.IntLiteral
 import klein.Lambda
 import klein.Lexer
+import klein.NullLiteral
 import klein.Operator
 import klein.Parser
 import klein.Program
 import klein.RecordLiteral
+import klein.SafeFieldAccess
 import klein.SourceSpan
 import klein.Stmt
 import klein.StringLiteral
@@ -36,6 +38,8 @@ fun double(value: Double) = DoubleLiteral(value, noSpan)
 fun string(value: String) = StringLiteral(value, noSpan)
 
 fun bool(value: Boolean) = BoolLiteral(value, noSpan)
+
+fun nullLit() = NullLiteral(noSpan)
 
 fun id(name: String) = Ident(name, noSpan)
 
@@ -131,6 +135,11 @@ fun fieldAccess(
     field: String,
 ) = FieldAccess(target, field, noSpan)
 
+fun safeFieldAccess(
+    target: Expr,
+    field: String,
+) = SafeFieldAccess(target, field, noSpan)
+
 fun implicitParam() = ImplicitParam(noSpan)
 
 fun record(vararg fields: Pair<String, Expr>) = RecordLiteral(fields.toList(), noSpan)
@@ -141,6 +150,7 @@ fun Expr.stripSpans(): Expr =
         is DoubleLiteral -> DoubleLiteral(value, noSpan)
         is StringLiteral -> StringLiteral(value, noSpan)
         is BoolLiteral -> BoolLiteral(value, noSpan)
+        is NullLiteral -> NullLiteral(noSpan)
         is Ident -> Ident(name, noSpan)
         is UnaryOp -> UnaryOp(op, operand.stripSpans(), noSpan)
         is BinaryOp -> BinaryOp(left.stripSpans(), op, right.stripSpans(), noSpan)
@@ -149,6 +159,7 @@ fun Expr.stripSpans(): Expr =
         is Block -> Block(stmts.map { it.stripSpan() }, noSpan)
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
+        is SafeFieldAccess -> SafeFieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
         is RecordLiteral -> RecordLiteral(fields.map { (name, value) -> name to value.stripSpans() }, noSpan)
     }
@@ -179,6 +190,11 @@ fun funDef(
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseStmt()
+}
+
+fun parseTopLevel(source: String): Stmt {
+    val tokens = Lexer(source).tokenize().toList()
+    return Parser(tokens).parseProgram().stmts.first()
 }
 
 fun Stmt.stripSpan(): Stmt =

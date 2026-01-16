@@ -83,6 +83,7 @@ object TypeSimplifier {
                 ty.func?.let { (params, result) ->
                     params.map { analyze(it, !pol) } to analyze(result, pol)
                 }
+            val optionalThunk = ty.optional?.let { analyze(it, pol) }
 
             // Return a thunk that applies substitutions during reconstruction
             return {
@@ -105,6 +106,7 @@ object TypeSimplifier {
                         funThunks?.let { (paramThunks, resultThunk) ->
                             paramThunks.map { it() } to resultThunk()
                         },
+                    optional = optionalThunk?.invoke(),
                 )
             }
         }
@@ -241,6 +243,7 @@ object TypeSimplifier {
                         PrimType.Num -> Type.Num
                         PrimType.String -> Type.Str
                         PrimType.Bool -> Type.Bool
+                        PrimType.Null -> Type.Null
                         PrimType.Unit -> Type.Unit
                     },
                 )
@@ -252,24 +255,50 @@ object TypeSimplifier {
                 components.add(Type.Record(typeFields))
             }
 
-            // Add function last
+            // Add function
             ty.func?.let { (params, result) ->
                 val typeParams = params.map { go(it, !pol, newInProcess) }
                 val typeResult = go(result, pol, newInProcess)
                 components.add(Type.Fun(typeParams, typeResult))
             }
 
-            val result =
-                if (components.isEmpty()) {
+            // Add optional
+            ty.optional?.let { inner ->
+                val innerType = go(inner, pol, newInProcess)
+                components.add(Type.Optional(innerType))
+            }
+
+            // In positive position, if Null appears with other types, convert to optional
+            // e.g., Num | Null becomes Num?
+            val hasNullPrim = PrimType.Null in ty.prims
+            val hasOtherComponents = components.any { it != Type.Null }
+            val wrapInOptional = pol && hasNullPrim && hasOtherComponents
+
+            val componentsWithoutNull =
+                if (wrapInOptional) {
+                    components.filter { it != Type.Null }
+                } else {
+                    components
+                }
+
+            val baseResult =
+                if (componentsWithoutNull.isEmpty()) {
                     if (pol) Type.Bottom else Type.Top
-                } else if (components.size == 1) {
-                    components[0]
+                } else if (componentsWithoutNull.size == 1) {
+                    componentsWithoutNull[0]
                 } else {
                     if (pol) {
-                        components.reduce { acc, t -> Type.Union(acc, t) }
+                        componentsWithoutNull.reduce { acc, t -> Type.Union(acc, t) }
                     } else {
-                        components.reduce { acc, t -> Type.Inter(acc, t) }
+                        componentsWithoutNull.reduce { acc, t -> Type.Inter(acc, t) }
                     }
+                }
+
+            val result =
+                if (wrapInOptional) {
+                    Type.Optional(baseResult)
+                } else {
+                    baseResult
                 }
 
             return if (isRecursive) {

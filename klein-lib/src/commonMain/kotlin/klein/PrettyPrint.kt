@@ -34,6 +34,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         is DoubleLiteral -> "${pad}Double($value)"
         is StringLiteral -> "${pad}String(\"$value\")"
         is BoolLiteral -> "${pad}Bool($value)"
+        is NullLiteral -> "${pad}Null"
         is Ident -> "${pad}Ident($name)"
         is UnaryOp -> "${pad}$op\n${operand.prettyPrint(indent + 1)}"
         is BinaryOp -> "${pad}$op\n${left.prettyPrint(indent + 1)}\n${right.prettyPrint(indent + 1)}"
@@ -54,6 +55,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             "${pad}If\n${condition.prettyPrint(indent + 1)}\n${pad}Then\n${thenBranch.prettyPrint(indent + 1)}$elseStr"
         }
         is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
+        is SafeFieldAccess -> "${pad}SafeFieldAccess($field)\n${target.prettyPrint(indent + 1)}"
         is ImplicitParam -> "${pad}ImplicitParam"
         is RecordLiteral -> {
             val fieldsStr =

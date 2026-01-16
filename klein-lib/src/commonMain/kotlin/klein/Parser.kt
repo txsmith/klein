@@ -25,6 +25,12 @@ class Parser(
     }
 
     fun parseStmt(): Stmt {
+        // Check for keyword used as variable name in binding
+        val token = peek()
+        if (token.kind.keyword != null && peekAt(1).kind == EQ) {
+            throw ParseError("Expected identifier, got keyword '${token.kind.keyword}'", token.span)
+        }
+
         val stmt = if (isBinding()) parseBinding() else parseExpr()
 
         if (!canEndStatement()) {
@@ -41,7 +47,7 @@ class Parser(
 
     private fun parseFunDef(): FunDef {
         val funToken = advance()
-        val name = expectAndAdvance(IDENT, message = "Expected function name")
+        val name = expectIdentifier("Expected function name")
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
@@ -54,18 +60,18 @@ class Parser(
         if (peek().kind == RPAREN) return emptyList()
 
         val params = mutableListOf<String>()
-        params.add(expectAndAdvance(IDENT, message = "Expected parameter name").text!!)
+        params.add(expectIdentifier("Expected parameter name").text!!)
 
         while (peek().kind == COMMA) {
             advance()
-            params.add(expectAndAdvance(IDENT, message = "Expected parameter name").text!!)
+            params.add(expectIdentifier("Expected parameter name").text!!)
         }
 
         return params
     }
 
     private fun parseBinding(): Val {
-        val name = expectAndAdvance(IDENT, message = "Expected identifier")
+        val name = expectIdentifier("Expected identifier")
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
         return Val(name.text!!, value, name.span + value.span)
@@ -123,6 +129,10 @@ class Parser(
                     expr = parseFieldAccessOn(expr)
                 }
 
+                QUESTION_DOT -> {
+                    expr = parseSafeFieldAccessOn(expr)
+                }
+
                 else -> break
             }
         }
@@ -163,6 +173,11 @@ class Parser(
             FALSE -> {
                 advance()
                 BoolLiteral(false, token.span)
+            }
+
+            NULL -> {
+                advance()
+                NullLiteral(token.span)
             }
 
             NOT -> {
@@ -228,7 +243,17 @@ class Parser(
     }
 
     private fun parseLambdaParams(): List<String> {
-        if (peek().kind != IDENT) return emptyList()
+        val token = peek()
+
+        // Check if a keyword is being used as a parameter name
+        if (token.kind.keyword != null) {
+            val next = peekAt(1)
+            if (next.kind == ARROW || next.kind == COMMA) {
+                throw ParseError("Expected parameter name, got keyword '${token.kind.keyword}'", token.span)
+            }
+        }
+
+        if (token.kind != IDENT) return emptyList()
 
         val next = peekAt(1)
         if (next.kind != ARROW && next.kind != COMMA) return emptyList()
@@ -238,8 +263,16 @@ class Parser(
             val ident = advance()
             params.add(ident.text!!)
 
-            if (peek().kind == COMMA && peekAt(1).kind == IDENT) {
+            if (peek().kind == COMMA) {
                 advance()
+                // Check for keyword after comma
+                val afterComma = peek()
+                if (afterComma.kind.keyword != null && (peekAt(1).kind == ARROW || peekAt(1).kind == COMMA)) {
+                    throw ParseError("Expected parameter name, got keyword '${afterComma.kind.keyword}'", afterComma.span)
+                }
+                if (afterComma.kind != IDENT) {
+                    throw ParseError("Expected parameter name, got $afterComma", afterComma.span)
+                }
             } else {
                 break
             }
@@ -254,7 +287,7 @@ class Parser(
         val fields = mutableListOf<Pair<String, Expr>>()
 
         while (peek().kind != RBRACE && peek().kind != EOF) {
-            val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
+            val nameToken = expectIdentifier("Expected field name")
             val name = nameToken.text!!
 
             val value =
@@ -313,8 +346,14 @@ class Parser(
 
     private fun parseFieldAccessOn(target: Expr): FieldAccess {
         advance()
-        val field = expectAndAdvance(IDENT, message = "Expected field name after '.'")
+        val field = expectIdentifier("Expected field name after '.'")
         return FieldAccess(target, field.text!!, target.span + field.span)
+    }
+
+    private fun parseSafeFieldAccessOn(target: Expr): SafeFieldAccess {
+        advance()
+        val field = expectIdentifier("Expected field name after '?.'")
+        return SafeFieldAccess(target, field.text!!, target.span + field.span)
     }
 
     private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
@@ -353,12 +392,29 @@ class Parser(
 
     private fun peek(): Token = tokens[pos]
 
-    private fun peekAt(offset: Int): Token = tokens[pos + offset]
+    private fun peekAt(offset: Int): Token {
+        val index = pos + offset
+        return if (index < tokens.size) tokens[index] else tokens.last()
+    }
 
     private fun advance(): Token {
         val token = tokens[pos++]
         token.indent?.let { currentLineIndent = it }
         return token
+    }
+
+    private fun expectIdentifier(message: String): Token {
+        val token = peek()
+        if (token.kind != IDENT) {
+            val errorMsg =
+                if (token.kind.keyword != null) {
+                    "$message, got keyword '${token.kind.keyword}'"
+                } else {
+                    "$message, got $token"
+                }
+            throw ParseError(errorMsg, token.span)
+        }
+        return advance()
     }
 
     private fun expectAndAdvance(

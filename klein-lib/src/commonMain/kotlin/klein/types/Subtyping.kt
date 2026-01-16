@@ -78,12 +78,29 @@ class Subtyping {
                 }
             }
 
+            // Null <: T? (null injection into any optional)
+            lhs is TNull && rhs is TOptional -> return
+
+            // T <: T? (embedding) and T? <: U? if T <: U (covariance)
+            rhs is TOptional -> {
+                when (lhs) {
+                    is TOptional -> constrain(lhs.inner, rhs.inner, span)
+                    else -> constrain(lhs, rhs.inner, span)
+                }
+            }
+
+            // Null NOT <: T for non-optional T (null safety)
+            lhs is TNull -> {
+                errors.add(TypeError.NullNotAllowed(simplifyCanonical(rhs), span))
+            }
+
             lhs is TNum && rhs is TNum -> return
             lhs is TString && rhs is TString -> return
             lhs is TBool && rhs is TBool -> return
+            lhs is TNull && rhs is TNull -> return
             lhs is TUnit && rhs is TUnit -> return
-
             else -> {
+                // Fall-through handles: T? NOT <: T (no implicit unwrap), and other mismatches
                 errors.add(TypeError.TypeMismatch(simplifyCanonical(rhs), simplifyCanonical(lhs), span))
             }
         }
@@ -119,6 +136,9 @@ class Subtyping {
 
             is TRecord ->
                 TRecord(ty.fields.mapValues { (_, v) -> extrude(v, positive, targetLevel, cache) })
+
+            is TOptional ->
+                TOptional(extrude(ty.inner, positive, targetLevel, cache))
 
             is TVar -> {
                 val key = ty to positive
