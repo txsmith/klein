@@ -74,6 +74,10 @@ class Lexer(
                 listOf(string())
             }
 
+            c == '\'' -> {
+                listOf(typeVar())
+            }
+
             c == '|' -> {
                 advance()
                 listOf(token(PIPE, SourceSpan(start, pos)))
@@ -162,6 +166,17 @@ class Lexer(
         val span = SourceSpan(start, pos)
         val kind = TokenKind.fromKeyword(text) ?: IDENT
         return token(kind, span, text)
+    }
+
+    private fun typeVar(): Token {
+        val start = pos
+        advance('\'')
+        val next = peek()
+        if (next == null || !next.isUpperCase()) {
+            throw LexerError("Type variable must start with uppercase letter after '", SourceSpan(start, pos))
+        }
+        val name = consumeWhile { it.isLetterOrDigit() || it == '_' }
+        return token(TYPE_VAR, SourceSpan(start, pos), name)
     }
 
     private fun string(): Token {

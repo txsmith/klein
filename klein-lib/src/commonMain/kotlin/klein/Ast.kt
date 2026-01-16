@@ -52,6 +52,12 @@ data class TypeName(
     override val span: SourceSpan,
 ) : TypeExpr()
 
+data class AppliedTypeExpr(
+    val name: String,
+    val args: List<TypeExpr>,
+    override val span: SourceSpan,
+) : TypeExpr()
+
 data class TypeVar(
     val name: String,
     override val span: SourceSpan,

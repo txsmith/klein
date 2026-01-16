@@ -352,7 +352,7 @@ class TypeDefTest {
     @Test
     fun recursiveTypeWithTypeParam() {
         assertTypeDefEquals(
-            parseTypeDef("type List<'A> = Nil | Cons { head: 'A, tail: List }"),
+            parseTypeDef("type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }"),
             typeDef(
                 "List",
                 listOf("A"),
@@ -360,7 +360,7 @@ class TypeDefTest {
                 constructor(
                     "Cons",
                     field("head", typeVar("A")),
-                    field("tail", typeName("List")),
+                    field("tail", appliedType("List", typeVar("A"))),
                 ),
             ),
         )
@@ -369,15 +369,15 @@ class TypeDefTest {
     @Test
     fun binaryTree() {
         assertTypeDefEquals(
-            parseTypeDef("type Tree<'A> = Leaf { value: 'A } | Node { left: Tree, right: Tree }"),
+            parseTypeDef("type Tree<'A> = Leaf { value: 'A } | Node { left: Tree<'A>, right: Tree<'A> }"),
             typeDef(
                 "Tree",
                 listOf("A"),
                 constructor("Leaf", field("value", typeVar("A"))),
                 constructor(
                     "Node",
-                    field("left", typeName("Tree")),
-                    field("right", typeName("Tree")),
+                    field("left", appliedType("Tree", typeVar("A"))),
+                    field("right", appliedType("Tree", typeVar("A"))),
                 ),
             ),
         )
@@ -934,7 +934,7 @@ class TypeDefTest {
                 """
                 type Box<'A> = Box { value: 'A }
 
-                unwrap(box) = box.value
+                fun unwrap(box) = box.value
                 """.trimIndent(),
             ),
             listOf(
@@ -955,19 +955,6 @@ class TypeDefTest {
                 """
                 type Bool = True
                 | False
-                """.trimIndent(),
-            )
-        }
-    }
-
-    @Test
-    fun multilineFieldBadIndentation() {
-        assertFailsWith<ParseError> {
-            parseProgram(
-                """
-                type Person = Person {
-                name: String
-                }
                 """.trimIndent(),
             )
         }

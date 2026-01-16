@@ -174,6 +174,9 @@ private fun infer(
                     val type = result.env.lookupAndInstantiate(stmt.name)!!
                     println("${stmt.name} : ${formatType(type)}")
                 }
+                is TypeDef -> {
+                    println("type ${stmt.name}")
+                }
                 is Expr -> {
                     val type = result.exprTypes[stmt.span] ?: result.type
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)

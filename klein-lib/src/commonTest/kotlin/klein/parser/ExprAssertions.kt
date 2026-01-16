@@ -1,5 +1,6 @@
 package klein.parser
 
+import klein.AppliedTypeExpr
 import klein.Apply
 import klein.BinaryOp
 import klein.Block
@@ -19,6 +20,7 @@ import klein.Lambda
 import klein.Lexer
 import klein.NullLiteral
 import klein.Operator
+import klein.ParseError
 import klein.Parser
 import klein.Program
 import klein.RecordLiteral
@@ -216,6 +218,11 @@ fun typeName(name: String) = TypeName(name, noSpan)
 
 fun typeVar(name: String) = TypeVar(name, noSpan)
 
+fun appliedType(
+    name: String,
+    vararg args: TypeExpr,
+) = AppliedTypeExpr(name, args.toList(), noSpan)
+
 fun functionType(
     paramType: TypeExpr,
     returnType: TypeExpr,
@@ -251,6 +258,7 @@ fun TypeExpr.stripSpan(): TypeExpr =
     when (this) {
         is TypeName -> TypeName(name, noSpan)
         is TypeVar -> TypeVar(name, noSpan)
+        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan)
         is FunctionTypeExpr -> FunctionTypeExpr(paramType.stripSpan(), returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
@@ -259,7 +267,10 @@ fun TypeExpr.stripSpan(): TypeExpr =
 fun parseTypeDef(source: String): TypeDef {
     val tokens = Lexer(source).tokenize().toList()
     val stmt = Parser(tokens).parseStmt()
-    return stmt as TypeDef
+    if (stmt !is TypeDef) {
+        throw ParseError("Expected type definition", stmt.span)
+    }
+    return stmt
 }
 
 fun assertTypeDefEquals(

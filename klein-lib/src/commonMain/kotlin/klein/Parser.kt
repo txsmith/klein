@@ -17,21 +17,31 @@ class Parser(
         val start = peek().span
         val stmts = mutableListOf<Stmt>()
         while (peek().kind != EOF) {
-            val stmt = if (peek().kind == FUN) parseFunDef() else parseStmt()
+            val stmt =
+                when (peek().kind) {
+                    FUN -> parseFunDef()
+                    TYPE -> parseTypeDef()
+                    else -> parseStmt()
+                }
             stmts.add(stmt)
         }
         val end = if (stmts.isNotEmpty()) stmts.last().span else start
         return Program(stmts, start + end)
     }
 
-    fun parseStmt(): Stmt {
+    fun parseStmt(allowTypeDef: Boolean = true): Stmt {
         // Check for keyword used as variable name in binding
         val token = peek()
         if (token.kind.keyword != null && peekAt(1).kind == EQ) {
             throw ParseError("Expected identifier, got keyword '${token.kind.keyword}'", token.span)
         }
 
-        val stmt = if (isBinding()) parseBinding() else parseExpr()
+        val stmt =
+            when {
+                peek().kind == TYPE && allowTypeDef -> parseTypeDef()
+                isBinding() -> parseBinding()
+                else -> parseExpr()
+            }
 
         if (!canEndStatement()) {
             throw ParseError("Expected newline but got ${peek()}", peek().span)
@@ -54,6 +64,261 @@ class Parser(
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
         return FunDef(name.text!!, params, body, funToken.span + body.span)
+    }
+
+    private fun parseTypeDef(): TypeDef {
+        val typeToken = advance()
+        val typeDefIndent = typeToken.indent ?: currentLineIndent
+
+        val nameToken = expectUpperIdent("Expected type name")
+        validateNotReserved(nameToken)
+
+        val typeParams = if (peek().kind == LT) parseTypeParams() else emptyList()
+
+        val constructors =
+            if (peek().kind == EQ && !peek().startsLineBefore(typeDefIndent)) {
+                advance()
+                parseConstructors(typeParams, typeDefIndent)
+            } else {
+                emptyList()
+            }
+
+        val endSpan = constructors.lastOrNull()?.span ?: typeParams.lastOrNull()?.let { nameToken.span } ?: nameToken.span
+        return TypeDef(nameToken.text!!, typeParams, constructors, typeToken.span + endSpan)
+    }
+
+    private fun parseTypeParams(): List<String> {
+        advance()
+        if (peek().kind == GT) {
+            throw ParseError("Type parameter list cannot be empty", peek().span)
+        }
+
+        val params = mutableListOf<String>()
+        val seenParams = mutableSetOf<String>()
+
+        while (true) {
+            val paramToken = expectAndAdvance(TYPE_VAR, message = "Expected type variable (e.g., 'A)")
+            val paramName = paramToken.text!!
+            if (!seenParams.add(paramName)) {
+                throw ParseError("Duplicate type parameter: '$paramName", paramToken.span)
+            }
+            params.add(paramName)
+
+            when (peek().kind) {
+                GT -> {
+                    advance()
+                    break
+                }
+                COMMA -> {
+                    advance()
+                    if (peek().kind == GT) {
+                        advance()
+                        break
+                    }
+                }
+                else -> throw ParseError("Expected ',' or '>'", peek().span)
+            }
+        }
+
+        return params
+    }
+
+    private fun parseConstructors(
+        typeParams: List<String>,
+        typeDefIndent: Int,
+    ): List<Constructor> {
+        val constructors = mutableListOf<Constructor>()
+        val seenNames = mutableSetOf<String>()
+
+        constructors.add(parseConstructor(typeParams, seenNames))
+
+        while (peek().kind == PIPE && !peek().startsLineAtOrBefore(typeDefIndent)) {
+            advance()
+            constructors.add(parseConstructor(typeParams, seenNames))
+        }
+
+        return constructors
+    }
+
+    private fun parseConstructor(
+        typeParams: List<String>,
+        seenNames: MutableSet<String>,
+    ): Constructor {
+        val nameToken = expectUpperIdent("Expected constructor name")
+        validateNotReserved(nameToken)
+
+        if (!seenNames.add(nameToken.text!!)) {
+            throw ParseError("Duplicate constructor name: '${nameToken.text}'", nameToken.span)
+        }
+
+        val fields =
+            if (peek().kind == LBRACE) {
+                parseConstructorFields(typeParams)
+            } else {
+                emptyList()
+            }
+
+        val endSpan = fields.lastOrNull()?.span ?: nameToken.span
+        return Constructor(nameToken.text!!, fields, nameToken.span + endSpan)
+    }
+
+    private fun parseConstructorFields(typeParams: List<String>): List<FieldDecl> {
+        advance()
+        if (peek().kind == RBRACE) {
+            throw ParseError("Constructor fields cannot be empty", peek().span)
+        }
+
+        val fields = mutableListOf<FieldDecl>()
+        val seenFields = mutableSetOf<String>()
+
+        while (true) {
+            val field = parseFieldDecl(typeParams, seenFields)
+            fields.add(field)
+
+            when (peek().kind) {
+                RBRACE -> {
+                    advance()
+                    break
+                }
+                COMMA -> {
+                    advance()
+                    if (peek().kind == RBRACE) {
+                        advance()
+                        break
+                    }
+                }
+                else -> throw ParseError("Expected ',' or '}'", peek().span)
+            }
+        }
+
+        return fields
+    }
+
+    private fun parseFieldDecl(
+        typeParams: List<String>,
+        seenFields: MutableSet<String>,
+    ): FieldDecl {
+        val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
+        validateNotKeyword(nameToken)
+
+        if (!seenFields.add(nameToken.text!!)) {
+            throw ParseError("Duplicate field name: '${nameToken.text}'", nameToken.span)
+        }
+
+        expectAndAdvance(COLON, message = "Expected ':'")
+        val type = parseTypeExpr(typeParams)
+
+        return FieldDecl(nameToken.text!!, type, nameToken.span + type.span)
+    }
+
+    private fun parseTypeExpr(typeParams: List<String>): TypeExpr {
+        val left = parseTypeAtom(typeParams)
+
+        if (peek().kind == ARROW) {
+            advance()
+            val right = parseTypeExpr(typeParams)
+            return FunctionTypeExpr(left, right, left.span + right.span)
+        }
+
+        return left
+    }
+
+    private fun parseTypeArgs(typeParams: List<String>): List<TypeExpr> {
+        advance()
+        val args = mutableListOf<TypeExpr>()
+        args.add(parseTypeExpr(typeParams))
+        while (peek().kind == COMMA) {
+            advance()
+            args.add(parseTypeExpr(typeParams))
+        }
+        expectAndAdvance(GT, message = "Expected '>'")
+        return args
+    }
+
+    private fun parseTypeAtom(typeParams: List<String>): TypeExpr {
+        val token = peek()
+        return when (token.kind) {
+            IDENT -> {
+                advance()
+                if (peek().kind == LT) {
+                    val args = parseTypeArgs(typeParams)
+                    AppliedTypeExpr(token.text!!, args, token.span + args.last().span)
+                } else {
+                    TypeName(token.text!!, token.span)
+                }
+            }
+
+            TYPE_VAR -> {
+                advance()
+                val varName = token.text!!
+                if (varName !in typeParams) {
+                    throw ParseError("Undefined type variable: '$varName", token.span)
+                }
+                TypeVar(varName, token.span)
+            }
+
+            LPAREN -> {
+                advance()
+                val innerType = parseTypeExpr(typeParams)
+                if (peek().kind == COMMA) {
+                    val elements = mutableListOf(innerType)
+                    while (peek().kind == COMMA) {
+                        advance()
+                        elements.add(parseTypeExpr(typeParams))
+                    }
+                    val close = expectAndAdvance(RPAREN, message = "Expected ')'")
+                    TupleTypeExpr(elements, token.span + close.span)
+                } else {
+                    expectAndAdvance(RPAREN, message = "Expected ')'")
+                    innerType
+                }
+            }
+
+            LBRACE -> {
+                advance()
+                val fields = mutableListOf<Pair<String, TypeExpr>>()
+                while (peek().kind != RBRACE && peek().kind != EOF) {
+                    val fieldName = expectAndAdvance(IDENT, message = "Expected field name")
+                    expectAndAdvance(COLON, message = "Expected ':'")
+                    val fieldType = parseTypeExpr(typeParams)
+                    fields.add(fieldName.text!! to fieldType)
+                    if (peek().kind == COMMA) {
+                        advance()
+                    } else {
+                        break
+                    }
+                }
+                val close = expectAndAdvance(RBRACE, message = "Expected '}'")
+                RecordTypeExpr(fields, token.span + close.span)
+            }
+
+            else -> throw ParseError("Expected type", token.span)
+        }
+    }
+
+    private fun expectUpperIdent(message: String): Token {
+        val token = peek()
+        if (token.kind != IDENT) {
+            throw ParseError(message, token.span)
+        }
+        val text = token.text!!
+        if (text.isEmpty() || !text[0].isUpperCase()) {
+            throw ParseError("$message (must start with uppercase letter)", token.span)
+        }
+        return advance()
+    }
+
+    private fun validateNotReserved(token: Token) {
+        val reserved = setOf("Type", "If", "Then", "Else", "Fun", "And", "Or", "Not")
+        if (token.text in reserved) {
+            throw ParseError("'${token.text}' is a reserved word", token.span)
+        }
+    }
+
+    private fun validateNotKeyword(token: Token) {
+        if (TokenKind.fromKeyword(token.text!!) != null) {
+            throw ParseError("'${token.text}' is a keyword and cannot be used as a field name", token.span)
+        }
     }
 
     private fun parseFunParams(): List<String> {
@@ -87,7 +352,7 @@ class Parser(
         var blockEndSpan = blockStartSpan
 
         while (!isBlockEnd()) {
-            val stmt = parseStmt()
+            val stmt = parseStmt(allowTypeDef = false)
             blockEndSpan = stmt.span
             stmts.add(stmt)
             currentLineIndent = blockIndent
@@ -211,6 +476,8 @@ class Parser(
             LBRACE -> parseRecordLiteral(token)
 
             FUN -> throw ParseError("Function definitions are only allowed at the top level", token.span)
+
+            TYPE -> throw ParseError("Type definitions are only allowed at the top level", token.span)
 
             else -> throw ParseError("Expected expression, got $token", token.span)
         }
