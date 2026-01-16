@@ -73,6 +73,7 @@ enum class TokenKind(
     GTEQ(symbol = ">="),
     ARROW(symbol = "->"),
     DOT(symbol = "."),
+    QUESTION_DOT(symbol = "?."),
     DOTDOT(symbol = ".."),
     COMMA(symbol = ","),
     COLON(symbol = ":"),

@@ -55,6 +55,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             "${pad}If\n${condition.prettyPrint(indent + 1)}\n${pad}Then\n${thenBranch.prettyPrint(indent + 1)}$elseStr"
         }
         is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
+        is SafeFieldAccess -> "${pad}SafeFieldAccess($field)\n${target.prettyPrint(indent + 1)}"
         is ImplicitParam -> "${pad}ImplicitParam"
         is RecordLiteral -> {
             val fieldsStr =

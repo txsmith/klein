@@ -199,13 +199,16 @@ Track optionality in function signatures: `fun (+)(a: Num[n..1], b: Num[m..1]): 
 
 ## Future Work (Out of Scope)
 
-- Safe navigation operator (`?.`)
 - Elvis operator (`?:`)
 - Not-null assertion (`!!`)
 - Pattern matching refinement
 - Smart casts
 
 These will be addressed when pattern matching and stdlib are implemented.
+
+## Related
+
+- [Safe Navigation Operator](./2026-01-16-safe-navigation-operator.md) - `?.` for field access and method calls
 
 ## References
 

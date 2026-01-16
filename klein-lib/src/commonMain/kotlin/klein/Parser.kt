@@ -129,6 +129,10 @@ class Parser(
                     expr = parseFieldAccessOn(expr)
                 }
 
+                QUESTION_DOT -> {
+                    expr = parseSafeFieldAccessOn(expr)
+                }
+
                 else -> break
             }
         }
@@ -267,7 +271,7 @@ class Parser(
                     throw ParseError("Expected parameter name, got keyword '${afterComma.kind.keyword}'", afterComma.span)
                 }
                 if (afterComma.kind != IDENT) {
-                    throw ParseError("Expected parameter name, got ${afterComma}", afterComma.span)
+                    throw ParseError("Expected parameter name, got $afterComma", afterComma.span)
                 }
             } else {
                 break
@@ -346,6 +350,12 @@ class Parser(
         return FieldAccess(target, field.text!!, target.span + field.span)
     }
 
+    private fun parseSafeFieldAccessOn(target: Expr): SafeFieldAccess {
+        advance()
+        val field = expectIdentifier("Expected field name after '?.'")
+        return SafeFieldAccess(target, field.text!!, target.span + field.span)
+    }
+
     private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
 
     private fun endsWithBlock(stmt: Stmt): Boolean =
@@ -396,11 +406,12 @@ class Parser(
     private fun expectIdentifier(message: String): Token {
         val token = peek()
         if (token.kind != IDENT) {
-            val errorMsg = if (token.kind.keyword != null) {
-                "$message, got keyword '${token.kind.keyword}'"
-            } else {
-                "$message, got $token"
-            }
+            val errorMsg =
+                if (token.kind.keyword != null) {
+                    "$message, got keyword '${token.kind.keyword}'"
+                } else {
+                    "$message, got $token"
+                }
             throw ParseError(errorMsg, token.span)
         }
         return advance()

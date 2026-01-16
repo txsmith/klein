@@ -19,6 +19,7 @@ import klein.Operator
 import klein.Parser
 import klein.Program
 import klein.RecordLiteral
+import klein.SafeFieldAccess
 import klein.SourceSpan
 import klein.Stmt
 import klein.StringLiteral
@@ -134,6 +135,11 @@ fun fieldAccess(
     field: String,
 ) = FieldAccess(target, field, noSpan)
 
+fun safeFieldAccess(
+    target: Expr,
+    field: String,
+) = SafeFieldAccess(target, field, noSpan)
+
 fun implicitParam() = ImplicitParam(noSpan)
 
 fun record(vararg fields: Pair<String, Expr>) = RecordLiteral(fields.toList(), noSpan)
@@ -153,6 +159,7 @@ fun Expr.stripSpans(): Expr =
         is Block -> Block(stmts.map { it.stripSpan() }, noSpan)
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
+        is SafeFieldAccess -> SafeFieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
         is RecordLiteral -> RecordLiteral(fields.map { (name, value) -> name to value.stripSpans() }, noSpan)
     }

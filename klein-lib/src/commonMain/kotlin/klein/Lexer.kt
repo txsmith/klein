@@ -100,7 +100,7 @@ class Lexer(
                 }
             }
 
-            c in "+*/%=<>!&,.;:@" -> {
+            c in "+*/%=<>!&,.;:@?" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
                         ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1))
