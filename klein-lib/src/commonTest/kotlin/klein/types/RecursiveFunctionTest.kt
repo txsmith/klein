@@ -408,4 +408,33 @@ class RecursiveFunctionTest {
             infer("|f -> |x -> f(|v -> x(x)(v)|)|(|x -> f(|v -> x(x)(v)|)|)|(|f -> |x -> f||)"),
         )
     }
+
+    @Test
+    fun mutualRecursion_isEvenIsOdd() {
+        assertType(
+            "(Num) -> Bool",
+            infer(
+                """
+                fun isEven(n) = if n == 0 then true else isOdd(n - 1)
+                fun isOdd(n) = if n == 0 then false else isEven(n - 1)
+                isEven
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun mutualRecursion_threeWay() {
+        assertType(
+            "(Num) -> Num",
+            infer(
+                """
+                fun a(x) = if x == 0 then 0 else b(x - 1)
+                fun b(x) = if x == 0 then 1 else c(x - 1)
+                fun c(x) = if x == 0 then 2 else a(x - 1)
+                a
+                """.trimIndent(),
+            ),
+        )
+    }
 }

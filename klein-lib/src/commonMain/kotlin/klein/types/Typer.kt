@@ -23,8 +23,44 @@ class Typer {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
-        val (type, exprTypes) = inferStmts(program.stmts, env)
+        val (type, exprTypes) = inferTopLevelStmts(program.stmts, env)
         return ProgramResult(type, env, getErrors(), exprTypes)
+    }
+
+    private fun inferTopLevelStmts(
+        stmts: List<Stmt>,
+        env: TypeEnv,
+    ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
+        val scopeEnv = env.enterBindingScope()
+        val funDefs = mutableMapOf<String, Pair<FunDef, SimpleType>>()
+
+        // Loop through all stmts to fish out FunDefs, bind them with a TVar.
+        for (stmt in stmts) {
+            if (stmt is FunDef) {
+                if (env.contains(stmt.name)) {
+                    errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
+                } else {
+                    val typeVar = scopeEnv.freshVar()
+                    funDefs[stmt.name] = stmt to typeVar
+                    env.bind(stmt.name, typeVar)
+                }
+            }
+        }
+
+        // Infer all found FunDefs, recursion is now possible because all are bound to a TVar.
+        for ((funDef, typeVar) in funDefs.values) {
+            val rhsEnv = env.enterBindingScope()
+            rhsEnv.bind(funDef.name, typeVar)
+            val type = inferFunction(funDef.params, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
+            subtyping.constrain(type, typeVar, funDef.span)
+        }
+
+        // After inference we don't need the TVars bound before, so override all bound functions with their actual type.
+        for ((name, pair) in funDefs) {
+            env.bindPolymorphic(name, pair.second)
+        }
+
+        return inferBlockStmts(stmts, env)
     }
 
     fun infer(
@@ -47,16 +83,15 @@ class Typer {
             is SafeFieldAccess -> inferSafeFieldAccess(expr, env)
             is IfThenElse -> inferIfThenElse(expr, env)
             is ImplicitParam -> inferImplicitParam(expr, env)
-            is Block -> inferStmts(expr.stmts, env.child()).first
+            is Block -> inferBlockStmts(expr.stmts, env.child()).first
         }
 
-    private fun inferStmts(
+    private fun inferBlockStmts(
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
         var lastType: SimpleType = TUnit
         val exprTypes = mutableMapOf<SourceSpan, SimpleType>()
-
         for (stmt in stmts) {
             lastType =
                 when (stmt) {
@@ -69,18 +104,7 @@ class Typer {
                         env.bindPolymorphic(stmt.name, type)
                         TUnit
                     }
-                    is FunDef -> {
-                        if (env.contains(stmt.name)) {
-                            errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
-                        }
-                        val rhsEnv = env.enterBindingScope()
-                        val recVar = rhsEnv.freshVar()
-                        rhsEnv.bind(stmt.name, recVar)
-                        val type = inferFunction(stmt.params, stmt.body, stmt.span, rhsEnv, functionName = stmt.name)
-                        subtyping.constrain(type, recVar, stmt.span)
-                        env.bindPolymorphic(stmt.name, recVar)
-                        TUnit
-                    }
+                    is FunDef -> TUnit
                     is Expr -> {
                         val type = infer(stmt, env)
                         exprTypes[stmt.span] = type
@@ -88,7 +112,6 @@ class Typer {
                     }
                 }
         }
-
         return Pair(lastType, exprTypes)
     }
 
