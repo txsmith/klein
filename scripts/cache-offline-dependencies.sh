@@ -52,7 +52,8 @@ if [ -d "$GRADLE_CACHE" ]; then
             filename="${parts[4]}"
 
             # Convert group to directory structure (org.jetbrains -> org/jetbrains)
-            group_path="${group//./\/}"
+            # Use tr to avoid bash escaping issues with path separators
+            group_path=$(echo "$group" | tr '.' '/')
 
             # Create target directory
             target_dir="$LOCAL_REPO/$group_path/$artifact/$version"

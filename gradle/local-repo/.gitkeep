@@ -1,3 +1,0 @@
-# This directory contains cached Maven dependencies for offline builds.
-# Run scripts/cache-offline-dependencies.sh with network access to populate.
-# See CLAUDE.md for offline build instructions.
