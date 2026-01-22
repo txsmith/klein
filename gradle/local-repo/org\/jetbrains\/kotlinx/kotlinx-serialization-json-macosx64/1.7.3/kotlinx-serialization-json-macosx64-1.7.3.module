@@ -1,0 +1,118 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "url": "../../kotlinx-serialization-json/1.7.3/kotlinx-serialization-json-1.7.3.module",
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-serialization-json",
+    "version": "1.7.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.7"
+    }
+  },
+  "variants": [
+    {
+      "name": "macosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-core",
+          "version": {
+            "requires": "1.7.3"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-serialization-json.klib",
+          "url": "kotlinx-serialization-json-macosx64-1.7.3.klib",
+          "size": 304843,
+          "sha512": "62814baf7ca5e41433e6215070bf09378c58d7b0967dbf9168c911ae0f51854743d5d8cc0832d11f49bf0f6c86245e462c01e335e8f0b9b6d21c45e1438aa798",
+          "sha256": "df842b6af3aff6c33a390514bae0a528d789056b4d5224826b67e44b930d7699",
+          "sha1": "6d4ee25d9fec086f9a7b9d186fbbab6316d490f1",
+          "md5": "7b7673e3cad12c59f12a77be7ed3e6a5"
+        }
+      ]
+    },
+    {
+      "name": "macosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "files": [
+        {
+          "name": "kotlinx-serialization-json-macosx64-1.7.3-sources.jar",
+          "url": "kotlinx-serialization-json-macosx64-1.7.3-sources.jar",
+          "size": 82307,
+          "sha512": "ac6eb31c8b4999861587b48cdce462f4c122d41440bef0c2109a1bd14b4235ea0a9d4d250c53d753850aceaf405e7815b4ea5e25701659e762be0adb4d18fc01",
+          "sha256": "b6c600f6eded02eb49ac9a40c0ca580295e73f5bb5f7ec0fa9f6b2541ad66182",
+          "sha1": "3416cf675640db40f952a4e9605161b8317916e9",
+          "md5": "0ff2ad731fda5d11f0ad0c20bdc93d4f"
+        }
+      ]
+    },
+    {
+      "name": "macosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-core",
+          "version": {
+            "requires": "1.7.3"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-serialization-json-macosx64-1.7.3-metadata.jar",
+          "url": "kotlinx-serialization-json-macosx64-1.7.3-metadata.jar",
+          "size": 261,
+          "sha512": "5bb9a2746c0cf6d86e580e143b930980952d80e090dd7c872410bb6e1b1bb3662531ab9d69c162ae614e52ab5b26ece24386272e27f48f7647d1005e89a4e95c",
+          "sha256": "2331acfa5402b20adadaf5b8dd77204c8867418acdb8418b182a391b244ea0a9",
+          "sha1": "c754d0262cf71c35c1eca962ae25a9417ff5a262",
+          "md5": "832d4468bbe1a9fe6b7aee1ff0f84394"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "url": "../../kotlinx-serialization-core/1.7.3/kotlinx-serialization-core-1.7.3.module",
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-serialization-core",
+    "version": "1.7.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.7"
+    }
+  },
+  "variants": [
+    {
+      "name": "linuxX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-serialization-core.klib",
+          "url": "kotlinx-serialization-core-linuxx64-1.7.3.klib",
+          "size": 325947,
+          "sha512": "b8a5e9a77e464b3b8ba9ceeb03dce19faba41c25680461fdd18a1da388d0af27fd3a357458a1fb3440df45f836248556052052a112cd9f54d8e37388a9e62621",
+          "sha256": "5956d4afa8262ad51b835326a1dc0f7d266a5fb20dc135ac2874e058736729b0",
+          "sha1": "bb2865b9d901c1fe10d8d1d7af0a5d17941c3677",
+          "md5": "116b0be93d5f091aa620238ce2132a0a"
+        }
+      ]
+    },
+    {
+      "name": "linuxX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "files": [
+        {
+          "name": "kotlinx-serialization-core-linuxx64-1.7.3-sources.jar",
+          "url": "kotlinx-serialization-core-linuxx64-1.7.3-sources.jar",
+          "size": 100861,
+          "sha512": "5989cf9c313fd18cd2ab459bc1cbeb91c7acad44574c3fd36a4572b3baa07d6ae0b64e417a8ec4917e29ba38e5764e9c8042221be74f094021575831df5cd2e5",
+          "sha256": "06d0d3d785d05aa771cf8f7ff20750f50bfeda218af7616c37c4e3f085320e4a",
+          "sha1": "c2a9b087fba77de05a1c805678518a12e709a1bc",
+          "md5": "92bc23c93a5a2f05e8ff336523715c75"
+        }
+      ]
+    }
+  ]
+}
