@@ -113,13 +113,14 @@ INT         = digit+
 DOUBLE      = digit+ '.' digit+
 STRING      = '"' (char | escape)* '"'
 BOOL        = 'true' | 'false'
-IDENT       = (letter | '_') (letter | digit | '_')*
+IDENT       = (lower | '_') (letter | digit | '_')*
 UPPER_IDENT = upper (letter | digit | '_')*
 TYPE_VAR    = '\'' upper (letter | digit | '_')*
 
 escape      = '\\' ('"' | '\\' | 'n' | 't')
 digit       = '0'..'9'
 letter      = 'a'..'z' | 'A'..'Z'
+lower       = 'a'..'z'
 upper       = 'A'..'Z'
 ```
 
@@ -256,7 +257,7 @@ UpperIdent
   = [A-Z] [a-zA-Z0-9_]*           # Person, Int, Ok
 
 LowerIdent
-  = [a-z] [a-zA-Z0-9_]*           # name, age, a, t
+  = [a-z_] [a-zA-Z0-9_]*          # name, age, a, t, _foo, _
 ```
 
 ## Type Grammar Examples

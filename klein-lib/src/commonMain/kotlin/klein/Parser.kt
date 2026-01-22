@@ -238,7 +238,7 @@ class Parser(
     private fun parseTypeAtom(typeParams: List<String>): TypeExpr {
         val token = peek()
         return when (token.kind) {
-            IDENT -> {
+            UPPER_IDENT -> {
                 advance()
                 if (peek().kind == LT) {
                     val args = parseTypeArgs(typeParams)
@@ -298,12 +298,14 @@ class Parser(
 
     private fun expectUpperIdent(message: String): Token {
         val token = peek()
-        if (token.kind != IDENT) {
-            throw ParseError(message, token.span)
-        }
-        val text = token.text!!
-        if (text.isEmpty() || !text[0].isUpperCase()) {
-            throw ParseError("$message (must start with uppercase letter)", token.span)
+        if (token.kind != UPPER_IDENT) {
+            val errorMsg =
+                if (token.kind == IDENT) {
+                    "$message (must start with uppercase letter)"
+                } else {
+                    message
+                }
+            throw ParseError(errorMsg, token.span)
         }
         return advance()
     }

@@ -1,0 +1,861 @@
+package klein.types
+
+import klein.SourceSpan
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class TypeDefSubtypingTest {
+    private fun subtype(): Subtyping = Subtyping()
+
+    private fun tvar(): SimpleType.TVar = SimpleType.TVar()
+
+    private fun tref(
+        name: String,
+        typeArgs: List<SimpleType>,
+        structure: SimpleType,
+        parentName: String? = null,
+        parentVariance: List<Variance> = emptyList(),
+    ): SimpleType.TRef = SimpleType.TRef(
+        name = name,
+        typeArgs = typeArgs,
+        structure = structure,
+        parentName = parentName,
+        parentVariance = parentVariance,
+        span = SourceSpan.zero,
+    )
+
+    // =========================================================================
+    // Case 1: Nominal -> Structural (TRef <: TRecord)
+    // =========================================================================
+
+    @Test
+    fun nominalSubtypesItsStructure() {
+        val sub = subtype()
+        val moneyType = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val record = SimpleType.TRecord(mapOf("value" to SimpleType.TNum))
+        sub.constrain(moneyType, record, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalSubtypesPartialStructure() {
+        val sub = subtype()
+        val consType = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(
+                mapOf(
+                    "head" to SimpleType.TNum,
+                    "tail" to tref("List", listOf(SimpleType.TNum), SimpleType.TRecord(emptyMap())),
+                )
+            ),
+        )
+        val headOnly = SimpleType.TRecord(mapOf("head" to SimpleType.TNum))
+        sub.constrain(consType, headOnly, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalWithEmptyStructure_subtypesEmptyRecord() {
+        val sub = subtype()
+        val nilType = tref(
+            name = "Nil",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(emptyMap()),
+        )
+        val emptyRecord = SimpleType.TRecord(emptyMap())
+        sub.constrain(nilType, emptyRecord, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalFailsToSubtypeMissingField() {
+        val sub = subtype()
+        val moneyType = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val recordWithExtra = SimpleType.TRecord(
+            mapOf(
+                "value" to SimpleType.TNum,
+                "currency" to SimpleType.TString,
+            )
+        )
+        sub.constrain(moneyType, recordWithExtra, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.MissingField)
+    }
+
+    @Test
+    fun structuralNotSubtypeOfNominal() {
+        val sub = subtype()
+        val record = SimpleType.TRecord(mapOf("value" to SimpleType.TNum))
+        val moneyType = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(record, moneyType, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun structuralWithExtraFieldsNotSubtypeOfNominal() {
+        val sub = subtype()
+        val record = SimpleType.TRecord(
+            mapOf(
+                "value" to SimpleType.TNum,
+                "currency" to SimpleType.TString,
+            )
+        )
+        val moneyType = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(record, moneyType, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun nominalSubtypesRecordWithTypeVar() {
+        val sub = subtype()
+        val v = tvar()
+        val consType = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("head" to SimpleType.TNum)),
+        )
+        val recordWithVar = SimpleType.TRecord(mapOf("head" to v))
+        sub.constrain(consType, recordWithVar, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        assertTrue(SimpleType.TNum in v.lowerBounds)
+    }
+
+    // =========================================================================
+    // Case 2: Nominal -> Nominal (same type)
+    // =========================================================================
+
+    // --- Covariant type arguments ---
+
+    @Test
+    fun covariantTypeArgs_subtypeSucceeds() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        val listDog = tref(
+            name = "List",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listAnimal = tref(
+            name = "List",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(listDog, listAnimal, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    @Test
+    fun covariantTypeArgs_supertypeNotSubtype() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val listDog = tref(
+            name = "List",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listAnimal = tref(
+            name = "List",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(listAnimal, listDog, SourceSpan.zero)
+        assertEquals(1, sub2.getErrors().size)
+    }
+
+    @Test
+    fun covariantTypeArgs_sameTypeSucceeds() {
+        val sub = subtype()
+        val listNum1 = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listNum2 = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(listNum1, listNum2, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    // --- Contravariant type arguments ---
+
+    @Test
+    fun contravariantTypeArgs_subtypeReversed() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val consumerAnimal = tref(
+            name = "Consumer",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant),
+        )
+        val consumerDog = tref(
+            name = "Consumer",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(consumerAnimal, consumerDog, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    @Test
+    fun contravariantTypeArgs_wrongDirectionFails() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val consumerAnimal = tref(
+            name = "Consumer",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant),
+        )
+        val consumerDog = tref(
+            name = "Consumer",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(consumerDog, consumerAnimal, SourceSpan.zero)
+        assertEquals(1, sub2.getErrors().size)
+    }
+
+    // --- Invariant type arguments ---
+
+    @Test
+    fun invariantTypeArgs_sameTypeSucceeds() {
+        val sub = subtype()
+        val refNum1 = tref(
+            name = "Ref",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        val refNum2 = tref(
+            name = "Ref",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        sub.constrain(refNum1, refNum2, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun invariantTypeArgs_differentTypesFails() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val refDog = tref(
+            name = "Ref",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        val refAnimal = tref(
+            name = "Ref",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(refDog, refAnimal, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isNotEmpty())
+    }
+
+    @Test
+    fun invariantTypeArgs_neitherDirectionWorks() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val refDog = tref(
+            name = "Ref",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        val refAnimal = tref(
+            name = "Ref",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(refAnimal, refDog, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isNotEmpty())
+    }
+
+    @Test
+    fun invariantTypeArgs_weirdExample() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val weirdDogDog = tref(
+            name = "Weird",
+            typeArgs = listOf(dog, dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant, Variance.Invariant),
+        )
+        val weirdAnimalAnimal = tref(
+            name = "Weird",
+            typeArgs = listOf(animal, animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Invariant, Variance.Invariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(weirdDogDog, weirdAnimalAnimal, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isNotEmpty())
+    }
+
+    // --- Bivariant type arguments ---
+
+    @Test
+    fun bivariantTypeArgs_anySubtypingSucceeds() {
+        val sub = subtype()
+        val phantomNum = tref(
+            name = "Phantom",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Bivariant),
+        )
+        val phantomString = tref(
+            name = "Phantom",
+            typeArgs = listOf(SimpleType.TString),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Bivariant),
+        )
+        sub.constrain(phantomNum, phantomString, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun bivariantTypeArgs_reverseAlsoSucceeds() {
+        val sub = subtype()
+        val phantomNum = tref(
+            name = "Phantom",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Bivariant),
+        )
+        val phantomString = tref(
+            name = "Phantom",
+            typeArgs = listOf(SimpleType.TString),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Bivariant),
+        )
+        sub.constrain(phantomString, phantomNum, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    // --- Mixed variance ---
+
+    @Test
+    fun mixedVariance_multipleTypeParams() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val funcDogAnimal = tref(
+            name = "Func",
+            typeArgs = listOf(animal, dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant, Variance.Covariant),
+        )
+        val funcAnimalDog = tref(
+            name = "Func",
+            typeArgs = listOf(dog, animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Contravariant, Variance.Covariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(funcDogAnimal, funcAnimalDog, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    // --- Different named types ---
+
+    @Test
+    fun differentNominalTypes_notSubtype() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val age = tref(
+            name = "Age",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(money, age, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun differentNominalTypes_sameStructure_notSubtype() {
+        val sub = subtype()
+        val listNum = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val arrayNum = tref(
+            name = "Array",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(listNum, arrayNum, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    // =========================================================================
+    // Case 3: Constructor -> Parent
+    // =========================================================================
+
+    @Test
+    fun constructorSubtypesParent_sameTypeArgs() {
+        val sub = subtype()
+        val consNum = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(
+                mapOf(
+                    "head" to SimpleType.TNum,
+                    "tail" to tref("List", listOf(SimpleType.TNum), SimpleType.TRecord(emptyMap())),
+                )
+            ),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val listNum = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(consNum, listNum, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun constructorSubtypesParent_covariantTypeArgs() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val consDog = tref(
+            name = "Cons",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(mapOf("head" to dog)),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val listAnimal = tref(
+            name = "List",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(consDog, listAnimal, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    @Test
+    fun parentNotSubtypeOfConstructor() {
+        val sub = subtype()
+        val listNum = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val consNum = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("head" to SimpleType.TNum)),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        sub.constrain(listNum, consNum, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun bareConstructorSubtypesParent_polymorphic() {
+        val sub = subtype()
+        val nilType = tref(
+            name = "Nil",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(emptyMap()),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val v = tvar()
+        val listA = tref(
+            name = "List",
+            typeArgs = listOf(v),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(nilType, listA, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun bareConstructorSubtypesParent_concreteType() {
+        val sub = subtype()
+        val nilType = tref(
+            name = "Nil",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(emptyMap()),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val listNum = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(nilType, listNum, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun bareConstructorSubtypesParent_anyConcreteType() {
+        val sub = subtype()
+        val nilType = tref(
+            name = "Nil",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(emptyMap()),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val listString = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TString),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(nilType, listString, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun constructorNotSubtypeDifferentParent() {
+        val sub = subtype()
+        val consNum = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("head" to SimpleType.TNum)),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val optionNum = tref(
+            name = "Option",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(consNum, optionNum, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun constructorSubtypesOwnType() {
+        val sub = subtype()
+        val consNum1 = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("head" to SimpleType.TNum)),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val consNum2 = tref(
+            name = "Cons",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("head" to SimpleType.TNum)),
+            parentName = "List",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        sub.constrain(consNum1, consNum2, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    // =========================================================================
+    // Edge cases and combinations
+    // =========================================================================
+
+    @Test
+    fun nominalTypeInFunctionResult_covariant() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val listDog = tref(
+            name = "List",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listAnimal = tref(
+            name = "List",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val producerDog = SimpleType.TFun(emptyList(), listDog)
+        val producerAnimal = SimpleType.TFun(emptyList(), listAnimal)
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(producerDog, producerAnimal, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalTypeInFunctionParam_contravariant() {
+        val sub = subtype()
+        val dog = tref("Dog", emptyList(), SimpleType.TRecord(emptyMap()))
+        val animal = tref("Animal", emptyList(), SimpleType.TRecord(emptyMap()))
+        sub.constrain(dog, animal, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        val listDog = tref(
+            name = "List",
+            typeArgs = listOf(dog),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listAnimal = tref(
+            name = "List",
+            typeArgs = listOf(animal),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val consumerAnimal = SimpleType.TFun(listOf(listAnimal), SimpleType.TUnit)
+        val consumerDog = SimpleType.TFun(listOf(listDog), SimpleType.TUnit)
+        val sub2 = subtype()
+        sub2.constrain(dog, animal, SourceSpan.zero)
+        sub2.constrain(consumerAnimal, consumerDog, SourceSpan.zero)
+        assertTrue(sub2.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalTypeInRecordField() {
+        val sub = subtype()
+        val moneyType = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val accountWithMoney = SimpleType.TRecord(mapOf("balance" to moneyType))
+        val accountWithNum = SimpleType.TRecord(mapOf("balance" to moneyType))
+        sub.constrain(accountWithMoney, accountWithNum, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nestedNominalTypes() {
+        val sub = subtype()
+        val innerList = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val outerList1 = tref(
+            name = "List",
+            typeArgs = listOf(innerList),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val outerList2 = tref(
+            name = "List",
+            typeArgs = listOf(innerList),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(outerList1, outerList2, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalTypeWithTypeVarArg() {
+        val sub = subtype()
+        val v = tvar()
+        val listV = tref(
+            name = "List",
+            typeArgs = listOf(v),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        val listNum = tref(
+            name = "List",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(emptyMap()),
+            variance = listOf(Variance.Covariant),
+        )
+        sub.constrain(listV, listNum, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+        assertTrue(SimpleType.TNum in v.upperBounds)
+    }
+
+    @Test
+    fun nominalSubtypeOfItself() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(money, money, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun constructorCanAccessParentInterface() {
+        val sub = subtype()
+        val someValue = tref(
+            name = "Some",
+            typeArgs = listOf(SimpleType.TNum),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+            parentName = "Option",
+            parentVariance = listOf(Variance.Covariant),
+        )
+        val recordWithValue = SimpleType.TRecord(mapOf("value" to SimpleType.TNum))
+        sub.constrain(someValue, recordWithValue, SourceSpan.zero)
+        assertTrue(sub.getErrors().isEmpty())
+    }
+
+    @Test
+    fun nominalNotSubtypeOfPrimitive() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(money, SimpleType.TNum, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun primitiveNotSubtypeOfNominal() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        sub.constrain(SimpleType.TNum, money, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun nominalNotSubtypeOfFunction() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val func = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
+        sub.constrain(money, func, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    @Test
+    fun functionNotSubtypeOfNominal() {
+        val sub = subtype()
+        val money = tref(
+            name = "Money",
+            typeArgs = emptyList(),
+            structure = SimpleType.TRecord(mapOf("value" to SimpleType.TNum)),
+        )
+        val func = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
+        sub.constrain(func, money, SourceSpan.zero)
+        assertEquals(1, sub.getErrors().size)
+        assertTrue(sub.getErrors()[0] is TypeError.TypeMismatch)
+    }
+
+    private fun tref(
+        name: String,
+        typeArgs: List<SimpleType>,
+        structure: SimpleType,
+        variance: List<Variance> = emptyList(),
+        parentName: String? = null,
+        parentVariance: List<Variance> = emptyList(),
+    ): SimpleType.TRef = SimpleType.TRef(
+        name = name,
+        typeArgs = typeArgs,
+        structure = structure,
+        variance = variance,
+        parentName = parentName,
+        parentVariance = parentVariance,
+        span = SourceSpan.zero,
+    )
+}

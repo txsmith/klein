@@ -19,6 +19,7 @@ data class Token(
     override fun toString(): String =
         when {
             kind == IDENT -> "Ident($text)"
+            kind == UPPER_IDENT -> "UpperIdent($text)"
             kind == TYPE_VAR -> "TypeVar($text)"
             kind == INT || kind == DOUBLE -> "Number($text)"
             kind == STRING -> "String($text)"
@@ -36,6 +37,7 @@ enum class TokenKind(
 ) {
     // Literals
     IDENT,
+    UPPER_IDENT,
     TYPE_VAR,
     INT,
     DOUBLE,
