@@ -1,19 +1,21 @@
 #!/bin/bash
 # Script to cache Gradle dependencies for offline builds
-# Run this script with network access, then commit gradle/local-repo/
+# Run this script with network access, then commit gradle/local-repo.zip
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 LOCAL_REPO="$PROJECT_DIR/gradle/local-repo"
+LOCAL_REPO_ZIP="$PROJECT_DIR/gradle/local-repo.zip"
 
 echo "=== Caching Klein dependencies for offline builds ==="
 echo "Project directory: $PROJECT_DIR"
 echo "Local repo: $LOCAL_REPO"
 echo ""
 
-# Ensure local repo directory exists
+# Clean up any existing local repo
+rm -rf "$LOCAL_REPO"
 mkdir -p "$LOCAL_REPO"
 
 # Step 1: Run Gradle to download all dependencies to cache
@@ -68,13 +70,26 @@ if [ -d "$GRADLE_CACHE" ]; then
 else
     echo "WARNING: Gradle cache not found at $GRADLE_CACHE"
     echo "Run './gradlew build' first to populate the cache"
+    exit 1
 fi
+
+# Step 4: Create zip archive
+echo ""
+echo "Step 4: Creating zip archive..."
+cd "$PROJECT_DIR/gradle"
+rm -f local-repo.zip
+zip -rq local-repo.zip local-repo
+echo "Created: $LOCAL_REPO_ZIP"
+echo "Size: $(du -h local-repo.zip | cut -f1)"
+
+# Clean up the unzipped directory (only the zip is committed)
+rm -rf "$LOCAL_REPO"
 
 echo ""
 echo "=== Done ==="
 echo ""
 echo "To enable offline builds:"
-echo "1. Verify the build works: ./gradlew :klein-lib:jvmTest --offline"
-echo "2. Commit the local repo: git add gradle/local-repo && git commit -m 'Cache offline dependencies'"
+echo "1. Commit the zip: git add gradle/local-repo.zip && git commit -m 'Cache offline dependencies'"
+echo "2. The build will auto-extract on first run"
 echo ""
-echo "Note: gradle/local-repo may be large (200-400MB). Consider using Git LFS for binary files."
+echo "To verify: ./gradlew :klein-lib:jvmTest --offline"

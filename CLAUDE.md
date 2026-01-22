@@ -170,19 +170,21 @@ For environments without network access, Klein supports offline builds using a l
 
 3. **Commit the cached dependencies** (optional, for team-wide offline support):
    ```bash
-   git add gradle/local-repo
+   git add gradle/local-repo.zip
    git commit -m "Cache offline dependencies"
    ```
 
 ### How it works
 
-- `settings.gradle.kts` configures Gradle to check `gradle/local-repo/` first for plugins and dependencies
-- If dependencies aren't found locally, Gradle falls back to Maven Central and Gradle Plugin Portal
-- The cache script exports dependencies from the Gradle cache to Maven repository format
+- `gradle/local-repo.zip` contains all dependencies in Maven repository format
+- On first build, `settings.gradle.kts` auto-extracts the zip to `gradle/local-repo/`
+- Gradle checks `gradle/local-repo/` first, then falls back to Maven Central
+- The extracted directory is gitignored; only the zip is tracked
 
 ### Notes
 
-- The cached dependencies can be 200-400MB; consider Git LFS for large repositories
+- The zip is ~78MB (under GitHub's 100MB limit)
+- Re-run the cache script when dependencies change
 - GitHub Actions caching handles CI builds automatically via `gradle/actions/setup-gradle@v3`
 
 ## Implementation Status
