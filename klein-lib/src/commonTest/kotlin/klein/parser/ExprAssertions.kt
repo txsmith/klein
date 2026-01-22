@@ -24,8 +24,8 @@ import klein.ParseError
 import klein.Parser
 import klein.Program
 import klein.RecordLiteral
-import klein.SafeFieldAccess
 import klein.RecordTypeExpr
+import klein.SafeFieldAccess
 import klein.SourceSpan
 import klein.Stmt
 import klein.StringLiteral

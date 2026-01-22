@@ -30,7 +30,7 @@ class TypeVarTest {
     fun typeVarInTypeDefinition() {
         assertTokens(
             "type Option<'A> = None",
-            kw(TYPE), ident("Option"), sym('<'), typeVar("A"), sym('>'), sym('='), ident("None"), eof,
+            kw(TYPE), upperIdent("Option"), sym('<'), typeVar("A"), sym('>'), sym('='), upperIdent("None"), eof,
         )
     }
 

@@ -162,9 +162,18 @@ class Lexer(
 
     private fun identOrKeyword(): Token {
         val start = pos
+        val firstChar = source[start]
         val text = consumeWhile { it.isLetterOrDigit() || it == '_' }
         val span = SourceSpan(start, pos)
-        val kind = TokenKind.fromKeyword(text) ?: IDENT
+
+        // Check if it's a keyword first
+        val keywordKind = TokenKind.fromKeyword(text)
+        if (keywordKind != null) {
+            return token(keywordKind, span, text)
+        }
+
+        // Distinguish between UPPER_IDENT and IDENT based on first character
+        val kind = if (firstChar.isUpperCase()) UPPER_IDENT else IDENT
         return token(kind, span, text)
     }
 

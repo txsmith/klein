@@ -1001,4 +1001,1007 @@ class TypeDefTest {
         val error = assertFailsWith<ParseError> { parse("if true then type T = T else 1") }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
+
+    @Test
+    fun appliedTypeWithMultipleConcreteTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Cache = Cache { data: Map<String, Num> }"),
+            typeDef(
+                "Cache",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Cache",
+                            field("data", appliedType("Map", typeName("String"), typeName("Num"))),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeWithManyConcreteTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Multi = Multi { data: Tuple5<A, B, C, D, E> }"),
+            typeDef(
+                "Multi",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Multi",
+                            field(
+                                "data",
+                                appliedType(
+                                    "Tuple5",
+                                    typeName("A"),
+                                    typeName("B"),
+                                    typeName("C"),
+                                    typeName("D"),
+                                    typeName("E"),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeWithEmptyTypeArgs() {
+        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: List<> }") }
+    }
+
+    @Test
+    fun appliedTypeWithMixedConcreteAndTypeVars() {
+        assertTypeDefEquals(
+            parseTypeDef("type Processor<'A> = Processor { result: Result<'A, String> }"),
+            typeDef(
+                "Processor",
+                listOf("A"),
+                constructor("Processor", field("result", appliedType("Result", typeVar("A"), typeName("String")))),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedAppliedTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Nested<'A> = Nested { items: List<Option<'A>> }"),
+            typeDef(
+                "Nested",
+                listOf("A"),
+                constructor(
+                    "Nested",
+                    field("items", appliedType("List", appliedType("Option", typeVar("A")))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun deeplyNestedAppliedTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Deep = Deep { data: Result<Option<List<Num>>, String> }"),
+            typeDef(
+                "Deep",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Deep",
+                            field(
+                                "data",
+                                appliedType(
+                                    "Result",
+                                    appliedType("Option", appliedType("List", typeName("Num"))),
+                                    typeName("String"),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeWithAllTypeVars() {
+        assertTypeDefEquals(
+            parseTypeDef("type Either3<'A, 'B, 'C> = Wrapper { value: Triple<'A, 'B, 'C> }"),
+            typeDef(
+                "Either3",
+                listOf("A", "B", "C"),
+                constructor(
+                    "Wrapper",
+                    field("value", appliedType("Triple", typeVar("A"), typeVar("B"), typeVar("C"))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeAsRecursiveField() {
+        assertTypeDefEquals(
+            parseTypeDef("type Tree<'A> = Node { value: 'A, children: List<Tree<'A>> }"),
+            typeDef(
+                "Tree",
+                listOf("A"),
+                constructor(
+                    "Node",
+                    field("value", typeVar("A")),
+                    field("children", appliedType("List", appliedType("Tree", typeVar("A")))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multipleFieldsWithDifferentAppliedTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Store<'K, 'V> = Store { keys: List<'K>, values: List<'V>, index: Map<'K, 'V> }"),
+            typeDef(
+                "Store",
+                listOf("K", "V"),
+                constructor(
+                    "Store",
+                    field("keys", appliedType("List", typeVar("K"))),
+                    field("values", appliedType("List", typeVar("V"))),
+                    field("index", appliedType("Map", typeVar("K"), typeVar("V"))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeWithSingleConcreteArg() {
+        assertTypeDefEquals(
+            parseTypeDef("type StringBox = StringBox { value: Box<String> }"),
+            typeDef(
+                "StringBox",
+                constructors =
+                    arrayOf(
+                        constructor("StringBox", field("value", appliedType("Box", typeName("String")))),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeInMultipleConstructors() {
+        assertTypeDefEquals(
+            parseTypeDef("type Response<'T> = Success { data: List<'T> } | Error { messages: List<String> }"),
+            typeDef(
+                "Response",
+                listOf("T"),
+                constructor("Success", field("data", appliedType("List", typeVar("T")))),
+                constructor("Error", field("messages", appliedType("List", typeName("String")))),
+            ),
+        )
+    }
+
+    // Tests merged from TypeDefEdgeCaseTest.kt
+    @Test
+    fun multilineWithEmptyLineAfterEquals() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Color =
+
+                    Red
+                    | Green
+                    | Blue
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Color",
+                    constructors =
+                        arrayOf(
+                            constructor("Red"),
+                            constructor("Green"),
+                            constructor("Blue"),
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineWithMultipleEmptyLines() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Option<'A>
+
+
+                    = None
+
+
+                    | Some { value: 'A }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Option",
+                    listOf("A"),
+                    constructor("None"),
+                    constructor("Some", field("value", typeVar("A"))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineFieldsWithEmptyLines() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Person = Person {
+
+                    name: String,
+
+                    age: Num,
+
+                    email: String
+
+                }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Person",
+                    constructors =
+                        arrayOf(
+                            constructor(
+                                "Person",
+                                field("name", typeName("String")),
+                                field("age", typeName("Num")),
+                                field("email", typeName("String")),
+                            ),
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineTypeArgsSpanningLines() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Container<'A> = Container {
+                    data: Result<
+                        'A,
+                        String
+                    >
+                }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Container",
+                    listOf("A"),
+                    constructor(
+                        "Container",
+                        field("data", appliedType("Result", typeVar("A"), typeName("String"))),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineRecordTypeInField() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Wrapper = Wrapper {
+                    config: {
+                        host: String,
+                        port: Num
+                    }
+                }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Wrapper",
+                    constructors =
+                        arrayOf(
+                            constructor(
+                                "Wrapper",
+                                field(
+                                    "config",
+                                    recordType(
+                                        "host" to typeName("String"),
+                                        "port" to typeName("Num"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineFunctionTypeSpanningLines() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Handler<'A, 'B> = Handler {
+                    process: 'A
+                        -> 'B
+                }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Handler",
+                    listOf("A", "B"),
+                    constructor(
+                        "Handler",
+                        field("process", functionType(typeVar("A"), typeVar("B"))),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun deeplyNestedFunctionTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Chain = Chain { f: A -> B -> C -> D -> E }"),
+            typeDef(
+                "Chain",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Chain",
+                            field(
+                                "f",
+                                functionType(
+                                    typeName("A"),
+                                    functionType(
+                                        typeName("B"),
+                                        functionType(
+                                            typeName("C"),
+                                            functionType(typeName("D"), typeName("E")),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun functionWithTupleParamAndTupleReturn() {
+        assertTypeDefEquals(
+            parseTypeDef("type Transformer = Transformer { f: (A, B) -> (C, D) }"),
+            typeDef(
+                "Transformer",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Transformer",
+                            field(
+                                "f",
+                                functionType(
+                                    tupleType(typeName("A"), typeName("B")),
+                                    tupleType(typeName("C"), typeName("D")),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun functionWithRecordParamAndRecordReturn() {
+        assertTypeDefEquals(
+            parseTypeDef("type Mapper = Mapper { f: { x: Num } -> { y: String } }"),
+            typeDef(
+                "Mapper",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Mapper",
+                            field(
+                                "f",
+                                functionType(
+                                    recordType("x" to typeName("Num")),
+                                    recordType("y" to typeName("String")),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun tupleContainingAppliedTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Pair<'A, 'B> = Pair { value: (List<'A>, Option<'B>) }"),
+            typeDef(
+                "Pair",
+                listOf("A", "B"),
+                constructor(
+                    "Pair",
+                    field(
+                        "value",
+                        tupleType(
+                            appliedType("List", typeVar("A")),
+                            appliedType("Option", typeVar("B")),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun recordWithMultipleFunctionFields() {
+        assertTypeDefEquals(
+            parseTypeDef("type Interface = Interface { get: Num -> A, set: A -> Num, transform: A -> B }"),
+            typeDef(
+                "Interface",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Interface",
+                            field("get", functionType(typeName("Num"), typeName("A"))),
+                            field("set", functionType(typeName("A"), typeName("Num"))),
+                            field("transform", functionType(typeName("A"), typeName("B"))),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun tripleNestedRecordTypes() {
+        assertTypeDefEquals(
+            parseTypeDef("type Deep = Deep { outer: { middle: { inner: Num } } }"),
+            typeDef(
+                "Deep",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Deep",
+                            field(
+                                "outer",
+                                recordType(
+                                    "middle" to
+                                        recordType(
+                                            "inner" to typeName("Num"),
+                                        ),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeInFunctionReturn() {
+        assertTypeDefEquals(
+            parseTypeDef("type Factory<'A> = Factory { create: Num -> List<Option<'A>> }"),
+            typeDef(
+                "Factory",
+                listOf("A"),
+                constructor(
+                    "Factory",
+                    field(
+                        "create",
+                        functionType(
+                            typeName("Num"),
+                            appliedType("List", appliedType("Option", typeVar("A"))),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multipleConstructorsWithComplexTypes() {
+        assertTypeDefEquals(
+            parseTypeDef(
+                "type Event<'A> = Data { payload: List<'A>, meta: { timestamp: Num } } | Error { code: Num, handler: String -> Result }",
+            ),
+            typeDef(
+                "Event",
+                listOf("A"),
+                constructor(
+                    "Data",
+                    field("payload", appliedType("List", typeVar("A"))),
+                    field("meta", recordType("timestamp" to typeName("Num"))),
+                ),
+                constructor(
+                    "Error",
+                    field("code", typeName("Num")),
+                    field("handler", functionType(typeName("String"), typeName("Result"))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun typeParamInDeeplyNestedPosition() {
+        assertTypeDefEquals(
+            parseTypeDef("type Complex<'A> = Complex { data: Result<Option<List<'A>>, String> }"),
+            typeDef(
+                "Complex",
+                listOf("A"),
+                constructor(
+                    "Complex",
+                    field(
+                        "data",
+                        appliedType(
+                            "Result",
+                            appliedType("Option", appliedType("List", typeVar("A"))),
+                            typeName("String"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun selfReferenceInMultiplePositions() {
+        assertTypeDefEquals(
+            parseTypeDef("type Graph<'A> = Graph { value: 'A, left: Option<Graph<'A>>, right: Option<Graph<'A>> }"),
+            typeDef(
+                "Graph",
+                listOf("A"),
+                constructor(
+                    "Graph",
+                    field("value", typeVar("A")),
+                    field("left", appliedType("Option", appliedType("Graph", typeVar("A")))),
+                    field("right", appliedType("Option", appliedType("Graph", typeVar("A")))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun spacesInsideTypeParams() {
+        assertTypeDefEquals(
+            parseTypeDef("type Box< 'A > = Box { value: 'A }"),
+            typeDef(
+                "Box",
+                listOf("A"),
+                constructor("Box", field("value", typeVar("A"))),
+            ),
+        )
+    }
+
+    @Test
+    fun spacesInsideAppliedTypeArgs() {
+        assertTypeDefEquals(
+            parseTypeDef("type Container = Container { data: Map< String , Num > }"),
+            typeDef(
+                "Container",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Container",
+                            field("data", appliedType("Map", typeName("String"), typeName("Num"))),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun minimalWhitespaceInComplexType() {
+        assertTypeDefEquals(
+            parseTypeDef("type X<'A,'B> =Y{a:'A,b:List<'B>}|Z{c:('A,'B)->Result<'A,'B>}"),
+            typeDef(
+                "X",
+                listOf("A", "B"),
+                constructor(
+                    "Y",
+                    field("a", typeVar("A")),
+                    field("b", appliedType("List", typeVar("B"))),
+                ),
+                constructor(
+                    "Z",
+                    field(
+                        "c",
+                        functionType(
+                            tupleType(typeVar("A"), typeVar("B")),
+                            appliedType("Result", typeVar("A"), typeVar("B")),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun typeParamsFollowedByEqualsNeedsSpaceToAvoidGtEqToken() {
+        assertFailsWith<ParseError> { parseTypeDef("type X<'A>= X") }
+    }
+
+    @Test
+    fun excessiveWhitespaceEverywhere() {
+        assertTypeDefEquals(
+            parseTypeDef("type   Box  <  'A  >   =   Box   {   value  :   'A   }"),
+            typeDef(
+                "Box",
+                listOf("A"),
+                constructor("Box", field("value", typeVar("A"))),
+            ),
+        )
+    }
+
+    @Test
+    fun sameFieldNameAcrossConstructorsIsAllowed() {
+        assertTypeDefEquals(
+            parseTypeDef("type Result<'A, 'E> = Ok { value: 'A } | Err { value: 'E }"),
+            typeDef(
+                "Result",
+                listOf("A", "E"),
+                constructor("Ok", field("value", typeVar("A"))),
+                constructor("Err", field("value", typeVar("E"))),
+            ),
+        )
+    }
+
+    @Test
+    fun emptyTupleAsFieldTypeNotSupported() {
+        assertFailsWith<ParseError> { parseTypeDef("type Unit = Unit { value: () }") }
+    }
+
+    @Test
+    fun singleElementTupleIsParenthesizedType() {
+        assertTypeDefEquals(
+            parseTypeDef("type Wrapped = Wrapped { value: (Num) }"),
+            typeDef(
+                "Wrapped",
+                constructors =
+                    arrayOf(
+                        constructor("Wrapped", field("value", typeName("Num"))),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun parenthesizedFunctionType() {
+        assertTypeDefEquals(
+            parseTypeDef("type Alias = Alias { f: (A -> B) }"),
+            typeDef(
+                "Alias",
+                constructors =
+                    arrayOf(
+                        constructor("Alias", field("f", functionType(typeName("A"), typeName("B")))),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun doublePipeIsError() {
+        assertFailsWith<ParseError> { parseTypeDef("type Bool = True || False") }
+    }
+
+    @Test
+    fun extraClosingAngleBracket() {
+        assertFailsWith<ParseError> { parseTypeDef("type Box<'A>> = Box { value: 'A }") }
+    }
+
+    @Test
+    fun missingOpeningAngleBracket() {
+        assertFailsWith<ParseError> { parseTypeDef("type Box 'A> = Box { value: 'A }") }
+    }
+
+    @Test
+    fun typeVarInAppliedTypePositionWithoutDefinition() {
+        assertFailsWith<ParseError> { parseTypeDef("type Container = Container { data: List<'X> }") }
+    }
+
+    @Test
+    fun nestedUnclosedBrace() {
+        assertFailsWith<ParseError> { parseTypeDef("type Bad = Bad { r: { x: Num }") }
+    }
+
+    @Test
+    fun unclosedTypeArgs() {
+        assertFailsWith<ParseError> { parseTypeDef("type Bad = Bad { data: List<Num }") }
+    }
+
+    @Test
+    fun multilineConstructorAtSameIndentAsTypeIsError() {
+        assertFailsWith<ParseError> {
+            parseProgram(
+                """
+                type Bool = True
+                | False
+                """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
+    fun typeWithOnlyWhitespaceAfterEquals() {
+        assertFailsWith<ParseError> {
+            parseTypeDef("type Empty =   ")
+        }
+    }
+
+    @Test
+    fun trailingCommaInAppliedTypeArgsNotSupported() {
+        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: List<Num,> }") }
+    }
+
+    @Test
+    fun multilineTypeDefinitionsWithInterleavedExpressions() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type A = A
+
+                x = 1
+
+                type B<'T>
+                    = B { value: 'T }
+
+                y = 2
+
+                type C = C1 | C2
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef("A", constructors = arrayOf(constructor("A"))),
+                valStmt("x", int(1)),
+                typeDef("B", listOf("T"), constructor("B", field("value", typeVar("T")))),
+                valStmt("y", int(2)),
+                typeDef("C", constructors = arrayOf(constructor("C1"), constructor("C2"))),
+            ),
+        )
+    }
+
+    @Test
+    fun typeFollowedByFunctionDefinition() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Option<'A> = None | Some { value: 'A }
+
+                fun unwrap(opt, default) = opt.value
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Option",
+                    listOf("A"),
+                    constructor("None"),
+                    constructor("Some", field("value", typeVar("A"))),
+                ),
+                funDef(
+                    "unwrap",
+                    "opt",
+                    "default",
+                    body = fieldAccess(id("opt"), "value"),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun functionTypeTakingFunctionReturningFunction() {
+        assertTypeDefEquals(
+            parseTypeDef("type Meta = Meta { f: (A -> B) -> (C -> D) }"),
+            typeDef(
+                "Meta",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Meta",
+                            field(
+                                "f",
+                                functionType(
+                                    functionType(typeName("A"), typeName("B")),
+                                    functionType(typeName("C"), typeName("D")),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun recordTypeWithEmptyRecord() {
+        assertTypeDefEquals(
+            parseTypeDef("type Empty = Empty { config: {} }"),
+            typeDef(
+                "Empty",
+                constructors =
+                    arrayOf(
+                        constructor("Empty", field("config", recordType())),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun veryLongTypeParamList() {
+        assertTypeDefEquals(
+            parseTypeDef("type Big<'A, 'B, 'C, 'D, 'E, 'F, 'G, 'H> = Big { a: 'A, b: 'B, c: 'C, d: 'D, e: 'E, f: 'F, g: 'G, h: 'H }"),
+            typeDef(
+                "Big",
+                listOf("A", "B", "C", "D", "E", "F", "G", "H"),
+                constructor(
+                    "Big",
+                    field("a", typeVar("A")),
+                    field("b", typeVar("B")),
+                    field("c", typeVar("C")),
+                    field("d", typeVar("D")),
+                    field("e", typeVar("E")),
+                    field("f", typeVar("F")),
+                    field("g", typeVar("G")),
+                    field("h", typeVar("H")),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun multilineWithDeeplyIndentedFields() {
+        assertProgramEquals(
+            parseProgram(
+                """
+                type Config = Config {
+                        host: String,
+                        port: Num,
+                        options: {
+                            timeout: Num,
+                            retries: Num
+                        }
+                    }
+                """.trimIndent(),
+            ),
+            listOf(
+                typeDef(
+                    "Config",
+                    constructors =
+                        arrayOf(
+                            constructor(
+                                "Config",
+                                field("host", typeName("String")),
+                                field("port", typeName("Num")),
+                                field(
+                                    "options",
+                                    recordType(
+                                        "timeout" to typeName("Num"),
+                                        "retries" to typeName("Num"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun appliedTypeSelfReferenceWithSwappedParams() {
+        assertTypeDefEquals(
+            parseTypeDef("type Flip<'A, 'B> = Flip { next: Flip<'B, 'A> }"),
+            typeDef(
+                "Flip",
+                listOf("A", "B"),
+                constructor(
+                    "Flip",
+                    field("next", appliedType("Flip", typeVar("B"), typeVar("A"))),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun recordFieldWithFunctionTakingRecord() {
+        assertTypeDefEquals(
+            parseTypeDef("type Processor = Processor { run: { input: String } -> { output: Num } }"),
+            typeDef(
+                "Processor",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Processor",
+                            field(
+                                "run",
+                                functionType(
+                                    recordType("input" to typeName("String")),
+                                    recordType("output" to typeName("Num")),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedTuplesInFunctionType() {
+        assertTypeDefEquals(
+            parseTypeDef("type Nested = Nested { f: ((A, B), C) -> (D, (E, F)) }"),
+            typeDef(
+                "Nested",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "Nested",
+                            field(
+                                "f",
+                                functionType(
+                                    tupleType(
+                                        tupleType(typeName("A"), typeName("B")),
+                                        typeName("C"),
+                                    ),
+                                    tupleType(
+                                        typeName("D"),
+                                        tupleType(typeName("E"), typeName("F")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun functionTypeAssociativity() {
+        assertTypeDefEquals(
+            parseTypeDef("type F = F { f: A -> B -> C }"),
+            typeDef(
+                "F",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "F",
+                            field(
+                                "f",
+                                functionType(
+                                    typeName("A"),
+                                    functionType(typeName("B"), typeName("C")),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun functionTypeWithParensChangesAssociativity() {
+        assertTypeDefEquals(
+            parseTypeDef("type F = F { f: (A -> B) -> C }"),
+            typeDef(
+                "F",
+                constructors =
+                    arrayOf(
+                        constructor(
+                            "F",
+                            field(
+                                "f",
+                                functionType(
+                                    functionType(typeName("A"), typeName("B")),
+                                    typeName("C"),
+                                ),
+                            ),
+                        ),
+                    ),
+            ),
+        )
+    }
 }

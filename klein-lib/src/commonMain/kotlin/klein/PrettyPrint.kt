@@ -7,6 +7,7 @@ fun Token.prettyPrint(): String {
         when (kind) {
             INT, DOUBLE -> "Number($text)"
             IDENT -> "Ident($text)"
+            UPPER_IDENT -> "UpperIdent($text)"
             STRING -> "String(\"$text\")"
             PIPE -> "Pipe"
             EOF -> "Eof"
