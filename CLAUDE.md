@@ -151,6 +151,40 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
+
+## Offline Builds
+
+For environments without network access, Klein supports offline builds using a local Maven repository.
+
+### Setting up offline builds
+
+1. **With network access**, run the cache script to populate the local repository:
+   ```bash
+   ./scripts/cache-offline-dependencies.sh
+   ```
+
+2. **Verify offline mode works**:
+   ```bash
+   ./gradlew :klein-lib:jvmTest --offline
+   ```
+
+3. **Commit the cached dependencies** (optional, for team-wide offline support):
+   ```bash
+   git add gradle/local-repo
+   git commit -m "Cache offline dependencies"
+   ```
+
+### How it works
+
+- `settings.gradle.kts` configures Gradle to check `gradle/local-repo/` first for plugins and dependencies
+- If dependencies aren't found locally, Gradle falls back to Maven Central and Gradle Plugin Portal
+- The cache script exports dependencies from the Gradle cache to Maven repository format
+
+### Notes
+
+- The cached dependencies can be 200-400MB; consider Git LFS for large repositories
+- GitHub Actions caching handles CI builds automatically via `gradle/actions/setup-gradle@v3`
+
 ## Implementation Status
 
 See **[implementation-status.md](./docs/implementation-status.md)** for current status across parser, type system, and interpreter.
