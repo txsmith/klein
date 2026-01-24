@@ -35,6 +35,8 @@ class TypeEnv(
     private val bindings: MutableMap<String, TypeBinding> = mutableMapOf(),
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
     val level: Int = 0,
+    private val typeDefs: MutableMap<String, TypeDefInfo> = mutableMapOf(),
+    private val constructors: MutableMap<String, ConstructorInfo> = mutableMapOf(),
 ) {
     fun lookupAndInstantiate(
         name: String,
@@ -69,9 +71,22 @@ class TypeEnv(
     fun freshVar(): SimpleType.TVar = SimpleType.TVar(level)
 
     fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
-        TypeEnv(parent = this, implicitParam = implicitParam, level = level)
+        TypeEnv(parent = this, implicitParam = implicitParam, level = level, typeDefs = typeDefs, constructors = constructors)
 
-    fun enterBindingScope(): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam, level = level + 1)
+    fun enterBindingScope(): TypeEnv =
+        TypeEnv(parent = this, implicitParam = implicitParam, level = level + 1, typeDefs = typeDefs, constructors = constructors)
+
+    fun registerTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
+    fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
+
+    fun registerConstructor(info: ConstructorInfo) {
+        constructors[info.name] = info
+    }
+
+    fun lookupConstructor(name: String): ConstructorInfo? = constructors[name]
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()

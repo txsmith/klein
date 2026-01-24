@@ -32,6 +32,11 @@ class Typer {
         env: TypeEnv,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
         val scopeEnv = env.enterBindingScope()
+
+        // Process type definitions first (three passes)
+        val typeDefs = stmts.filterIsInstance<TypeDef>()
+        processTypeDefs(typeDefs, env)
+
         val funDefs = mutableMapOf<String, Pair<FunDef, SimpleType>>()
 
         // Loop through all stmts to fish out FunDefs, bind them with a TVar.
@@ -325,6 +330,93 @@ class Typer {
         } else {
             TUnit
         }
+    }
+
+    private fun processTypeDefs(
+        typeDefs: List<TypeDef>,
+        env: TypeEnv,
+    ) {
+        if (typeDefs.isEmpty()) return
+
+        // Pass 1: Register placeholders for all types and constructors
+        registerPlaceholders(typeDefs, env)
+
+        // Pass 2: Infer variance for all type parameters
+        inferVariance(typeDefs, env)
+
+        // Pass 3: Finalize structures and bind constructors
+        finalizeTypeDefs(typeDefs, env)
+    }
+
+    private fun registerPlaceholders(
+        typeDefs: List<TypeDef>,
+        env: TypeEnv,
+    ) {
+        for (typeDef in typeDefs) {
+            val typeParams =
+                typeDef.typeParams.map { name ->
+                    TypeParamInfo(name, Variance.Bivariant, env.freshVar())
+                }
+
+            // Register the sum type
+            env.registerTypeDef(
+                TypeDefInfo(
+                    name = typeDef.name,
+                    typeParams = typeParams,
+                    structure = TRecord(emptyMap()),
+                    span = typeDef.span,
+                ),
+            )
+
+            // Register each constructor
+            for (constructor in typeDef.constructors) {
+                env.registerConstructor(
+                    ConstructorInfo(
+                        name = constructor.name,
+                        typeParams = typeDef.typeParams,
+                        fields = constructor.fields,
+                        parentType = typeDef.name,
+                        span = constructor.span,
+                    ),
+                )
+
+                // Also register constructor type (placeholder)
+                if (constructor.fields.isNotEmpty()) {
+                    env.registerTypeDef(
+                        TypeDefInfo(
+                            name = constructor.name,
+                            typeParams = typeParams,
+                            structure = TRecord(emptyMap()),
+                            span = constructor.span,
+                        ),
+                    )
+                } else {
+                    // Bare constructor - no type params
+                    env.registerTypeDef(
+                        TypeDefInfo(
+                            name = constructor.name,
+                            typeParams = emptyList(),
+                            structure = TRecord(emptyMap()),
+                            span = constructor.span,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun inferVariance(
+        typeDefs: List<TypeDef>,
+        env: TypeEnv,
+    ) {
+        // TODO: Fixed-point iteration over variance
+    }
+
+    private fun finalizeTypeDefs(
+        typeDefs: List<TypeDef>,
+        env: TypeEnv,
+    ) {
+        // TODO: Build structures, compute inferred interfaces, bind constructors
     }
 
     companion object {

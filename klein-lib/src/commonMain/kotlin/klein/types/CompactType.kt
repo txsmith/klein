@@ -61,6 +61,7 @@ data class CompactType(
                             go(ty.result, pol, emptySet(), inProgress),
                         )
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go(v, pol, emptySet(), inProgress) })
+                    is TRef -> TODO("TRef not yet supported in CompactType conversion")
                     is TVar -> {
                         val key = ty to pol
 
@@ -153,6 +154,7 @@ data class CompactType(
                             go0(ty.result, pol),
                         )
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
+                    is TRef -> TODO("TRef not yet supported in CompactType canonicalization")
                     is TVar -> CompactType(vars = closeOver(setOf(ty), pol))
                 }
 

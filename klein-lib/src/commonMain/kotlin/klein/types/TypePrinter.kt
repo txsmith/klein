@@ -67,6 +67,9 @@ object TypePrinter {
                 is TRecord -> {
                     type.fields.values.forEach { collectVars(it) }
                 }
+                is TRef -> {
+                    type.typeArgs.forEach { collectVars(it) }
+                }
                 else -> {}
             }
         }
@@ -82,7 +85,13 @@ object TypePrinter {
                 is TVar -> varName(type)
                 is TFun -> printFun(type)
                 is TRecord -> printRecord(type)
+                is TRef -> printRef(type)
             }
+
+        private fun printRef(ref: TRef): String {
+            val args = if (ref.typeArgs.isEmpty()) "" else "<${ref.typeArgs.joinToString(", ") { printType(it) }}>"
+            return "${ref.name}$args"
+        }
 
         private fun varName(tv: TVar): String = varNames.getOrPut(tv) { generateVarName(nextVarId++) }
 

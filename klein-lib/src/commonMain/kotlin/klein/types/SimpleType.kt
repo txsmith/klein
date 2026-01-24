@@ -1,5 +1,7 @@
 package klein.types
 
+import klein.SourceSpan
+
 sealed class SimpleType {
     /**
      * Get the level of this type. For TVars, returns the level.
@@ -48,6 +50,13 @@ sealed class SimpleType {
                         ty.fields.mapValues { freshen(it.value) },
                     )
                 ty is TOptional -> TOptional(freshen(ty.inner))
+                ty is TRef ->
+                    TRef(
+                        ty.name,
+                        ty.typeArgs.map { freshen(it) },
+                        freshen(ty.structure),
+                        ty.span,
+                    )
                 else -> ty
             }
 
@@ -106,5 +115,15 @@ sealed class SimpleType {
     ) : SimpleType() {
         override val level: Int
             get() = fields.values.maxOfOrNull { it.level } ?: 0
+    }
+
+    data class TRef(
+        val name: String,
+        val typeArgs: List<SimpleType>,
+        val structure: SimpleType,
+        val span: SourceSpan,
+    ) : SimpleType() {
+        override val level: Int
+            get() = typeArgs.maxOfOrNull { it.level } ?: 0
     }
 }
