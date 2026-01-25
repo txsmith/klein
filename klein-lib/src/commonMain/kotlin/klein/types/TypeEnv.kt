@@ -80,6 +80,10 @@ class TypeEnv(
         typeDefs[info.name] = info
     }
 
+    fun updateTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
     fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
 
     fun registerConstructor(info: ConstructorInfo) {

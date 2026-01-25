@@ -88,4 +88,12 @@ sealed class TypeError {
     ) : TypeError() {
         override val message = "Null is not allowed here: expected ${Type.print(expected)}"
     }
+
+    data class UndeclaredTypeParam(
+        val name: String,
+        val typeName: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type parameter '$name' is not declared on type '$typeName'"
+    }
 }

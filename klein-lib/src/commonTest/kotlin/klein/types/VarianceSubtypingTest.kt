@@ -418,4 +418,151 @@ class VarianceSubtypingTest {
             )
         assertTrue(result.errors.isNotEmpty(), "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant")
     }
+
+    // ============================================================
+    // Constructor subtypes parent: Cov<X> <: V<X>, Cont<X> <: V<X>
+    // ============================================================
+
+    @Test
+    fun constructorSubtypesParent_covariant() {
+        assertType(
+            "V<Dog>",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type VDog = VDog { v: V<Dog> }
+
+                VDog(Cov(|Dog("Rex")|)).v
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun constructorSubtypesParent_contravariant() {
+        assertType(
+            "V<Dog>",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type VDog = VDog { v: V<Dog> }
+                type DogHolder = DogHolder { d: Dog }
+
+                VDog(Cont(|d -> DogHolder(d).d.name|)).v
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // ============================================================
+    // Constructor does NOT subtype parent with different type arg
+    // V is invariant (has both covariant and contravariant constructors)
+    // So Cov<Dog> <: V<Animal> fails, Cont<Animal> <: V<Dog> fails, etc.
+    // ============================================================
+
+    @Test
+    fun constructorNotSubtypesParent_covDogNotSubtypesVAnimal() {
+        val result =
+            inferWithErrors(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type AnimalHolder = AnimalHolder { a: Animal }
+                type VAnimal = VAnimal { v: V<Animal> }
+
+                VAnimal(Cov(|Dog("Rex")|)).v
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty(), "Cov<Dog> should not subtype V<Animal> - V is invariant")
+    }
+
+    @Test
+    fun constructorNotSubtypesParent_covAnimalNotSubtypesVDog() {
+        val result =
+            inferWithErrors(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type AnimalHolder = AnimalHolder { a: Animal }
+                type VDog = VDog { v: V<Dog> }
+
+                VDog(Cov(|AnimalHolder(Dog("Rex")).a|)).v
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty(), "Cov<Animal> should not subtype V<Dog> - V is invariant")
+    }
+
+    @Test
+    fun constructorNotSubtypesParent_contDogNotSubtypesVAnimal() {
+        val result =
+            inferWithErrors(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type DogHolder = DogHolder { d: Dog }
+                type VAnimal = VAnimal { v: V<Animal> }
+
+                VAnimal(Cont(|d -> DogHolder(d).d.name|)).v
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty(), "Cont<Dog> should not subtype V<Animal> - V is invariant")
+    }
+
+    @Test
+    fun constructorNotSubtypesParent_contAnimalNotSubtypesVDog() {
+        val result =
+            inferWithErrors(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
+                type AnimalHolder = AnimalHolder { a: Animal }
+                type VDog = VDog { v: V<Dog> }
+
+                VDog(Cont(|a -> AnimalHolder(a).a.name|)).v
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty(), "Cont<Animal> should not subtype V<Dog> - V is invariant")
+    }
+
+    // ============================================================
+    // Constructors have their own variance
+    // Cov<Dog> <: Cov<Animal> (covariant)
+    // Cont<Animal> <: Cont<Dog> (contravariant)
+    // ============================================================
+
+    @Test
+    fun constructorVariance_covariant() {
+        assertType(
+            "Cov<Animal>",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Cov<'A> = Cov { f: () -> 'A }
+                type CovAnimal = CovAnimal { c: Cov<Animal> }
+
+                CovAnimal(Cov(|Dog("Rex")|)).c
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun constructorVariance_contravariant() {
+        assertType(
+            "Cont<Dog>",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Cont<'A> = Cont { f: 'A -> String }
+                type AnimalHolder = AnimalHolder { a: Animal }
+                type ContAnimal = ContAnimal { c: Cont<Animal> }
+                type ContDog = ContDog { c: Cont<Dog> }
+
+                ContDog(ContAnimal(Cont(|a -> AnimalHolder(a).a.name|)).c).c
+                """.trimIndent(),
+            ),
+        )
+    }
 }

@@ -31,41 +31,43 @@ class Typer {
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
+        processTypeDefs(stmts.filterIsInstance<TypeDef>(), env)
+        processFunDefs(stmts.filterIsInstance<FunDef>(), env)
+        return inferBlockStmts(stmts, env)
+    }
+
+    private fun processFunDefs(
+        funDefs: List<FunDef>,
+        env: TypeEnv,
+    ) {
+        if (funDefs.isEmpty()) return
+
         val scopeEnv = env.enterBindingScope()
+        val funDefBindings = mutableMapOf<String, Pair<FunDef, SimpleType>>()
 
-        // Process type definitions first (three passes)
-        val typeDefs = stmts.filterIsInstance<TypeDef>()
-        processTypeDefs(typeDefs, env)
-
-        val funDefs = mutableMapOf<String, Pair<FunDef, SimpleType>>()
-
-        // Loop through all stmts to fish out FunDefs, bind them with a TVar.
-        for (stmt in stmts) {
-            if (stmt is FunDef) {
-                if (env.contains(stmt.name)) {
-                    errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
-                } else {
-                    val typeVar = scopeEnv.freshVar()
-                    funDefs[stmt.name] = stmt to typeVar
-                    env.bind(stmt.name, typeVar)
-                }
+        // Pass 1: Bind all with TVars (enables mutual recursion)
+        for (funDef in funDefs) {
+            if (env.contains(funDef.name)) {
+                errors.add(TypeError.DuplicateBinding(funDef.name, funDef.span))
+            } else {
+                val typeVar = scopeEnv.freshVar()
+                funDefBindings[funDef.name] = funDef to typeVar
+                env.bind(funDef.name, typeVar)
             }
         }
 
-        // Infer all found FunDefs, recursion is now possible because all are bound to a TVar.
-        for ((funDef, typeVar) in funDefs.values) {
+        // Pass 2: Infer types
+        for ((funDef, typeVar) in funDefBindings.values) {
             val rhsEnv = env.enterBindingScope()
             rhsEnv.bind(funDef.name, typeVar)
             val type = inferFunction(funDef.params, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
             subtyping.constrain(type, typeVar, funDef.span)
         }
 
-        // After inference we don't need the TVars bound before, so override all bound functions with their actual type.
-        for ((name, pair) in funDefs) {
+        // Pass 3: Generalize to polymorphic bindings
+        for ((name, pair) in funDefBindings) {
             env.bindPolymorphic(name, pair.second)
         }
-
-        return inferBlockStmts(stmts, env)
     }
 
     fun infer(
@@ -339,6 +341,7 @@ class Typer {
         if (typeDefs.isEmpty()) return
 
         // Pass 1: Register placeholders for all types and constructors
+        // This ensures all type names are known, and enables the following passes to work for (mutually) recursive types
         registerPlaceholders(typeDefs, env)
 
         // Pass 2: Infer variance for all type parameters
@@ -353,57 +356,65 @@ class Typer {
         env: TypeEnv,
     ) {
         for (typeDef in typeDefs) {
-            val typeParams =
-                typeDef.typeParams.map { name ->
-                    TypeParamInfo(name, Variance.Bivariant, env.freshVar())
-                }
+            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant) }
 
             // Register the sum type
             env.registerTypeDef(
                 TypeDefInfo(
                     name = typeDef.name,
                     typeParams = typeParams,
-                    structure = TRecord(emptyMap()),
+                    iface = TRecord(emptyMap()),
                     span = typeDef.span,
                 ),
             )
 
             // Register each constructor
             for (constructor in typeDef.constructors) {
+                val usedTypeVars = collectTypeVarsFromFields(constructor.fields)
+                val declaredTypeParams = typeDef.typeParams.toSet()
+
+                // Check for undeclared type params
+                for (typeVar in usedTypeVars) {
+                    if (typeVar !in declaredTypeParams) {
+                        errors.add(TypeError.UndeclaredTypeParam(typeVar, typeDef.name, constructor.span))
+                    }
+                }
+
+                val ctorTypeParams = typeParams.filter { it.name in usedTypeVars }.map { it.copy() }
+
                 env.registerConstructor(
                     ConstructorInfo(
                         name = constructor.name,
-                        typeParams = typeDef.typeParams,
+                        typeParams = ctorTypeParams.map { it.name },
                         fields = constructor.fields,
                         parentType = typeDef.name,
                         span = constructor.span,
                     ),
                 )
 
-                // Also register constructor type (placeholder)
-                if (constructor.fields.isNotEmpty()) {
-                    env.registerTypeDef(
-                        TypeDefInfo(
-                            name = constructor.name,
-                            typeParams = typeParams,
-                            structure = TRecord(emptyMap()),
-                            span = constructor.span,
-                        ),
-                    )
-                } else {
-                    // Bare constructor - no type params
-                    env.registerTypeDef(
-                        TypeDefInfo(
-                            name = constructor.name,
-                            typeParams = emptyList(),
-                            structure = TRecord(emptyMap()),
-                            span = constructor.span,
-                        ),
-                    )
-                }
+                env.registerTypeDef(
+                    TypeDefInfo(
+                        name = constructor.name,
+                        typeParams = ctorTypeParams,
+                        iface = TRecord(emptyMap()),
+                        span = constructor.span,
+                    ),
+                )
             }
         }
     }
+
+    private fun collectTypeVars(typeExpr: TypeExpr): Set<String> =
+        when (typeExpr) {
+            is TypeVar -> setOf(typeExpr.name)
+            is TypeName -> emptySet()
+            is AppliedTypeExpr -> typeExpr.args.flatMap { collectTypeVars(it) }.toSet()
+            is FunctionTypeExpr -> collectTypeVars(typeExpr.paramType) + collectTypeVars(typeExpr.returnType)
+            is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVars(it) }.toSet()
+            is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVars(it.second) }.toSet()
+        }
+
+    private fun collectTypeVarsFromFields(fields: List<FieldDecl>): Set<String> = fields.flatMap { collectTypeVars(it.type) }.toSet()
 
     private fun inferVariance(
         typeDefs: List<TypeDef>,

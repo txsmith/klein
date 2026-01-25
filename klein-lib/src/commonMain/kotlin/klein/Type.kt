@@ -47,6 +47,11 @@ sealed class Type {
         val inner: Type,
     ) : Type()
 
+    data class Ref(
+        val name: String,
+        val args: List<Type>,
+    ) : Type()
+
     override fun toString(): String = print(this)
 
     companion object {
@@ -66,7 +71,13 @@ sealed class Type {
                 is Union -> printUnion(type)
                 is Inter -> printInter(type)
                 is Optional -> "${printWithParensIfNeeded(type.inner, isUnionOrInter = false)}?"
+                is Ref -> printRef(type)
             }
+
+        private fun printRef(ref: Ref): String {
+            val args = if (ref.args.isEmpty()) "" else "<${ref.args.joinToString(", ") { print(it) }}>"
+            return "${ref.name}$args"
+        }
 
         private fun printFun(fn: Fun): String {
             val params = "(${fn.params.joinToString(", ") { print(it) }})"
@@ -120,13 +131,14 @@ sealed class Type {
                 Null -> 4
                 is Optional -> 5
                 Unit -> 6
-                is Record -> 7
-                is Fun -> 8
-                Top -> 9
-                Bottom -> 10
-                is Union -> 11
-                is Inter -> 12
-                is Rec -> 13
+                is Ref -> 7
+                is Record -> 8
+                is Fun -> 9
+                Top -> 10
+                Bottom -> 11
+                is Union -> 12
+                is Inter -> 13
+                is Rec -> 14
             }
 
         private fun printWithParensIfNeeded(

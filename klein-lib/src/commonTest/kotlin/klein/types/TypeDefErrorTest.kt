@@ -7,6 +7,28 @@ import kotlin.test.assertTrue
 @Ignore("Type definitions not yet implemented - these tests specify expected error behavior")
 class TypeDefErrorTest {
     @Test
+    fun undeclaredTypeParamInConstructor_error() {
+        val result =
+            inferWithErrors(
+                """
+                type Foo = Bar { value: 'A }
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty())
+    }
+
+    @Test
+    fun unknownTypeInField_error() {
+        val result =
+            inferWithErrors(
+                """
+                type Foo = Foo { x: Bar }
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isNotEmpty())
+    }
+
+    @Test
     fun duplicateConstructorName_acrossTypes_error() {
         val result =
             inferWithErrors(
