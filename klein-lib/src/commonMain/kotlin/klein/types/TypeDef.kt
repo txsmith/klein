@@ -11,13 +11,14 @@ import klein.SourceSpan
 data class TypeDefInfo(
     val name: String,
     val typeParams: List<TypeParamInfo>,
-    val iface: SimpleType,
+    val iface: SimpleType.TRecord,
     val span: SourceSpan,
 )
 
 data class TypeParamInfo(
     val name: String,
     val variance: Variance,
+    val tvar: SimpleType.TVar,
 )
 
 data class ConstructorInfo(

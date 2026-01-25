@@ -340,15 +340,24 @@ class Typer {
     ) {
         if (typeDefs.isEmpty()) return
 
-        // Pass 1: Register placeholders for all types and constructors
+        // Register placeholders for all types and constructors
         // This ensures all type names are known, and enables the following passes to work for (mutually) recursive types
         registerPlaceholders(typeDefs, env)
 
-        // Pass 2: Infer variance for all type parameters
-        inferVariance(typeDefs, env)
+        // Validate all type references exist and have correct arity
+        resolveNames(env)
 
-        // Pass 3: Finalize structures and bind constructors
-        finalizeTypeDefs(typeDefs, env)
+        // Infer variance for all type parameters
+        computeVariance(typeDefs, env)
+
+        // Compute the TRecord type of each constructor
+        buildCtorIfaces(env)
+
+        // Derive the shared fields for each sum type
+        buildParentIfaces(typeDefs, env)
+
+        // Expose ctors as function values
+        bindConstructors(env)
     }
 
     private fun registerPlaceholders(
@@ -356,7 +365,7 @@ class Typer {
         env: TypeEnv,
     ) {
         for (typeDef in typeDefs) {
-            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant) }
+            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, env.freshVar()) }
 
             // Register the sum type
             env.registerTypeDef(
@@ -370,7 +379,7 @@ class Typer {
 
             // Register each constructor
             for (constructor in typeDef.constructors) {
-                val usedTypeVars = collectTypeVarsFromFields(constructor.fields)
+                val usedTypeVars = constructor.fields.flatMap { collectTypeVars(it.type) }.toSet()
                 val declaredTypeParams = typeDef.typeParams.toSet()
 
                 // Check for undeclared type params
@@ -380,7 +389,10 @@ class Typer {
                     }
                 }
 
-                val ctorTypeParams = typeParams.filter { it.name in usedTypeVars }.map { it.copy() }
+                val ctorTypeParams =
+                    typeParams
+                        .filter { it.name in usedTypeVars }
+                        .map { it.copy(tvar = env.freshVar()) }
 
                 env.registerConstructor(
                     ConstructorInfo(
@@ -404,6 +416,54 @@ class Typer {
         }
     }
 
+    private fun resolveNames(env: TypeEnv) {
+        for (ctor in env.allConstructors()) {
+            for (field in ctor.fields) {
+                resolveTypeExpr(field.type, env)
+            }
+        }
+    }
+
+    private fun resolveTypeExpr(
+        typeExpr: TypeExpr,
+        env: TypeEnv,
+    ) {
+        when (typeExpr) {
+            is TypeVar -> {} // TVars are already checked during registerPlaceholders
+            is TypeName -> {
+                val builtinTypes = setOf("Num", "String", "Bool", "Unit")
+                if (typeExpr.name !in builtinTypes && env.lookupTypeDef(typeExpr.name) == null) {
+                    errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                }
+            }
+            is AppliedTypeExpr -> {
+                val typeDef = env.lookupTypeDef(typeExpr.name)
+                if (typeDef == null) {
+                    errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                } else if (typeExpr.args.size != typeDef.typeParams.size) {
+                    errors.add(TypeError.ArityMismatch(typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
+                }
+                for (arg in typeExpr.args) {
+                    resolveTypeExpr(arg, env)
+                }
+            }
+            is FunctionTypeExpr -> {
+                resolveTypeExpr(typeExpr.paramType, env)
+                resolveTypeExpr(typeExpr.returnType, env)
+            }
+            is TupleTypeExpr -> {
+                for (element in typeExpr.elements) {
+                    resolveTypeExpr(element, env)
+                }
+            }
+            is RecordTypeExpr -> {
+                for ((_, fieldType) in typeExpr.fields) {
+                    resolveTypeExpr(fieldType, env)
+                }
+            }
+        }
+    }
+
     private fun collectTypeVars(typeExpr: TypeExpr): Set<String> =
         when (typeExpr) {
             is TypeVar -> setOf(typeExpr.name)
@@ -414,20 +474,221 @@ class Typer {
             is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVars(it.second) }.toSet()
         }
 
-    private fun collectTypeVarsFromFields(fields: List<FieldDecl>): Set<String> = fields.flatMap { collectTypeVars(it.type) }.toSet()
-
-    private fun inferVariance(
+    private fun computeVariance(
         typeDefs: List<TypeDef>,
         env: TypeEnv,
     ) {
-        // TODO: Fixed-point iteration over variance
+        if (typeDefs.isEmpty()) return
+
+        val allTypeDefs = env.allTypeDefs()
+        val allConstructors = env.allConstructors()
+
+        val variances = mutableMapOf<Pair<String, String>, Variance>()
+
+        for (typeDefInfo in allTypeDefs) {
+            for (param in typeDefInfo.typeParams) {
+                variances[typeDefInfo.name to param.name] = Variance.Bivariant
+            }
+        }
+
+        fun update(
+            typeExpr: TypeExpr,
+            ownerName: String,
+            polarity: Variance,
+        ): Boolean =
+            when (typeExpr) {
+                is TypeVar -> {
+                    val current =
+                        variances[ownerName to typeExpr.name]
+                            ?: error("TypeVar '${typeExpr.name}' not found in variances for $ownerName")
+                    val newVariance = current.meet(polarity)
+                    if (newVariance != current) {
+                        variances[ownerName to typeExpr.name] = newVariance
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                is TypeName -> false
+
+                is AppliedTypeExpr -> {
+                    val refInfo = env.getTypeDef(typeExpr.name)
+                    var changed = false
+                    for ((i, arg) in typeExpr.args.withIndex()) {
+                        val paramName =
+                            refInfo.typeParams.getOrNull(i)?.name
+                                ?: error("Type '${typeExpr.name}' has ${refInfo.typeParams.size} params but got arg at index $i")
+                        val paramVariance =
+                            variances[typeExpr.name to paramName]
+                                ?: error("Variance not found for ${typeExpr.name}.$paramName")
+                        val argPolarity =
+                            when (paramVariance) {
+                                Variance.Bivariant -> polarity
+                                Variance.Covariant -> polarity
+                                Variance.Contravariant -> polarity.flip()
+                                Variance.Invariant -> Variance.Invariant
+                            }
+                        changed = update(arg, ownerName, argPolarity) || changed
+                    }
+                    changed
+                }
+
+                is FunctionTypeExpr -> {
+                    val paramChanged = update(typeExpr.paramType, ownerName, polarity.flip())
+                    val returnChanged = update(typeExpr.returnType, ownerName, polarity)
+                    paramChanged || returnChanged
+                }
+
+                is TupleTypeExpr -> {
+                    var changed = false
+                    for (element in typeExpr.elements) {
+                        changed = update(element, ownerName, polarity) || changed
+                    }
+                    changed
+                }
+
+                is RecordTypeExpr -> {
+                    var changed = false
+                    for ((_, fieldType) in typeExpr.fields) {
+                        changed = update(fieldType, ownerName, polarity) || changed
+                    }
+                    changed
+                }
+            }
+
+        var changed = true
+        while (changed) {
+            changed = false
+            for (ctor in allConstructors) {
+                for (field in ctor.fields) {
+                    changed = update(field.type, ctor.name, Variance.Covariant) || changed
+                }
+            }
+        }
+
+        for (ctor in allConstructors) {
+            for (param in ctor.typeParams) {
+                val parentKey = ctor.parentType to param
+                val ctorKey = ctor.name to param
+                val parentVar = variances[parentKey] ?: Variance.Bivariant
+                val ctorVar = variances[ctorKey] ?: Variance.Bivariant
+                variances[parentKey] = parentVar.meet(ctorVar)
+            }
+        }
+
+        for ((key, variance) in variances.toMap()) {
+            if (variance == Variance.Bivariant) {
+                variances[key] = Variance.Invariant
+            }
+        }
+
+        for (typeDefInfo in allTypeDefs) {
+            val updatedParams =
+                typeDefInfo.typeParams.map { param ->
+                    val v = variances[typeDefInfo.name to param.name] ?: Variance.Invariant
+                    param.copy(variance = v)
+                }
+            env.updateTypeDef(typeDefInfo.copy(typeParams = updatedParams))
+        }
     }
 
-    private fun finalizeTypeDefs(
+    private fun buildCtorIfaces(env: TypeEnv) {
+        for (ctor in env.allConstructors()) {
+            val iface = inferCtorIface(ctor, env)
+            env.updateTypeDef(env.getTypeDef(ctor.name).copy(iface = iface))
+        }
+    }
+
+    private fun buildParentIfaces(
         typeDefs: List<TypeDef>,
         env: TypeEnv,
     ) {
-        // TODO: Build structures, compute inferred interfaces, bind constructors
+        for (typeDef in typeDefs) {
+            val ctorIfaces = typeDef.constructors.map { env.getTypeDef(it.name).iface }
+            val parentIface = intersectIfaces(ctorIfaces)
+            env.updateTypeDef(env.getTypeDef(typeDef.name).copy(iface = parentIface))
+        }
+    }
+
+    private fun bindConstructors(env: TypeEnv) {
+        for (ctor in env.allConstructors()) {
+            val ctorTypeDef = env.getTypeDef(ctor.name)
+            val tvars = ctorTypeDef.typeParams.map { it.tvar }
+            val resultType = TRef(ctor.name, tvars, ctor.span)
+
+            val ctorType =
+                if (ctor.fields.isEmpty()) {
+                    resultType
+                } else {
+                    val fieldTypes = ctor.fields.map { ctorTypeDef.iface.fields[it.name]!! }
+                    TFun(fieldTypes, resultType)
+                }
+
+            env.bindPolymorphic(ctor.name, ctorType)
+        }
+    }
+
+    private fun intersectIfaces(ifaces: List<TRecord>): TRecord {
+        if (ifaces.isEmpty()) return TRecord(emptyMap())
+        return ifaces.reduce { acc, record ->
+            TRecord(acc.fields.filter { (name, type) -> record.fields[name] == type })
+        }
+    }
+
+    private fun inferCtorIface(
+        ctor: ConstructorInfo,
+        env: TypeEnv,
+    ): TRecord {
+        val ctorTypeDef = env.getTypeDef(ctor.name)
+        val typeVarMap: Map<String, TVar> = ctorTypeDef.typeParams.associate { it.name to it.tvar }
+
+        fun convertToSimpleType(typeExpr: TypeExpr): SimpleType =
+            when (typeExpr) {
+                is TypeVar ->
+                    typeVarMap[typeExpr.name]
+                        ?: error("Type variable '${typeExpr.name}' not in scope")
+
+                is TypeName ->
+                    when (typeExpr.name) {
+                        "Num" -> TNum
+                        "String" -> TString
+                        "Bool" -> TBool
+                        "Unit" -> TUnit
+                        else -> TRef(typeExpr.name, emptyList(), typeExpr.span)
+                    }
+
+                is AppliedTypeExpr -> {
+                    val args = typeExpr.args.map { convertToSimpleType(it) }
+                    TRef(typeExpr.name, args, typeExpr.span)
+                }
+
+                is FunctionTypeExpr ->
+                    TFun(
+                        listOf(convertToSimpleType(typeExpr.paramType)),
+                        convertToSimpleType(typeExpr.returnType),
+                    )
+
+                is TupleTypeExpr -> {
+                    val fields =
+                        typeExpr.elements
+                            .mapIndexed { i, elem ->
+                                "_$i" to convertToSimpleType(elem)
+                            }.toMap()
+                    TRecord(fields)
+                }
+
+                is RecordTypeExpr ->
+                    TRecord(
+                        typeExpr.fields.associate { (name, type) ->
+                            name to convertToSimpleType(type)
+                        },
+                    )
+            }
+
+        val fields = ctor.fields.associate { it.name to convertToSimpleType(it.type) }
+
+        return TRecord(fields)
     }
 
     companion object {

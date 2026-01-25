@@ -427,7 +427,7 @@ class Parser(
                 StringLiteral(token.text!!, token.span)
             }
 
-            IDENT -> {
+            IDENT, UPPER_IDENT -> {
                 advance()
                 Ident(token.text!!, token.span)
             }

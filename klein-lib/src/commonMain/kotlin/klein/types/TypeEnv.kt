@@ -86,11 +86,17 @@ class TypeEnv(
 
     fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
 
+    fun getTypeDef(name: String): TypeDefInfo = typeDefs[name] ?: error("Type '$name' not registered")
+
+    fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
+
     fun registerConstructor(info: ConstructorInfo) {
         constructors[info.name] = info
     }
 
     fun lookupConstructor(name: String): ConstructorInfo? = constructors[name]
+
+    fun allConstructors(): Collection<ConstructorInfo> = constructors.values
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()

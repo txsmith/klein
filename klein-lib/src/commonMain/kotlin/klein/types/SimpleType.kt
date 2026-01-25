@@ -54,7 +54,6 @@ sealed class SimpleType {
                     TRef(
                         ty.name,
                         ty.typeArgs.map { freshen(it) },
-                        freshen(ty.structure),
                         ty.span,
                     )
                 else -> ty
@@ -120,7 +119,6 @@ sealed class SimpleType {
     data class TRef(
         val name: String,
         val typeArgs: List<SimpleType>,
-        val structure: SimpleType,
         val span: SourceSpan,
     ) : SimpleType() {
         override val level: Int
