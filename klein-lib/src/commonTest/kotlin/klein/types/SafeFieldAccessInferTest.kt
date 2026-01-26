@@ -2,9 +2,7 @@
 
 package klein.types
 
-import klein.Klein
 import kotlin.test.Test
-import kotlin.test.assertTrue
 
 class SafeFieldAccessInferTest {
 
@@ -46,12 +44,11 @@ class SafeFieldAccessInferTest {
 
     @Test
     fun safeFieldAccess_nestedOptionalField() {
-        // Note: T?? doesn't flatten to T? yet (ADR says it should)
         val code = """
             r = if true then { value = if false then 42 else null } else null
             r?.value
         """.trimIndent()
-        assertType("Num??", infer(code))
+        assertType("Num?", infer(code))
     }
 
     @Test
@@ -173,10 +170,7 @@ class SafeFieldAccessInferTest {
             r = if true then { inner = if false then { process = |x -> x + 1| } else null } else null
             r?.inner?.process(5)
         """.trimIndent()
-        // TODO: Chained ?. should collapse to single optional, but currently produces a spurious NullNotAllowed
-        val result = Klein.infer(code)
-        assertType("Num?", result.type)
-        assertTrue(result.hasErrors, "Known bug: chained ?. produces spurious NullNotAllowed")
+        assertType("Num?", infer(code))
     }
 
     @Test
@@ -211,7 +205,6 @@ class SafeFieldAccessInferTest {
         val code = """
             fun process(order) = order?.purchasedAt?.isAfter(0)
         """.trimIndent()
-        // Chained ?. gives single optional result
-        assertType("({ purchasedAt: { isAfter: (Num) -> 'A } }?) -> 'A?", infer(code + "\nprocess"))
+        assertType("({ purchasedAt: { isAfter: (Num) -> 'A }? }?) -> 'A?", infer(code + "\nprocess"))
     }
 }

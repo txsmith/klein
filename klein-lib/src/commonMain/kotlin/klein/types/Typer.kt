@@ -312,7 +312,10 @@ class Typer {
         val targetType = infer(expr.target, env)
         val fieldType = env.freshVar()
         subtyping.constrain(targetType, TOptional(TRecord(mapOf(expr.field to fieldType))), expr.span)
-        return TOptional(fieldType)
+        val result = env.freshVar()
+        subtyping.constrain(fieldType, result, expr.span)
+        subtyping.constrain(TNull, result, expr.span)
+        return result
     }
 
     private fun inferIfThenElse(
