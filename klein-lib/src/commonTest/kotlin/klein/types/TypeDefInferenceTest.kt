@@ -1,6 +1,5 @@
 package klein.types
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -183,33 +182,15 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    @Ignore("Test expectation incorrect - input doesn't flow into type arg")
-    fun mutualRecursion_barUsable() {
-        assertType(
-            "Bar<Num>",
-            infer(
-                """
-                type Foo<'A> = Foo { bar: Bar<'A> }
-                type Bar<'A> = Bar { foo: Foo<'A> }
-
-                fun mkBar(x) = Bar(Foo(mkBar(x)))
-                mkBar(42)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    @Ignore("Test expectation incorrect - input doesn't flow into type arg")
     fun mutualRecursion_fieldAccess() {
         assertType(
             "Bar<Num>",
             infer(
                 """
                 type Foo<'A> = Foo { bar: Bar<'A> }
-                type Bar<'A> = Bar { foo: Foo<'A> }
+                type Bar<'A> = Bar { value: 'A, foo: Foo<'A> }
 
-                fun mkFoo(x) = Foo(Bar(mkFoo(x)))
+                fun mkFoo(x) = Foo(Bar(x, mkFoo(x)))
                 f = mkFoo(42)
                 f.bar
                 """.trimIndent(),
@@ -218,16 +199,15 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    @Ignore("Test expectation incorrect - input doesn't flow into type arg")
     fun mutualRecursion_transitiveFieldAccess() {
         assertType(
             "Foo<Num>",
             infer(
                 """
                 type Foo<'A> = Foo { bar: Bar<'A> }
-                type Bar<'A> = Bar { foo: Foo<'A> }
+                type Bar<'A> = Bar { value: 'A, foo: Foo<'A> }
 
-                fun mkFoo(x) = Foo(Bar(mkFoo(x)))
+                fun mkFoo(x) = Foo(Bar(x, mkFoo(x)))
                 f = mkFoo(42)
                 f.bar.foo
                 """.trimIndent(),
@@ -275,15 +255,14 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    @Ignore("Test expectation incorrect - input doesn't flow into type arg in self-referential type")
     fun recursiveVariance_sameTypeWorks() {
         assertType(
             "T<Num>",
             infer(
                 """
-                type T<'A> = T { x: T<'A> }
+                type T<'A> = T { value: 'A, x: T<'A> }
 
-                fun mkT(v) = T(mkT(v))
+                fun mkT(v) = T(v, mkT(v))
                 mkT(42)
                 """.trimIndent(),
             ),
