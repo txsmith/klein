@@ -45,8 +45,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun covariant_wrongDirection_boxCatNotSubtypeBoxDog() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type Box<'A> = Box { value: 'A }
@@ -55,7 +55,7 @@ class VarianceSubtypingTest {
                 BoxDog(Box(Cat("Whiskers"))).b
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Box<Cat> should not subtype Box<Dog>")
+        assertTrue(errors.isNotEmpty(), "Box<Cat> should not subtype Box<Dog>")
     }
 
     // ============================================================
@@ -82,8 +82,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun contravariant_wrongDirection_consumerDogNotSubtypeConsumerCat() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type DogHolder = DogHolder { d: Dog }
@@ -93,7 +93,7 @@ class VarianceSubtypingTest {
                 ConsumerCat(Consumer(|d -> DogHolder(d).d.breed|)).c
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Consumer<Dog> should not subtype Consumer<Cat>")
+        assertTrue(errors.isNotEmpty(), "Consumer<Dog> should not subtype Consumer<Cat>")
     }
 
     // ============================================================
@@ -103,8 +103,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun invariant_refDogNotSubtypeRefAnimal() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type Ref<'A> = Ref { get: () -> 'A, set: 'A -> () }
@@ -113,13 +113,13 @@ class VarianceSubtypingTest {
                 RefAnimal(Ref(|() -> Dog("Fido", "Labrador")|, |d -> d.breed|)).r
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Ref<Dog> should not subtype Ref<Animal>")
+        assertTrue(errors.isNotEmpty(), "Ref<Dog> should not subtype Ref<Animal>")
     }
 
     @Test
     fun invariant_refCatNotSubtypeRefDog() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type CatHolder = CatHolder { c: Cat }
@@ -130,7 +130,7 @@ class VarianceSubtypingTest {
                 RefDog(Ref(|() -> Cat("Whiskers")|, |c -> CatHolder(c).c.name|)).r
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Ref<Cat> should not subtype Ref<Dog>")
+        assertTrue(errors.isNotEmpty(), "Ref<Cat> should not subtype Ref<Dog>")
     }
 
     @Test
@@ -157,8 +157,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun phantom_unusedParamIsInvariant_dogNotSubtypeAnimal() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type Phantom<'A> = Phantom { value: Num }
@@ -168,13 +168,13 @@ class VarianceSubtypingTest {
                 PhantomAnimal(PhantomDog(Phantom(42)).p).p
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Phantom<Dog> should not subtype Phantom<Animal> - unused params are invariant")
+        assertTrue(errors.isNotEmpty(), "Phantom<Dog> should not subtype Phantom<Animal> - unused params are invariant")
     }
 
     @Test
     fun phantom_unusedParamIsInvariant_catNotSubtypeDog() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type Phantom<'A> = Phantom { value: Num }
@@ -184,7 +184,7 @@ class VarianceSubtypingTest {
                 PhantomDog(PhantomCat(Phantom(42)).p).p
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Phantom<Cat> should not subtype Phantom<Dog> - unused params are invariant")
+        assertTrue(errors.isNotEmpty(), "Phantom<Cat> should not subtype Phantom<Dog> - unused params are invariant")
     }
 
     @Test
@@ -226,8 +226,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun function_dogToDogNotSubtypesCatToCat() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type DogHolder = DogHolder { d: Dog }
@@ -236,7 +236,7 @@ class VarianceSubtypingTest {
                 FuncHolder(|d -> DogHolder(d).d|).f
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "(Dog -> Dog) should not subtype (Cat -> Cat)")
+        assertTrue(errors.isNotEmpty(), "(Dog -> Dog) should not subtype (Cat -> Cat)")
     }
 
     // ============================================================
@@ -261,8 +261,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun producerCovariant_wrongDirectionFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type AnimalHolder = AnimalHolder { a: Animal }
@@ -272,7 +272,7 @@ class VarianceSubtypingTest {
                 ProducerDog(Producer(|() -> AnimalHolder(Cat("Whiskers")).a|)).p
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Producer<Animal> should not subtype Producer<Dog>")
+        assertTrue(errors.isNotEmpty(), "Producer<Animal> should not subtype Producer<Dog>")
     }
 
     // ============================================================
@@ -349,8 +349,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun swappedRecursion_firstParam_covariantDirectionFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type DogHolder = DogHolder { d: Dog }
@@ -362,13 +362,13 @@ class VarianceSubtypingTest {
                 WeirdAnimalNum(WeirdDogNum(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant")
+        assertTrue(errors.isNotEmpty(), "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant")
     }
 
     @Test
     fun swappedRecursion_firstParam_contravariantDirectionFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type AnimalHolder = AnimalHolder { a: Animal }
@@ -380,13 +380,13 @@ class VarianceSubtypingTest {
                 WeirdDogNum(WeirdAnimalNum(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Weird<Animal, Num> should not subtype Weird<Dog, Num> - 'A is invariant")
+        assertTrue(errors.isNotEmpty(), "Weird<Animal, Num> should not subtype Weird<Dog, Num> - 'A is invariant")
     }
 
     @Test
     fun swappedRecursion_secondParam_covariantDirectionFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type DogHolder = DogHolder { d: Dog }
@@ -398,13 +398,13 @@ class VarianceSubtypingTest {
                 WeirdNumAnimal(WeirdNumDog(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Weird<Num, Dog> should not subtype Weird<Num, Animal> - 'B is invariant")
+        assertTrue(errors.isNotEmpty(), "Weird<Num, Dog> should not subtype Weird<Num, Animal> - 'B is invariant")
     }
 
     @Test
     fun swappedRecursion_secondParam_contravariantDirectionFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type AnimalHolder = AnimalHolder { a: Animal }
@@ -416,7 +416,7 @@ class VarianceSubtypingTest {
                 WeirdNumDog(WeirdNumAnimal(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant")
+        assertTrue(errors.isNotEmpty(), "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant")
     }
 
     // ============================================================
@@ -464,8 +464,8 @@ class VarianceSubtypingTest {
 
     @Test
     fun constructorNotSubtypesParent_covDogNotSubtypesVAnimal() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
@@ -475,13 +475,13 @@ class VarianceSubtypingTest {
                 VAnimal(Cov(|Dog("Rex")|)).v
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Cov<Dog> should not subtype V<Animal> - V is invariant")
+        assertTrue(errors.isNotEmpty(), "Cov<Dog> should not subtype V<Animal> - V is invariant")
     }
 
     @Test
     fun constructorNotSubtypesParent_covAnimalNotSubtypesVDog() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
@@ -491,13 +491,13 @@ class VarianceSubtypingTest {
                 VDog(Cov(|AnimalHolder(Dog("Rex")).a|)).v
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Cov<Animal> should not subtype V<Dog> - V is invariant")
+        assertTrue(errors.isNotEmpty(), "Cov<Animal> should not subtype V<Dog> - V is invariant")
     }
 
     @Test
     fun constructorNotSubtypesParent_contDogNotSubtypesVAnimal() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
@@ -507,13 +507,13 @@ class VarianceSubtypingTest {
                 VAnimal(Cont(|d -> DogHolder(d).d.name|)).v
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Cont<Dog> should not subtype V<Animal> - V is invariant")
+        assertTrue(errors.isNotEmpty(), "Cont<Dog> should not subtype V<Animal> - V is invariant")
     }
 
     @Test
     fun constructorNotSubtypesParent_contAnimalNotSubtypesVDog() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
@@ -523,7 +523,7 @@ class VarianceSubtypingTest {
                 VDog(Cont(|a -> AnimalHolder(a).a.name|)).v
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Cont<Animal> should not subtype V<Dog> - V is invariant")
+        assertTrue(errors.isNotEmpty(), "Cont<Animal> should not subtype V<Dog> - V is invariant")
     }
 
     // ============================================================

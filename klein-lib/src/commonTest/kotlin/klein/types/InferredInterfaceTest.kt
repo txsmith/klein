@@ -85,8 +85,8 @@ class InferredInterfaceTest {
 
     @Test
     fun noCommonFields_fieldAccessFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type AB = A { x: Num } | B { y: String }
                 type H = H { ab: AB }
@@ -94,8 +94,8 @@ class InferredInterfaceTest {
                 H(A(42)).ab.x
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
@@ -115,8 +115,8 @@ class InferredInterfaceTest {
 
     @Test
     fun partialOverlap_nonCommonFieldNotAccessible() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type AB = A { x: Num, y: String } | B { x: Num }
                 type H = H { ab: AB }
@@ -124,8 +124,8 @@ class InferredInterfaceTest {
                 H(A(1, "hello")).ab.y
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
@@ -161,8 +161,8 @@ class InferredInterfaceTest {
 
     @Test
     fun bareConstructors_fieldAccessFails() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Bool = True | False
                 type H = H { b: Bool }
@@ -170,8 +170,8 @@ class InferredInterfaceTest {
                 H(True).b.value
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
@@ -191,8 +191,8 @@ class InferredInterfaceTest {
 
     @Test
     fun mixedBareAndFieldConstructors_noCommonFields() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option = None | Some { value: Num }
                 type H = H { opt: Option }
@@ -200,8 +200,8 @@ class InferredInterfaceTest {
                 H(Some(42)).opt.value
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
@@ -224,8 +224,8 @@ class InferredInterfaceTest {
 
     @Test
     fun multipleCommonFields_nonCommonNotAccessible() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type ABC = A { x: Num, y: String, z: Bool }
                          | B { x: Num, y: String }
@@ -235,8 +235,8 @@ class InferredInterfaceTest {
                 H(A(1, "hi", true)).abc.z
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test

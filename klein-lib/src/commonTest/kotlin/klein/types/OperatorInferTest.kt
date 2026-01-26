@@ -98,29 +98,29 @@ class OperatorInferTest {
 
     @Test
     fun add_stringPlusString_fails() {
-        val result = inferWithErrors("\"a\" + \"b\"")
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("\"a\" + \"b\"")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
     fun and_intAndInt_fails() {
-        val result = inferWithErrors("1 and 2")
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.all { it is TypeError.TypeMismatch })
+        val errors = inferErrors("1 and 2")
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
     fun not_int_fails() {
-        val result = inferWithErrors("not 1")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("not 1")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
     fun neg_bool_fails() {
-        val result = inferWithErrors("-true")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("-true")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test

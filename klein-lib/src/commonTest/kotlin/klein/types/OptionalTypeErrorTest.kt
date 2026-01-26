@@ -3,7 +3,6 @@
 package klein.types
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -22,32 +21,32 @@ class OptionalTypeErrorTest {
 
     @Test
     fun null_cannotBeAddedToNum() {
-        val result = inferWithErrors("42 + null")
-        assertTrue(result.errors.isNotEmpty(), "Adding null to num should produce error")
+        val errors = inferErrors("42 + null")
+        assertTrue(errors.isNotEmpty(), "Adding null to num should produce error")
     }
 
     @Test
     fun null_cannotSubtractFromNum() {
-        val result = inferWithErrors("42 - null")
-        assertTrue(result.errors.isNotEmpty(), "Subtracting null from num should produce error")
+        val errors = inferErrors("42 - null")
+        assertTrue(errors.isNotEmpty(), "Subtracting null from num should produce error")
     }
 
     @Test
     fun null_cannotMultiplyWithNum() {
-        val result = inferWithErrors("42 * null")
-        assertTrue(result.errors.isNotEmpty(), "Multiplying null with num should produce error")
+        val errors = inferErrors("42 * null")
+        assertTrue(errors.isNotEmpty(), "Multiplying null with num should produce error")
     }
 
     @Test
     fun null_cannotDivideNum() {
-        val result = inferWithErrors("42 / null")
-        assertTrue(result.errors.isNotEmpty(), "Dividing by null should produce error")
+        val errors = inferErrors("42 / null")
+        assertTrue(errors.isNotEmpty(), "Dividing by null should produce error")
     }
 
     @Test
     fun null_cannotBeNegated() {
-        val result = inferWithErrors("-null")
-        assertTrue(result.errors.isNotEmpty(), "Negating null should produce error")
+        val errors = inferErrors("-null")
+        assertTrue(errors.isNotEmpty(), "Negating null should produce error")
     }
 
     // =========================================================================
@@ -56,20 +55,20 @@ class OptionalTypeErrorTest {
 
     @Test
     fun null_cannotBeUsedWithAnd() {
-        val result = inferWithErrors("true and null")
-        assertTrue(result.errors.isNotEmpty(), "null in 'and' should produce error")
+        val errors = inferErrors("true and null")
+        assertTrue(errors.isNotEmpty(), "null in 'and' should produce error")
     }
 
     @Test
     fun null_cannotBeUsedWithOr() {
-        val result = inferWithErrors("true or null")
-        assertTrue(result.errors.isNotEmpty(), "null in 'or' should produce error")
+        val errors = inferErrors("true or null")
+        assertTrue(errors.isNotEmpty(), "null in 'or' should produce error")
     }
 
     @Test
     fun null_cannotBeNegatedWithNot() {
-        val result = inferWithErrors("not null")
-        assertTrue(result.errors.isNotEmpty(), "'not null' should produce error")
+        val errors = inferErrors("not null")
+        assertTrue(errors.isNotEmpty(), "'not null' should produce error")
     }
 
     // =========================================================================
@@ -78,26 +77,26 @@ class OptionalTypeErrorTest {
 
     @Test
     fun null_cannotBeLessThanNum() {
-        val result = inferWithErrors("null < 42")
-        assertTrue(result.errors.isNotEmpty(), "null < num should produce error")
+        val errors = inferErrors("null < 42")
+        assertTrue(errors.isNotEmpty(), "null < num should produce error")
     }
 
     @Test
     fun null_cannotBeGreaterThanNum() {
-        val result = inferWithErrors("null > 42")
-        assertTrue(result.errors.isNotEmpty(), "null > num should produce error")
+        val errors = inferErrors("null > 42")
+        assertTrue(errors.isNotEmpty(), "null > num should produce error")
     }
 
     @Test
     fun null_cannotBeLessThanOrEqualNum() {
-        val result = inferWithErrors("null <= 42")
-        assertTrue(result.errors.isNotEmpty(), "null <= num should produce error")
+        val errors = inferErrors("null <= 42")
+        assertTrue(errors.isNotEmpty(), "null <= num should produce error")
     }
 
     @Test
     fun null_cannotBeGreaterThanOrEqualNum() {
-        val result = inferWithErrors("null >= 42")
-        assertTrue(result.errors.isNotEmpty(), "null >= num should produce error")
+        val errors = inferErrors("null >= 42")
+        assertTrue(errors.isNotEmpty(), "null >= num should produce error")
     }
 
     // Note: null == null and null != null might be allowed for equality checks
@@ -109,8 +108,8 @@ class OptionalTypeErrorTest {
 
     @Test
     fun null_cannotBeIfCondition() {
-        val result = inferWithErrors("if null then 1 else 2")
-        assertTrue(result.errors.isNotEmpty(), "null as if condition should produce error")
+        val errors = inferErrors("if null then 1 else 2")
+        assertTrue(errors.isNotEmpty(), "null as if condition should produce error")
     }
 
     @Test
@@ -119,8 +118,8 @@ class OptionalTypeErrorTest {
             maybeBool = if true then true else null
             if maybeBool then 1 else 2
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Bool? as if condition should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Bool? as if condition should produce error")
     }
 
     // =========================================================================
@@ -133,8 +132,8 @@ class OptionalTypeErrorTest {
             maybeNum = if true then 42 else null
             maybeNum + 1
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Num? + Num should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Num? + Num should produce error")
     }
 
     @Test
@@ -143,8 +142,8 @@ class OptionalTypeErrorTest {
             maybeNum = if true then 42 else null
             100 - maybeNum
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Num - Num? should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Num - Num? should produce error")
     }
 
     @Test
@@ -154,8 +153,8 @@ class OptionalTypeErrorTest {
             b = if false then 2 else null
             a + b
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Num? + Num? should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Num? + Num? should produce error")
     }
 
     // =========================================================================
@@ -168,8 +167,8 @@ class OptionalTypeErrorTest {
             fun double(x) = x * 2
             double(null)
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Passing null to (Num) -> Num should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Passing null to (Num) -> Num should produce error")
     }
 
     @Test
@@ -179,8 +178,8 @@ class OptionalTypeErrorTest {
             maybeNum = if true then 21 else null
             double(maybeNum)
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Passing Num? to (Num) -> Num should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Passing Num? to (Num) -> Num should produce error")
     }
 
     @Test
@@ -189,8 +188,8 @@ class OptionalTypeErrorTest {
             f = null
             f(42)
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Applying null as function should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Applying null as function should produce error")
     }
 
     @Test
@@ -199,8 +198,8 @@ class OptionalTypeErrorTest {
             f = if true then |x -> x + 1| else null
             f(42)
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Applying ((Num) -> Num)? should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Applying ((Num) -> Num)? should produce error")
     }
 
     // =========================================================================
@@ -209,8 +208,8 @@ class OptionalTypeErrorTest {
 
     @Test
     fun null_cannotHaveFieldAccess() {
-        val result = inferWithErrors("null.x")
-        assertTrue(result.errors.isNotEmpty(), "Field access on null should produce error")
+        val errors = inferErrors("null.x")
+        assertTrue(errors.isNotEmpty(), "Field access on null should produce error")
     }
 
     @Test
@@ -219,8 +218,8 @@ class OptionalTypeErrorTest {
             r = if true then { x = 42 } else null
             r.x
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Field access on { x: Num }? should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Field access on { x: Num }? should produce error")
     }
 
     // =========================================================================
@@ -236,9 +235,9 @@ class OptionalTypeErrorTest {
             fun double(x) = x * 2
             double(maybeVal(true))
         """.trimIndent()
-        val result = inferWithErrors(code)
+        val errors = inferErrors(code)
         // maybeVal returns Num?, double expects Num
-        assertTrue(result.errors.isNotEmpty(), "Num? as argument to Num -> Num should produce error")
+        assertTrue(errors.isNotEmpty(), "Num? as argument to Num -> Num should produce error")
     }
 
     // =========================================================================
@@ -253,9 +252,9 @@ class OptionalTypeErrorTest {
             rec = { x = if true then 42 else null }
             getX(rec)
         """.trimIndent()
-        val result = inferWithErrors(code)
+        val errors = inferErrors(code)
         // r.x needs to be Num for + 1, but rec.x is Num?
-        assertTrue(result.errors.isNotEmpty(), "Using { x: Num? } where { x: Num } expected should fail")
+        assertTrue(errors.isNotEmpty(), "Using { x: Num? } where { x: Num } expected should fail")
     }
 
     // =========================================================================
@@ -269,8 +268,8 @@ class OptionalTypeErrorTest {
             result = step(0, true)
             result + 10
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Arithmetic on chained optional should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Arithmetic on chained optional should produce error")
     }
 
     @Test
@@ -281,8 +280,8 @@ class OptionalTypeErrorTest {
             }
             outer.inner.value
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Field access through optional should produce error")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Field access through optional should produce error")
     }
 
     @Test
@@ -292,8 +291,8 @@ class OptionalTypeErrorTest {
             maybeF = if true then |x -> x + 1| else null
             apply(maybeF, 42)
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty(), "Passing optional function where function expected should fail")
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty(), "Passing optional function where function expected should fail")
     }
 
     // =========================================================================
@@ -302,9 +301,9 @@ class OptionalTypeErrorTest {
 
     @Test
     fun error_nullArithmetic_hasUsefulMessage() {
-        val result = inferWithErrors("42 + null")
-        assertTrue(result.errors.isNotEmpty())
-        val error = result.errors[0]
+        val errors = inferErrors("42 + null")
+        assertTrue(errors.isNotEmpty())
+        val error = errors[0]
         // The error message should mention type mismatch or null
         assertTrue(
             error.message.contains("mismatch") ||
@@ -320,9 +319,9 @@ class OptionalTypeErrorTest {
             b = if true then true else null
             if b then 1 else 2
         """.trimIndent()
-        val result = inferWithErrors(code)
-        assertTrue(result.errors.isNotEmpty())
-        val error = result.errors[0]
+        val errors = inferErrors(code)
+        assertTrue(errors.isNotEmpty())
+        val error = errors[0]
         assertTrue(
             error.message.contains("Bool") ||
             error.message.contains("mismatch"),

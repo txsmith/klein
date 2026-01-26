@@ -34,44 +34,44 @@ class ImplicitParamInferTest {
 
     @Test
     fun implicitParam_outsideLambda_error() {
-        val result = inferWithErrors(".")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamOutsideLambda)
+        val errors = inferErrors(".")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamOutsideLambda)
     }
 
     @Test
     fun implicitParam_outsideLambda_fieldAccess_error() {
-        val result = inferWithErrors(".x")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamOutsideLambda)
+        val errors = inferErrors(".x")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamOutsideLambda)
     }
 
     @Test
     fun implicitParam_mixedWithExplicit_error() {
-        val result = inferWithErrors("|x -> . + x|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamWithExplicitParams)
+        val errors = inferErrors("|x -> . + x|")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamWithExplicitParams)
     }
 
     @Test
     fun implicitParam_inNamedFunction_error() {
-        val result = inferWithErrors("fun g() = .")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamInNamedFunction)
+        val errors = inferErrors("fun g() = .")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamInNamedFunction)
     }
 
     @Test
     fun implicitParam_inNamedFunctionWithParams_error() {
-        val result = inferWithErrors("fun f(x) = .")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamInNamedFunction)
+        val errors = inferErrors("fun f(x) = .")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamInNamedFunction)
     }
 
     @Test
     fun implicitParam_mixedWithExplicit_fieldAccess_error() {
-        val result = inferWithErrors("|x -> .y + x|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ImplicitParamWithExplicitParams)
+        val errors = inferErrors("|x -> .y + x|")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ImplicitParamWithExplicitParams)
     }
 
     @Test

@@ -310,8 +310,8 @@ class TypeDefInferenceTest {
 
     @Test
     fun inferredInterface_nonCommonFieldError() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Light =
                     Red { duration: Num, intensity: Num }
@@ -322,7 +322,7 @@ class TypeDefInferenceTest {
                 getIntensity(if true then Red(100, 50) else Yellow(30))
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test

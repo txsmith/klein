@@ -150,15 +150,15 @@ class RecursiveFunctionTest {
     @Test
     fun recursive_lambdaNotRecursive() {
         // Lambdas bound with = cannot refer to themselves (unlike fun f(x) = ...)
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 f = |x -> f(x)|
                 f
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.UnboundVariable })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.UnboundVariable })
     }
 
     @Test

@@ -5,7 +5,6 @@ import klein.types.SimpleType.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class IdentInferTest {
     @Test
@@ -45,12 +44,11 @@ class IdentInferTest {
 
     @Test
     fun ident_unbound_simple() {
-        val result = inferWithErrors("x")
+        val errors = inferErrors("x")
 
-        assertTrue(result.hasErrors)
-        assertEquals(1, result.errors.size)
+        assertEquals(1, errors.size)
 
-        val error = result.errors[0]
+        val error = errors[0]
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("x", error.name)
         assertEquals("Unbound variable: x", error.message)
@@ -61,12 +59,11 @@ class IdentInferTest {
         val env = TypeEnv.empty()
         env.bind("name", TString)
 
-        val result = inferWithErrors("naem", env)
+        val errors = inferErrors("naem", env)
 
-        assertTrue(result.hasErrors)
-        assertEquals(1, result.errors.size)
+        assertEquals(1, errors.size)
 
-        val error = result.errors[0]
+        val error = errors[0]
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("naem", error.name)
         assertEquals("Unbound variable: naem", error.message)

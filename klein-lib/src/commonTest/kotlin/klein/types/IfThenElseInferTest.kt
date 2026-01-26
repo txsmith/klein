@@ -18,9 +18,9 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_conditionMustBeBool() {
-        val result = inferWithErrors("if 1 then 2 else 3")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("if 1 then 2 else 3")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -50,9 +50,9 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_noElse_conditionMustBeBool() {
-        val result = inferWithErrors("if 1 then 2")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("if 1 then 2")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -77,8 +77,8 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_conditionUsedInElse() {
-        val result = inferWithErrors("|x -> |y -> if x then y else x||")
-        assertEquals(0, result.errors.size, "Intersection from conditional should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> |y -> if x then y else x||")
+        assertEquals(0, errors.size, "Intersection from conditional should type-check: $errors")
     }
 
     @Test

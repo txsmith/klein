@@ -8,30 +8,30 @@ import kotlin.test.assertTrue
 class TypeDefErrorTest {
     @Test
     fun undeclaredTypeParamInConstructor_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Foo = Bar { value: 'A }
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun unknownTypeInField_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Foo = Foo { x: Bar }
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun duplicateConstructorName_acrossTypes_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
                 type Result<'A, 'E> = None | Ok { value: 'A } | Err { error: 'E }
@@ -39,71 +39,71 @@ class TypeDefErrorTest {
                 None
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun duplicateTypeName_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Foo = Foo { x: Num }
                 type Foo = Bar { y: String }
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun sameNamedConstructor_sumType_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Foo = Foo { x: Num } | Bar
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun constructorArityError_tooManyArgs() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
                 Some(1, 2)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.ArityMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
     fun constructorArityError_tooFewArgs() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Pair<'A, 'B> = Pair { first: 'A, second: 'B }
 
                 Pair(1)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.ArityMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
     fun constructorArityError_argsOnBareConstructor() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
                 None(42)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
@@ -123,61 +123,61 @@ class TypeDefErrorTest {
 
     @Test
     fun constructorWrongFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Box = Box { value: Num }
 
                 Box("not a number")
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
     }
 
     @Test
     fun fieldAccessOnBareConstructor() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
                 None.value
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.MissingField })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.MissingField })
     }
 
     @Test
     fun undefinedConstructor_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 Cons(1, Nil)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun constructorAsValue_wrongContext() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
                 Some + 1
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
     }
 
     @Test
     fun bareConstructorAsFunction_error() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
@@ -185,41 +185,41 @@ class TypeDefErrorTest {
                 f(42)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun constructorFieldTypeMismatch_nested() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
 
                 Cons(1, Cons(2, "not a list"))
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
     }
 
     @Test
     fun constructorWithWrongFieldOrder() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Person = Person { name: String, age: Num }
 
                 Person(25, "Alice")
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
     }
 
     @Test
     fun fieldAccessOnParentType_nonCommonField() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Shape = Circle { radius: Num } | Rectangle { width: Num, height: Num }
 
@@ -227,14 +227,14 @@ class TypeDefErrorTest {
                 getRadius(if true then Circle(5) else Rectangle(3, 4))
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.MissingField })
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.MissingField })
     }
 
     @Test
     fun mutualRecursion_brokenReference() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Foo<'A> = Foo { bar: Bar<'A> }
                 type Bar<'A> = Bar { foo: Baz<'A> }
@@ -242,26 +242,26 @@ class TypeDefErrorTest {
                 Foo(Bar(Nil))
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun infiniteExpansion_doubleNesting() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Bad<'A> = Bad { x: Bad<Bad<'A>> }
 
                 Bad(Bad(42))
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_tooManyArgs_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 type Bad = Bad { items: List<Num, String> }
@@ -269,13 +269,13 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_tooManyArgs_moreExcess_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = None | Some { value: 'A }
                 type Bad = Bad { opt: Option<Num, String, Bool> }
@@ -283,13 +283,13 @@ class TypeDefErrorTest {
                 Bad(None)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_tooFewArgs_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Map<'K, 'V> = Empty | Entry { key: 'K, value: 'V, rest: Map<'K, 'V> }
                 type Bad = Bad { m: Map<String> }
@@ -297,13 +297,13 @@ class TypeDefErrorTest {
                 Bad(Empty)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_noArgsForGeneric_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 type Bad = Bad { items: List }
@@ -311,13 +311,13 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_argsOnNonGenericType_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type MyBool = True | False
                 type Bad = Bad { flag: MyBool<Num> }
@@ -325,13 +325,13 @@ class TypeDefErrorTest {
                 Bad(True)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_nestedError_innerTypeWrongArity_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 type Option<'A> = None | Some { value: 'A }
@@ -340,13 +340,13 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test
     fun typeArity_nestedError_outerTypeWrongArity_inFieldType() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 type Option<'A> = None | Some { value: 'A }
@@ -355,6 +355,6 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty())
+        assertTrue(errors.isNotEmpty())
     }
 }

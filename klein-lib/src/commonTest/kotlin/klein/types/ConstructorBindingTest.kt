@@ -134,49 +134,49 @@ class ConstructorBindingTest {
 
     @Test
     fun error_wrongArity_tooMany() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Option<'A> = Some { value: 'A } | None
                 Some(1, 2)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Expected error for too many arguments")
+        assertTrue(errors.isNotEmpty(), "Expected error for too many arguments")
     }
 
     @Test
     fun error_wrongArity_tooFew() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Pair<'A, 'B> = Pair { fst: 'A, snd: 'B }
                 Pair(1)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Expected error for too few arguments")
+        assertTrue(errors.isNotEmpty(), "Expected error for too few arguments")
     }
 
     @Test
     fun error_bareConstructorCalled() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
                 Nil(1)
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Expected error for calling bare constructor")
+        assertTrue(errors.isNotEmpty(), "Expected error for calling bare constructor")
     }
 
     @Test
     fun error_typeMismatch() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Box = Box { value: Num }
                 Box("hello")
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Expected error for type mismatch")
+        assertTrue(errors.isNotEmpty(), "Expected error for type mismatch")
     }
 }

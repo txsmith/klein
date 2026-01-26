@@ -128,8 +128,8 @@ class NominalStructuralTest {
 
     @Test
     fun nominalInRecordField_structuralCannotReplaceNestedNominal() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 type Money = Money { value: Num }
                 type Account = Account { balance: Money, owner: String }
@@ -137,6 +137,6 @@ class NominalStructuralTest {
                 Account({ value = 100 }, "Bob")
                 """.trimIndent(),
             )
-        assertTrue(result.errors.isNotEmpty(), "Cannot construct Account with structural record instead of Money")
+        assertTrue(errors.isNotEmpty(), "Cannot construct Account with structural record instead of Money")
     }
 }

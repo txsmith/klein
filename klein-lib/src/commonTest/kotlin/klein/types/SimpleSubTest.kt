@@ -80,23 +80,23 @@ class SimpleSubTest {
 
     @Test
     fun booleans_succTrue_error() {
-        val result = inferWithErrors("true + 1")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("true + 1")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
     fun booleans_succNotX_error() {
-        val result = inferWithErrors("|x -> (not x) + 1|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("|x -> (not x) + 1|")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
     fun booleans_notRecordField_error() {
-        val result = inferWithErrors("|x -> not x.f|({ f = 123 })")
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        val errors = inferErrors("|x -> not x.f|({ f = 123 })")
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -141,16 +141,16 @@ class SimpleSubTest {
 
     @Test
     fun records_missingField_error() {
-        val result = inferWithErrors("{ a = 123, b = true }.c")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        val errors = inferErrors("{ a = 123, b = true }.c")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
     fun records_missingFieldInFunction_error() {
-        val result = inferWithErrors("|x -> { a = x }.b|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        val errors = inferErrors("|x -> { a = x }.b|")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test
@@ -356,8 +356,8 @@ class SimpleSubTest {
 
     @Test
     fun booleans_notFunctionAppliedToNonFunction_error() {
-        val result = inferWithErrors("|f -> |x -> not f(x.u)||(false)")
-        assertTrue(result.errors.isNotEmpty())
+        val errors = inferErrors("|f -> |x -> not f(x.u)||(false)")
+        assertTrue(errors.isNotEmpty())
     }
 
     @Test

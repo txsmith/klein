@@ -40,25 +40,25 @@ class FunctionInferTest {
     fun apply_arityMismatch() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        val result = inferWithErrors("f(1, 2)", env)
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.ArityMismatch)
+        val errors = inferErrors("f(1, 2)", env)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ArityMismatch)
     }
 
     @Test
     fun apply_typeMismatch() {
         val env = TypeEnv.empty()
         env.bind("f", TFun(listOf(TNum), TString))
-        val result = inferWithErrors("f(\"hello\")", env)
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("f(\"hello\")", env)
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
     fun apply_unboundFunction() {
-        val result = inferWithErrors("unknown(1)")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.UnboundVariable)
+        val errors = inferErrors("unknown(1)")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.UnboundVariable)
     }
 
     @Test
@@ -87,16 +87,16 @@ class FunctionInferTest {
 
     @Test
     fun lambda_duplicateParam() {
-        val result = inferWithErrors("|x, x -> x|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.DuplicateParameter)
+        val errors = inferErrors("|x, x -> x|")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.DuplicateParameter)
     }
 
     @Test
     fun lambda_tripleDuplicateParam() {
-        val result = inferWithErrors("|x, x, x -> x|")
-        assertEquals(2, result.errors.size)
-        assertTrue(result.errors.all { it is TypeError.DuplicateParameter })
+        val errors = inferErrors("|x, x, x -> x|")
+        assertEquals(2, errors.size)
+        assertTrue(errors.all { it is TypeError.DuplicateParameter })
     }
 
     @Test
@@ -116,8 +116,8 @@ class FunctionInferTest {
 
     @Test
     fun selfApplication_basic() {
-        val result = inferWithErrors("|x -> x(x)|")
-        assertEquals(0, result.errors.size, "Self-application should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> x(x)|")
+        assertEquals(0, errors.size, "Self-application should type-check: $errors")
     }
 
     @Test
@@ -127,31 +127,31 @@ class FunctionInferTest {
 
     @Test
     fun selfApplication_triple() {
-        val result = inferWithErrors("|x -> x(x)(x)|")
-        assertEquals(0, result.errors.size, "Triple self-application should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> x(x)(x)|")
+        assertEquals(0, errors.size, "Triple self-application should type-check: $errors")
     }
 
     @Test
     fun selfApplication_mixed1() {
-        val result = inferWithErrors("|x -> |y -> x(y)(x)||")
-        assertEquals(0, result.errors.size, "Mixed self-application should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> |y -> x(y)(x)||")
+        assertEquals(0, errors.size, "Mixed self-application should type-check: $errors")
     }
 
     @Test
     fun selfApplication_mixed2() {
-        val result = inferWithErrors("|x -> |y -> x(x)(y)||")
-        assertEquals(0, result.errors.size, "Mixed self-application 2 should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> |y -> x(x)(y)||")
+        assertEquals(0, errors.size, "Mixed self-application 2 should type-check: $errors")
     }
 
     @Test
     fun selfApplication_omega() {
-        val result = inferWithErrors("|x -> x(x)|(|x -> x(x)|)")
-        assertEquals(0, result.errors.size, "Omega combinator should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> x(x)|(|x -> x(x)|)")
+        assertEquals(0, errors.size, "Omega combinator should type-check: $errors")
     }
 
     @Test
     fun selfApplication_inRecord() {
-        val result = inferWithErrors("|x -> { l = x(x), r = x }|")
-        assertEquals(0, result.errors.size, "Self-application in record should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> { l = x(x), r = x }|")
+        assertEquals(0, errors.size, "Self-application in record should type-check: $errors")
     }
 }
