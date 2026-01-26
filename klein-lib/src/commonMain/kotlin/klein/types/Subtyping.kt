@@ -4,7 +4,13 @@ import klein.SourceSpan
 import klein.types.SimpleType.*
 import klein.types.TypeSimplifier.simplifyCanonical
 
-class Subtyping {
+class Subtyping(
+    private val env: TypeEnv,
+) {
+    private fun typeLookup(name: String): TypeDefInfo? = env.lookupTypeDef(name)
+
+    private fun ctorLookup(name: String): ConstructorInfo? = env.lookupConstructor(name)
+
     private val cache = mutableSetOf<Pair<SimpleType, SimpleType>>()
     private val errors = mutableListOf<TypeError>()
 
@@ -31,6 +37,12 @@ class Subtyping {
 
         when {
             lhs === rhs -> return
+
+            lhs is TNum && rhs is TNum -> return
+            lhs is TString && rhs is TString -> return
+            lhs is TBool && rhs is TBool -> return
+            lhs is TNull && rhs is TNull -> return
+            lhs is TUnit && rhs is TUnit -> return
 
             lhs is TVar -> {
                 if (rhs.level <= lhs.level) {
@@ -71,7 +83,7 @@ class Subtyping {
                 for ((name, rhsType) in rhs.fields) {
                     val lhsType = lhs.fields[name]
                     if (lhsType == null) {
-                        errors.add(TypeError.MissingField(name, simplifyCanonical(lhs), span))
+                        errors.add(TypeError.MissingField(name, simplifyCanonical(lhs, env), span))
                     } else {
                         constrain(lhsType, rhsType, span)
                     }
@@ -91,17 +103,47 @@ class Subtyping {
 
             // Null NOT <: T for non-optional T (null safety)
             lhs is TNull -> {
-                errors.add(TypeError.NullNotAllowed(simplifyCanonical(rhs), span))
+                errors.add(TypeError.NullNotAllowed(simplifyCanonical(rhs, env), span))
             }
 
-            lhs is TNum && rhs is TNum -> return
-            lhs is TString && rhs is TString -> return
-            lhs is TBool && rhs is TBool -> return
-            lhs is TNull && rhs is TNull -> return
-            lhs is TUnit && rhs is TUnit -> return
+            lhs is TRef && rhs is TRecord -> {
+                constrain(lhs.expandToStructure(::typeLookup), rhs, span)
+            }
+
+            lhs is TRef && rhs is TRef -> {
+                val lhsTypeDef =
+                    if (lhs.name == rhs.name) {
+                        typeLookup(lhs.name) ?: error("Type '${lhs.name}' not registered")
+                    } else {
+                        val lhsCtor = ctorLookup(lhs.name)
+                        if (lhsCtor == null || lhsCtor.parentType != rhs.name) {
+                            errors.add(TypeError.TypeMismatch(simplifyCanonical(rhs, env), simplifyCanonical(lhs, env), span))
+                            return
+                        }
+                        typeLookup(lhs.name) ?: error("Unknown constructor type '${lhs.name}'")
+                    }
+                val rhsTypeDef = typeLookup(rhs.name) ?: error("Type '${rhs.name}' not registered")
+
+                val lhsApplied =
+                    lhsTypeDef.typeParams
+                        .map { it.name }
+                        .zip(lhs.typeArgs)
+                        .toMap()
+                val rhsApplied = rhsTypeDef.typeParams.zip(rhs.typeArgs).associate { (p, arg) -> p.name to (p.variance to arg) }
+
+                for ((name, lhsArg) in lhsApplied) {
+                    val (variance, rhsArg) = rhsApplied.getValue(name)
+                    when (variance) {
+                        Variance.Covariant -> constrain(lhsArg, rhsArg, span)
+                        Variance.Contravariant -> constrain(rhsArg, lhsArg, span)
+                        Variance.Invariant, Variance.Bivariant -> constrainEqual(lhsArg, rhsArg, span)
+                    }
+                }
+            }
+
             else -> {
                 // Fall-through handles: T? NOT <: T (no implicit unwrap), and other mismatches
-                errors.add(TypeError.TypeMismatch(simplifyCanonical(rhs), simplifyCanonical(lhs), span))
+                errors.add(TypeError.TypeMismatch(simplifyCanonical(rhs, env), simplifyCanonical(lhs, env), span))
             }
         }
     }

@@ -38,7 +38,7 @@ object Klein {
 
         return InferenceResult(
             program = program,
-            type = TypeSimplifier.simplifyCanonical(result.type),
+            type = TypeSimplifier.simplifyCanonical(result.type, result.env),
             errors = result.errors,
         )
     }

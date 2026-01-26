@@ -13,12 +13,18 @@ import klein.types.SimpleType.*
  *
  * Reference: SimpleSub paper - https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
+data class RefType(
+    val name: String,
+    val args: List<CompactType>,
+)
+
 data class CompactType(
     val vars: Set<TVar> = emptySet(),
     val prims: Set<PrimType> = emptySet(),
     val rec: Map<String, CompactType>? = null,
     val func: Pair<List<CompactType>, CompactType>? = null,
     val optional: CompactType? = null,
+    val refs: Set<RefType> = emptySet(),
 ) {
     enum class PrimType { Num, String, Bool, Null, Unit }
 
@@ -37,6 +43,11 @@ data class CompactType(
         fun record(fields: Map<String, CompactType>) = CompactType(rec = fields)
 
         fun optional(inner: CompactType) = CompactType(optional = inner)
+
+        fun ref(
+            name: String,
+            args: List<CompactType>,
+        ) = CompactType(refs = setOf(RefType(name, args)))
 
         fun fromSimpleType(ty: SimpleType): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<TVar, Boolean>, TVar>()
@@ -61,7 +72,7 @@ data class CompactType(
                             go(ty.result, pol, emptySet(), inProgress),
                         )
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go(v, pol, emptySet(), inProgress) })
-                    is TRef -> TODO("TRef not yet supported in CompactType conversion")
+                    is TRef -> CompactType.ref(ty.name, ty.typeArgs.map { go(it, pol, emptySet(), inProgress) })
                     is TVar -> {
                         val key = ty to pol
 
@@ -154,7 +165,7 @@ data class CompactType(
                             go0(ty.result, pol),
                         )
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
-                    is TRef -> TODO("TRef not yet supported in CompactType canonicalization")
+                    is TRef -> CompactType.ref(ty.name, ty.typeArgs.map { go0(it, pol) })
                     is TVar -> CompactType(vars = closeOver(setOf(ty), pol))
                 }
 
@@ -193,6 +204,7 @@ data class CompactType(
                                 params.map { go1(it, !pol, newInProgress) } to go1(result, pol, newInProgress)
                             },
                         optional = merged.optional?.let { go1(it, pol, newInProgress) },
+                        refs = merged.refs.map { RefType(it.name, it.args.map { arg -> go1(arg, pol, newInProgress) }) }.toSet(),
                     )
 
                 val recVar = recursive[key]
@@ -215,6 +227,7 @@ data class CompactType(
     ): CompactType {
         val mergedVars = this.vars + other.vars
         val mergedPrims = this.prims + other.prims
+        val mergedRefs = this.refs + other.refs
 
         val mergedRec =
             when {
@@ -269,10 +282,11 @@ data class CompactType(
             rec = mergedRec,
             func = mergedFun,
             optional = mergedOptional,
+            refs = mergedRefs,
         )
     }
 
-    fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null
+    fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null && refs.isEmpty()
 }
 
 data class CompactTypeScheme(

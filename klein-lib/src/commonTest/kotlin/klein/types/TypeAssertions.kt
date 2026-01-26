@@ -10,16 +10,16 @@ import kotlin.test.assertEquals
 fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): Type = Klein.infer(source, env).type
+): Type {
+    val result = Klein.infer(source, env)
+    check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
+    return result.type
+}
 
-/**
- * Infer types and return full result including errors.
- * Useful for testing error cases.
- */
-fun inferWithErrors(
+fun inferErrors(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): Klein.InferenceResult = Klein.infer(source, env)
+): List<TypeError> = Klein.infer(source, env).errors
 
 /**
  * Assert that two Types are equal.

@@ -123,5 +123,35 @@ sealed class SimpleType {
     ) : SimpleType() {
         override val level: Int
             get() = typeArgs.maxOfOrNull { it.level } ?: 0
+
+        private var _expandedStructure: TRecord? = null
+
+        fun expandToStructure(typeLookup: (String) -> TypeDefInfo?): TRecord {
+            _expandedStructure?.let { return it }
+
+            val typeDef = typeLookup(name) ?: error("Type '$name' not registered")
+            check(typeArgs.size == typeDef.typeParams.size) {
+                "Type '$name' expects ${typeDef.typeParams.size} args but got ${typeArgs.size}"
+            }
+
+            val substitution =
+                typeDef.typeParams.zip(typeArgs).associate { (param, arg) ->
+                    param.tvar to arg
+                }
+
+            fun substitute(ty: SimpleType): SimpleType =
+                when (ty) {
+                    is TVar -> substitution[ty] ?: ty
+                    is TFun -> TFun(ty.params.map { substitute(it) }, substitute(ty.result))
+                    is TRecord -> TRecord(ty.fields.mapValues { substitute(it.value) })
+                    is TOptional -> TOptional(substitute(ty.inner))
+                    is TRef -> TRef(ty.name, ty.typeArgs.map { substitute(it) }, ty.span)
+                    else -> ty
+                }
+
+            return TRecord(typeDef.iface.fields.mapValues { substitute(it.value) }).also {
+                _expandedStructure = it
+            }
+        }
     }
 }

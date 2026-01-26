@@ -15,7 +15,7 @@ data class ProgramResult(
 
 class Typer {
     private val errors = mutableListOf<TypeError>()
-    private val subtyping = Subtyping()
+    private lateinit var subtyping: Subtyping
 
     fun getErrors(): List<TypeError> = errors + subtyping.getErrors()
 
@@ -23,6 +23,7 @@ class Typer {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
+        subtyping = Subtyping(env)
         val (type, exprTypes) = inferTopLevelStmts(program.stmts, env)
         return ProgramResult(type, env, getErrors(), exprTypes)
     }
@@ -364,8 +365,9 @@ class Typer {
         typeDefs: List<TypeDef>,
         env: TypeEnv,
     ) {
+        val polyEnv = env.enterBindingScope() // Ensure we create lvl-1 TVars so they get generalized
         for (typeDef in typeDefs) {
-            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, env.freshVar()) }
+            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, polyEnv.freshVar()) }
 
             // Register the sum type
             env.registerTypeDef(
@@ -392,7 +394,7 @@ class Typer {
                 val ctorTypeParams =
                     typeParams
                         .filter { it.name in usedTypeVars }
-                        .map { it.copy(tvar = env.freshVar()) }
+                        .map { it.copy(tvar = polyEnv.freshVar()) }
 
                 env.registerConstructor(
                     ConstructorInfo(

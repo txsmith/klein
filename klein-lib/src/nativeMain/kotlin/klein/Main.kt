@@ -158,9 +158,9 @@ private fun infer(
 
         fun formatType(type: SimpleType): String =
             when (format) {
-                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type))
-                TypeFormat.PRE_CANONICAL -> Type.print(TypeSimplifier.simplify(type))
-                TypeFormat.IR_COMPACT -> TypeSimplifier.simplify(type).toString()
+                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
+                TypeFormat.PRE_CANONICAL -> Type.print(TypeSimplifier.simplify(type, result.env))
+                TypeFormat.IR_COMPACT -> TypeSimplifier.simplify(type, result.env).toString()
                 TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
             }
 

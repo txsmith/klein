@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class TypeSimplifierTest {
-    private fun simplified(type: SimpleType): Type = TypeSimplifier.simplify(type)
+    private fun simplified(type: SimpleType): Type = TypeSimplifier.simplify(type, TypeEnv.empty())
 
     @Test
     fun simplify_primitives_unchanged() {

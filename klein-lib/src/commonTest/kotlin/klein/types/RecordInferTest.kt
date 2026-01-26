@@ -45,7 +45,9 @@ class RecordInferTest {
 
     @Test
     fun duplicateField_usesLastValue() {
-        assertType(Type.Record(mapOf("x" to Type.Str)), infer("{ x = 1, x = \"hello\" }"))
+        val result = inferWithErrors("{ x = 1, x = \"hello\" }")
+        assertEquals(1, result.errors.size)
+        assertTrue(result.errors[0] is TypeError.DuplicateField)
     }
 
     @Test

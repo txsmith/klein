@@ -13,21 +13,22 @@ import klein.types.SimpleType.TVar
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
 object TypeSimplifier {
-    fun simplify(type: SimpleType): Type {
+    fun simplify(
+        type: SimpleType,
+        env: TypeEnv,
+    ): Type {
         val scheme = CompactType.fromSimpleType(type)
         val simplified = simplifyType(scheme)
-        return coalesceType(simplified)
+        return coalesceType(simplified, env)
     }
 
-    /**
-     * Like simplify, but uses canonicalization to merge co-occurring recursive types.
-     * This produces simpler types when multiple recursive types with different cycle
-     * lengths are merged (e.g., in a union).
-     */
-    fun simplifyCanonical(type: SimpleType): Type {
+    fun simplifyCanonical(
+        type: SimpleType,
+        env: TypeEnv,
+    ): Type {
         val scheme = CompactType.canonicalizeType(type)
         val simplified = simplifyType(scheme)
-        return coalesceType(simplified)
+        return coalesceType(simplified, env)
     }
 
     /**
@@ -84,6 +85,7 @@ object TypeSimplifier {
                     params.map { analyze(it, !pol) } to analyze(result, pol)
                 }
             val optionalThunk = ty.optional?.let { analyze(it, pol) }
+            val refThunks = ty.refs.map { ref -> ref.name to ref.args.map { analyze(it, pol) } }
 
             // Return a thunk that applies substitutions during reconstruction
             return {
@@ -107,6 +109,7 @@ object TypeSimplifier {
                             paramThunks.map { it() } to resultThunk()
                         },
                     optional = optionalThunk?.invoke(),
+                    refs = refThunks.map { (name, argThunks) -> RefType(name, argThunks.map { it() }) }.toSet(),
                 )
             }
         }
@@ -187,7 +190,10 @@ object TypeSimplifier {
      * Uses hash-consing to tie recursive type knots tighter.
      * Variable names are assigned on first encounter during traversal.
      */
-    fun coalesceType(cty: CompactTypeScheme): Type {
+    fun coalesceType(
+        cty: CompactTypeScheme,
+        env: TypeEnv,
+    ): Type {
         val varNames = mutableMapOf<TVar, String>()
 
         fun varName(v: TVar): String =
@@ -266,6 +272,36 @@ object TypeSimplifier {
             ty.optional?.let { inner ->
                 val innerType = go(inner, pol, newInProcess)
                 components.add(Type.Optional(innerType))
+            }
+
+            // Add refs - in positive position, try to simplify sibling constructors to parent
+            val parentTypes = ty.refs.mapNotNull { env.lookupConstructor(it.name)?.parentType }.toSet()
+            val allSiblings =
+                pol &&
+                    ty.refs.size > 1 &&
+                    parentTypes.size == 1 &&
+                    ty.vars.isEmpty() &&
+                    ty.prims.isEmpty() &&
+                    ty.rec == null &&
+                    ty.func == null &&
+                    ty.optional == null
+            if (allSiblings) {
+                val parentName = parentTypes.single()
+                val parentDef = env.lookupTypeDef(parentName) ?: error("Parent type '$parentName' not registered")
+                val mergedArgs =
+                    parentDef.typeParams.map { parentParam ->
+                        ty.refs
+                            .mapNotNull { ref ->
+                                val ctorDef = env.lookupTypeDef(ref.name) ?: error("Constructor type '${ref.name}' not registered")
+                                val paramIndex = ctorDef.typeParams.indexOfFirst { it.name == parentParam.name }
+                                if (paramIndex >= 0) ref.args[paramIndex] else null
+                            }.fold(CompactType.empty) { acc, arg -> acc.merge(arg, pol) }
+                    }
+                components.add(Type.Ref(parentName, mergedArgs.map { go(it, pol, newInProcess) }))
+            } else {
+                for (ref in ty.refs) {
+                    components.add(Type.Ref(ref.name, ref.args.map { go(it, pol, newInProcess) }))
+                }
             }
 
             // In positive position, if Null appears with other types, convert to optional

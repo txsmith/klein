@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SubtypingTest {
-    private fun subtype(): Subtyping = Subtyping()
+    private fun subtype(): Subtyping = Subtyping(TypeEnv.empty())
 
     @Test
     fun intSubtypeOfInt() {
