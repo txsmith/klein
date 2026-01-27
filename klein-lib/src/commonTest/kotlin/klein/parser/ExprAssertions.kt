@@ -226,7 +226,7 @@ fun appliedType(
 fun functionType(
     paramType: TypeExpr,
     returnType: TypeExpr,
-) = FunctionTypeExpr(paramType, returnType, noSpan)
+) = FunctionTypeExpr(listOf(paramType), returnType, noSpan)
 
 fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSpan)
 
@@ -259,7 +259,7 @@ fun TypeExpr.stripSpan(): TypeExpr =
         is TypeName -> TypeName(name, noSpan)
         is TypeVar -> TypeVar(name, noSpan)
         is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan)
-        is FunctionTypeExpr -> FunctionTypeExpr(paramType.stripSpan(), returnType.stripSpan(), noSpan)
+        is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
     }

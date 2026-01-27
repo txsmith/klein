@@ -453,7 +453,7 @@ class Typer {
                 }
             }
             is FunctionTypeExpr -> {
-                resolveTypeExpr(typeExpr.paramType, env)
+                for (param in typeExpr.paramTypes) resolveTypeExpr(param, env)
                 resolveTypeExpr(typeExpr.returnType, env)
             }
             is TupleTypeExpr -> {
@@ -474,7 +474,7 @@ class Typer {
             is TypeVar -> setOf(typeExpr.name)
             is TypeName -> emptySet()
             is AppliedTypeExpr -> typeExpr.args.flatMap { collectTypeVars(it) }.toSet()
-            is FunctionTypeExpr -> collectTypeVars(typeExpr.paramType) + collectTypeVars(typeExpr.returnType)
+            is FunctionTypeExpr -> typeExpr.paramTypes.flatMap { collectTypeVars(it) }.toSet() + collectTypeVars(typeExpr.returnType)
             is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVars(it) }.toSet()
             is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVars(it.second) }.toSet()
         }
@@ -540,9 +540,12 @@ class Typer {
                 }
 
                 is FunctionTypeExpr -> {
-                    val paramChanged = update(typeExpr.paramType, ownerName, polarity.flip())
-                    val returnChanged = update(typeExpr.returnType, ownerName, polarity)
-                    paramChanged || returnChanged
+                    var changed = false
+                    for (param in typeExpr.paramTypes) {
+                        changed = update(param, ownerName, polarity.flip()) || changed
+                    }
+                    changed = update(typeExpr.returnType, ownerName, polarity) || changed
+                    changed
                 }
 
                 is TupleTypeExpr -> {
@@ -670,17 +673,21 @@ class Typer {
 
                 is FunctionTypeExpr ->
                     TFun(
-                        listOf(convertToSimpleType(typeExpr.paramType)),
+                        typeExpr.paramTypes.map { convertToSimpleType(it) },
                         convertToSimpleType(typeExpr.returnType),
                     )
 
                 is TupleTypeExpr -> {
-                    val fields =
-                        typeExpr.elements
-                            .mapIndexed { i, elem ->
-                                "_$i" to convertToSimpleType(elem)
-                            }.toMap()
-                    TRecord(fields)
+                    if (typeExpr.elements.isEmpty()) {
+                        TUnit
+                    } else {
+                        val fields =
+                            typeExpr.elements
+                                .mapIndexed { i, elem ->
+                                    "_$i" to convertToSimpleType(elem)
+                                }.toMap()
+                        TRecord(fields)
+                    }
                 }
 
                 is RecordTypeExpr ->

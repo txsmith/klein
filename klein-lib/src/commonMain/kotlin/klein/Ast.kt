@@ -64,7 +64,7 @@ data class TypeVar(
 ) : TypeExpr()
 
 data class FunctionTypeExpr(
-    val paramType: TypeExpr,
+    val paramTypes: List<TypeExpr>,
     val returnType: TypeExpr,
     override val span: SourceSpan,
 ) : TypeExpr()

@@ -1655,8 +1655,17 @@ class TypeDefTest {
     }
 
     @Test
-    fun emptyTupleAsFieldTypeNotSupported() {
-        assertFailsWith<ParseError> { parseTypeDef("type Unit = Unit { value: () }") }
+    fun emptyTupleAsFieldType_parsesAsUnit() {
+        assertTypeDefEquals(
+            parseTypeDef("type Unit = Unit { value: () }"),
+            typeDef(
+                "Unit",
+                constructors =
+                    arrayOf(
+                        constructor("Unit", field("value", tupleType())),
+                    ),
+            ),
+        )
     }
 
     @Test

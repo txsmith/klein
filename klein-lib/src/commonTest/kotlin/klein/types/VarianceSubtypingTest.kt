@@ -1,10 +1,8 @@
 package klein.types
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-@Ignore("Type definitions not yet implemented - these tests specify expected variance-subtyping behavior")
 class VarianceSubtypingTest {
     // ============================================================
     // Covariance: Box<Dog> <: Box<Animal>
@@ -107,10 +105,10 @@ class VarianceSubtypingTest {
             inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> () }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
                 type RefAnimal = RefAnimal { r: Ref<Animal> }
 
-                RefAnimal(Ref(|() -> Dog("Fido", "Labrador")|, |d -> d.breed|)).r
+                RefAnimal(Ref(|Dog("Fido", "Labrador")|, |d -> d.breed|)).r
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Ref<Dog> should not subtype Ref<Animal>")
@@ -124,10 +122,10 @@ class VarianceSubtypingTest {
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type CatHolder = CatHolder { c: Cat }
                 type DogHolder = DogHolder { d: Dog }
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> () }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
                 type RefDog = RefDog { r: Ref<Dog> }
 
-                RefDog(Ref(|() -> Cat("Whiskers")|, |c -> CatHolder(c).c.name|)).r
+                RefDog(Ref(|Cat("Whiskers")|, |c -> CatHolder(c).c.name|)).r
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Ref<Cat> should not subtype Ref<Dog>")
@@ -141,10 +139,10 @@ class VarianceSubtypingTest {
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type DogHolder = DogHolder { d: Dog }
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> () }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
                 type RefDog = RefDog { r: Ref<Dog> }
 
-                RefDog(Ref(|() -> Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.breed|)).r
+                RefDog(Ref(|Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.breed|)).r
                 """.trimIndent(),
             ),
         )
@@ -211,7 +209,7 @@ class VarianceSubtypingTest {
     @Test
     fun function_animalToDogSubtypesDogToAnimal() {
         assertType(
-            "Dog -> Animal",
+            "(Dog) -> Animal",
             infer(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
@@ -253,7 +251,7 @@ class VarianceSubtypingTest {
                 type Producer<'A> = Producer { produce: () -> 'A }
                 type ProducerAnimal = ProducerAnimal { p: Producer<Animal> }
 
-                ProducerAnimal(Producer(|() -> Dog("Fido", "Labrador")|)).p
+                ProducerAnimal(Producer(|Dog("Fido", "Labrador")|)).p
                 """.trimIndent(),
             ),
         )
@@ -269,7 +267,7 @@ class VarianceSubtypingTest {
                 type Producer<'A> = Producer { produce: () -> 'A }
                 type ProducerDog = ProducerDog { p: Producer<Dog> }
 
-                ProducerDog(Producer(|() -> AnimalHolder(Cat("Whiskers")).a|)).p
+                ProducerDog(Producer(|AnimalHolder(Cat("Whiskers")).a|)).p
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Producer<Animal> should not subtype Producer<Dog>")
@@ -330,7 +328,7 @@ class VarianceSubtypingTest {
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type AnimalHolder = AnimalHolder { a: Animal }
-                type Transform<'A, 'B> = Transform { value: 'A, handler: 'B -> () }
+                type Transform<'A, 'B> = Transform { value: 'A, handler: 'B -> String }
                 type TransformAnimalDog = TransformAnimalDog { t: Transform<Animal, Dog> }
 
                 TransformAnimalDog(Transform(Dog("Fido", "Labrador"), |a -> AnimalHolder(a).a.name|)).t

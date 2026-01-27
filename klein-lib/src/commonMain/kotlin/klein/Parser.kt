@@ -217,7 +217,13 @@ class Parser(
         if (peek().kind == ARROW) {
             advance()
             val right = parseTypeExpr(typeParams)
-            return FunctionTypeExpr(left, right, left.span + right.span)
+            val paramTypes =
+                if (left is TupleTypeExpr && left.elements.isEmpty()) {
+                    emptyList()
+                } else {
+                    listOf(left)
+                }
+            return FunctionTypeExpr(paramTypes, right, left.span + right.span)
         }
 
         return left
@@ -259,18 +265,23 @@ class Parser(
 
             LPAREN -> {
                 advance()
-                val innerType = parseTypeExpr(typeParams)
-                if (peek().kind == COMMA) {
-                    val elements = mutableListOf(innerType)
-                    while (peek().kind == COMMA) {
-                        advance()
-                        elements.add(parseTypeExpr(typeParams))
-                    }
-                    val close = expectAndAdvance(RPAREN, message = "Expected ')'")
-                    TupleTypeExpr(elements, token.span + close.span)
+                if (peek().kind == RPAREN) {
+                    val close = advance()
+                    TupleTypeExpr(emptyList(), token.span + close.span)
                 } else {
-                    expectAndAdvance(RPAREN, message = "Expected ')'")
-                    innerType
+                    val innerType = parseTypeExpr(typeParams)
+                    if (peek().kind == COMMA) {
+                        val elements = mutableListOf(innerType)
+                        while (peek().kind == COMMA) {
+                            advance()
+                            elements.add(parseTypeExpr(typeParams))
+                        }
+                        val close = expectAndAdvance(RPAREN, message = "Expected ')'")
+                        TupleTypeExpr(elements, token.span + close.span)
+                    } else {
+                        expectAndAdvance(RPAREN, message = "Expected ')'")
+                        innerType
+                    }
                 }
             }
 

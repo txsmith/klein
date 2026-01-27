@@ -45,7 +45,13 @@ fun TypeExpr.prettyPrint(): String =
         is TypeName -> name
         is TypeVar -> "'$name"
         is AppliedTypeExpr -> "$name<${args.joinToString(", ") { it.prettyPrint() }}>"
-        is FunctionTypeExpr -> "(${paramType.prettyPrint()} -> ${returnType.prettyPrint()})"
+        is FunctionTypeExpr -> "(${if (paramTypes.isEmpty()) {
+            "()"
+        } else {
+            paramTypes.joinToString(
+                ", ",
+            ) { it.prettyPrint() }
+        }} -> ${returnType.prettyPrint()})"
         is TupleTypeExpr -> "(${elements.joinToString(", ") { it.prettyPrint() }})"
         is RecordTypeExpr -> "{ ${fields.joinToString(", ") { (n, t) -> "$n: ${t.prettyPrint()}" }} }"
     }

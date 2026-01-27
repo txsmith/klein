@@ -156,6 +156,8 @@ private fun infer(
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program, TypeEnv.empty())
 
+        println("Inference result:")
+
         fun formatType(type: SimpleType): String =
             when (format) {
                 TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
