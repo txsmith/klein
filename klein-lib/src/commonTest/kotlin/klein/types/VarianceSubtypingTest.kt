@@ -105,13 +105,31 @@ class VarianceSubtypingTest {
             inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type DogHolder = DogHolder { d: Dog }
                 type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
                 type RefAnimal = RefAnimal { r: Ref<Animal> }
 
-                RefAnimal(Ref(|Dog("Fido", "Labrador")|, |d -> d.breed|)).r
+                RefAnimal(Ref(|Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.name|)).r
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Ref<Dog> should not subtype Ref<Animal>")
+    }
+
+    @Test
+    fun invariant_unforcedRefCanUnifyWithRefAnimal() {
+        assertType(
+            "RefAnimal",
+            infer(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+                type RefAnimal = RefAnimal { r: Ref<Animal> }
+
+                refDog = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+                RefAnimal(refDog)
+                """.trimIndent(),
+            ),
+        )
     }
 
     @Test
@@ -152,6 +170,21 @@ class VarianceSubtypingTest {
     // Phantom types: Unused params default to invariance
     // This enables phantom types for type-level distinctions
     // ============================================================
+
+    @Test
+    fun phantom_canReferencePhantomTypeParam() {
+        assertType(
+            "PhantomBool",
+            infer(
+                """
+                type Phantom<'A> = Phantom { value: Num }
+                type PhantomBool = PhantomBool { p: Phantom<Bool> }
+
+                PhantomBool(Phantom(42))
+                """.trimIndent(),
+            ),
+        )
+    }
 
     @Test
     fun phantom_unusedParamIsInvariant_dogNotSubtypeAnimal() {
@@ -467,10 +500,12 @@ class VarianceSubtypingTest {
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-                type AnimalHolder = AnimalHolder { a: Animal }
                 type VAnimal = VAnimal { v: V<Animal> }
 
-                VAnimal(Cov(|Dog("Rex")|)).v
+                type Force = F { c: Cov<Dog> }
+
+                cov = F(Cov(|Dog("Rex")|)).c
+                VAnimal(cov)
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Cov<Dog> should not subtype V<Animal> - V is invariant")
@@ -515,10 +550,12 @@ class VarianceSubtypingTest {
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-                type AnimalHolder = AnimalHolder { a: Animal }
                 type VDog = VDog { v: V<Dog> }
 
-                VDog(Cont(|a -> AnimalHolder(a).a.name|)).v
+                type Force = F { c: Cont<Animal> }
+                contAnimal = F(Cont(|a -> a.name|)).c
+
+                VDog(contAnimal)
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty(), "Cont<Animal> should not subtype V<Dog> - V is invariant")

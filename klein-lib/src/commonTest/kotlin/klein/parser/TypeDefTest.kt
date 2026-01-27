@@ -1655,6 +1655,20 @@ class TypeDefTest {
     }
 
     @Test
+    fun functionTypeNoParams() {
+        assertTypeDefEquals(
+            parseTypeDef("type Thunk = Thunk { f: () -> Num }"),
+            typeDef(
+                "Thunk",
+                constructors =
+                    arrayOf(
+                        constructor("Thunk", field("f", functionType(typeName("Num")))),
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun emptyTupleAsFieldType_parsesAsUnit() {
         assertTypeDefEquals(
             parseTypeDef("type Unit = Unit { value: () }"),
