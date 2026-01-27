@@ -29,6 +29,11 @@ data class ConstructorInfo(
     val span: SourceSpan,
 )
 
+data class FunDefInfo(
+    val name: String,
+    val paramNames: List<String>,
+)
+
 enum class Variance {
     Bivariant,
     Covariant,

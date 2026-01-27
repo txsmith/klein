@@ -54,6 +54,7 @@ class Typer {
                 val typeVar = scopeEnv.freshVar()
                 funDefBindings[funDef.name] = funDef to typeVar
                 env.bind(funDef.name, typeVar)
+                env.registerFunDef(FunDefInfo(funDef.name, funDef.params))
             }
         }
 
@@ -145,9 +146,9 @@ class Typer {
             val childEnv = env.child(ImplicitParamContext.Available(implicitType))
             val bodyType = infer(body, childEnv)
             if (body.usesImplicitParam) {
-                TFun(listOf(implicitType), bodyType)
+                TFun(listOf(implicitType), emptyList(), bodyType)
             } else {
-                TFun(emptyList(), bodyType)
+                TFun(emptyList(), emptyList(), bodyType)
             }
         } else {
             val blockedContext =
@@ -162,7 +163,7 @@ class Typer {
                 childEnv.bind(name, type)
             }
             val bodyType = infer(body, childEnv)
-            TFun(paramTypes, bodyType)
+            TFun(paramTypes, emptyList(), bodyType)
         }
     }
 
@@ -174,14 +175,23 @@ class Typer {
             return inferSafeMethodCall(expr.callee, expr.args, expr.span, env)
         }
 
+        val calleeName =
+            when (expr.callee) {
+                is Ident -> expr.callee.name
+                is FieldAccess -> expr.callee.field
+                else -> null // TODO what if lambda?
+            }
+
         val calleeType = infer(expr.callee, env)
         val argTypes = expr.args.map { infer(it, env) }
         val resultType = env.freshVar()
 
+        val context = listOf(ConstraintContext.FunctionCall(calleeName?.let { env.lookupFunDef(it) }))
         subtyping.constrain(
             calleeType,
-            TFun(argTypes, resultType),
+            TFun(argTypes, expr.args.map { it.span }, resultType),
             expr.span,
+            context,
         )
 
         return resultType
@@ -197,7 +207,8 @@ class Typer {
         val argTypes = args.map { infer(it, env) }
         val returnType = env.freshVar()
 
-        val funType = TFun(argTypes, returnType)
+        val funType = TFun(argTypes, args.map { it.span }, returnType)
+
         subtyping.constrain(targetType, TOptional(TRecord(mapOf(callee.field to funType))), span)
 
         return TOptional(returnType)
@@ -408,15 +419,18 @@ class Typer {
                         span = constructor.span,
                     ),
                 )
+                env.registerFunDef(FunDefInfo(constructor.name, constructor.fields.map { it.name }))
 
-                env.registerTypeDef(
-                    TypeDefInfo(
-                        name = constructor.name,
-                        typeParams = ctorTypeParams,
-                        iface = TRecord(emptyMap()),
-                        span = constructor.span,
-                    ),
-                )
+                if (constructor.name != typeDef.name) {
+                    env.registerTypeDef(
+                        TypeDefInfo(
+                            name = constructor.name,
+                            typeParams = ctorTypeParams,
+                            iface = TRecord(emptyMap()),
+                            span = constructor.span,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -630,7 +644,7 @@ class Typer {
                     resultType
                 } else {
                     val fieldTypes = ctor.fields.map { ctorTypeDef.iface.fields[it.name]!! }
-                    TFun(fieldTypes, resultType)
+                    TFun(fieldTypes, emptyList(), resultType)
                 }
 
             env.bindPolymorphic(ctor.name, ctorType)
@@ -674,6 +688,7 @@ class Typer {
                 is FunctionTypeExpr ->
                     TFun(
                         typeExpr.paramTypes.map { convertToSimpleType(it) },
+                        typeExpr.paramTypes.map { it.span },
                         convertToSimpleType(typeExpr.returnType),
                     )
 

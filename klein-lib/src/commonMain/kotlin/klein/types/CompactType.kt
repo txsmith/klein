@@ -122,7 +122,7 @@ data class CompactType(
          *
          * This is akin to NFA-to-DFA powerset construction.
          */
-        fun canonicalizeType(ty: SimpleType): CompactTypeScheme {
+        fun canonicalizeType(ty: SimpleType, positive: Boolean = true): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<CompactType, Boolean>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
 
@@ -216,7 +216,7 @@ data class CompactType(
                 }
             }
 
-            val term = go1(go0(ty, pol = true), pol = true, inProgress = emptySet())
+            val term = go1(go0(ty, pol = positive), pol = positive, inProgress = emptySet())
             return CompactTypeScheme(term, recVars)
         }
     }

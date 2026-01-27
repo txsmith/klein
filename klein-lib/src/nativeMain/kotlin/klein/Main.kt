@@ -1,10 +1,6 @@
 package klein
 
-import klein.types.SimpleType
-import klein.types.TypeEnv
-import klein.types.TypePrinter
-import klein.types.TypeSimplifier
-import klein.types.Typer
+import klein.types.*
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -188,7 +184,11 @@ private fun infer(
         }
 
         for (error in result.errors) {
-            printError(source, error.span, error.message, rawErrors)
+            if (rawErrors) {
+                printRawError(error, result.env)
+            } else {
+                printError(source, error.span, error.render(result.env), rawOutput = false)
+            }
         }
     } catch (e: LexerError) {
         printError(source, e.span, e.message ?: "Lexer error", rawErrors)
@@ -196,6 +196,15 @@ private fun infer(
         printError(source, e.span, e.message ?: "Parse error", rawErrors)
     } catch (e: NotImplementedError) {
         println("Type inference not yet implemented: ${e.message}")
+    }
+}
+
+private fun printRawError(error: TypeError, env: TypeEnv) {
+    println("Error: ${error.renderMessage(env)} at ${error.span}")
+    if (error.context.isNotEmpty()) {
+        for (ctx in error.context) {
+            println("  ${ctx.render(env)}")
+        }
     }
 }
 

@@ -3,65 +3,6 @@ package klein.types
 import klein.SourceSpan
 
 sealed class SimpleType {
-    /**
-     * Get the level of this type. For TVars, returns the level.
-     * For compound types, returns the minimum level of all contained TVars.
-     * For ground types, returns 0 (always safe to use).
-     */
-    open val level: Int
-        get() = 0
-
-    /**
-     * Create a fresh copy of this type, only freshening TVars above the given level.
-     * TVars at or below the limit are kept as-is (they're from outer scope).
-     * This is used for let polymorphism - only generalize variables created in the binding.
-     *
-     * @param above Only freshen TVars with level > above
-     * @param currentLevel The level to assign to fresh TVars
-     */
-    fun freshenAbove(
-        above: Int,
-        currentLevel: Int,
-    ): SimpleType {
-        val varMap = mutableMapOf<TVar, TVar>()
-
-        fun freshen(ty: SimpleType): SimpleType =
-            when {
-                ty.level <= above -> ty
-                ty is TVar -> {
-                    // Check if we've already started processing this TVar
-                    varMap[ty]?.let { return it }
-                    // Create fresh TVar first (without bounds) to handle cycles
-                    val fresh = TVar(currentLevel)
-                    varMap[ty] = fresh
-                    // Process bounds in order to preserve relative UID ordering
-                    // of type variables (important for simplification)
-                    ty.lowerBounds.forEach { fresh.lowerBounds.add(freshen(it)) }
-                    ty.upperBounds.forEach { fresh.upperBounds.add(freshen(it)) }
-                    fresh
-                }
-                ty is TFun ->
-                    TFun(
-                        ty.params.map { freshen(it) },
-                        freshen(ty.result),
-                    )
-                ty is TRecord ->
-                    TRecord(
-                        ty.fields.mapValues { freshen(it.value) },
-                    )
-                ty is TOptional -> TOptional(freshen(ty.inner))
-                ty is TRef ->
-                    TRef(
-                        ty.name,
-                        ty.typeArgs.map { freshen(it) },
-                        ty.span,
-                    )
-                else -> ty
-            }
-
-        return freshen(this)
-    }
-
     object TNum : SimpleType() {
         override fun toString(): String = "TNum"
     }
@@ -96,6 +37,12 @@ sealed class SimpleType {
     ) : SimpleType() {
         val uid: Int = nextUid++
 
+        override fun toString(): String {
+            val letter = 'A' + (uid % 26)
+            val suffix = if (uid >= 26) "${uid / 26}" else ""
+            return "'$letter$suffix"
+        }
+
         companion object {
             private var nextUid = 0
         }
@@ -103,10 +50,14 @@ sealed class SimpleType {
 
     data class TFun(
         val params: List<SimpleType>,
+        val paramSpans: List<SourceSpan>,
         val result: SimpleType,
     ) : SimpleType() {
         override val level: Int
             get() = (params.map { it.level } + result.level).maxOrNull() ?: 0
+
+        override fun toString(): String =
+            "(${params.joinToString(", ")}) -> $result"
     }
 
     data class TRecord(
@@ -123,6 +74,9 @@ sealed class SimpleType {
     ) : SimpleType() {
         override val level: Int
             get() = typeArgs.maxOfOrNull { it.level } ?: 0
+
+        override fun toString(): String =
+            if (typeArgs.isEmpty()) name else "$name<${typeArgs.joinToString(", ")}>"
 
         private var _expandedStructure: TRecord? = null
 
@@ -142,7 +96,7 @@ sealed class SimpleType {
             fun substitute(ty: SimpleType): SimpleType =
                 when (ty) {
                     is TVar -> substitution[ty] ?: ty
-                    is TFun -> TFun(ty.params.map { substitute(it) }, substitute(ty.result))
+                    is TFun -> TFun(ty.params.map { substitute(it) }, ty.paramSpans, substitute(ty.result))
                     is TRecord -> TRecord(ty.fields.mapValues { substitute(it.value) })
                     is TOptional -> TOptional(substitute(ty.inner))
                     is TRef -> TRef(ty.name, ty.typeArgs.map { substitute(it) }, ty.span)
@@ -153,5 +107,69 @@ sealed class SimpleType {
                 _expandedStructure = it
             }
         }
+    }
+
+    /**
+     * Get the level of this type. For TVars, returns the level.
+     * For compound types, returns the minimum level of all contained TVars.
+     * For ground types, returns 0 (always safe to use).
+     */
+    open val level: Int
+        get() = 0
+
+
+
+    fun clone(): SimpleType = freshenAbove(-1, 0)
+
+    /**
+     * Create a fresh copy of this type, only freshening TVars above the given level.
+     * TVars at or below the limit are kept as-is (they're from outer scope).
+     * This is used for let polymorphism - only generalize variables created in the binding.
+     *
+     * @param above Only freshen TVars with level > above
+     * @param currentLevel The level to assign to fresh TVars
+     */
+    fun freshenAbove(
+        above: Int,
+        currentLevel: Int,
+    ): SimpleType {
+        val varMap = mutableMapOf<TVar, TVar>()
+
+        fun freshen(ty: SimpleType): SimpleType =
+            when {
+                ty.level <= above -> ty
+                ty is TVar -> {
+                    // Check if we've already started processing this TVar
+                    varMap[ty]?.let { return it }
+                    // Create fresh TVar first (without bounds) to handle cycles
+                    val fresh = TVar(currentLevel)
+                    varMap[ty] = fresh
+                    // Process bounds in order to preserve relative UID ordering
+                    // of type variables (important for simplification)
+                    ty.lowerBounds.forEach { fresh.lowerBounds.add(freshen(it)) }
+                    ty.upperBounds.forEach { fresh.upperBounds.add(freshen(it)) }
+                    fresh
+                }
+                ty is TFun ->
+                    TFun(
+                        ty.params.map { freshen(it) },
+                        ty.paramSpans,
+                        freshen(ty.result),
+                    )
+                ty is TRecord ->
+                    TRecord(
+                        ty.fields.mapValues { freshen(it.value) },
+                    )
+                ty is TOptional -> TOptional(freshen(ty.inner))
+                ty is TRef ->
+                    TRef(
+                        ty.name,
+                        ty.typeArgs.map { freshen(it) },
+                        ty.span,
+                    )
+                else -> ty
+            }
+
+        return freshen(this)
     }
 }

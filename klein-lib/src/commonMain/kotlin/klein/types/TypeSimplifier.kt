@@ -25,8 +25,9 @@ object TypeSimplifier {
     fun simplifyCanonical(
         type: SimpleType,
         env: TypeEnv,
+        positive: Boolean = true,
     ): Type {
-        val scheme = CompactType.canonicalizeType(type)
+        val scheme = CompactType.canonicalizeType(type, positive)
         val simplified = simplifyType(scheme)
         return coalesceType(simplified, env)
     }

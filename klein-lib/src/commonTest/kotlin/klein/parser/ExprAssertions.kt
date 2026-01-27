@@ -228,9 +228,7 @@ fun functionType(
     returnType: TypeExpr,
 ) = FunctionTypeExpr(listOf(paramType), returnType, noSpan)
 
-fun functionType(
-    returnType: TypeExpr,
-) = FunctionTypeExpr(emptyList(), returnType, noSpan)
+fun functionType(returnType: TypeExpr) = FunctionTypeExpr(emptyList(), returnType, noSpan)
 
 fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSpan)
 
