@@ -1,10 +1,8 @@
 package klein.types
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-@Ignore("Type definitions not yet implemented - these tests specify expected behavior")
 class NominalStructuralTest {
     @Test
     fun nominalSubtypesStructural_moneyFieldAccess() {

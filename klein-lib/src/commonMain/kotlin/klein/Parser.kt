@@ -78,7 +78,7 @@ class Parser(
         val constructors =
             if (peek().kind == EQ && !peek().startsLineBefore(typeDefIndent)) {
                 advance()
-                parseConstructors(typeParams, typeDefIndent)
+                parseConstructors(typeDefIndent)
             } else {
                 emptyList()
             }
@@ -123,27 +123,21 @@ class Parser(
         return params
     }
 
-    private fun parseConstructors(
-        typeParams: List<String>,
-        typeDefIndent: Int,
-    ): List<Constructor> {
+    private fun parseConstructors(typeDefIndent: Int): List<Constructor> {
         val constructors = mutableListOf<Constructor>()
         val seenNames = mutableSetOf<String>()
 
-        constructors.add(parseConstructor(typeParams, seenNames))
+        constructors.add(parseConstructor(seenNames))
 
         while (peek().kind == PIPE && !peek().startsLineAtOrBefore(typeDefIndent)) {
             advance()
-            constructors.add(parseConstructor(typeParams, seenNames))
+            constructors.add(parseConstructor(seenNames))
         }
 
         return constructors
     }
 
-    private fun parseConstructor(
-        typeParams: List<String>,
-        seenNames: MutableSet<String>,
-    ): Constructor {
+    private fun parseConstructor(seenNames: MutableSet<String>): Constructor {
         val nameToken = expectUpperIdent("Expected constructor name")
         validateNotReserved(nameToken)
 
@@ -153,7 +147,7 @@ class Parser(
 
         val fields =
             if (peek().kind == LBRACE) {
-                parseConstructorFields(typeParams)
+                parseConstructorFields()
             } else {
                 emptyList()
             }
@@ -162,7 +156,7 @@ class Parser(
         return Constructor(nameToken.text!!, fields, nameToken.span + endSpan)
     }
 
-    private fun parseConstructorFields(typeParams: List<String>): List<FieldDecl> {
+    private fun parseConstructorFields(): List<FieldDecl> {
         advance()
         if (peek().kind == RBRACE) {
             throw ParseError("Constructor fields cannot be empty", peek().span)
@@ -172,7 +166,7 @@ class Parser(
         val seenFields = mutableSetOf<String>()
 
         while (true) {
-            val field = parseFieldDecl(typeParams, seenFields)
+            val field = parseFieldDecl(seenFields)
             fields.add(field)
 
             when (peek().kind) {
@@ -194,10 +188,7 @@ class Parser(
         return fields
     }
 
-    private fun parseFieldDecl(
-        typeParams: List<String>,
-        seenFields: MutableSet<String>,
-    ): FieldDecl {
+    private fun parseFieldDecl(seenFields: MutableSet<String>): FieldDecl {
         val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
         validateNotKeyword(nameToken)
 
@@ -206,17 +197,17 @@ class Parser(
         }
 
         expectAndAdvance(COLON, message = "Expected ':'")
-        val type = parseTypeExpr(typeParams)
+        val type = parseTypeExpr()
 
         return FieldDecl(nameToken.text!!, type, nameToken.span + type.span)
     }
 
-    private fun parseTypeExpr(typeParams: List<String>): TypeExpr {
-        val left = parseTypeAtom(typeParams)
+    private fun parseTypeExpr(): TypeExpr {
+        val left = parseTypeAtom()
 
         if (peek().kind == ARROW) {
             advance()
-            val right = parseTypeExpr(typeParams)
+            val right = parseTypeExpr()
             val paramTypes =
                 if (left is TupleTypeExpr && left.elements.isEmpty()) {
                     emptyList()
@@ -229,25 +220,25 @@ class Parser(
         return left
     }
 
-    private fun parseTypeArgs(typeParams: List<String>): List<TypeExpr> {
+    private fun parseTypeArgs(): List<TypeExpr> {
         advance()
         val args = mutableListOf<TypeExpr>()
-        args.add(parseTypeExpr(typeParams))
+        args.add(parseTypeExpr())
         while (peek().kind == COMMA) {
             advance()
-            args.add(parseTypeExpr(typeParams))
+            args.add(parseTypeExpr())
         }
         expectAndAdvance(GT, message = "Expected '>'")
         return args
     }
 
-    private fun parseTypeAtom(typeParams: List<String>): TypeExpr {
+    private fun parseTypeAtom(): TypeExpr {
         val token = peek()
         return when (token.kind) {
             UPPER_IDENT -> {
                 advance()
                 if (peek().kind == LT) {
-                    val args = parseTypeArgs(typeParams)
+                    val args = parseTypeArgs()
                     AppliedTypeExpr(token.text!!, args, token.span + args.last().span)
                 } else {
                     TypeName(token.text!!, token.span)
@@ -256,11 +247,7 @@ class Parser(
 
             TYPE_VAR -> {
                 advance()
-                val varName = token.text!!
-                if (varName !in typeParams) {
-                    throw ParseError("Undefined type variable: '$varName", token.span)
-                }
-                TypeVar(varName, token.span)
+                TypeVar(token.text!!, token.span)
             }
 
             LPAREN -> {
@@ -269,12 +256,12 @@ class Parser(
                     val close = advance()
                     TupleTypeExpr(emptyList(), token.span + close.span)
                 } else {
-                    val innerType = parseTypeExpr(typeParams)
+                    val innerType = parseTypeExpr()
                     if (peek().kind == COMMA) {
                         val elements = mutableListOf(innerType)
                         while (peek().kind == COMMA) {
                             advance()
-                            elements.add(parseTypeExpr(typeParams))
+                            elements.add(parseTypeExpr())
                         }
                         val close = expectAndAdvance(RPAREN, message = "Expected ')'")
                         TupleTypeExpr(elements, token.span + close.span)
@@ -291,7 +278,7 @@ class Parser(
                 while (peek().kind != RBRACE && peek().kind != EOF) {
                     val fieldName = expectAndAdvance(IDENT, message = "Expected field name")
                     expectAndAdvance(COLON, message = "Expected ':'")
-                    val fieldType = parseTypeExpr(typeParams)
+                    val fieldType = parseTypeExpr()
                     fields.add(fieldName.text!! to fieldType)
                     if (peek().kind == COMMA) {
                         advance()

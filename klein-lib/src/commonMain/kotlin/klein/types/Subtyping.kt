@@ -7,7 +7,7 @@ import klein.types.TypeSimplifier.simplifyCanonical
 class Subtyping(
     private val env: TypeEnv,
 ) {
-    private fun typeLookup(name: String): TypeDefInfo? = env.lookupTypeDef(name)
+    private fun typeLookup(name: String): TypeDefInfo = env.getTypeDef(name)
 
     private fun ctorLookup(name: String): ConstructorInfo? = env.lookupConstructor(name)
 
@@ -141,7 +141,7 @@ class Subtyping(
 
                 if (lhs.name == rhs.name) {
                     updatedContext = context
-                    lhsTypeDef = typeLookup(lhs.name) ?: error("Type '${lhs.name}' not registered")
+                    lhsTypeDef = typeLookup(lhs.name)
                 } else {
                     val lhsCtor = ctorLookup(lhs.name)
                     if (lhsCtor == null || lhsCtor.parentType != rhs.name) {
@@ -149,10 +149,10 @@ class Subtyping(
                         return
                     }
                     updatedContext = context + ConstraintContext.ConstructorToParent(lhs.name, rhs.name)
-                    lhsTypeDef = typeLookup(lhs.name) ?: error("Unknown constructor type '${lhs.name}'")
+                    lhsTypeDef = typeLookup(lhs.name)
                 }
 
-                val rhsTypeDef = typeLookup(rhs.name) ?: error("Type '${rhs.name}' not registered")
+                val rhsTypeDef = typeLookup(rhs.name)
 
                 val lhsApplied =
                     lhsTypeDef.typeParams

@@ -1,12 +1,10 @@
 package klein.types
 
 import klein.Type
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-@Ignore("Type definitions not yet implemented - these tests specify expected behavior")
 class InferredInterfaceTest {
     @Test
     fun allConstructorsShareField_sameType() {

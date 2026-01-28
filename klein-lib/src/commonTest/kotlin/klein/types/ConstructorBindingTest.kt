@@ -1,10 +1,8 @@
 package klein.types
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-@Ignore("Type definitions not yet implemented")
 class ConstructorBindingTest {
     // ============================================================
     // Constructors with parameters infer to functions

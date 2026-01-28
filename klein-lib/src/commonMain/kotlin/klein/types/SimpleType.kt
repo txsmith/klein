@@ -78,10 +78,10 @@ sealed class SimpleType {
 
         private var cachedStructure: TRecord? = null
 
-        fun expandToStructure(typeLookup: (String) -> TypeDefInfo?): TRecord {
+        fun expandToStructure(getType: (String) -> TypeDefInfo): TRecord {
             cachedStructure?.let { return it }
 
-            val typeDef = typeLookup(name) ?: error("Type '$name' not registered")
+            val typeDef = getType(name)
             check(typeArgs.size == typeDef.typeParams.size) {
                 "Type '$name' expects ${typeDef.typeParams.size} args but got ${typeArgs.size}"
             }

@@ -1,9 +1,12 @@
 package klein.parser
 
+import klein.AppliedTypeExpr
 import klein.ParseError
+import klein.TypeVar
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class TypeDefTest {
     @Test
@@ -663,8 +666,15 @@ class TypeDefTest {
     }
 
     @Test
-    fun undefinedTypeVariable() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box<'A> = Box { value: 'B }") }
+    fun undefinedTypeVariable_parsesSuccessfully() {
+        val typeDef = parseTypeDef("type Box<'A> = Box { value: 'B }")
+        assertEquals("Box", typeDef.name)
+        assertEquals(listOf("A"), typeDef.typeParams)
+        assertEquals(1, typeDef.constructors.size)
+        val field = typeDef.constructors[0].fields[0]
+        assertEquals("value", field.name)
+        assertTrue(field.type is TypeVar)
+        assertEquals("B", (field.type as TypeVar).name)
     }
 
     @Test
@@ -1726,8 +1736,16 @@ class TypeDefTest {
     }
 
     @Test
-    fun typeVarInAppliedTypePositionWithoutDefinition() {
-        assertFailsWith<ParseError> { parseTypeDef("type Container = Container { data: List<'X> }") }
+    fun typeVarInAppliedTypePositionWithoutDefinition_parsesSuccessfully() {
+        val typeDef = parseTypeDef("type Container = Container { data: List<'X> }")
+        assertEquals("Container", typeDef.name)
+        assertEquals(emptyList<String>(), typeDef.typeParams)
+        val field = typeDef.constructors[0].fields[0]
+        val fieldType = field.type as AppliedTypeExpr
+        assertEquals("List", fieldType.name)
+        assertEquals(1, fieldType.args.size)
+        assertTrue(fieldType.args[0] is TypeVar)
+        assertEquals("X", (fieldType.args[0] as TypeVar).name)
     }
 
     @Test
