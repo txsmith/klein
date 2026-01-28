@@ -1,10 +1,8 @@
 package klein.types
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-@Ignore("Type definitions not yet implemented - these tests specify expected error behavior")
 class TypeDefErrorTest {
     @Test
     fun undeclaredTypeParamInConstructor_error() {
@@ -63,6 +61,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.DuplicateBinding })
     }
 
     @Test

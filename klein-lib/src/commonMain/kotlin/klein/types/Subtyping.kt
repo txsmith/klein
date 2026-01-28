@@ -257,7 +257,6 @@ class Subtyping(
         rhs: SimpleType,
         span: SourceSpan,
         context: List<ConstraintContext> = emptyList(),
-        pos: Boolean = true,
     ) {
         constrain(lhs, rhs, span, context)
         constrain(rhs, lhs, span, context)

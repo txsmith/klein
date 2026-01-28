@@ -17,43 +17,6 @@ RefAnimal(refDog)
 
 The type of `refDog` is `Ref<'B>` where `Dog <: 'B <: { name: String }`, but the simplifier displays it as `Ref<Dog>`. This hides the structural upper bound and makes it look like the type is fully concrete when it isn't. For invariant type parameters, collapsing to the lower bound is misleading.
 
-## Type Error Constraint Tracing
-
-When a type error occurs, it's hard to understand HOW the constraint solver reached that error. We need a stack trace of the `constrain`/`constrainEqual` calls that led to each error, similar to the parser stack trace.
-
-## Constructor Sharing Name with Parent Type
-
-When a constructor shares its name with the parent type, things break in multi-constructor types. This crashes:
-
-```klein
-type X = X { n: Num } | A | B
-```
-
-While this works fine:
-
-```klein
-type X = X | A
-```
-
-The parent and constructor occupy the same slot in the type def registry, and the current fix (skip constructor registration when names match) only works for single-constructor types. For sum types, we need both entries because the constructor has its own type params (subset of parent's).
-
-Simplest rule: only allow a constructor to share the parent's name when the type has exactly one constructor. Emit a parse error otherwise.
-
-## Wrong Number of Type Args Crashes in computeVariance
-
-Using a type with the wrong number of type arguments crashes instead of producing a type error.
-
-```klein
-type Box = Box { value: (Num) -> Num }
-type NeedsDog = NeedsDog { b: Box<Dog> }
-```
-
-Crashes with: `IllegalStateException: Type 'Box' has 0 params but got arg at index 0` at `Typer.kt:540` in `computeVariance`. Should emit a type error (e.g., "Box expects 0 type arguments but got 1") instead of crashing.
-
-## Duplicate Type Definitions Not Detected
-
-Defining two types with the same name silently succeeds — the second definition overwrites the first. Should emit a type error (e.g., "Type 'Box' is already defined"). Same applies to constructor names — two different types can define constructors with the same name, and the second silently overwrites the first.
-
 ## Constraint Context Snapshots Have Incomplete Bounds
 
 Type error messages show `Nothing` for type variables because constraint context snapshots types mid-inference:

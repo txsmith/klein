@@ -357,19 +357,20 @@ class Typer {
 
         // Register placeholders for all types and constructors
         // This ensures all type names are known, and enables the following passes to work for (mutually) recursive types
-        registerPlaceholders(typeDefs, env)
+        val validTypeDefs = registerPlaceholders(typeDefs, env)
 
         // Validate all type references exist and have correct arity
         resolveNames(env)
+        if (errors.isNotEmpty()) return
 
         // Infer variance for all type parameters
-        computeVariance(typeDefs, env)
+        computeVariance(validTypeDefs, env)
 
         // Compute the TRecord type of each constructor
         buildCtorIfaces(env)
 
         // Derive the shared fields for each sum type
-        buildParentIfaces(typeDefs, env)
+        buildParentIfaces(validTypeDefs, env)
 
         // Expose ctors as function values
         bindConstructors(env)
@@ -378,9 +379,16 @@ class Typer {
     private fun registerPlaceholders(
         typeDefs: List<TypeDef>,
         env: TypeEnv,
-    ) {
+    ): List<TypeDef> {
+        val validTypeDefs = mutableListOf<TypeDef>()
         val polyEnv = env.enterBindingScope() // Ensure we create lvl-1 TVars so they get generalized
         for (typeDef in typeDefs) {
+            if (env.lookupTypeDef(typeDef.name) != null) {
+                errors.add(TypeError.DuplicateBinding(typeDef.name, typeDef.span))
+                continue
+            }
+
+            validTypeDefs.add(typeDef)
             val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, polyEnv.freshVar()) }
 
             // Register the sum type
@@ -395,6 +403,17 @@ class Typer {
 
             // Register each constructor
             for (constructor in typeDef.constructors) {
+                // Check for constructor name conflict with parent type in multi-constructor sum types
+                if (constructor.name == typeDef.name && typeDef.constructors.size > 1) {
+                    errors.add(TypeError.DuplicateBinding(constructor.name, constructor.span))
+                    continue
+                }
+
+                if (env.lookupConstructor(constructor.name) != null) {
+                    errors.add(TypeError.DuplicateBinding(constructor.name, constructor.span))
+                    continue
+                }
+
                 val usedTypeVars = constructor.fields.flatMap { collectTypeVars(it.type) }.toSet()
                 val declaredTypeParams = typeDef.typeParams.toSet()
 
@@ -433,6 +452,7 @@ class Typer {
                 }
             }
         }
+        return validTypeDefs
     }
 
     private fun resolveNames(env: TypeEnv) {
@@ -451,8 +471,12 @@ class Typer {
             is TypeVar -> {} // TVars are already checked during registerPlaceholders
             is TypeName -> {
                 val builtinTypes = setOf("Num", "String", "Bool", "Unit")
-                if (typeExpr.name !in builtinTypes && env.lookupTypeDef(typeExpr.name) == null) {
+                if (typeExpr.name in builtinTypes) return
+                val typeDef = env.lookupTypeDef(typeExpr.name)
+                if (typeDef == null) {
                     errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                } else if (typeDef.typeParams.isNotEmpty()) {
+                    errors.add(TypeError.ArityMismatch(typeDef.typeParams.size, 0, typeExpr.span))
                 }
             }
             is AppliedTypeExpr -> {
