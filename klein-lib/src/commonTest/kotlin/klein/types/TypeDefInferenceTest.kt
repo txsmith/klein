@@ -1,6 +1,7 @@
 package klein.types
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TypeDefInferenceTest {
@@ -301,7 +302,8 @@ class TypeDefInferenceTest {
                 getIntensity(if true then Red(100, 50) else Yellow(30))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.MissingField)
     }
 
     @Test

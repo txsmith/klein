@@ -105,7 +105,7 @@ class OperatorInferTest {
     @Test
     fun and_intAndInt_fails() {
         val errors = inferErrors("1 and 2")
-        assertTrue(errors.isNotEmpty())
+        assertEquals(2, errors.size)
         assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 

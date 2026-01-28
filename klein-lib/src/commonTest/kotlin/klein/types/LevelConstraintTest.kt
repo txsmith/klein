@@ -280,10 +280,8 @@ class LevelConstraintTest {
             """.trimIndent()
 
         val errors = inferErrors(program)
-        assertTrue(
-            errors.isNotEmpty(),
-            "Should fail: can't add Num and Bool",
-        )
+        assertEquals(1, errors.size, "Should fail: can't add Num and Bool")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     /**
@@ -299,10 +297,8 @@ class LevelConstraintTest {
             """.trimIndent()
 
         val errors = inferErrors(program)
-        assertTrue(
-            errors.isNotEmpty(),
-            "Should fail: can't add Bool and Num",
-        )
+        assertEquals(1, errors.size, "Should fail: can't add Bool and Num")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     /**

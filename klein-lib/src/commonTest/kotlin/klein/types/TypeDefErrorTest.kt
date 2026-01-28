@@ -47,7 +47,8 @@ class TypeDefErrorTest {
                 type Foo = Bar { value: 'A }
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.UndeclaredTypeParam)
     }
 
     @Test
@@ -58,7 +59,8 @@ class TypeDefErrorTest {
                 type Foo = Foo { x: Bar }
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.UnboundVariable)
     }
 
     @Test
@@ -72,7 +74,7 @@ class TypeDefErrorTest {
                 None
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.DuplicateBinding })
     }
 
     @Test
@@ -84,7 +86,8 @@ class TypeDefErrorTest {
                 type Foo = Bar { y: String }
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.DuplicateBinding)
     }
 
     @Test
@@ -137,7 +140,8 @@ class TypeDefErrorTest {
                 None(42)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -191,7 +195,8 @@ class TypeDefErrorTest {
                 Cons(1, Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(2, errors.size)
+        assertTrue(errors.all { it is TypeError.UnboundVariable })
     }
 
     @Test
@@ -219,7 +224,8 @@ class TypeDefErrorTest {
                 f(42)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -276,7 +282,7 @@ class TypeDefErrorTest {
                 Foo(Bar(Nil))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.UnboundVariable })
     }
 
     @Test
@@ -289,7 +295,8 @@ class TypeDefErrorTest {
                 Bad(Bad(42))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -303,7 +310,7 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -317,7 +324,7 @@ class TypeDefErrorTest {
                 Bad(None)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -331,7 +338,7 @@ class TypeDefErrorTest {
                 Bad(Empty)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -345,7 +352,7 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -359,7 +366,7 @@ class TypeDefErrorTest {
                 Bad(True)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -374,7 +381,7 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 
     @Test
@@ -389,6 +396,6 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.ArityMismatch })
     }
 }

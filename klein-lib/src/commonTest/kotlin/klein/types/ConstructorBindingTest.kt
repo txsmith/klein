@@ -1,6 +1,7 @@
 package klein.types
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ConstructorBindingTest {
@@ -139,7 +140,8 @@ class ConstructorBindingTest {
                 Some(1, 2)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Expected error for too many arguments")
+        assertEquals(1, errors.size, "Expected exactly one error for too many arguments")
+        assertTrue(errors[0] is TypeError.ArityMismatch)
     }
 
     @Test
@@ -151,7 +153,8 @@ class ConstructorBindingTest {
                 Pair(1)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Expected error for too few arguments")
+        assertEquals(1, errors.size, "Expected exactly one error for too few arguments")
+        assertTrue(errors[0] is TypeError.ArityMismatch)
     }
 
     @Test
@@ -163,7 +166,8 @@ class ConstructorBindingTest {
                 Nil(1)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Expected error for calling bare constructor")
+        assertEquals(1, errors.size, "Expected exactly one error for calling bare constructor")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package klein.types
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class VarianceSubtypingTest {
@@ -53,7 +54,8 @@ class VarianceSubtypingTest {
                 BoxDog(Box(Cat("Whiskers"))).b
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Box<Cat> should not subtype Box<Dog>")
+        assertEquals(1, errors.size, "Box<Cat> should not subtype Box<Dog>")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     // ============================================================
@@ -91,7 +93,8 @@ class VarianceSubtypingTest {
                 ConsumerCat(Consumer(|d -> DogHolder(d).d.breed|)).c
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Consumer<Dog> should not subtype Consumer<Cat>")
+        assertEquals(1, errors.size, "Consumer<Dog> should not subtype Consumer<Cat>")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     // ============================================================
@@ -112,7 +115,8 @@ class VarianceSubtypingTest {
                 RefAnimal(Ref(|Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.name|)).r
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Ref<Dog> should not subtype Ref<Animal>")
+        assertEquals(1, errors.size, "Ref<Dog> should not subtype Ref<Animal>")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -146,7 +150,8 @@ class VarianceSubtypingTest {
                 RefDog(Ref(|Cat("Whiskers")|, |c -> CatHolder(c).c.name|)).r
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Ref<Cat> should not subtype Ref<Dog>")
+        assertEquals(2, errors.size, "Ref<Cat> should not subtype Ref<Dog>")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -199,7 +204,8 @@ class VarianceSubtypingTest {
                 PhantomAnimal(PhantomDog(Phantom(42)).p).p
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Phantom<Dog> should not subtype Phantom<Animal> - unused params are invariant")
+        assertEquals(1, errors.size, "Phantom<Dog> should not subtype Phantom<Animal> - unused params are invariant")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -215,7 +221,8 @@ class VarianceSubtypingTest {
                 PhantomDog(PhantomCat(Phantom(42)).p).p
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Phantom<Cat> should not subtype Phantom<Dog> - unused params are invariant")
+        assertEquals(2, errors.size, "Phantom<Cat> should not subtype Phantom<Dog> - unused params are invariant")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -267,7 +274,8 @@ class VarianceSubtypingTest {
                 FuncHolder(|d -> DogHolder(d).d|).f
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "(Dog -> Dog) should not subtype (Cat -> Cat)")
+        assertEquals(2, errors.size, "(Dog -> Dog) should not subtype (Cat -> Cat)")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     // ============================================================
@@ -303,7 +311,8 @@ class VarianceSubtypingTest {
                 ProducerDog(Producer(|AnimalHolder(Cat("Whiskers")).a|)).p
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Producer<Animal> should not subtype Producer<Dog>")
+        assertEquals(1, errors.size, "Producer<Animal> should not subtype Producer<Dog>")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     // ============================================================
@@ -393,7 +402,8 @@ class VarianceSubtypingTest {
                 WeirdAnimalNum(WeirdDogNum(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant")
+        assertEquals(5, errors.size, "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -411,7 +421,8 @@ class VarianceSubtypingTest {
                 WeirdDogNum(WeirdAnimalNum(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Weird<Animal, Num> should not subtype Weird<Dog, Num> - 'A is invariant")
+        assertEquals(5, errors.size, "Weird<Animal, Num> should not subtype Weird<Dog, Num> - 'A is invariant")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -429,7 +440,8 @@ class VarianceSubtypingTest {
                 WeirdNumAnimal(WeirdNumDog(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Weird<Num, Dog> should not subtype Weird<Num, Animal> - 'B is invariant")
+        assertEquals(4, errors.size, "Weird<Num, Dog> should not subtype Weird<Num, Animal> - 'B is invariant")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     @Test
@@ -447,7 +459,8 @@ class VarianceSubtypingTest {
                 WeirdNumDog(WeirdNumAnimal(mkWeird()).w).w
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant")
+        assertEquals(4, errors.size, "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant")
+        assertTrue(errors.all { it is TypeError.TypeMismatch })
     }
 
     // ============================================================
@@ -508,7 +521,8 @@ class VarianceSubtypingTest {
                 VAnimal(cov)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Cov<Dog> should not subtype V<Animal> - V is invariant")
+        assertEquals(1, errors.size, "Cov<Dog> should not subtype V<Animal> - V is invariant")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -524,7 +538,8 @@ class VarianceSubtypingTest {
                 VDog(Cov(|AnimalHolder(Dog("Rex")).a|)).v
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Cov<Animal> should not subtype V<Dog> - V is invariant")
+        assertEquals(1, errors.size, "Cov<Animal> should not subtype V<Dog> - V is invariant")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -540,7 +555,8 @@ class VarianceSubtypingTest {
                 VAnimal(Cont(|d -> DogHolder(d).d.name|)).v
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Cont<Dog> should not subtype V<Animal> - V is invariant")
+        assertEquals(1, errors.size, "Cont<Dog> should not subtype V<Animal> - V is invariant")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -558,7 +574,8 @@ class VarianceSubtypingTest {
                 VDog(contAnimal)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Cont<Animal> should not subtype V<Dog> - V is invariant")
+        assertEquals(1, errors.size, "Cont<Animal> should not subtype V<Dog> - V is invariant")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     // ============================================================
