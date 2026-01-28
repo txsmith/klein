@@ -76,35 +76,7 @@ sealed class SimpleType {
 
         override fun toString(): String = if (typeArgs.isEmpty()) name else "$name<${typeArgs.joinToString(", ")}>"
 
-        private var cachedStructure: TRecord? = null
-
-        fun expandToStructure(getType: (String) -> TypeDefInfo): TRecord {
-            cachedStructure?.let { return it }
-
-            val typeDef = getType(name)
-            check(typeArgs.size == typeDef.typeParams.size) {
-                "Type '$name' expects ${typeDef.typeParams.size} args but got ${typeArgs.size}"
-            }
-
-            val substitution =
-                typeDef.typeParams.zip(typeArgs).associate { (param, arg) ->
-                    param.tvar to arg
-                }
-
-            fun substitute(ty: SimpleType): SimpleType =
-                when (ty) {
-                    is TVar -> substitution[ty] ?: ty
-                    is TFun -> TFun(ty.params.map { substitute(it) }, substitute(ty.result), ty.paramNames)
-                    is TRecord -> TRecord(ty.fields.mapValues { substitute(it.value) })
-                    is TOptional -> TOptional(substitute(ty.inner))
-                    is TRef -> TRef(ty.name, ty.typeArgs.map { substitute(it) }, ty.span)
-                    else -> ty
-                }
-
-            return TRecord(typeDef.iface.fields.mapValues { substitute(it.value) }).also {
-                cachedStructure = it
-            }
-        }
+        private var cachedStructure: SimpleType? = null
     }
 
     /**
@@ -115,7 +87,11 @@ sealed class SimpleType {
     open val level: Int
         get() = 0
 
-    fun clone(): SimpleType = freshenAbove(-1, 0)
+    /**
+     * Used for copying types to the error context
+     * Cloning ensures that errors can accumulate without the types getting more constraints on them as we go.
+     */
+    fun clone(): SimpleType = freshenAbove(-1, 0).component1()
 
     /**
      * Create a fresh copy of this type, only freshening TVars above the given level.
@@ -128,7 +104,7 @@ sealed class SimpleType {
     fun freshenAbove(
         above: Int,
         currentLevel: Int,
-    ): SimpleType {
+    ): Pair<SimpleType, Map<TVar, TVar>> {
         val varMap = mutableMapOf<TVar, TVar>()
 
         fun freshen(ty: SimpleType): SimpleType =
@@ -166,6 +142,6 @@ sealed class SimpleType {
                 else -> ty
             }
 
-        return freshen(this)
+        return freshen(this) to varMap.toMap()
     }
 }

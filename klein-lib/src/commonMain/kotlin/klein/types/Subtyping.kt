@@ -123,18 +123,25 @@ class Subtyping(
                 errors.add(TypeError.NullNotAllowed(simplifyCanonical(rhs, env), span, context))
             }
 
+            // Structural subtyping
             lhs is TRef && rhs is TRecord -> {
-                val structure = lhs.expandToStructure(::typeLookup)
-                for ((name, rhsType) in rhs.fields) {
-                    val lhsType = structure.fields[name]
-                    if (lhsType == null) {
-                        errors.add(TypeError.MissingField(name, simplifyCanonical(lhs, env), span, context))
-                    } else {
-                        constrain(lhsType, rhsType, span, context)
+                val typeDef = env.getTypeDef(lhs.name)
+                val (freshType, replacedVars) = typeDef.iface.instantiate(env.level)
+                val newVars = typeDef.typeParams.map { it.copy(tvar = replacedVars[it.tvar] ?: it.tvar) }
+
+                // TODO: add to ConstraintContext
+                newVars.zip(lhs.typeArgs) { typeParam, typeArg ->
+                    when (typeParam.variance) {
+                        Variance.Covariant -> constrain(typeArg, typeParam.tvar, span, context)
+                        Variance.Contravariant -> constrain(typeParam.tvar, typeArg, span, context)
+                        Variance.Invariant, Variance.Bivariant -> constrainEqual(typeParam.tvar, typeArg, span, context)
                     }
                 }
+
+                constrain(freshType, rhs, span, context)
             }
 
+            // Nominal subtyping
             lhs is TRef && rhs is TRef -> {
                 val updatedContext: List<ConstraintContext>
                 val lhsTypeDef: TypeDefInfo

@@ -11,7 +11,7 @@ import klein.SourceSpan
 data class TypeDefInfo(
     val name: String,
     val typeParams: List<TypeParamInfo>,
-    val iface: SimpleType.TRecord,
+    val iface: TypeBinding.Poly,
     val span: SourceSpan,
 )
 

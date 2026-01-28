@@ -26,7 +26,8 @@ sealed class TypeBinding {
         val generalizationLevel: Int,
         val body: SimpleType,
     ) : TypeBinding() {
-        fun instantiate(currentLevel: Int): SimpleType = body.freshenAbove(generalizationLevel, currentLevel)
+        fun instantiate(currentLevel: Int): Pair<SimpleType, Map<SimpleType.TVar, SimpleType.TVar>> =
+            body.freshenAbove(generalizationLevel, currentLevel)
     }
 }
 
@@ -47,7 +48,7 @@ class TypeEnv(
         if (binding != null) {
             return when (binding) {
                 is TypeBinding.Mono -> binding.type
-                is TypeBinding.Poly -> binding.instantiate(currentLevel)
+                is TypeBinding.Poly -> binding.instantiate(currentLevel).component1()
             }
         }
         return parent?.lookupAndInstantiate(name, currentLevel)
@@ -72,10 +73,24 @@ class TypeEnv(
     fun freshVar(): SimpleType.TVar = SimpleType.TVar(level)
 
     fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
-        TypeEnv(parent = this, implicitParam = implicitParam, level = level, typeDefs = typeDefs, constructors = constructors, funDefs = funDefs)
+        TypeEnv(
+            parent = this,
+            implicitParam = implicitParam,
+            level = level,
+            typeDefs = typeDefs,
+            constructors = constructors,
+            funDefs = funDefs,
+        )
 
     fun enterBindingScope(): TypeEnv =
-        TypeEnv(parent = this, implicitParam = implicitParam, level = level + 1, typeDefs = typeDefs, constructors = constructors, funDefs = funDefs)
+        TypeEnv(
+            parent = this,
+            implicitParam = implicitParam,
+            level = level + 1,
+            typeDefs = typeDefs,
+            constructors = constructors,
+            funDefs = funDefs,
+        )
 
     fun registerTypeDef(info: TypeDefInfo) {
         typeDefs[info.name] = info
