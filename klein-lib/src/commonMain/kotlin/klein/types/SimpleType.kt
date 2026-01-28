@@ -50,14 +50,13 @@ sealed class SimpleType {
 
     data class TFun(
         val params: List<SimpleType>,
-        val paramSpans: List<SourceSpan>,
         val result: SimpleType,
+        val paramNames: List<String> = emptyList(),
     ) : SimpleType() {
         override val level: Int
             get() = (params.map { it.level } + result.level).maxOrNull() ?: 0
 
-        override fun toString(): String =
-            "(${params.joinToString(", ")}) -> $result"
+        override fun toString(): String = "(${params.joinToString(", ")}) -> $result"
     }
 
     data class TRecord(
@@ -75,13 +74,12 @@ sealed class SimpleType {
         override val level: Int
             get() = typeArgs.maxOfOrNull { it.level } ?: 0
 
-        override fun toString(): String =
-            if (typeArgs.isEmpty()) name else "$name<${typeArgs.joinToString(", ")}>"
+        override fun toString(): String = if (typeArgs.isEmpty()) name else "$name<${typeArgs.joinToString(", ")}>"
 
-        private var _expandedStructure: TRecord? = null
+        private var cachedStructure: TRecord? = null
 
         fun expandToStructure(typeLookup: (String) -> TypeDefInfo?): TRecord {
-            _expandedStructure?.let { return it }
+            cachedStructure?.let { return it }
 
             val typeDef = typeLookup(name) ?: error("Type '$name' not registered")
             check(typeArgs.size == typeDef.typeParams.size) {
@@ -96,7 +94,7 @@ sealed class SimpleType {
             fun substitute(ty: SimpleType): SimpleType =
                 when (ty) {
                     is TVar -> substitution[ty] ?: ty
-                    is TFun -> TFun(ty.params.map { substitute(it) }, ty.paramSpans, substitute(ty.result))
+                    is TFun -> TFun(ty.params.map { substitute(it) }, substitute(ty.result), ty.paramNames)
                     is TRecord -> TRecord(ty.fields.mapValues { substitute(it.value) })
                     is TOptional -> TOptional(substitute(ty.inner))
                     is TRef -> TRef(ty.name, ty.typeArgs.map { substitute(it) }, ty.span)
@@ -104,7 +102,7 @@ sealed class SimpleType {
                 }
 
             return TRecord(typeDef.iface.fields.mapValues { substitute(it.value) }).also {
-                _expandedStructure = it
+                cachedStructure = it
             }
         }
     }
@@ -116,8 +114,6 @@ sealed class SimpleType {
      */
     open val level: Int
         get() = 0
-
-
 
     fun clone(): SimpleType = freshenAbove(-1, 0)
 
@@ -153,8 +149,8 @@ sealed class SimpleType {
                 ty is TFun ->
                     TFun(
                         ty.params.map { freshen(it) },
-                        ty.paramSpans,
                         freshen(ty.result),
+                        ty.paramNames,
                     )
                 ty is TRecord ->
                     TRecord(

@@ -29,7 +29,6 @@ class Subtyping(
         rhs: SimpleType,
         span: SourceSpan,
         context: List<ConstraintContext> = emptyList(),
-        lhsIsExpectedType: Boolean = true,
     ) {
         if (lhs is TVar || rhs is TVar) {
             val pair = lhs to rhs
@@ -50,11 +49,11 @@ class Subtyping(
                 if (rhs.level <= lhs.level) {
                     lhs.upperBounds.add(rhs)
                     for (lb in lhs.lowerBounds.toList()) {
-                        constrain(lb, rhs, span, context, lhsIsExpectedType)
+                        constrain(lb, rhs, span, context)
                     }
                 } else {
                     val extruded = extrude(rhs, positive = false, targetLevel = lhs.level)
-                    constrain(lhs, extruded, span, context, lhsIsExpectedType)
+                    constrain(lhs, extruded, span, context)
                 }
             }
 
@@ -62,34 +61,39 @@ class Subtyping(
                 if (lhs.level <= rhs.level) {
                     rhs.lowerBounds.add(lhs)
                     for (ub in rhs.upperBounds.toList()) {
-                        constrain(lhs, ub, span, context, lhsIsExpectedType)
+                        constrain(lhs, ub, span, context)
                     }
                 } else {
                     val extruded = extrude(lhs, positive = true, targetLevel = rhs.level)
-                    constrain(extruded, rhs, span, context, lhsIsExpectedType)
+                    constrain(extruded, rhs, span, context)
                 }
             }
 
             lhs is TFun && rhs is TFun -> {
-                val expected = if (lhsIsExpectedType) lhs else rhs
-                val actual = if (lhsIsExpectedType) rhs else lhs
-                if (expected.params.size != actual.params.size) {
-                    errors.add(TypeError.ArityMismatch(expected.params.size, actual.params.size, span, context))
+                if (lhs.params.size != rhs.params.size) {
+                    errors.add(TypeError.ArityMismatch(lhs.params.size, rhs.params.size, span, context))
                     return
                 }
+                val funCall = context.lastOrNull() as? ConstraintContext.FunctionCall
                 for (i in lhs.params.indices) {
                     val argContext =
                         context +
                             ConstraintContext.Argument(
                                 paramIndex = i,
-                                expected = expected.params[i].clone(),
-                                actual = actual.params[i].clone(),
-                                pos = lhsIsExpectedType,
+                                paramName = lhs.paramNames.getOrNull(i),
+                                subtype = rhs.params[i].clone(),
+                                supertype = lhs.params[i].clone(),
                             )
-                    val paramSpan = if (lhsIsExpectedType) rhs.paramSpans.getOrNull(i) else lhs.paramSpans.getOrNull(i)
-                    constrain(rhs.params[i], lhs.params[i], paramSpan ?: span, argContext, lhsIsExpectedType = !lhsIsExpectedType)
+                    val argSpan = funCall?.argSpans?.getOrNull(i)
+                    constrain(rhs.params[i], lhs.params[i], argSpan ?: span, argContext)
                 }
-                constrain(lhs.result, rhs.result, span, context, lhsIsExpectedType)
+                val resultContext =
+                    context +
+                        ConstraintContext.FunctionResult(
+                            subtype = lhs.result.clone(),
+                            supertype = rhs.result.clone(),
+                        )
+                constrain(lhs.result, rhs.result, span, resultContext)
             }
 
             lhs is TRecord && rhs is TRecord -> {
@@ -98,7 +102,7 @@ class Subtyping(
                     if (lhsType == null) {
                         errors.add(TypeError.MissingField(name, simplifyCanonical(lhs, env), span, context))
                     } else {
-                        constrain(lhsType, rhsType, span, context, lhsIsExpectedType)
+                        constrain(lhsType, rhsType, span, context)
                     }
                 }
             }
@@ -109,8 +113,8 @@ class Subtyping(
             // T <: T? (embedding) and T? <: U? if T <: U (covariance)
             rhs is TOptional -> {
                 when (lhs) {
-                    is TOptional -> constrain(lhs.inner, rhs.inner, span, context, lhsIsExpectedType)
-                    else -> constrain(lhs, rhs.inner, span, context, lhsIsExpectedType)
+                    is TOptional -> constrain(lhs.inner, rhs.inner, span, context)
+                    else -> constrain(lhs, rhs.inner, span, context)
                 }
             }
 
@@ -126,7 +130,7 @@ class Subtyping(
                     if (lhsType == null) {
                         errors.add(TypeError.MissingField(name, simplifyCanonical(lhs, env), span, context))
                     } else {
-                        constrain(lhsType, rhsType, span, context, lhsIsExpectedType)
+                        constrain(lhsType, rhsType, span, context)
                     }
                 }
             }
@@ -141,9 +145,7 @@ class Subtyping(
                 } else {
                     val lhsCtor = ctorLookup(lhs.name)
                     if (lhsCtor == null || lhsCtor.parentType != rhs.name) {
-                        val expectedType = if (lhsIsExpectedType) lhs else rhs
-                        val actualType = if (lhsIsExpectedType) rhs else lhs
-                        errors.add(TypeError.TypeMismatch(expectedType.clone(), actualType.clone(), span, context))
+                        errors.add(TypeError.TypeMismatch(lhs.clone(), rhs.clone(), span, context))
                         return
                     }
                     updatedContext = context + ConstraintContext.ConstructorToParent(lhs.name, rhs.name)
@@ -170,17 +172,15 @@ class Subtyping(
                                 variance = variance,
                             )
                     when (variance) {
-                        Variance.Covariant -> constrain(lhsArg, rhsArg, span, varianceContext, lhsIsExpectedType)
-                        Variance.Contravariant -> constrain(rhsArg, lhsArg, span, varianceContext, !lhsIsExpectedType)
-                        Variance.Invariant, Variance.Bivariant -> constrainEqual(lhsArg, rhsArg, span, varianceContext, lhsIsExpectedType)
+                        Variance.Covariant -> constrain(lhsArg, rhsArg, span, varianceContext)
+                        Variance.Contravariant -> constrain(rhsArg, lhsArg, span, varianceContext)
+                        Variance.Invariant, Variance.Bivariant -> constrainEqual(lhsArg, rhsArg, span, varianceContext)
                     }
                 }
             }
 
             else -> {
-                val expectedType = if (lhsIsExpectedType) lhs else rhs
-                val actualType = if (lhsIsExpectedType) rhs else lhs
-                errors.add(TypeError.TypeMismatch(expectedType.clone(), actualType.clone(), span, context))
+                errors.add(TypeError.TypeMismatch(lhs.clone(), rhs.clone(), span, context))
             }
         }
     }
@@ -210,8 +210,8 @@ class Subtyping(
             is TFun ->
                 TFun(
                     ty.params.map { extrude(it, !positive, targetLevel, cache) },
-                    ty.paramSpans,
                     extrude(ty.result, positive, targetLevel, cache),
+                    ty.paramNames,
                 )
 
             is TRecord ->
@@ -259,7 +259,7 @@ class Subtyping(
         context: List<ConstraintContext> = emptyList(),
         pos: Boolean = true,
     ) {
-        constrain(lhs, rhs, span, context, pos)
-        constrain(rhs, lhs, span, context, !pos)
+        constrain(lhs, rhs, span, context)
+        constrain(rhs, lhs, span, context)
     }
 }

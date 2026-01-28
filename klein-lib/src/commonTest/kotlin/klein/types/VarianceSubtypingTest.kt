@@ -600,4 +600,28 @@ class VarianceSubtypingTest {
             ),
         )
     }
+
+    // ============================================================
+    // Type simplification respects variance
+    // Contravariant type params should simplify to their bound, not Nothing
+    // ============================================================
+
+    @Test
+    fun simplification_contravariantParamShowsBound_notNothing() {
+        assertType(
+            "Consumer<Dog>",
+            infer(
+                """
+                type Animal = Dog | Cat
+                type Consumer<'A> = Consumer { f: 'A -> Num }
+                type ForceDog = ForceDog { dog: Dog }
+
+                Consumer(|dog ->
+                    ForceDog(dog)
+                    1
+                |)
+                """.trimIndent(),
+            ),
+        )
+    }
 }

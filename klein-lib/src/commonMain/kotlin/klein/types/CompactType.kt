@@ -49,72 +49,11 @@ data class CompactType(
             args: List<CompactType>,
         ) = CompactType(refs = setOf(RefType(name, args)))
 
-        fun fromSimpleType(ty: SimpleType): CompactTypeScheme {
-            val recursive = mutableMapOf<Pair<TVar, Boolean>, TVar>()
-            val recVars = mutableMapOf<TVar, CompactType>()
-
-            fun go(
-                ty: SimpleType,
-                pol: Boolean,
-                parents: Set<TVar>,
-                inProgress: Set<Pair<TVar, Boolean>>,
-            ): CompactType =
-                when (ty) {
-                    TNum -> CompactType.prim(PrimType.Num)
-                    TString -> CompactType.prim(PrimType.String)
-                    TBool -> CompactType.prim(PrimType.Bool)
-                    TNull -> CompactType.prim(PrimType.Null)
-                    TUnit -> CompactType.prim(PrimType.Unit)
-                    is TOptional -> CompactType.optional(go(ty.inner, pol, parents, inProgress))
-                    is TFun ->
-                        CompactType.function(
-                            ty.params.map { go(it, !pol, emptySet(), inProgress) },
-                            go(ty.result, pol, emptySet(), inProgress),
-                        )
-                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go(v, pol, emptySet(), inProgress) })
-                    is TRef -> CompactType.ref(ty.name, ty.typeArgs.map { go(it, pol, emptySet(), inProgress) })
-                    is TVar -> {
-                        val key = ty to pol
-
-                        if (key in inProgress) {
-                            if (ty in parents) {
-                                CompactType.empty
-                            } else {
-                                val recVar = recursive.getOrPut(key) { TVar() }
-                                CompactType.variable(recVar)
-                            }
-                        } else {
-                            val bounds = if (pol) ty.lowerBounds.toList() else ty.upperBounds.toList()
-                            val newInProgress = inProgress + key
-                            val bound =
-                                if (bounds.isEmpty()) {
-                                    CompactType.variable(ty)
-                                } else {
-                                    val boundTypes = bounds.map { go(it, pol, parents + ty, newInProgress) }
-                                    boundTypes.fold(CompactType.variable(ty)) { acc, t -> acc.merge(t, pol) }
-                                }
-
-                            val recVar = recursive[key]
-                            if (recVar != null) {
-                                recVars[recVar] = bound
-                                CompactType.variable(recVar)
-                            } else {
-                                bound
-                            }
-                        }
-                    }
-                }
-
-            val term = go(ty, pol = true, parents = emptySet(), inProgress = emptySet())
-            return CompactTypeScheme(term, recVars)
-        }
-
         /**
-         * Canonicalizing version of fromSimpleType.
+         * Convert SimpleType to CompactType using canonicalization.
          *
-         * Unlike fromSimpleType which tracks (TVar, pol) pairs to detect recursion,
-         * this tracks (CompactType, pol) pairs. This allows merging co-occurring
-         * recursive types with different cycle lengths by finding their LCD.
+         * Tracks (CompactType, pol) pairs to detect recursion, allowing merging
+         * co-occurring recursive types with different cycle lengths by finding their LCD.
          *
          * The algorithm uses two phases:
          * - go0: Convert outermost layer without expanding variable bounds
@@ -122,7 +61,11 @@ data class CompactType(
          *
          * This is akin to NFA-to-DFA powerset construction.
          */
-        fun canonicalizeType(ty: SimpleType, positive: Boolean = true): CompactTypeScheme {
+        fun canonicalizeType(
+            ty: SimpleType,
+            positive: Boolean = true,
+            env: TypeEnv,
+        ): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<CompactType, Boolean>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
 
@@ -165,7 +108,15 @@ data class CompactType(
                             go0(ty.result, pol),
                         )
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
-                    is TRef -> CompactType.ref(ty.name, ty.typeArgs.map { go0(it, pol) })
+                    is TRef -> {
+                        val typeDef = env.getTypeDef(ty.name)
+                        CompactType.ref(
+                            ty.name,
+                            ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
+                                go0(arg, if (paramInfo.variance.isPositive) pol else !pol)
+                            },
+                        )
+                    }
                     is TVar -> CompactType(vars = closeOver(setOf(ty), pol))
                 }
 
@@ -204,7 +155,17 @@ data class CompactType(
                                 params.map { go1(it, !pol, newInProgress) } to go1(result, pol, newInProgress)
                             },
                         optional = merged.optional?.let { go1(it, pol, newInProgress) },
-                        refs = merged.refs.map { RefType(it.name, it.args.map { arg -> go1(arg, pol, newInProgress) }) }.toSet(),
+                        refs =
+                            merged.refs
+                                .map { ref ->
+                                    val typeDef = env.getTypeDef(ref.name)
+                                    RefType(
+                                        ref.name,
+                                        ref.args.zip(typeDef.typeParams) { arg, paramInfo ->
+                                            go1(arg, if (paramInfo.variance.isPositive) pol else !pol, newInProgress)
+                                        },
+                                    )
+                                }.toSet(),
                     )
 
                 val recVar = recursive[key]

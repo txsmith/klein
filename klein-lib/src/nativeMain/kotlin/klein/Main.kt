@@ -14,7 +14,7 @@ import platform.posix.ftell
 import platform.posix.rewind
 import platform.posix.stdin
 
-enum class TypeFormat { CANONICAL, PRE_CANONICAL, IR_COMPACT, IR_BOUNDS }
+enum class TypeFormat { CANONICAL, IR_BOUNDS }
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -31,8 +31,6 @@ fun main(args: Array<String>) {
     val typeFormat =
         when {
             "--canonical" in args -> TypeFormat.CANONICAL
-            "--pre-canonical" in args -> TypeFormat.PRE_CANONICAL
-            "--ir-compact" in args -> TypeFormat.IR_COMPACT
             "--ir-bounds" in args -> TypeFormat.IR_BOUNDS
             else -> TypeFormat.CANONICAL
         }
@@ -157,8 +155,6 @@ private fun infer(
         fun formatType(type: SimpleType): String =
             when (format) {
                 TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
-                TypeFormat.PRE_CANONICAL -> Type.print(TypeSimplifier.simplify(type, result.env))
-                TypeFormat.IR_COMPACT -> TypeSimplifier.simplify(type, result.env).toString()
                 TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
             }
 
@@ -199,7 +195,10 @@ private fun infer(
     }
 }
 
-private fun printRawError(error: TypeError, env: TypeEnv) {
+private fun printRawError(
+    error: TypeError,
+    env: TypeEnv,
+) {
     println("Error: ${error.renderMessage(env)} at ${error.span}")
     if (error.context.isNotEmpty()) {
         for (ctx in error.context) {

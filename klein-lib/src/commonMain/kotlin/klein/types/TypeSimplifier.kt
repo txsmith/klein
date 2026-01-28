@@ -8,26 +8,17 @@ import klein.types.SimpleType.TVar
  * Type simplification following the SimpleSub algorithm.
  *
  * Pipeline:
- *   SimpleType → CompactType (fromSimpleType) → simplified CompactType → Type
+ *   SimpleType → CompactType (canonicalizeType) → simplified CompactType → Type
  *
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
 object TypeSimplifier {
-    fun simplify(
-        type: SimpleType,
-        env: TypeEnv,
-    ): Type {
-        val scheme = CompactType.fromSimpleType(type)
-        val simplified = simplifyType(scheme)
-        return coalesceType(simplified, env)
-    }
-
     fun simplifyCanonical(
         type: SimpleType,
         env: TypeEnv,
         positive: Boolean = true,
     ): Type {
-        val scheme = CompactType.canonicalizeType(type, positive)
+        val scheme = CompactType.canonicalizeType(type, positive, env)
         val simplified = simplifyType(scheme)
         return coalesceType(simplified, env)
     }

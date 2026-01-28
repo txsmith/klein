@@ -10,18 +10,31 @@ sealed class ConstraintContext {
 
     data class FunctionCall(
         val funDef: FunDefInfo?,
+        val argSpans: List<SourceSpan> = emptyList(),
     ) : ConstraintContext()
 
     data class Argument(
         val paramIndex: Int,
-        val expected: SimpleType,
-        val actual: SimpleType,
-        val pos: Boolean,
+        val paramName: String?,
+        val subtype: SimpleType,
+        val supertype: SimpleType,
     ) : ConstraintContext() {
         override fun render(env: TypeEnv): String {
-            val exp = Type.print(simplifyCanonical(expected, env, positive = !pos))
-            val act = Type.print(simplifyCanonical(actual, env, positive = pos))
-            return "Argument(paramIndex=$paramIndex, expected=$exp, actual=$act)"
+            val sub = Type.print(simplifyCanonical(subtype, env, positive = true))
+            val sup = Type.print(simplifyCanonical(supertype, env, positive = false))
+            val name = if (paramName != null) ", paramName=$paramName" else ""
+            return "Argument(paramIndex=$paramIndex$name, subtype=$sub, supertype=$sup)"
+        }
+    }
+
+    data class FunctionResult(
+        val subtype: SimpleType,
+        val supertype: SimpleType,
+    ) : ConstraintContext() {
+        override fun render(env: TypeEnv): String {
+            val sub = Type.print(simplifyCanonical(subtype, env, positive = true))
+            val sup = Type.print(simplifyCanonical(supertype, env, positive = false))
+            return "FunctionResult(subtype=$sub, supertype=$sup)"
         }
     }
 
@@ -53,34 +66,43 @@ sealed class TypeError {
 
     protected fun renderContext(env: TypeEnv): List<String> {
         val notes = mutableListOf<String>()
-        for ((i, ctx) in context.withIndex()) {
+        for (ctx in context) {
             when (ctx) {
                 is ConstraintContext.FunctionCall -> {
-                    val argument = context.getOrNull(i + 1) as? ConstraintContext.Argument
-                    val argIndex = argument?.paramIndex
-                    if (ctx.funDef != null && argIndex != null) {
-                        notes.add("In argument '${ctx.funDef.paramNames[argument.paramIndex]}' of ${ctx.funDef.name}")
+                    val funName = ctx.funDef?.name
+                    if (funName != null) {
+                        notes.add("When calling function '$funName'")
                     }
                 }
                 is ConstraintContext.Argument -> {
-                    val expected = Type.print(simplifyCanonical(ctx.expected, env, positive = !ctx.pos))
-                    val actual = Type.print(simplifyCanonical(ctx.actual, env, positive = ctx.pos))
-                    notes.add("└> Requires $expected, got $actual")
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
+                    notes.add("└> $subtype cannot be passed into parameter '${ctx.paramName}: $supertype'")
+                }
+                is ConstraintContext.FunctionResult -> {
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
+                    notes.add("└> Function returns '$subtype', but '$supertype' is required")
                 }
                 is ConstraintContext.ConstructorToParent -> {
-                    notes.add("└> Note: ${ctx.constructorName} is a constructor of ${ctx.parentName}")
+                    notes.add("└> Note: ${ctx.constructorName} is a constructor of type '${ctx.parentName}'")
                 }
                 is ConstraintContext.VarianceCheck -> {
-                    val desc = when (ctx.variance) {
-                        Variance.Invariant -> "invariant"
-                        Variance.Covariant -> "covariant"
-                        Variance.Contravariant -> "contravariant"
-                        Variance.Bivariant -> "bivariant"
-                    }
-                    val typeDisplay = ctx.typeName + if (ctx.typeParams.isNotEmpty()) {
-                        "<${ctx.typeParams.joinToString(", ") { "'$it" }}>"
-                    } else ""
-                    notes.add("└> Note: $typeDisplay is $desc in '${ctx.paramName}")
+                    val desc =
+                        when (ctx.variance) {
+                            Variance.Invariant -> "invariant"
+                            Variance.Covariant -> "covariant"
+                            Variance.Contravariant -> "contravariant"
+                            Variance.Bivariant -> "bivariant"
+                        }
+                    val typeDisplay =
+                        ctx.typeName +
+                            if (ctx.typeParams.isNotEmpty()) {
+                                "<${ctx.typeParams.joinToString(", ") { "'$it" }}>"
+                            } else {
+                                ""
+                            }
+                    notes.add("└> Note: '$typeDisplay' is $desc in '${ctx.paramName}")
                 }
             }
         }
@@ -95,26 +117,31 @@ sealed class TypeError {
     }
 
     data class TypeMismatch(
-        val expected: SimpleType,
-        val actual: SimpleType,
+        val subtype: SimpleType,
+        val supertype: SimpleType,
         override val span: SourceSpan,
         override val context: List<ConstraintContext> = emptyList(),
     ) : TypeError() {
         override val message = "Type mismatch"
 
-        private fun printExpected(env: TypeEnv) = Type.print(simplifyCanonical(expected, env, positive = false))
-        private fun printActual(env: TypeEnv) = Type.print(simplifyCanonical(actual, env, positive = true))
+        private fun printSubtype(env: TypeEnv) = Type.print(simplifyCanonical(subtype, env, positive = true))
 
-        override fun renderMessage(env: TypeEnv) =
-            "Type mismatch: expected ${printExpected(env)}, got ${printActual(env)}"
+        private fun printSupertype(env: TypeEnv) = Type.print(simplifyCanonical(supertype, env, positive = false))
+
+        override fun renderMessage(env: TypeEnv) = "Type mismatch: '${printSubtype(env)}' cannot be used as '${printSupertype(env)}'"
 
         override fun render(env: TypeEnv): String {
             val msg = renderMessage(env)
             if (context.isEmpty()) return msg
             val notes = renderContext(env).toMutableList()
             val lastCtx = context.lastOrNull()
-            if (lastCtx is ConstraintContext.VarianceCheck && lastCtx.variance == Variance.Invariant) {
-                notes.add("\u2514> Therefore: ${printActual(env)} must equal ${printExpected(env)}, which it doesn't")
+            if (lastCtx is ConstraintContext.VarianceCheck) {
+                when (lastCtx.variance) {
+                    Variance.Invariant, Variance.Bivariant ->
+                        notes.add("└> Meaning '${printSubtype(env)}' must equal '${printSubtype(env)}', which it isn't")
+                    Variance.Covariant, Variance.Contravariant ->
+                        notes.add("└> Meaning '${printSubtype(env)}' must be usable as '${printSupertype(env)}', which it isn't")
+                }
             }
             return (listOf(msg) + notes).joinToString("\n")
         }
@@ -126,7 +153,7 @@ sealed class TypeError {
         override val span: SourceSpan,
         override val context: List<ConstraintContext> = emptyList(),
     ) : TypeError() {
-        override val message = "${Type.print(recordType)} has no field '$field'"
+        override val message = "Type error: ${Type.print(recordType)} has no field '$field'"
     }
 
     data class DuplicateField(

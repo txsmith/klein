@@ -41,6 +41,12 @@ enum class Variance {
     Invariant,
     ;
 
+    val isPositive: Boolean get() =
+        when (this) {
+            Covariant, Invariant, Bivariant -> true
+            Contravariant -> false
+        }
+
     fun meet(other: Variance): Variance =
         when {
             this == other -> this

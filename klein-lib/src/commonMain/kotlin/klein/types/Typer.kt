@@ -146,9 +146,9 @@ class Typer {
             val childEnv = env.child(ImplicitParamContext.Available(implicitType))
             val bodyType = infer(body, childEnv)
             if (body.usesImplicitParam) {
-                TFun(listOf(implicitType), emptyList(), bodyType)
+                TFun(listOf(implicitType), bodyType, listOf("."))
             } else {
-                TFun(emptyList(), emptyList(), bodyType)
+                TFun(emptyList(), bodyType)
             }
         } else {
             val blockedContext =
@@ -163,7 +163,7 @@ class Typer {
                 childEnv.bind(name, type)
             }
             val bodyType = infer(body, childEnv)
-            TFun(paramTypes, emptyList(), bodyType)
+            TFun(paramTypes, bodyType, params)
         }
     }
 
@@ -186,10 +186,10 @@ class Typer {
         val argTypes = expr.args.map { infer(it, env) }
         val resultType = env.freshVar()
 
-        val context = listOf(ConstraintContext.FunctionCall(calleeName?.let { env.lookupFunDef(it) }))
+        val context = listOf(ConstraintContext.FunctionCall(calleeName?.let { env.lookupFunDef(it) }, expr.args.map { it.span }))
         subtyping.constrain(
             calleeType,
-            TFun(argTypes, expr.args.map { it.span }, resultType),
+            TFun(argTypes, resultType),
             expr.span,
             context,
         )
@@ -207,7 +207,7 @@ class Typer {
         val argTypes = args.map { infer(it, env) }
         val returnType = env.freshVar()
 
-        val funType = TFun(argTypes, args.map { it.span }, returnType)
+        val funType = TFun(argTypes, returnType)
 
         subtyping.constrain(targetType, TOptional(TRecord(mapOf(callee.field to funType))), span)
 
@@ -644,7 +644,7 @@ class Typer {
                     resultType
                 } else {
                     val fieldTypes = ctor.fields.map { ctorTypeDef.iface.fields[it.name]!! }
-                    TFun(fieldTypes, emptyList(), resultType)
+                    TFun(fieldTypes, resultType, ctor.fields.map { it.name })
                 }
 
             env.bindPolymorphic(ctor.name, ctorType)
@@ -688,7 +688,6 @@ class Typer {
                 is FunctionTypeExpr ->
                     TFun(
                         typeExpr.paramTypes.map { convertToSimpleType(it) },
-                        typeExpr.paramTypes.map { it.span },
                         convertToSimpleType(typeExpr.returnType),
                     )
 
