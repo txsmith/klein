@@ -1,9 +1,44 @@
 package klein.types
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TypeDefErrorTest {
+    @Test
+    fun shadowsBuiltinType_Num() {
+        val errors = inferErrors("type Num = Zero | Succ { n: Num }")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ShadowsBuiltinType)
+    }
+
+    @Test
+    fun shadowsBuiltinType_Bool() {
+        val errors = inferErrors("type Bool = True | False")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ShadowsBuiltinType)
+    }
+
+    @Test
+    fun shadowsBuiltinType_String() {
+        val errors = inferErrors("type String = String { value: Num }")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ShadowsBuiltinType)
+    }
+
+    @Test
+    fun shadowsBuiltinType_Unit() {
+        val errors = inferErrors("type Unit = Unit")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ShadowsBuiltinType)
+    }
+
+    @Test
+    fun shadowsBuiltinType_constructorNamedNum() {
+        val errors = inferErrors("type Wrapper = Num { value: Num }")
+        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType })
+    }
+
     @Test
     fun undeclaredTypeParamInConstructor_error() {
         val errors =

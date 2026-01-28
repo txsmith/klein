@@ -44,7 +44,7 @@ class ConstructorBindingTest {
             "True",
             infer(
                 """
-                type Bool = True | False
+                type MyBool = True | False
                 True
                 """.trimIndent(),
             ),

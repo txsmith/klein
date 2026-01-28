@@ -3,24 +3,34 @@ package klein.types
 import klein.SourceSpan
 
 sealed class SimpleType {
+    enum class Primitive(
+        val typeName: String,
+        val type: SimpleType,
+    ) {
+        Num("Num", TNum),
+        Str("String", TString),
+        Bool("Bool", TBool),
+        Unit("Unit", TUnit),
+    }
+
     object TNum : SimpleType() {
-        override fun toString(): String = "TNum"
+        override fun toString(): String = "Num"
     }
 
     object TString : SimpleType() {
-        override fun toString(): String = "TString"
+        override fun toString(): String = "String"
     }
 
     object TBool : SimpleType() {
-        override fun toString(): String = "TBool"
+        override fun toString(): String = "Bool"
     }
 
     object TNull : SimpleType() {
-        override fun toString(): String = "TNull"
+        override fun toString(): String = "Null"
     }
 
     object TUnit : SimpleType() {
-        override fun toString(): String = "TUnit"
+        override fun toString(): String = "Unit"
     }
 
     data class TOptional(
@@ -75,8 +85,6 @@ sealed class SimpleType {
             get() = typeArgs.maxOfOrNull { it.level } ?: 0
 
         override fun toString(): String = if (typeArgs.isEmpty()) name else "$name<${typeArgs.joinToString(", ")}>"
-
-        private var cachedStructure: SimpleType? = null
     }
 
     /**
@@ -86,6 +94,13 @@ sealed class SimpleType {
      */
     open val level: Int
         get() = 0
+
+    companion object {
+        val primitiveNames: Set<String> = Primitive.entries.map { it.typeName }.toSet()
+        private val primitivesByName: Map<String, SimpleType> = Primitive.entries.associate { it.typeName to it.type }
+
+        fun fromName(name: String): SimpleType? = primitivesByName[name]
+    }
 
     /**
      * Used for copying types to the error context

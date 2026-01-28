@@ -76,11 +76,7 @@ object TypePrinter {
 
         private fun printType(type: SimpleType): String =
             when (type) {
-                TNum -> "Num"
-                TString -> "String"
-                TBool -> "Bool"
-                TNull -> "Null"
-                TUnit -> "Unit"
+                TNum, TString, TBool, TNull, TUnit -> type.toString()
                 is TOptional -> "${printType(type.inner)}?"
                 is TVar -> varName(type)
                 is TFun -> printFun(type)

@@ -32,6 +32,10 @@ class TypeDefPreprocessor(
         val validTypeDefs = mutableListOf<TypeDef>()
         val polyEnv = env.enterBindingScope()
         for (typeDef in typeDefs) {
+            if (typeDef.name in SimpleType.primitiveNames) {
+                errors.add(TypeError.ShadowsBuiltinType(typeDef.name, typeDef.span))
+                continue
+            }
             if (env.lookupTypeDef(typeDef.name) != null) {
                 errors.add(TypeError.DuplicateBinding(typeDef.name, typeDef.span))
                 continue
@@ -52,6 +56,11 @@ class TypeDefPreprocessor(
             )
 
             for (constructor in typeDef.constructors) {
+                if (constructor.name in SimpleType.primitiveNames) {
+                    errors.add(TypeError.ShadowsBuiltinType(constructor.name, constructor.span))
+                    continue
+                }
+
                 if (constructor.name == typeDef.name && typeDef.constructors.size > 1) {
                     errors.add(TypeError.DuplicateBinding(constructor.name, constructor.span))
                     continue
@@ -114,8 +123,7 @@ class TypeDefPreprocessor(
         when (typeExpr) {
             is TypeVar -> {}
             is TypeName -> {
-                val builtinTypes = setOf("Num", "String", "Bool", "Unit")
-                if (typeExpr.name in builtinTypes) return
+                if (typeExpr.name in SimpleType.primitiveNames) return
                 val typeDef = env.lookupTypeDef(typeExpr.name)
                 if (typeDef == null) {
                     errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
@@ -326,13 +334,8 @@ class TypeDefPreprocessor(
                     ?: error("Type variable '${typeExpr.name}' not in scope")
 
             is TypeName ->
-                when (typeExpr.name) {
-                    "Num" -> TNum
-                    "String" -> TString
-                    "Bool" -> TBool
-                    "Unit" -> TUnit
-                    else -> TRef(typeExpr.name, emptyList(), typeExpr.span)
-                }
+                SimpleType.fromName(typeExpr.name)
+                    ?: TRef(typeExpr.name, emptyList(), typeExpr.span)
 
             is AppliedTypeExpr -> {
                 val args = typeExpr.args.map { resolveTypeExprToSimpleType(it, typeVarMap) }

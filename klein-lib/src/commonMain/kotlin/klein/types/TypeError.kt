@@ -224,4 +224,11 @@ sealed class TypeError {
     ) : TypeError() {
         override val message = "Type parameter '$name' is not declared on type '$typeName'"
     }
+
+    data class ShadowsBuiltinType(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "'$name' shadows a builtin type"
+    }
 }

@@ -10,7 +10,7 @@ class TypeDefInferenceTest {
             "True",
             infer(
                 """
-                type Bool = True | False
+                type MyBool = True | False
                 True
                 """.trimIndent(),
             ),
@@ -20,10 +20,10 @@ class TypeDefInferenceTest {
     @Test
     fun basicEnum_bothConstructorsJoinToParent() {
         assertType(
-            "Bool",
+            "MyBool",
             infer(
                 """
-                type Bool = True | False
+                type MyBool = True | False
                 if true then True else False
                 """.trimIndent(),
             ),

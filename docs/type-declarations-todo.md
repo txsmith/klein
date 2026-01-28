@@ -39,18 +39,6 @@ The `'A` in `{ p: Bool, q: 'A, r: 'A }` becomes `Nothing` because the context cl
 2. Simplify using "live" types with final bounds instead of snapshots
 3. Store type variable identities and resolve bounds lazily at render time
 
-## Disallow Shadowing Builtin Type Names
-
-Users can currently define types with names that shadow builtins:
-```klein
-type Bool = True | False  // shadows the builtin Bool
-type Num = Zero | Succ { n: Num }  // shadows the builtin Num
-```
-
-This should be an error. The reserved type names (`Num`, `String`, `Bool`, `Unit`) should be added to validation in either:
-1. Parser's `validateNotReserved` function, or
-2. Typer's `registerPlaceholders` (to report as a `TypeError`)
-
 ## Deduplicate MissingField Errors
 
 When a sum type's parent iface TVar has multiple constructor lower bounds, constraint propagation produces one `MissingField` error per constructor that lacks the field. For example:

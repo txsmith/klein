@@ -126,11 +126,11 @@ class Subtyping(
             // Structural subtyping
             lhs is TRef && rhs is TRecord -> {
                 val typeDef = env.getTypeDef(lhs.name)
-                val (freshType, replacedVars) = typeDef.iface.instantiate(env.level)
-                val newVars = typeDef.typeParams.map { it.copy(tvar = replacedVars[it.tvar] ?: it.tvar) }
+                val (structuralType, replacedVars) = typeDef.iface.instantiate(env.level)
+                val freshVars = typeDef.typeParams.map { it.copy(tvar = replacedVars[it.tvar] ?: it.tvar) }
 
                 // TODO: add to ConstraintContext
-                newVars.zip(lhs.typeArgs) { typeParam, typeArg ->
+                freshVars.zip(lhs.typeArgs) { typeParam, typeArg ->
                     when (typeParam.variance) {
                         Variance.Covariant -> constrain(typeArg, typeParam.tvar, span, context)
                         Variance.Contravariant -> constrain(typeParam.tvar, typeArg, span, context)
@@ -138,7 +138,7 @@ class Subtyping(
                     }
                 }
 
-                constrain(freshType, rhs, span, context)
+                constrain(structuralType, rhs, span, context)
             }
 
             // Nominal subtyping
