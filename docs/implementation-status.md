@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** Parser complete for core expression features. Type inference implemented (SimpleSub). No interpreter.
+**Current state:** Parser complete for core expression features and type definitions. Type inference implemented (SimpleSub) with nominal types, variance inference, and structural subtyping. No interpreter.
 
 ## Parser
 
@@ -24,6 +24,11 @@
 | Record literals | `{ x = 1, y = 2 }` |
 | Record shorthand | `{ name }` = `{ name = name }` |
 | Trailing commas | `{ x = 1, }` |
+| Type definitions | `type Money = Money { value: Num }` |
+| Sum types | `type Color = Red \| Green \| Blue` |
+| Type parameters | `type Option<'A> = Some { value: 'A } \| None` |
+| Upper identifiers | `Person`, `Some`, `None` (constructors and type names) |
+| Type variables | `'A`, `'B` in type definitions |
 | If-then-else | `if cond then a else b` |
 | Val bindings | `x = expr` |
 | Blocks | Indentation-based |
@@ -65,8 +70,6 @@
 
 | Feature | Notes |
 |---------|-------|
-| Type definitions | `type Person = Person { name: String }` |
-| Sum types | `type Color = Red \| Green \| Blue` |
 | Type aliases | `type Money = Num` |
 | Extension methods | `fun f(on x: T)` |
 | Modules | `module Name` |
@@ -96,13 +99,26 @@ See [type-system.md](type-system.md) for design and [simplesub-type-inference.md
 | Union/intersection | `a \| b`, `a & b` |
 | Type simplification | Canonicalization of recursive types |
 
+### Complete (Type Definitions)
+
+| Feature | Notes |
+|---------|-------|
+| Nominal types | `type Money = Money { value: Num }` — types with identity |
+| Sum types | `type Option<'A> = Some { value: 'A } \| None` |
+| First-class constructors | `nums.map(Some)` — constructors are functions |
+| Variance inference | Automatic covariant/contravariant/invariant inference |
+| Phantom types | Unused type params are invariant (e.g., `UserId<State>`) |
+| Nominal → structural | `Money <: { value: Num }` |
+| Inferred interfaces | Sum types expose common fields (intersection-based) |
+| Constructor → parent | `Some<Num> <: Option<Num>` |
+| Validation | No shadowing primitives, no duplicate constructors/types |
+
+See [variance-inference.md](decisions/2026-01-27-variance-inference.md), [inferred-interfaces.md](decisions/2026-01-27-inferred-interfaces.md), and [nominal-structural-subtyping.md](decisions/2026-01-27-nominal-structural-subtyping.md) for design decisions.
+
 ### Not Started
 
 | Feature | Notes |
 |---------|-------|
-| Sum types | `Ok { value: t } \| Err { error: e }` |
-| Generics | `List<'A>`, `Option<'A>` |
-| Nominal types | `type Person = Person { ... }` creates nominal type |
 | Kleene types | `T?`, `T*`, `T+` (experimental) |
 
 ## Interpreter
