@@ -232,10 +232,8 @@ class InferredInterfaceTest {
                 H(A(1, "hi", true)).abc.z
                 """.trimIndent(),
             )
-        // TODO: should be 1 error after MissingField deduplication
-        assertEquals(2, errors.size)
+        assertEquals(1, errors.size)
         assertMissingField(errors[0], "z")
-        assertMissingField(errors[1], "z")
     }
 
     @Test

@@ -1,6 +1,7 @@
 package klein.types
 
 import klein.SourceSpan
+import klein.Type
 import klein.types.SimpleType.*
 import klein.types.TypeSimplifier.simplifyCanonical
 
@@ -12,7 +13,7 @@ class Subtyping(
     private fun ctorLookup(name: String): ConstructorInfo? = env.lookupConstructor(name)
 
     private val cache = mutableSetOf<Pair<SimpleType, SimpleType>>()
-    private val errors = mutableListOf<TypeError>()
+    private val errors = linkedSetOf<TypeError>()
 
     fun getErrors(): List<TypeError> = errors.toList()
 
@@ -100,7 +101,14 @@ class Subtyping(
                 for ((name, rhsType) in rhs.fields) {
                     val lhsType = lhs.fields[name]
                     if (lhsType == null) {
-                        errors.add(TypeError.MissingField(name, simplifyCanonical(lhs, env), span, context))
+                        val nominalType = context.filterIsInstance<ConstraintContext.NominalToStructural>().lastOrNull()
+                        val recordType =
+                            if (nominalType != null) {
+                                Type.Ref(nominalType.typeName, emptyList())
+                            } else {
+                                simplifyCanonical(lhs, env)
+                            }
+                        errors.add(TypeError.MissingField(name, recordType, span, context))
                     } else {
                         constrain(lhsType, rhsType, span, context)
                     }
@@ -129,7 +137,6 @@ class Subtyping(
                 val (structuralType, replacedVars) = typeDef.iface.instantiate(env.level)
                 val freshVars = typeDef.typeParams.map { it.copy(tvar = replacedVars[it.tvar] ?: it.tvar) }
 
-                // TODO: add to ConstraintContext
                 freshVars.zip(lhs.typeArgs) { typeParam, typeArg ->
                     when (typeParam.variance) {
                         Variance.Covariant -> constrain(typeArg, typeParam.tvar, span, context)
@@ -138,7 +145,7 @@ class Subtyping(
                     }
                 }
 
-                constrain(structuralType, rhs, span, context)
+                constrain(structuralType, rhs, span, context + ConstraintContext.NominalToStructural(lhs.name))
             }
 
             // Nominal subtyping

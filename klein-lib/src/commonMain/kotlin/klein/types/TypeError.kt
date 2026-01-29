@@ -43,6 +43,10 @@ sealed class ConstraintContext {
         val parentName: String,
     ) : ConstraintContext()
 
+    data class NominalToStructural(
+        val typeName: String,
+    ) : ConstraintContext()
+
     data class VarianceCheck(
         val typeName: String,
         val typeParams: List<String>,
@@ -102,6 +106,10 @@ sealed class TypeError {
         override val context: List<ConstraintContext> = emptyList(),
     ) : TypeError() {
         override val message = "Type error: ${Type.print(recordType)} has no field '$field'"
+
+        override fun equals(other: Any?) = other is MissingField && field == other.field && span == other.span
+
+        override fun hashCode() = 31 * field.hashCode() + span.hashCode()
     }
 
     data class DuplicateField(
@@ -235,6 +243,7 @@ sealed class TypeError {
                             }
                     notes.add("└> Note: '$typeDisplay' is $desc in '${ctx.paramName}")
                 }
+                is ConstraintContext.NominalToStructural -> {}
             }
         }
         return notes
