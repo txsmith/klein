@@ -2,7 +2,6 @@ package klein.types
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class SimpleSubTest {
     @Test
@@ -144,14 +143,14 @@ class SimpleSubTest {
     fun records_missingField_error() {
         val errors = inferErrors("{ a = 123, b = true }.c")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "c")
     }
 
     @Test
     fun records_missingFieldInFunction_error() {
         val errors = inferErrors("|x -> { a = x }.b|")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "b")
     }
 
     @Test

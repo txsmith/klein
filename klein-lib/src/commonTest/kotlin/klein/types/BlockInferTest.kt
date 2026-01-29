@@ -101,7 +101,7 @@ class BlockInferTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.UnboundVariable)
+        assertUnbound(errors[0], "x")
     }
 
     @Test
@@ -131,7 +131,7 @@ class BlockInferTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.DuplicateBinding)
+        assertDuplicateBinding(errors[0], "x")
     }
 
     @Test

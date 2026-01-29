@@ -71,7 +71,7 @@ class Subtyping(
 
             lhs is TFun && rhs is TFun -> {
                 if (lhs.params.size != rhs.params.size) {
-                    errors.add(TypeError.ArityMismatch(lhs.params.size, rhs.params.size, span, context))
+                    errors.add(TypeError.CallArityMismatch(lhs.params.size, rhs.params.size, span, context))
                     return
                 }
                 val funCall = context.lastOrNull() as? ConstraintContext.FunctionCall

@@ -42,7 +42,7 @@ class FunctionInferTest {
         env.bind("f", TFun(listOf(TNum), TString))
         val errors = inferErrors("f(1, 2)", env)
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.ArityMismatch)
+        assertCallArityMismatch(errors[0], expected = 1, actual = 2)
     }
 
     @Test
@@ -58,7 +58,7 @@ class FunctionInferTest {
     fun apply_unboundFunction() {
         val errors = inferErrors("unknown(1)")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.UnboundVariable)
+        assertUnbound(errors[0], "unknown")
     }
 
     @Test

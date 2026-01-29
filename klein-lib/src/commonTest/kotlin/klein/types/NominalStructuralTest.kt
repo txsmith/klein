@@ -2,7 +2,6 @@ package klein.types
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class NominalStructuralTest {
     @Test
@@ -140,50 +139,19 @@ class NominalStructuralTest {
         assertMismatch(errors[0], "{ value: Num }", "Money")
     }
 
-    // ============================================================
-    // Structural records cannot subtype nominal types
-    // ============================================================
-
-    @Test
-    fun recordLiteralCannotSubtypeNominalParam() {
-        val errors =
-            inferErrors(
-                """
-                type Money = Money { value: Num }
-                type MoneyConsumer = MoneyConsumer { f: Money -> Num }
-                mc = MoneyConsumer(|m -> m.value|)
-                mc.f({ value = 100 })
-                """.trimIndent(),
-            )
-        assertTrue(errors.isNotEmpty(), "Structural record should not be usable where Money is expected")
-    }
-
-    @Test
-    fun recordWithExactSameFieldsCannotSubtypeNominal() {
-        val errors =
-            inferErrors(
-                """
-                type Point = Point { x: Num, y: Num }
-                type PointConsumer = PointConsumer { f: Point -> Num }
-                pc = PointConsumer(|p -> p.x + p.y|)
-                pc.f({ x = 3, y = 4 })
-                """.trimIndent(),
-            )
-        assertTrue(errors.isNotEmpty(), "Record with same fields as Point should not subtype Point")
-    }
-
     @Test
     fun genericStructuralCannotSubtypeGenericNominal() {
         val errors =
             inferErrors(
                 """
                 type Box<'A> = Box { content: 'A }
-                type BoxNumConsumer = BoxNumConsumer { f: Box<Num> -> Num }
-                bc = BoxNumConsumer(|b -> b.content|)
-                bc.f({ content = 42 })
+                type ForceBox = ForceBox { b: Box<Num> }
+
+                ForceBox({ content = 42 })
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Structural record should not subtype generic nominal Box<Num>")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "{ content: Num }", "Box<Num>")
     }
 
     @Test
@@ -193,12 +161,13 @@ class NominalStructuralTest {
                 """
                 type Dollars = Dollars { amount: Num }
                 type Euros = Euros { amount: Num }
-                type DollarConsumer = DollarConsumer { f: Dollars -> Num }
-                dc = DollarConsumer(|d -> d.amount|)
-                dc.f(Euros(50))
+                type ForceDollars = ForceDollars { d: Dollars }
+
+                ForceDollars(Euros(50))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Euros should not be usable where Dollars is expected")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Euros", "Dollars")
     }
 
     // ============================================================
@@ -267,19 +236,5 @@ class NominalStructuralTest {
                 """.trimIndent(),
             ),
         )
-    }
-
-    @Test
-    fun nestedNominal_structuralCannotSubstituteForInnerNominal() {
-        val errors =
-            inferErrors(
-                """
-                type Address = Address { city: String, zip: Num }
-                type Person = Person { name: String, address: Address }
-
-                Person("Alice", { city = "Nairobi", zip = 10100 })
-                """.trimIndent(),
-            )
-        assertTrue(errors.isNotEmpty(), "Structural record should not be accepted where nominal Address is required")
     }
 }

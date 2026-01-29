@@ -125,13 +125,22 @@ sealed class TypeError {
         override val message = "'$name' is already defined"
     }
 
-    data class ArityMismatch(
+    data class CallArityMismatch(
         val expected: Int,
         val actual: Int,
         override val span: SourceSpan,
         override val context: List<ConstraintContext> = emptyList(),
     ) : TypeError() {
-        override val message = "Expected $expected arguments, got $actual"
+        override val message = "Expected $expected argument(s), got $actual"
+    }
+
+    data class TypeArityMismatch(
+        val typeName: String,
+        val expected: Int,
+        val actual: Int,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type '$typeName' expects $expected type parameter(s), got $actual"
     }
 
     data class ImplicitParamOutsideLambda(

@@ -69,7 +69,7 @@ class RecordInferTest {
     fun fieldAccess_missingField() {
         val errors = inferErrors("{ x = 1 }.y")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "y")
     }
 
     @Test

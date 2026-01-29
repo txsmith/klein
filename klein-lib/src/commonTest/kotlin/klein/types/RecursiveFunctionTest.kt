@@ -1,7 +1,7 @@
 package klein.types
 
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 class RecursiveFunctionTest {
     @Test
@@ -157,8 +157,8 @@ class RecursiveFunctionTest {
                 f
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.UnboundVariable })
+        assertEquals(1, errors.size)
+        assertUnbound(errors[0], "f")
     }
 
     @Test

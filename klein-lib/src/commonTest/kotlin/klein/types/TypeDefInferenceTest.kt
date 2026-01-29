@@ -2,7 +2,6 @@ package klein.types
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class TypeDefInferenceTest {
     @Test
@@ -303,7 +302,7 @@ class TypeDefInferenceTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "intensity")
     }
 
     @Test
@@ -536,8 +535,8 @@ class TypeDefInferenceTest {
                 Some(42) + 1
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Some<Num>", "Num")
     }
 
     @Test
@@ -565,8 +564,8 @@ class TypeDefInferenceTest {
                 addOne(Wrapper("not a number"))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "String", "Num")
     }
 
     // ============================================================

@@ -38,6 +38,52 @@ fun assertType(
     actual: Type,
 ) = assertEquals(expected, Type.print(actual))
 
+fun assertDuplicateBinding(
+    error: TypeError,
+    name: String,
+) {
+    check(error is TypeError.DuplicateBinding) { "Expected DuplicateBinding but got ${error::class.simpleName}" }
+    assertEquals(name, error.name, "name")
+}
+
+fun assertUnbound(
+    error: TypeError,
+    name: String,
+) {
+    check(error is TypeError.UnboundVariable) { "Expected UnboundVariable but got ${error::class.simpleName}" }
+    assertEquals(name, error.name, "name")
+}
+
+fun assertMissingField(
+    error: TypeError,
+    field: String,
+) {
+    check(error is TypeError.MissingField) { "Expected MissingField but got ${error::class.simpleName}" }
+    assertEquals(field, error.field, "field")
+}
+
+fun assertCallArityMismatch(
+    error: TypeError,
+    expected: Int,
+    actual: Int,
+) {
+    check(error is TypeError.CallArityMismatch) { "Expected CallArityMismatch but got ${error::class.simpleName}" }
+    assertEquals(expected, error.expected, "expected")
+    assertEquals(actual, error.actual, "actual")
+}
+
+fun assertTypeArityMismatch(
+    error: TypeError,
+    typeName: String,
+    expected: Int,
+    actual: Int,
+) {
+    check(error is TypeError.TypeArityMismatch) { "Expected TypeArityMismatch but got ${error::class.simpleName}" }
+    assertEquals(typeName, error.typeName, "typeName")
+    assertEquals(expected, error.expected, "expected")
+    assertEquals(actual, error.actual, "actual")
+}
+
 fun assertMismatch(
     error: TypeError,
     sub: String,

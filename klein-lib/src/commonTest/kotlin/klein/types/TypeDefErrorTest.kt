@@ -36,7 +36,8 @@ class TypeDefErrorTest {
     @Test
     fun shadowsBuiltinType_constructorNamedNum() {
         val errors = inferErrors("type Wrapper = Num { value: Num }")
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType })
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.ShadowsBuiltinType)
     }
 
     @Test
@@ -60,7 +61,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.UnboundVariable)
+        assertUnbound(errors[0], "Bar")
     }
 
     @Test
@@ -74,7 +75,8 @@ class TypeDefErrorTest {
                 None
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.DuplicateBinding })
+        assertEquals(1, errors.size)
+        assertDuplicateBinding(errors[0], "None")
     }
 
     @Test
@@ -87,7 +89,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.DuplicateBinding)
+        assertDuplicateBinding(errors[0], "Foo")
     }
 
     @Test
@@ -98,8 +100,8 @@ class TypeDefErrorTest {
                 type Foo = Foo { x: Num } | Bar
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.DuplicateBinding })
+        assertEquals(1, errors.size)
+        assertDuplicateBinding(errors[0], "Foo")
     }
 
     @Test
@@ -112,8 +114,8 @@ class TypeDefErrorTest {
                 Some(1, 2)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertCallArityMismatch(errors[0], expected = 1, actual = 2)
     }
 
     @Test
@@ -126,8 +128,8 @@ class TypeDefErrorTest {
                 Pair(1)
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertCallArityMismatch(errors[0], expected = 2, actual = 1)
     }
 
     @Test
@@ -183,8 +185,8 @@ class TypeDefErrorTest {
                 None.value
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.MissingField })
+        assertEquals(1, errors.size)
+        assertMissingField(errors[0], "value")
     }
 
     @Test
@@ -196,7 +198,8 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(2, errors.size)
-        assertTrue(errors.all { it is TypeError.UnboundVariable })
+        assertUnbound(errors[0], "Cons")
+        assertUnbound(errors[1], "Nil")
     }
 
     @Test
@@ -268,8 +271,8 @@ class TypeDefErrorTest {
                 getRadius(if true then Circle(5) else Rectangle(3, 4))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.MissingField })
+        assertEquals(1, errors.size)
+        assertMissingField(errors[0], "radius")
     }
 
     @Test
@@ -283,7 +286,9 @@ class TypeDefErrorTest {
                 Foo(Bar(Nil))
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.UnboundVariable })
+        assertEquals(2, errors.size)
+        assertUnbound(errors[0], "Baz")
+        assertUnbound(errors[1], "Nil")
     }
 
     @Test
@@ -311,7 +316,8 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "List", expected = 1, actual = 2)
     }
 
     @Test
@@ -325,7 +331,8 @@ class TypeDefErrorTest {
                 Bad(None)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "Option", expected = 1, actual = 3)
     }
 
     @Test
@@ -339,7 +346,8 @@ class TypeDefErrorTest {
                 Bad(Empty)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "Map", expected = 2, actual = 1)
     }
 
     @Test
@@ -353,7 +361,8 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "List", expected = 1, actual = 0)
     }
 
     @Test
@@ -367,7 +376,8 @@ class TypeDefErrorTest {
                 Bad(True)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "MyBool", expected = 0, actual = 1)
     }
 
     @Test
@@ -382,7 +392,8 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "Option", expected = 1, actual = 2)
     }
 
     @Test
@@ -397,6 +408,7 @@ class TypeDefErrorTest {
                 Bad(Nil)
                 """.trimIndent(),
             )
-        assertTrue(errors.any { it is TypeError.ArityMismatch })
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], typeName = "List", expected = 1, actual = 2)
     }
 }

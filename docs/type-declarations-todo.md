@@ -53,21 +53,3 @@ This produces two `MissingField` errors for `z` (one from B, one from C), but sh
 ## Include Constructor Name in MissingField Errors
 
 When a field access fails on a sum type, the error should indicate which constructor(s) are missing the field, similar to MLscript's `Type 'Cons[Num]' does not contain member 'x'`. This could be done via `ConstraintContext`.
-
-## Error Tests Only Check Presence, Not Content
-
-Many typing tests that expect errors only verify `errors.isNotEmpty()` without asserting which specific error was thrown. This could hide bugs where the wrong error is being reported. We should:
-
-1. Add assertions for the specific `TypeError` subclass (e.g., `TypeMismatch`, `ArityMismatch`)
-2. Optionally assert on error details (expected/actual types, span location, etc.)
-
-Example of current weak assertion:
-```kotlin
-assertTrue(errors.isNotEmpty(), "Box<Cat> should not subtype Box<Dog>")
-```
-
-Should be something like:
-```kotlin
-assertEquals(1, errors.size)
-assertTrue(errors[0] is TypeError.TypeMismatch)
-```

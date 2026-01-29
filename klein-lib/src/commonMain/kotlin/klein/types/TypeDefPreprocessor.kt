@@ -16,7 +16,6 @@ class TypeDefPreprocessor(
         val validTypeDefs = registerPlaceholders(typeDefs, env)
 
         resolveNames(env)
-        if (errors.isNotEmpty()) return
 
         computeVariance(validTypeDefs, env)
 
@@ -128,7 +127,7 @@ class TypeDefPreprocessor(
                 if (typeDef == null) {
                     errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
                 } else if (typeDef.typeParams.isNotEmpty()) {
-                    errors.add(TypeError.ArityMismatch(typeDef.typeParams.size, 0, typeExpr.span))
+                    errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, 0, typeExpr.span))
                 }
             }
             is AppliedTypeExpr -> {
@@ -136,7 +135,7 @@ class TypeDefPreprocessor(
                 if (typeDef == null) {
                     errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
                 } else if (typeExpr.args.size != typeDef.typeParams.size) {
-                    errors.add(TypeError.ArityMismatch(typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
+                    errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
                 }
                 for (arg in typeExpr.args) {
                     resolveTypeExpr(arg, env)
@@ -193,9 +192,7 @@ class TypeDefPreprocessor(
         ): Boolean =
             when (typeExpr) {
                 is TypeVar -> {
-                    val current =
-                        variances[ownerName to typeExpr.name]
-                            ?: error("TypeVar '${typeExpr.name}' not found in variances for $ownerName")
+                    val current = variances[ownerName to typeExpr.name] ?: return false
                     val newVariance = current.meet(polarity)
                     if (newVariance != current) {
                         variances[ownerName to typeExpr.name] = newVariance
@@ -208,15 +205,11 @@ class TypeDefPreprocessor(
                 is TypeName -> false
 
                 is AppliedTypeExpr -> {
-                    val refInfo = env.getTypeDef(typeExpr.name)
+                    val refInfo = env.lookupTypeDef(typeExpr.name) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
-                        val paramName =
-                            refInfo.typeParams.getOrNull(i)?.name
-                                ?: error("Type '${typeExpr.name}' has ${refInfo.typeParams.size} params but got arg at index $i")
-                        val paramVariance =
-                            variances[typeExpr.name to paramName]
-                                ?: error("Variance not found for ${typeExpr.name}.$paramName")
+                        val paramName = refInfo.typeParams.getOrNull(i)?.name ?: break
+                        val paramVariance = variances[typeExpr.name to paramName] ?: break
                         val argPolarity =
                             when (paramVariance) {
                                 Variance.Bivariant -> polarity
@@ -327,25 +320,32 @@ class TypeDefPreprocessor(
     private fun resolveTypeExprToSimpleType(
         typeExpr: TypeExpr,
         typeVarMap: Map<String, TVar>,
+        env: TypeEnv,
     ): SimpleType =
         when (typeExpr) {
             is TypeVar ->
-                typeVarMap[typeExpr.name]
-                    ?: error("Type variable '${typeExpr.name}' not in scope")
+                typeVarMap[typeExpr.name] ?: env.freshVar()
 
             is TypeName ->
                 SimpleType.fromName(typeExpr.name)
-                    ?: TRef(typeExpr.name, emptyList(), typeExpr.span)
+                    ?: if (env.lookupTypeDef(typeExpr.name) != null) {
+                        TRef(typeExpr.name, emptyList(), typeExpr.span)
+                    } else {
+                        env.freshVar()
+                    }
 
-            is AppliedTypeExpr -> {
-                val args = typeExpr.args.map { resolveTypeExprToSimpleType(it, typeVarMap) }
-                TRef(typeExpr.name, args, typeExpr.span)
-            }
+            is AppliedTypeExpr ->
+                if (env.lookupTypeDef(typeExpr.name) != null) {
+                    val args = typeExpr.args.map { resolveTypeExprToSimpleType(it, typeVarMap, env) }
+                    TRef(typeExpr.name, args, typeExpr.span)
+                } else {
+                    env.freshVar()
+                }
 
             is FunctionTypeExpr ->
                 TFun(
-                    typeExpr.paramTypes.map { resolveTypeExprToSimpleType(it, typeVarMap) },
-                    resolveTypeExprToSimpleType(typeExpr.returnType, typeVarMap),
+                    typeExpr.paramTypes.map { resolveTypeExprToSimpleType(it, typeVarMap, env) },
+                    resolveTypeExprToSimpleType(typeExpr.returnType, typeVarMap, env),
                 )
 
             is TupleTypeExpr -> {
@@ -355,7 +355,7 @@ class TypeDefPreprocessor(
                     val fields =
                         typeExpr.elements
                             .mapIndexed { i, elem ->
-                                "_$i" to resolveTypeExprToSimpleType(elem, typeVarMap)
+                                "_$i" to resolveTypeExprToSimpleType(elem, typeVarMap, env)
                             }.toMap()
                     TRecord(fields)
                 }
@@ -364,7 +364,7 @@ class TypeDefPreprocessor(
             is RecordTypeExpr ->
                 TRecord(
                     typeExpr.fields.associate { (name, type) ->
-                        name to resolveTypeExprToSimpleType(type, typeVarMap)
+                        name to resolveTypeExprToSimpleType(type, typeVarMap, env)
                     },
                 )
         }
@@ -375,7 +375,7 @@ class TypeDefPreprocessor(
     ): TRecord {
         val ctorTypeDef = env.getTypeDef(ctor.name)
         val typeVarMap: Map<String, TVar> = ctorTypeDef.typeParams.associate { it.name to it.tvar }
-        val fields = ctor.fields.associate { it.name to resolveTypeExprToSimpleType(it.type, typeVarMap) }
+        val fields = ctor.fields.associate { it.name to resolveTypeExprToSimpleType(it.type, typeVarMap, env) }
 
         return TRecord(fields)
     }

@@ -3,7 +3,6 @@ package klein.types
 import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class InferredInterfaceTest {
     @Test
@@ -93,7 +92,7 @@ class InferredInterfaceTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "x")
     }
 
     @Test
@@ -123,7 +122,7 @@ class InferredInterfaceTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "y")
     }
 
     @Test
@@ -169,7 +168,7 @@ class InferredInterfaceTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "value")
     }
 
     @Test
@@ -199,7 +198,7 @@ class InferredInterfaceTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.MissingField)
+        assertMissingField(errors[0], "value")
     }
 
     @Test
@@ -235,7 +234,8 @@ class InferredInterfaceTest {
             )
         // TODO: should be 1 error after MissingField deduplication
         assertEquals(2, errors.size)
-        assertTrue(errors.all { it is TypeError.MissingField })
+        assertMissingField(errors[0], "z")
+        assertMissingField(errors[1], "z")
     }
 
     @Test
