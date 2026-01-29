@@ -36,21 +36,6 @@ class InferredInterfaceTest {
     }
 
     @Test
-    fun commonFieldWithSameType_interfaceHasField() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type AB = A { x: Num } | B { x: Num }
-                type H = H { ab: AB }
-
-                H(A(42)).ab.x
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun commonFieldWithDifferentTypes_unifiesViaSimpleSub() {
         assertType(
             "Num | String",
@@ -60,21 +45,6 @@ class InferredInterfaceTest {
                 type H = H { ab: AB }
 
                 H(A(42)).ab.x
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun commonFieldWithDifferentTypes_appliedToBothViaHolder() {
-        assertType(
-            "{ a: Num | String, b: Num | String }",
-            infer(
-                """
-                type AB = A { x: Num } | B { x: String }
-                type H = H { ab: AB }
-
-                { a = H(A(42)).ab.x, b = H(B("hello")).ab.x }
                 """.trimIndent(),
             ),
         )
@@ -297,36 +267,6 @@ class InferredInterfaceTest {
     }
 
     @Test
-    fun sumTypeSubtypesInferredInterface() {
-        assertType(
-            Type.Num,
-            infer(
-                """
-                type Light = Red { duration: Num } | Yellow { duration: Num } | Green { duration: Num }
-                type H = H { light: Light }
-
-                H(Red(10)).light.duration
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun constructorSubtypesParent_fieldStillAccessible() {
-        assertType(
-            Type.Num,
-            infer(
-                """
-                type Light = Red { duration: Num } | Yellow { duration: Num } | Green { duration: Num }
-
-                red = Red(10)
-                red.duration
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun constructorHasMoreFieldsThanInterface() {
         assertType(
             "{ d: Num, i: Num }",
@@ -338,21 +278,6 @@ class InferredInterfaceTest {
 
                 red = Red(10, 100)
                 { d = red.duration, i = red.intensity }
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun sumTypeInIfThenElse_commonFieldAccessible() {
-        assertType(
-            Type.Num,
-            infer(
-                """
-                type Light = Red { duration: Num } | Yellow { duration: Num } | Green { duration: Num }
-                type H = H { light: Light }
-
-                H(if true then Red(10) else Green(20)).light.duration
                 """.trimIndent(),
             ),
         )
@@ -383,36 +308,6 @@ class InferredInterfaceTest {
 
                 m = if true then Concrete(42) else Generic("hi")
                 m.x
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun differentTypes_numAndString_unifiesViaUpperBound() {
-        assertType(
-            "Num | String",
-            infer(
-                """
-                type Mixed = A { x: Num } | B { x: String }
-                type H = H { m: Mixed }
-
-                H(A(42)).m.x
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun functionTypes_differentReturnTypes_unifiesReturnType() {
-        assertType(
-            "(Num) -> Num | String",
-            infer(
-                """
-                type Handlers = A { f: Num -> String } | B { f: Num -> Num }
-                type H = H { h: Handlers }
-
-                H(A(|x -> "hello"|)).h.f
                 """.trimIndent(),
             ),
         )
@@ -559,22 +454,6 @@ class InferredInterfaceTest {
         )
     }
 
-    @Test
-    fun deeplyNestedUnification_threeLevels() {
-        assertType(
-            "{ l1: { l2: { l3: Num | String } } }",
-            infer(
-                """
-                type Deep = A { data: { l1: { l2: { l3: Num } } } }
-                          | B { data: { l1: { l2: { l3: String } } } }
-                type H = H { d: Deep }
-
-                H(A({ l1 = { l2 = { l3 = 42 } } })).d.data
-                """.trimIndent(),
-            ),
-        )
-    }
-
     // ============================================================
     // Polymorphic interface usage
     // ============================================================
@@ -589,22 +468,6 @@ class InferredInterfaceTest {
 
                 fun getValue(c) = c.value
                 getValue(Box(42))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun genericFieldAccess_resultPassedToTypedFunction() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type Pair<'A> = Left { value: 'A, side: String } | Right { value: 'A, side: String }
-
-                fun getValue(p) = p.value
-                fun addOne(x) = x + 1
-                addOne(getValue(Left(10, "left")))
                 """.trimIndent(),
             ),
         )

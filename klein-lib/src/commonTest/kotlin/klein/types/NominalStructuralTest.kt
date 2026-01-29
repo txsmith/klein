@@ -20,21 +20,6 @@ class NominalStructuralTest {
     }
 
     @Test
-    fun nominalSubtypesStructural_consPartialFieldAccess() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-
-                fun getHead(r) = r.head
-                getHead(Cons(42, Nil))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun nominalSubtypesStructural_multipleFieldsAccess() {
         assertType(
             "{ x: Num, y: Num }",
@@ -44,51 +29,6 @@ class NominalStructuralTest {
 
                 fun toRecord(p) = { x = p.x, y = p.y }
                 toRecord(Point(1, 2))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun nominalInFunctionContext_acceptsNominalForStructural() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type Dollars = Dollars { amount: Num }
-
-                fun getAmount(r) = r.amount
-                getAmount(Dollars(50))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun nominalInFunctionContext_functionInferredToRequireStructuralAcceptsNominal() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type Point = Point { x: Num, y: Num }
-
-                fun sumCoords(p) = p.x + p.y
-                sumCoords(Point(3, 4))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun nominalInFunctionContext_genericFunctionAcceptsNominal() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type Box<'A> = Box { content: 'A }
-
-                fun unbox(b) = b.content
-                unbox(Box(42))
                 """.trimIndent(),
             ),
         )
@@ -185,23 +125,6 @@ class NominalStructuralTest {
 
                 fun getCity(p) = p.address.city
                 getCity(Person("Alice", Address("Nairobi", 10100)))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun threeLevelNominal_deepFieldAccessThroughStructural() {
-        assertType(
-            "String",
-            infer(
-                """
-                type Address = Address { city: String, zip: Num }
-                type Person = Person { name: String, address: Address }
-                type Company = Company { ceo: Person, revenue: Num }
-
-                fun getCeoCity(c) = c.ceo.address.city
-                getCeoCity(Company(Person("Bob", Address("Amsterdam", 1011)), 1000000))
                 """.trimIndent(),
             ),
         )

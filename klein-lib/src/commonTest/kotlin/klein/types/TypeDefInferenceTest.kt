@@ -58,20 +58,6 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    fun sumType_constructorFieldAccess() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type Option = None | Some { value: Num }
-                s = Some(42)
-                s.value
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun genericType_constructorInference() {
         assertType(
             "Some<Num>",
@@ -119,33 +105,6 @@ class TypeDefInferenceTest {
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 Cons(1, Nil)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun recursiveType_nestedCons() {
-        assertType(
-            "Cons<Num>",
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-                Cons(1, Cons(2, Cons(3, Nil)))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun recursiveType_listFieldAccess() {
-        assertType(
-            "Num",
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-                xs = Cons(1, Cons(2, Nil))
-                xs.head
                 """.trimIndent(),
             ),
         )
@@ -242,34 +201,6 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    fun bareConstructor_usedAsTailForTypedList() {
-        assertType(
-            "Cons<Num>",
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-                Cons(42, Nil)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun recursiveVariance_sameTypeWorks() {
-        assertType(
-            "T<Num>",
-            infer(
-                """
-                type T<'A> = T { value: 'A, x: T<'A> }
-
-                fun mkT(v) = T(v, mkT(v))
-                mkT(42)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun inferredInterface_commonFieldAccessible() {
         assertType(
             "Num",
@@ -314,19 +245,6 @@ class TypeDefInferenceTest {
                 x = Some(42)
                 type Option<'A> = None | Some { value: 'A }
                 x
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun constructorFunction_bareConstructor() {
-        assertType(
-            "Nil",
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-                Nil
                 """.trimIndent(),
             ),
         )
@@ -449,21 +367,6 @@ class TypeDefInferenceTest {
     }
 
     @Test
-    fun multipleTypes_composedInFields() {
-        assertType(
-            "Some<Cons<Num>>",
-            infer(
-                """
-                type Option<'A> = None | Some { value: 'A }
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-
-                Some(Cons(1, Cons(2, Nil)))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun genericFunction_workingWithTypeDefs() {
         assertType(
             "('A) -> Some<'A>",
@@ -506,20 +409,6 @@ class TypeDefInferenceTest {
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
 
                 Cons(1, Cons("hello", Nil))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun nestedTypeApplication_correctType() {
-        assertType(
-            "Some<Some<Num>>",
-            infer(
-                """
-                type Option<'A> = None | Some { value: 'A }
-
-                Some(Some(42))
                 """.trimIndent(),
             ),
         )

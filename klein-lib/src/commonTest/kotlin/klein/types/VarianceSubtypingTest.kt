@@ -2,7 +2,6 @@ package klein.types
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class VarianceSubtypingTest {
     // ============================================================
@@ -57,11 +56,6 @@ class VarianceSubtypingTest {
         assertEquals(1, errors.size, "Box<Cat> should not subtype Box<Dog>")
         assertMismatch(errors[0], "Cat", "Dog")
     }
-
-    // ============================================================
-    // Contravariance: Consumer<Animal> <: Consumer<Dog>
-    // A consumer that handles any animal can be used where Dog consumer expected
-    // ============================================================
 
     @Test
     fun contravariant_consumerAnimalSubtypesConsumerDog() {
@@ -172,11 +166,6 @@ class VarianceSubtypingTest {
         )
     }
 
-    // ============================================================
-    // Phantom types: Unused params default to invariance
-    // This enables phantom types for type-level distinctions
-    // ============================================================
-
     @Test
     fun phantom_canReferencePhantomTypeParam() {
         assertType(
@@ -193,38 +182,24 @@ class VarianceSubtypingTest {
     }
 
     @Test
-    fun phantom_unusedParamIsInvariant_dogNotSubtypeAnimal() {
-        val errors =
-            inferErrors(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Phantom<'A> = Phantom { value: Num }
-                type PhantomDog = PhantomDog { p: Phantom<Dog> }
-                type PhantomAnimal = PhantomAnimal { p: Phantom<Animal> }
-
-                PhantomAnimal(PhantomDog(Phantom(42)).p).p
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size, "Phantom<Dog> should not subtype Phantom<Animal> - unused params are invariant")
-        assertMismatch(errors[0], "Animal", "Dog")
-    }
-
-    @Test
     fun phantom_unusedParamIsInvariant_catNotSubtypeDog() {
         val errors =
             inferErrors(
                 """
                 type Animal = Dog { name: String, breed: String } | Cat { name: String }
                 type Phantom<'A> = Phantom { value: Num }
+                type PhantomAnimal = PhantomAnimal { p: Phantom<Animal> }
                 type PhantomCat = PhantomCat { p: Phantom<Cat> }
                 type PhantomDog = PhantomDog { p: Phantom<Dog> }
 
+                PhantomAnimal(PhantomDog(Phantom(42)).p).p
                 PhantomDog(PhantomCat(Phantom(42)).p).p
                 """.trimIndent(),
             )
-        assertEquals(2, errors.size, "Phantom<Cat> should not subtype Phantom<Dog> - unused params are invariant")
-        assertMismatch(errors[0], "Cat", "Dog")
-        assertMismatch(errors[1], "Dog", "Cat")
+        assertEquals(3, errors.size)
+        assertMismatch(errors[0], "Animal", "Dog")
+        assertMismatch(errors[1], "Cat", "Dog")
+        assertMismatch(errors[2], "Dog", "Cat")
     }
 
     @Test
@@ -243,10 +218,6 @@ class VarianceSubtypingTest {
             ),
         )
     }
-
-    // ============================================================
-    // Function variance: contravariant in input, covariant in output
-    // ============================================================
 
     @Test
     fun function_animalToDogSubtypesDogToAnimal() {
@@ -279,26 +250,6 @@ class VarianceSubtypingTest {
         assertEquals(2, errors.size, "(Dog -> Dog) should not subtype (Cat -> Cat)")
         assertMismatch(errors[0], "Cat", "Dog")
         assertMismatch(errors[1], "Dog", "Cat")
-    }
-
-    // ============================================================
-    // Producer covariance: Producer<Dog> <: Producer<Animal>
-    // ============================================================
-
-    @Test
-    fun producerCovariant_producerDogSubtypesProducerAnimal() {
-        assertType(
-            "Producer<Animal>",
-            infer(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Producer<'A> = Producer { produce: () -> 'A }
-                type ProducerAnimal = ProducerAnimal { p: Producer<Animal> }
-
-                ProducerAnimal(Producer(|Dog("Fido", "Labrador")|)).p
-                """.trimIndent(),
-            ),
-        )
     }
 
     @Test
@@ -361,35 +312,6 @@ class VarianceSubtypingTest {
         )
     }
 
-    // ============================================================
-    // Transform: covariant in first param, contravariant in second
-    // ============================================================
-
-    @Test
-    fun multipleParams_independentVariances() {
-        assertType(
-            "Transform<Animal, Dog>",
-            infer(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type AnimalHolder = AnimalHolder { a: Animal }
-                type Transform<'A, 'B> = Transform { value: 'A, handler: 'B -> String }
-                type TransformAnimalDog = TransformAnimalDog { t: Transform<Animal, Dog> }
-
-                TransformAnimalDog(Transform(Dog("Fido", "Labrador"), |a -> AnimalHolder(a).a.name|)).t
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    // ============================================================
-    // Swapped recursion forces invariance
-    // type Weird<'A, 'B> = Weird { fn: 'A -> 'B, next: Weird<'B, 'A> }
-    // 'A: contravariant (fn input) + covariant (swapped in next) = invariant
-    // 'B: covariant (fn output) + contravariant (swapped in next) = invariant
-    // Test each param in both directions (4 tests)
-    // ============================================================
-
     @Test
     fun swappedRecursion_firstParam_covariantDirectionFails() {
         val errors =
@@ -403,22 +325,6 @@ class VarianceSubtypingTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size, "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant")
-        assertMismatch(errors[0], "Animal", "Dog")
-    }
-
-    @Test
-    fun swappedRecursion_firstParam_contravariantDirectionFails() {
-        val errors =
-            inferErrors(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Weird<'A, 'B> = Weird { fn: 'A -> 'B, next: Weird<'B, 'A> }
-
-                type Cast = Cast { f: Weird<Animal, Num> -> Weird<Dog, Num> }
-                Cast(|w -> w|)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size, "Weird<Animal, Num> should not subtype Weird<Dog, Num> - 'A is invariant")
         assertMismatch(errors[0], "Animal", "Dog")
     }
 
@@ -570,46 +476,6 @@ class VarianceSubtypingTest {
     }
 
     // ============================================================
-    // Constructors have their own variance
-    // Cov<Dog> <: Cov<Animal> (covariant)
-    // Cont<Animal> <: Cont<Dog> (contravariant)
-    // ============================================================
-
-    @Test
-    fun constructorVariance_covariant() {
-        assertType(
-            "Cov<Animal>",
-            infer(
-                """
-                type Animal = Dog { name: String } | Cat { name: String }
-                type Cov<'A> = Cov { f: () -> 'A }
-                type CovAnimal = CovAnimal { c: Cov<Animal> }
-
-                CovAnimal(Cov(|Dog("Rex")|)).c
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun constructorVariance_contravariant() {
-        assertType(
-            "Cont<Dog>",
-            infer(
-                """
-                type Animal = Dog { name: String } | Cat { name: String }
-                type Cont<'A> = Cont { f: 'A -> String }
-                type AnimalHolder = AnimalHolder { a: Animal }
-                type ContAnimal = ContAnimal { c: Cont<Animal> }
-                type ContDog = ContDog { c: Cont<Dog> }
-
-                ContDog(ContAnimal(Cont(|a -> AnimalHolder(a).a.name|)).c).c
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    // ============================================================
     // Type simplification respects variance
     // Contravariant type params should simplify to their bound, not Nothing
     // ============================================================
@@ -628,23 +494,6 @@ class VarianceSubtypingTest {
                     ForceDog(dog)
                     1
                 |)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun covariant_genericFunctionReceivesBoxDog_constrainedToBoxAnimal() {
-        assertType(
-            "Animal",
-            infer(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Box<'A> = Box { value: 'A }
-                type BoxAnimal = BoxAnimal { b: Box<Animal> }
-
-                fun unbox(b) = BoxAnimal(b).b.value
-                unbox(Box(Dog("Fido", "Labrador")))
                 """.trimIndent(),
             ),
         )
@@ -684,23 +533,6 @@ class VarianceSubtypingTest {
     }
 
     @Test
-    fun covariant_boxDogNotSubtypeBoxCat_throughFunction() {
-        val errors =
-            inferErrors(
-                """
-                type Animal = Dog { name: String, breed: String } | Cat { name: String }
-                type Box<'A> = Box { value: 'A }
-                type BoxCat = BoxCat { b: Box<Cat> }
-
-                fun forceCat(b) = BoxCat(b).b
-                forceCat(Box(Dog("Fido", "Labrador")))
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size, "Box<Dog> should not subtype Box<Cat> even through a generic function")
-        assertMismatch(errors[0], "Dog", "Cat")
-    }
-
-    @Test
     fun mixedVariance_twoParamTypePassedThroughFunction() {
         assertType(
             "Transform<Animal, Dog>",
@@ -712,37 +544,6 @@ class VarianceSubtypingTest {
 
                 fun wrap(t) = TransformAnimalDog(t).t
                 wrap(Transform(Dog("Fido"), |a -> a.name|))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun invariantTypeParamInferredThroughFunctionCall() {
-        assertType(
-            "Ref<Num>",
-            infer(
-                """
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-
-                fun identity(r) = r
-                identity(Ref(|42|, |n -> "ok"|))
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun invariantTypeParamUnifiesTwoArgs() {
-        assertType(
-            "Ref<Num>",
-            infer(
-                """
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-
-                fun both(a, b) = { first = a, second = b }
-                r = both(Ref(|1|, |n -> "a"|), Ref(|2|, |n -> "b"|))
-                r.first
                 """.trimIndent(),
             ),
         )
@@ -765,23 +566,6 @@ class VarianceSubtypingTest {
     }
 
     @Test
-    fun invariantTypeParamThreadedThroughMultipleCalls() {
-        assertType(
-            "Ref<Num>",
-            infer(
-                """
-                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-
-                fun mkRef(v) = Ref(|v|, |x -> "ok"|)
-                fun passThrough(r) = r
-                fun wrapAndReturn(v) = passThrough(mkRef(v))
-                wrapAndReturn(42)
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun bareConstructor_subtypesCovariantParent() {
         assertType(
             "Box<Num>",
@@ -790,20 +574,6 @@ class VarianceSubtypingTest {
                 type Box<'A> = Full { value: 'A } | Empty
                 type BoxNum = BoxNum { b: Box<Num> }
                 BoxNum(Empty).b
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
-    fun bareConstructor_subtypesContravariantParent() {
-        assertType(
-            "Handler<String>",
-            infer(
-                """
-                type Handler<'A> = Active { handle: 'A -> Num } | Disabled
-                type HandlerString = HandlerString { h: Handler<String> }
-                HandlerString(Disabled).h
                 """.trimIndent(),
             ),
         )

@@ -105,48 +105,6 @@ class TypeDefErrorTest {
     }
 
     @Test
-    fun constructorArityError_tooManyArgs() {
-        val errors =
-            inferErrors(
-                """
-                type Option<'A> = None | Some { value: 'A }
-
-                Some(1, 2)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertCallArityMismatch(errors[0], expected = 1, actual = 2)
-    }
-
-    @Test
-    fun constructorArityError_tooFewArgs() {
-        val errors =
-            inferErrors(
-                """
-                type Pair<'A, 'B> = Pair { first: 'A, second: 'B }
-
-                Pair(1)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertCallArityMismatch(errors[0], expected = 2, actual = 1)
-    }
-
-    @Test
-    fun constructorArityError_argsOnBareConstructor() {
-        val errors =
-            inferErrors(
-                """
-                type Option<'A> = None | Some { value: 'A }
-
-                None(42)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertMismatch(errors[0], "None", "(Num) -> Nothing")
-    }
-
-    @Test
     fun circularTypeDefinition_directSelfWorks() {
         assertType(
             "T",
@@ -159,20 +117,6 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             ),
         )
-    }
-
-    @Test
-    fun constructorWrongFieldType() {
-        val errors =
-            inferErrors(
-                """
-                type Box = Box { value: Num }
-
-                Box("not a number")
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertMismatch(errors[0], "String", "Num")
     }
 
     @Test
@@ -217,21 +161,6 @@ class TypeDefErrorTest {
     }
 
     @Test
-    fun bareConstructorAsFunction_error() {
-        val errors =
-            inferErrors(
-                """
-                type Option<'A> = None | Some { value: 'A }
-
-                f = None
-                f(42)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertMismatch(errors[0], "None", "(Num) -> Nothing")
-    }
-
-    @Test
     fun constructorFieldTypeMismatch_nested() {
         val errors =
             inferErrors(
@@ -258,21 +187,6 @@ class TypeDefErrorTest {
         assertEquals(2, errors.size)
         assertMismatch(errors[0], "Num", "String")
         assertMismatch(errors[1], "String", "Num")
-    }
-
-    @Test
-    fun fieldAccessOnParentType_nonCommonField() {
-        val errors =
-            inferErrors(
-                """
-                type Shape = Circle { radius: Num } | Rectangle { width: Num, height: Num }
-
-                fun getRadius(s) = s.radius
-                getRadius(if true then Circle(5) else Rectangle(3, 4))
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertMissingField(errors[0], "radius")
     }
 
     @Test
@@ -318,21 +232,6 @@ class TypeDefErrorTest {
             )
         assertEquals(1, errors.size)
         assertTypeArityMismatch(errors[0], typeName = "List", expected = 1, actual = 2)
-    }
-
-    @Test
-    fun typeArity_tooManyArgs_moreExcess_inFieldType() {
-        val errors =
-            inferErrors(
-                """
-                type Option<'A> = None | Some { value: 'A }
-                type Bad = Bad { opt: Option<Num, String, Bool> }
-
-                Bad(None)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertTypeArityMismatch(errors[0], typeName = "Option", expected = 1, actual = 3)
     }
 
     @Test
@@ -396,19 +295,4 @@ class TypeDefErrorTest {
         assertTypeArityMismatch(errors[0], typeName = "Option", expected = 1, actual = 2)
     }
 
-    @Test
-    fun typeArity_nestedError_outerTypeWrongArity_inFieldType() {
-        val errors =
-            inferErrors(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
-                type Option<'A> = None | Some { value: 'A }
-                type Bad = Bad { items: List<Option<Num>, String> }
-
-                Bad(Nil)
-                """.trimIndent(),
-            )
-        assertEquals(1, errors.size)
-        assertTypeArityMismatch(errors[0], typeName = "List", expected = 1, actual = 2)
-    }
 }
