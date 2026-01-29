@@ -16,6 +16,7 @@ import klein.types.SimpleType.*
 data class RefType(
     val name: String,
     val args: List<CompactType>,
+    val negArgs: List<CompactType>? = null,
 )
 
 data class CompactType(
@@ -110,12 +111,20 @@ data class CompactType(
                     is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
                     is TRef -> {
                         val typeDef = env.getTypeDef(ty.name)
-                        CompactType.ref(
-                            ty.name,
+                        val hasInvariant = typeDef.typeParams.any { it.variance == Variance.Invariant }
+                        val args =
                             ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
                                 go0(arg, if (paramInfo.variance.isPositive) pol else !pol)
-                            },
-                        )
+                            }
+                        val negArgs =
+                            if (hasInvariant) {
+                                ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
+                                    go0(arg, if (paramInfo.variance.isPositive) !pol else pol)
+                                }
+                            } else {
+                                null
+                            }
+                        CompactType(refs = setOf(RefType(ty.name, args, negArgs)))
                     }
                     is TVar -> CompactType(vars = closeOver(setOf(ty), pol))
                 }
@@ -163,6 +172,9 @@ data class CompactType(
                                         ref.name,
                                         ref.args.zip(typeDef.typeParams) { arg, paramInfo ->
                                             go1(arg, if (paramInfo.variance.isPositive) pol else !pol, newInProgress)
+                                        },
+                                        ref.negArgs?.zip(typeDef.typeParams) { arg, paramInfo ->
+                                            go1(arg, if (paramInfo.variance.isPositive) !pol else pol, newInProgress)
                                         },
                                     )
                                 }.toSet(),

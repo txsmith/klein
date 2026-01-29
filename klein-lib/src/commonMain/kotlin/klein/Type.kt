@@ -50,7 +50,14 @@ sealed class Type {
     data class Ref(
         val name: String,
         val args: List<Type>,
+        val whereClauses: List<WhereClause> = emptyList(),
     ) : Type()
+
+    data class WhereClause(
+        val varName: String,
+        val lowerBound: Type?,
+        val upperBound: Type?,
+    )
 
     override fun toString(): String = print(this)
 
@@ -76,7 +83,24 @@ sealed class Type {
 
         private fun printRef(ref: Ref): String {
             val args = if (ref.args.isEmpty()) "" else "<${ref.args.joinToString(", ") { print(it) }}>"
-            return "${ref.name}$args"
+            val where =
+                if (ref.whereClauses.isEmpty()) {
+                    ""
+                } else {
+                    val clauses =
+                        ref.whereClauses.joinToString(", ") { clause ->
+                            val lower = clause.lowerBound?.let { print(it) }
+                            val upper = clause.upperBound?.let { print(it) }
+                            when {
+                                lower != null && upper != null -> "$lower <: ${clause.varName} <: $upper"
+                                lower != null -> "$lower <: ${clause.varName}"
+                                upper != null -> "${clause.varName} <: $upper"
+                                else -> clause.varName
+                            }
+                        }
+                    " where $clauses"
+                }
+            return "${ref.name}$args$where"
         }
 
         private fun printFun(fn: Fun): String {
