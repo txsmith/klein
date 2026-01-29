@@ -167,6 +167,37 @@ class VarianceSubtypingTest {
     }
 
     @Test
+    fun invariant_equalBoundsCollapsesToConcreteType() {
+        assertType(
+            "Ref<Dog>",
+            infer(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type ForceDog = ForceDog { d: Dog }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                Ref(|Dog("Fido", "Labrador")|, |d -> ForceDog(d).d.name|)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariant_inferredRefShowsWhereClause() {
+        assertType(
+            "Ref<'A> where Dog <: 'A <: { name: String }",
+            infer(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
     fun phantom_canReferencePhantomTypeParam() {
         assertType(
             "PhantomBool",

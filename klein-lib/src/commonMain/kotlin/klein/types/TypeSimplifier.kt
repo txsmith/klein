@@ -20,7 +20,7 @@ object TypeSimplifier {
         keepVars: Boolean = false,
     ): Type {
         val scheme = CompactType.canonicalizeType(type, positive, env)
-        val simplified = simplifyType(scheme, keepVars)
+        val simplified = simplifyType(scheme, keepVars, env)
         return coalesceType(simplified, env, keepVars)
     }
 
@@ -35,6 +35,7 @@ object TypeSimplifier {
     fun simplifyType(
         cty: CompactTypeScheme,
         keepVars: Boolean = false,
+        env: TypeEnv? = null,
     ): CompactTypeScheme {
         val allVars = mutableSetOf<TVar>()
         val recVars = mutableMapOf<TVar, () -> CompactType>()
@@ -81,7 +82,30 @@ object TypeSimplifier {
                     params.map { analyze(it, !pol) } to analyze(result, pol)
                 }
             val optionalThunk = ty.optional?.let { analyze(it, pol) }
-            val refThunks = ty.refs.map { ref -> ref.name to ref.args.map { analyze(it, pol) } }
+            val refThunks =
+                ty.refs.map { ref ->
+                    val typeDef = env?.lookupTypeDef(ref.name)
+
+                    fun analyzeRefArg(
+                        arg: CompactType,
+                        i: Int,
+                    ): () -> CompactType {
+                        val variance = typeDef?.typeParams?.getOrNull(i)?.variance
+                        return if (variance == Variance.Invariant) {
+                            val posThunk = analyze(arg, true)
+                            val negThunk = analyze(arg, false)
+                            val capPol = pol
+                            { posThunk().merge(negThunk(), capPol) }
+                        } else {
+                            val argPol = if (variance == Variance.Contravariant) !pol else pol
+                            analyze(arg, argPol)
+                        }
+                    }
+
+                    val argThunks = ref.args.mapIndexed { i, arg -> analyzeRefArg(arg, i) }
+                    val negArgThunks = ref.negArgs?.mapIndexed { i, arg -> analyzeRefArg(arg, i) }
+                    Triple(ref.name, argThunks, negArgThunks)
+                }
 
             // Return a thunk that applies substitutions during reconstruction
             return {
@@ -105,7 +129,11 @@ object TypeSimplifier {
                             paramThunks.map { it() } to resultThunk()
                         },
                     optional = optionalThunk?.invoke(),
-                    refs = refThunks.map { (name, argThunks) -> RefType(name, argThunks.map { it() }) }.toSet(),
+                    refs =
+                        refThunks
+                            .map { (name, argThunks, negArgThunks) ->
+                                RefType(name, argThunks.map { it() }, negArgThunks?.map { it() })
+                            }.toSet(),
                 )
             }
         }
@@ -287,6 +315,47 @@ object TypeSimplifier {
                     ty.rec == null &&
                     ty.func == null &&
                     ty.optional == null
+
+            fun makeRef(
+                refName: String,
+                typeParams: List<TypeParamInfo>,
+                args: List<CompactType>,
+                negArgs: List<CompactType>? = null,
+            ): Type.Ref {
+                val whereClauses = mutableListOf<Type.WhereClause>()
+                val coalescedArgs =
+                    args.mapIndexed { i, arg ->
+                        val variance = typeParams.getOrNull(i)?.variance
+                        if (variance == Variance.Invariant && arg.vars.isNotEmpty()) {
+                            val v = arg.vars.first()
+                            val vName = varName(v)
+                            val argWithoutVar = arg.copy(vars = emptySet())
+                            val negArg = negArgs?.getOrNull(i)
+                            val negArgWithoutVar = negArg?.copy(vars = emptySet())
+                            val posType = go(argWithoutVar, true, newInProcess)
+                            val negType =
+                                if (negArgWithoutVar != null) {
+                                    go(negArgWithoutVar, false, newInProcess)
+                                } else {
+                                    go(argWithoutVar, false, newInProcess)
+                                }
+                            val lower = if (posType != Type.Bottom) posType else null
+                            val upper = if (negType != Type.Top) negType else null
+                            if (lower != null && upper != null && lower == upper) {
+                                lower
+                            } else {
+                                if (lower != null || upper != null) {
+                                    whereClauses.add(Type.WhereClause(vName, lower, upper))
+                                }
+                                Type.Var(vName)
+                            }
+                        } else {
+                            go(arg, pol, newInProcess)
+                        }
+                    }
+                return Type.Ref(refName, coalescedArgs, whereClauses)
+            }
+
             if (allSiblings) {
                 val parentName = parentTypes.single()
                 val parentDef = env.lookupTypeDef(parentName) ?: error("Parent type '$parentName' not registered")
@@ -299,10 +368,12 @@ object TypeSimplifier {
                                 if (paramIndex >= 0) ref.args[paramIndex] else null
                             }.fold(CompactType.empty) { acc, arg -> acc.merge(arg, pol) }
                     }
-                components.add(Type.Ref(parentName, mergedArgs.map { go(it, pol, newInProcess) }))
+                components.add(makeRef(parentName, parentDef.typeParams, mergedArgs))
             } else {
                 for (ref in ty.refs) {
-                    components.add(Type.Ref(ref.name, ref.args.map { go(it, pol, newInProcess) }))
+                    val typeDef = env.lookupTypeDef(ref.name)
+                    val typeParams = typeDef?.typeParams ?: emptyList()
+                    components.add(makeRef(ref.name, typeParams, ref.args, ref.negArgs))
                 }
             }
 
