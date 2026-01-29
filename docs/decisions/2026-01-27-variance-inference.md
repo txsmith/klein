@@ -100,6 +100,18 @@ Collapsing bivariant → invariant after inference is a pragmatic choice. It mea
 - Phantom types work correctly out of the box
 - Constructor types get their own variance independent of the parent sum type
 
+**Variance only applies to resolved nominal types.** A flexible type variable can still unify with an invariant type parameter. For example:
+
+```klein
+type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+type RefAnimal = RefAnimal { r: Ref<Animal> }
+
+refDog = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+RefAnimal(refDog)  // OK: infers RefAnimal
+```
+
+Here `refDog` has a flexible type variable — its getter lower-bounds it to `Dog` and its setter upper-bounds it to `{ name: String }`. When `RefAnimal(refDog)` is checked, SimpleSub unifies the variable to `Animal`, which satisfies both bounds. This is not a variance violation because `refDog` was never constrained to `Ref<Dog>` — the variable was still open. Variance only blocks subtyping between types whose parameters are already resolved (e.g., a `Ref<Dog>` forced through a `DogHolder` cannot widen to `Ref<Animal>`).
+
 **Negative:**
 - Users cannot override inferred variance (e.g., force a covariant parameter to be invariant for safety). In practice this hasn't been needed.
 - The bivariant → invariant collapse is a deviation from the pure lattice semantics. It's the right default but removes the ability to express "this parameter is truly irrelevant."
