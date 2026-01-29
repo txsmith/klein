@@ -576,4 +576,84 @@ class InferredInterfaceTest {
             ),
         )
     }
+
+    // ============================================================
+    // Polymorphic interface usage
+    // ============================================================
+
+    @Test
+    fun genericFunction_accessesCommonFieldOnSumType() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Container<'A> = Box { value: 'A } | Wrapper { value: 'A, label: String }
+
+                fun getValue(c) = c.value
+                getValue(Box(42))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun genericFieldAccess_resultPassedToTypedFunction() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Pair<'A> = Left { value: 'A, side: String } | Right { value: 'A, side: String }
+
+                fun getValue(p) = p.value
+                fun addOne(x) = x + 1
+                addOne(getValue(Left(10, "left")))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun commonFieldOfFunctionType_calledPolymorphically() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Transformer<'A, 'B> = MapT { apply: 'A -> 'B } | FilterT { apply: 'A -> 'B }
+
+                fun run(t, x) = t.apply(x)
+                run(MapT(|x -> x + 1|), 10)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun twoDifferentInstantiations_sameGenericSumType() {
+        assertType(
+            "{ a: Num, b: String }",
+            infer(
+                """
+                type Tagged<'A> = Label { value: 'A, tag: String } | Plain { value: 'A, tag: String }
+
+                fun getValue(t) = t.value
+                { a = getValue(Label(42, "num")), b = getValue(Plain("hello", "str")) }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun singleConstructorGeneric_fullInterfaceUsedPolymorphically() {
+        assertType(
+            "{ l: String, v: Num }",
+            infer(
+                """
+                type Wrapped<'A> = Wrapped { value: 'A, label: String }
+
+                fun unwrap(w) = { v = w.value, l = w.label }
+                unwrap(Wrapped(42, "answer"))
+                """.trimIndent(),
+            ),
+        )
+    }
 }

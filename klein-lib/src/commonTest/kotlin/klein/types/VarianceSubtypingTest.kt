@@ -641,4 +641,222 @@ class VarianceSubtypingTest {
             ),
         )
     }
+
+    @Test
+    fun covariant_genericFunctionReceivesBoxDog_constrainedToBoxAnimal() {
+        assertType(
+            "Animal",
+            infer(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Box<'A> = Box { value: 'A }
+                type BoxAnimal = BoxAnimal { b: Box<Animal> }
+
+                fun unbox(b) = BoxAnimal(b).b.value
+                unbox(Box(Dog("Fido", "Labrador")))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun contravariant_genericFunctionReceivesConsumerAnimal_constrainedToConsumerDog() {
+        assertType(
+            "String",
+            infer(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Consumer<'A> = Consumer { consume: 'A -> String }
+                type ConsumerDog = ConsumerDog { c: Consumer<Dog> }
+
+                fun runConsumer(c) = ConsumerDog(c).c.consume(Dog("Rex", "Poodle"))
+                runConsumer(Consumer(|a -> a.name|))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariant_genericFunctionInfersRefNumFromUsage() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+                type RefNum = RefNum { r: Ref<Num> }
+
+                fun readRef(r) = RefNum(r).r.get()
+                readRef(Ref(|42|, |n -> "ok"|))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun covariant_boxDogNotSubtypeBoxCat_throughFunction() {
+        val errors =
+            inferErrors(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Box<'A> = Box { value: 'A }
+                type BoxCat = BoxCat { b: Box<Cat> }
+
+                fun forceCat(b) = BoxCat(b).b
+                forceCat(Box(Dog("Fido", "Labrador")))
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Box<Dog> should not subtype Box<Cat> even through a generic function")
+    }
+
+    @Test
+    fun mixedVariance_twoParamTypePassedThroughFunction() {
+        assertType(
+            "Transform<Animal, Dog>",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Transform<'A, 'B> = Transform { value: 'A, handler: 'B -> String }
+                type TransformAnimalDog = TransformAnimalDog { t: Transform<Animal, Dog> }
+
+                fun wrap(t) = TransformAnimalDog(t).t
+                wrap(Transform(Dog("Fido"), |a -> a.name|))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariantTypeParamInferredThroughFunctionCall() {
+        assertType(
+            "Ref<Num>",
+            infer(
+                """
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                fun identity(r) = r
+                identity(Ref(|42|, |n -> "ok"|))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariantTypeParamUnifiesTwoArgs() {
+        assertType(
+            "Ref<Num>",
+            infer(
+                """
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                fun both(a, b) = { first = a, second = b }
+                r = both(Ref(|1|, |n -> "a"|), Ref(|2|, |n -> "b"|))
+                r.first
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariantTypeReturnedAndPassedToAnotherFunction() {
+        assertType(
+            "String",
+            infer(
+                """
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                fun mkRef(v) = Ref(|v|, |x -> "ok"|)
+                fun useRef(r) = r.set(r.get())
+                useRef(mkRef(42))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun invariantTypeParamThreadedThroughMultipleCalls() {
+        assertType(
+            "Ref<Num>",
+            infer(
+                """
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                fun mkRef(v) = Ref(|v|, |x -> "ok"|)
+                fun passThrough(r) = r
+                fun wrapAndReturn(v) = passThrough(mkRef(v))
+                wrapAndReturn(42)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareConstructor_subtypesCovariantParent() {
+        assertType(
+            "Box<Num>",
+            infer(
+                """
+                type Box<'A> = Full { value: 'A } | Empty
+                type BoxNum = BoxNum { b: Box<Num> }
+                BoxNum(Empty).b
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareConstructor_subtypesContravariantParent() {
+        assertType(
+            "Handler<String>",
+            infer(
+                """
+                type Handler<'A> = Active { handle: 'A -> Num } | Disabled
+                type HandlerString = HandlerString { h: Handler<String> }
+                HandlerString(Disabled).h
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareConstructor_subtypesInvariantParent() {
+        assertType(
+            "Cell<Num>",
+            infer(
+                """
+                type Cell<'A> = Live { get: () -> 'A, set: 'A -> String } | Dead
+                type CellNum = CellNum { c: Cell<Num> }
+                CellNum(Dead).c
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareConstructor_usedAtTwoDifferentInstantiations() {
+        assertType(
+            "{ a: Option<Num>, b: Option<String> }",
+            infer(
+                """
+                type Option<'A> = Some { value: 'A } | None
+                type OptNum = OptNum { o: Option<Num> }
+                type OptStr = OptStr { o: Option<String> }
+                { a = OptNum(None).o, b = OptStr(None).o }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareConstructor_multiParamSumWhereOtherConstructorUsesAllParams() {
+        assertType(
+            "Result<String, Num>",
+            infer(
+                """
+                type Result<'A, 'B> = Ok { value: 'A } | Err { error: 'B } | Unknown
+                type ResultStringNum = ResultStringNum { r: Result<String, Num> }
+                ResultStringNum(Unknown).r
+                """.trimIndent(),
+            ),
+        )
+    }
 }

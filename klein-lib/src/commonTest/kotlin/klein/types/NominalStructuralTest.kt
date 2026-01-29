@@ -136,6 +136,150 @@ class NominalStructuralTest {
                 Account({ value = 100 }, "Bob")
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty(), "Cannot construct Account with structural record instead of Money")
+        assertEquals(1, errors.size, "Cannot construct Account with structural record instead of Money")
+        assertTrue(errors[0] is TypeError.TypeMismatch)
+    }
+
+    // ============================================================
+    // Structural records cannot subtype nominal types
+    // ============================================================
+
+    @Test
+    fun recordLiteralCannotSubtypeNominalParam() {
+        val errors =
+            inferErrors(
+                """
+                type Money = Money { value: Num }
+                type MoneyConsumer = MoneyConsumer { f: Money -> Num }
+                mc = MoneyConsumer(|m -> m.value|)
+                mc.f({ value = 100 })
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Structural record should not be usable where Money is expected")
+    }
+
+    @Test
+    fun recordWithExactSameFieldsCannotSubtypeNominal() {
+        val errors =
+            inferErrors(
+                """
+                type Point = Point { x: Num, y: Num }
+                type PointConsumer = PointConsumer { f: Point -> Num }
+                pc = PointConsumer(|p -> p.x + p.y|)
+                pc.f({ x = 3, y = 4 })
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Record with same fields as Point should not subtype Point")
+    }
+
+    @Test
+    fun genericStructuralCannotSubtypeGenericNominal() {
+        val errors =
+            inferErrors(
+                """
+                type Box<'A> = Box { content: 'A }
+                type BoxNumConsumer = BoxNumConsumer { f: Box<Num> -> Num }
+                bc = BoxNumConsumer(|b -> b.content|)
+                bc.f({ content = 42 })
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Structural record should not subtype generic nominal Box<Num>")
+    }
+
+    @Test
+    fun twoNominalTypesSameStructureCannotBeConfused() {
+        val errors =
+            inferErrors(
+                """
+                type Dollars = Dollars { amount: Num }
+                type Euros = Euros { amount: Num }
+                type DollarConsumer = DollarConsumer { f: Dollars -> Num }
+                dc = DollarConsumer(|d -> d.amount|)
+                dc.f(Euros(50))
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Euros should not be usable where Dollars is expected")
+    }
+
+    // ============================================================
+    // Nested nominal subtyping
+    // ============================================================
+
+    @Test
+    fun twoLevelNominal_structuralFunctionAccessesNestedField() {
+        assertType(
+            "String",
+            infer(
+                """
+                type Address = Address { city: String, zip: Num }
+                type Person = Person { name: String, address: Address }
+
+                fun getCity(p) = p.address.city
+                getCity(Person("Alice", Address("Nairobi", 10100)))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun threeLevelNominal_deepFieldAccessThroughStructural() {
+        assertType(
+            "String",
+            infer(
+                """
+                type Address = Address { city: String, zip: Num }
+                type Person = Person { name: String, address: Address }
+                type Company = Company { ceo: Person, revenue: Num }
+
+                fun getCeoCity(c) = c.ceo.address.city
+                getCeoCity(Company(Person("Bob", Address("Amsterdam", 1011)), 1000000))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedGenericNominals_typeParamsAtEachLevel() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Wrapper<'A> = Wrapper { inner: 'A }
+                type Box<'A> = Box { content: Wrapper<'A> }
+
+                fun unwrapBox(b) = b.content.inner
+                unwrapBox(Box(Wrapper(42)))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun mixedNominalStructural_nominalContainingStructuralContainingNominal() {
+        assertType(
+            "String",
+            infer(
+                """
+                type Tag = Tag { label: String }
+
+                fun getLabel(x) = x.meta.tag.label
+                getLabel({ meta = { tag = Tag("important") } })
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedNominal_structuralCannotSubstituteForInnerNominal() {
+        val errors =
+            inferErrors(
+                """
+                type Address = Address { city: String, zip: Num }
+                type Person = Person { name: String, address: Address }
+
+                Person("Alice", { city = "Nairobi", zip = 10100 })
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty(), "Structural record should not be accepted where nominal Address is required")
     }
 }

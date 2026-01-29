@@ -493,4 +493,142 @@ class TypeDefInferenceTest {
             ),
         )
     }
+
+    // ============================================================
+    // Type application at use sites
+    // ============================================================
+
+    @Test
+    fun mixedTypesInGenericContainer_infersUnion() {
+        assertType(
+            "Cons<Num | String>",
+            infer(
+                """
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+
+                Cons(1, Cons("hello", Nil))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedTypeApplication_correctType() {
+        assertType(
+            "Some<Some<Num>>",
+            infer(
+                """
+                type Option<'A> = None | Some { value: 'A }
+
+                Some(Some(42))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun constructorResultUsedInIncompatibleContext() {
+        val errors =
+            inferErrors(
+                """
+                type Option<'A> = None | Some { value: 'A }
+
+                Some(42) + 1
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
+    }
+
+    @Test
+    fun recursiveTypeConstructionWithMixedTypes_infersUnion() {
+        assertType(
+            "Node<Num | String>",
+            infer(
+                """
+                type Tree<'A> = Leaf { value: 'A } | Node { left: Tree<'A>, right: Tree<'A> }
+
+                Node(Leaf(1), Leaf("wrong"))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun constructorPassedToFunctionExpectingDifferentType() {
+        val errors =
+            inferErrors(
+                """
+                type Wrapper<'A> = Wrapper { value: 'A }
+
+                fun addOne(w) = w.value + 1
+                addOne(Wrapper("not a number"))
+                """.trimIndent(),
+            )
+        assertTrue(errors.isNotEmpty())
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
+    }
+
+    // ============================================================
+    // Composed generic types
+    // ============================================================
+
+    @Test
+    fun crossTypeComposition_resultContainingOption() {
+        assertType(
+            "Ok<Some<Num>>",
+            infer(
+                """
+                type Option<'A> = None | Some { value: 'A }
+                type Result<'A, 'E> = Ok { value: 'A } | Err { error: 'E }
+                Ok(Some(42))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun pairOfDistinctNominalTypes() {
+        assertType(
+            "Pair<Money, Person>",
+            infer(
+                """
+                type Money = Money { value: Num }
+                type Person = Person { name: String, age: Num }
+                type Pair<'A, 'B> = Pair { fst: 'A, snd: 'B }
+                Pair(Money(100), Person("Alice", 30))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun threeDeepNesting_boxWrappingSomeWrappingCons() {
+        assertType(
+            "Box<Some<Cons<Num>>>",
+            infer(
+                """
+                type Box<'A> = Box { inner: 'A }
+                type Option<'A> = None | Some { value: 'A }
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                Box(Some(Cons(1, Nil)))
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun fieldAccessThroughComposedTypes() {
+        assertType(
+            "Num",
+            infer(
+                """
+                type Box<'A> = Box { inner: 'A }
+                type Option<'A> = None | Some { value: 'A }
+                b = Box(Some(42))
+                b.inner.value
+                """.trimIndent(),
+            ),
+        )
+    }
 }
