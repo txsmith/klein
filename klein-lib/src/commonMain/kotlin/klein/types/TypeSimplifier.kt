@@ -17,10 +17,11 @@ object TypeSimplifier {
         type: SimpleType,
         env: TypeEnv,
         positive: Boolean = true,
+        keepVars: Boolean = false,
     ): Type {
         val scheme = CompactType.canonicalizeType(type, positive, env)
-        val simplified = simplifyType(scheme)
-        return coalesceType(simplified, env)
+        val simplified = simplifyType(scheme, keepVars)
+        return coalesceType(simplified, env, keepVars)
     }
 
     /**
@@ -31,7 +32,10 @@ object TypeSimplifier {
      *    (positive-only → Bottom, negative-only → Top)
      * 2. Variables that always co-occur at the same polarity can be unified
      */
-    fun simplifyType(cty: CompactTypeScheme): CompactTypeScheme {
+    fun simplifyType(
+        cty: CompactTypeScheme,
+        keepVars: Boolean = false,
+    ): CompactTypeScheme {
         val allVars = mutableSetOf<TVar>()
         val recVars = mutableMapOf<TVar, () -> CompactType>()
 
@@ -114,6 +118,7 @@ object TypeSimplifier {
             val posOccs = coOccurrences[true to v]
             val negOccs = coOccurrences[false to v]
             if ((posOccs != null && negOccs == null) || (posOccs == null && negOccs != null)) {
+                if (keepVars && v.lowerBounds.isEmpty() && v.upperBounds.isEmpty()) continue
                 varSubst[v] = null // eliminate
             }
         }
@@ -185,6 +190,7 @@ object TypeSimplifier {
     fun coalesceType(
         cty: CompactTypeScheme,
         env: TypeEnv,
+        keepVars: Boolean = false,
     ): Type {
         val varNames = mutableMapOf<TVar, String>()
 
@@ -205,6 +211,10 @@ object TypeSimplifier {
             inProcess[key]?.let { return it() }
 
             if (ty.isEmpty()) {
+                if (keepVars) {
+                    val v = TVar()
+                    return Type.Var(varName(v))
+                }
                 return if (pol) Type.Bottom else Type.Top
             }
 
