@@ -152,7 +152,14 @@ class Subtyping(
                 } else {
                     val lhsCtor = ctorLookup(lhs.name)
                     if (lhsCtor == null || lhsCtor.parentType != rhs.name) {
-                        errors.add(TypeError.TypeMismatch(lhs.clone(), rhs.clone(), span, context))
+                        errors.add(
+                            TypeError.TypeMismatch(
+                                simplifyCanonical(lhs, env, positive = true),
+                                simplifyCanonical(rhs, env, positive = false),
+                                span,
+                                context,
+                            ),
+                        )
                         return
                     }
                     updatedContext = context + ConstraintContext.ConstructorToParent(lhs.name, rhs.name)
@@ -187,7 +194,14 @@ class Subtyping(
             }
 
             else -> {
-                errors.add(TypeError.TypeMismatch(lhs.clone(), rhs.clone(), span, context))
+                errors.add(
+                    TypeError.TypeMismatch(
+                        simplifyCanonical(lhs, env, positive = true),
+                        simplifyCanonical(rhs, env, positive = false),
+                        span,
+                        context,
+                    ),
+                )
             }
         }
     }

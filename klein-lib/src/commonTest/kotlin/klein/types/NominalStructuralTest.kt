@@ -137,7 +137,7 @@ class NominalStructuralTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size, "Cannot construct Account with structural record instead of Money")
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "{ value: Num }", "Money")
     }
 
     // ============================================================

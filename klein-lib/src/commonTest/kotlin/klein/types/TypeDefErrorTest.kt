@@ -141,7 +141,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "None", "(Num) -> Nothing")
     }
 
     @Test
@@ -169,8 +169,8 @@ class TypeDefErrorTest {
                 Box("not a number")
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "String", "Num")
     }
 
     @Test
@@ -209,8 +209,8 @@ class TypeDefErrorTest {
                 Some + 1
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "('A) -> Some<'A>", "Num")
     }
 
     @Test
@@ -225,7 +225,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "None", "(Num) -> Nothing")
     }
 
     @Test
@@ -238,8 +238,8 @@ class TypeDefErrorTest {
                 Cons(1, Cons(2, "not a list"))
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "String", "List<Nothing>")
     }
 
     @Test
@@ -252,8 +252,9 @@ class TypeDefErrorTest {
                 Person(25, "Alice")
                 """.trimIndent(),
             )
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertEquals(2, errors.size)
+        assertMismatch(errors[0], "Num", "String")
+        assertMismatch(errors[1], "String", "Num")
     }
 
     @Test
@@ -296,7 +297,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Num", "Bad<Bad<Nothing>>")
     }
 
     @Test

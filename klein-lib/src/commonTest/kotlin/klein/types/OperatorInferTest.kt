@@ -3,7 +3,6 @@ package klein.types
 import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class OperatorInferTest {
     @Test
@@ -99,28 +98,29 @@ class OperatorInferTest {
     @Test
     fun add_stringPlusString_fails() {
         val errors = inferErrors("\"a\" + \"b\"")
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "String", "Num")
     }
 
     @Test
     fun and_intAndInt_fails() {
         val errors = inferErrors("1 and 2")
         assertEquals(2, errors.size)
-        assertTrue(errors.all { it is TypeError.TypeMismatch })
+        assertMismatch(errors[0], "Num", "Bool")
+        assertMismatch(errors[1], "Num", "Bool")
     }
 
     @Test
     fun not_int_fails() {
         val errors = inferErrors("not 1")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Num", "Bool")
     }
 
     @Test
     fun neg_bool_fails() {
         val errors = inferErrors("-true")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test

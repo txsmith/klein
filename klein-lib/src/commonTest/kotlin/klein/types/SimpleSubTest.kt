@@ -82,21 +82,22 @@ class SimpleSubTest {
     fun booleans_succTrue_error() {
         val errors = inferErrors("true + 1")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test
     fun booleans_succNotX_error() {
         val errors = inferErrors("|x -> (not x) + 1|")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test
     fun booleans_notRecordField_error() {
         val errors = inferErrors("|x -> not x.f|({ f = 123 })")
         assertEquals(2, errors.size)
-        assertTrue(errors.all { it is TypeError.TypeMismatch })
+        assertMismatch(errors[0], "Bool", "{ f: Nothing }")
+        assertMismatch(errors[1], "{ f: Num }", "Bool")
     }
 
     @Test
@@ -358,7 +359,7 @@ class SimpleSubTest {
     fun booleans_notFunctionAppliedToNonFunction_error() {
         val errors = inferErrors("|f -> |x -> not f(x.u)||(false)")
         assertEquals(1, errors.size)
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Bool", "(Any) -> Nothing")
     }
 
     @Test

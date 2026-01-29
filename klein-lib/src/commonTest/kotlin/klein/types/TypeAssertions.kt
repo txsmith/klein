@@ -37,3 +37,13 @@ fun assertType(
     expected: String,
     actual: Type,
 ) = assertEquals(expected, Type.print(actual))
+
+fun assertMismatch(
+    error: TypeError,
+    sub: String,
+    sup: String,
+) {
+    check(error is TypeError.TypeMismatch) { "Expected TypeMismatch but got ${error::class.simpleName}" }
+    assertEquals(sub, Type.print(error.subtype), "subtype")
+    assertEquals(sup, Type.print(error.supertype), "supertype")
+}

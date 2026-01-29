@@ -167,7 +167,7 @@ class ConstructorBindingTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size, "Expected exactly one error for calling bare constructor")
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "Nil", "(Num) -> Nothing")
     }
 
     @Test
@@ -180,7 +180,7 @@ class ConstructorBindingTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size, "Expected exactly one error for type mismatch")
-        assertTrue(errors[0] is TypeError.TypeMismatch)
+        assertMismatch(errors[0], "String", "Num")
     }
 
     // ============================================================

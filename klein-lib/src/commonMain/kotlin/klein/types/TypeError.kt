@@ -58,57 +58,6 @@ sealed class TypeError {
 
     open fun renderMessage(env: TypeEnv): String = message
 
-    open fun render(env: TypeEnv): String {
-        val msg = renderMessage(env)
-        if (context.isEmpty()) return msg
-        return (listOf(msg) + renderContext(env)).joinToString("\n")
-    }
-
-    protected fun renderContext(env: TypeEnv): List<String> {
-        val notes = mutableListOf<String>()
-        for (ctx in context) {
-            when (ctx) {
-                is ConstraintContext.FunctionCall -> {
-                    val funName = ctx.funDef?.name
-                    if (funName != null) {
-                        notes.add("When calling function '$funName'")
-                    }
-                }
-                is ConstraintContext.Argument -> {
-                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
-                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
-                    notes.add("└> $subtype cannot be passed into parameter '${ctx.paramName}: $supertype'")
-                }
-                is ConstraintContext.FunctionResult -> {
-                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
-                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
-                    notes.add("└> Function returns '$subtype', but '$supertype' is required")
-                }
-                is ConstraintContext.ConstructorToParent -> {
-                    notes.add("└> Note: ${ctx.constructorName} is a constructor of type '${ctx.parentName}'")
-                }
-                is ConstraintContext.VarianceCheck -> {
-                    val desc =
-                        when (ctx.variance) {
-                            Variance.Invariant -> "invariant"
-                            Variance.Covariant -> "covariant"
-                            Variance.Contravariant -> "contravariant"
-                            Variance.Bivariant -> "bivariant"
-                        }
-                    val typeDisplay =
-                        ctx.typeName +
-                            if (ctx.typeParams.isNotEmpty()) {
-                                "<${ctx.typeParams.joinToString(", ") { "'$it" }}>"
-                            } else {
-                                ""
-                            }
-                    notes.add("└> Note: '$typeDisplay' is $desc in '${ctx.paramName}")
-                }
-            }
-        }
-        return notes
-    }
-
     data class UnboundVariable(
         val name: String,
         override val span: SourceSpan,
@@ -117,18 +66,17 @@ sealed class TypeError {
     }
 
     data class TypeMismatch(
-        val subtype: SimpleType,
-        val supertype: SimpleType,
+        val subtype: Type,
+        val supertype: Type,
         override val span: SourceSpan,
         override val context: List<ConstraintContext> = emptyList(),
     ) : TypeError() {
         override val message = "Type mismatch"
 
-        private fun printSubtype(env: TypeEnv) = Type.print(simplifyCanonical(subtype, env, positive = true))
+        private val printedSubtype get() = Type.print(subtype)
+        private val printedSupertype get() = Type.print(supertype)
 
-        private fun printSupertype(env: TypeEnv) = Type.print(simplifyCanonical(supertype, env, positive = false))
-
-        override fun renderMessage(env: TypeEnv) = "Type mismatch: '${printSubtype(env)}' cannot be used as '${printSupertype(env)}'"
+        override fun renderMessage(env: TypeEnv) = "Type mismatch: '$printedSubtype' cannot be used as '$printedSupertype'"
 
         override fun render(env: TypeEnv): String {
             val msg = renderMessage(env)
@@ -138,9 +86,9 @@ sealed class TypeError {
             if (lastCtx is ConstraintContext.VarianceCheck) {
                 when (lastCtx.variance) {
                     Variance.Invariant, Variance.Bivariant ->
-                        notes.add("└> Meaning '${printSubtype(env)}' must equal '${printSubtype(env)}', which it isn't")
+                        notes.add("└> Meaning '$printedSubtype' must equal '$printedSupertype', which it isn't")
                     Variance.Covariant, Variance.Contravariant ->
-                        notes.add("└> Meaning '${printSubtype(env)}' must be usable as '${printSupertype(env)}', which it isn't")
+                        notes.add("└> Meaning '$printedSubtype' must be usable as '$printedSupertype', which it isn't")
                 }
             }
             return (listOf(msg) + notes).joinToString("\n")
@@ -230,5 +178,56 @@ sealed class TypeError {
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "'$name' shadows a builtin type"
+    }
+
+    open fun render(env: TypeEnv): String {
+        val msg = renderMessage(env)
+        if (context.isEmpty()) return msg
+        return (listOf(msg) + renderContext(env)).joinToString("\n")
+    }
+
+    protected fun renderContext(env: TypeEnv): List<String> {
+        val notes = mutableListOf<String>()
+        for (ctx in context) {
+            when (ctx) {
+                is ConstraintContext.FunctionCall -> {
+                    val funName = ctx.funDef?.name
+                    if (funName != null) {
+                        notes.add("When calling function '$funName'")
+                    }
+                }
+                is ConstraintContext.Argument -> {
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
+                    notes.add("└> $subtype cannot be passed into parameter '${ctx.paramName}: $supertype'")
+                }
+                is ConstraintContext.FunctionResult -> {
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false))
+                    notes.add("└> Function returns '$subtype', but '$supertype' is required")
+                }
+                is ConstraintContext.ConstructorToParent -> {
+                    notes.add("└> Note: ${ctx.constructorName} is a constructor of type '${ctx.parentName}'")
+                }
+                is ConstraintContext.VarianceCheck -> {
+                    val desc =
+                        when (ctx.variance) {
+                            Variance.Invariant -> "invariant"
+                            Variance.Covariant -> "covariant"
+                            Variance.Contravariant -> "contravariant"
+                            Variance.Bivariant -> "bivariant"
+                        }
+                    val typeDisplay =
+                        ctx.typeName +
+                            if (ctx.typeParams.isNotEmpty()) {
+                                "<${ctx.typeParams.joinToString(", ") { "'$it" }}>"
+                            } else {
+                                ""
+                            }
+                    notes.add("└> Note: '$typeDisplay' is $desc in '${ctx.paramName}")
+                }
+            }
+        }
+        return notes
     }
 }
