@@ -130,6 +130,4 @@ The alternative is a union approach: include all fields from all constructors, m
 - Works with generics, nested records, and function types
 
 **Negative:**
-- Adding a bare constructor to a sum type is a breaking change (it empties the interface)
-- Removing a field from any one constructor removes it from the interface for all users
-- When field types differ across constructors, the unified type (e.g., `Num | String`) may be less useful than pattern matching for the specific variant
+- Adding a constraint per constructor means that violating the interface produces multiple type errors (one per constructor). Deduplicating these into a single clear error is future work.
