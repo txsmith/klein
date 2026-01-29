@@ -29,6 +29,9 @@ See [docs/decisions/](./docs/decisions/) for architecture decision records:
 - **[modules-vs-records.md](./docs/decisions/2026-01-09-modules-vs-records.md)** - Design decisions around module system
 - **[no-anonymous-unions.md](./docs/decisions/2026-01-09-no-anonymous-unions.md)** - Why Klein doesn't support anonymous union types
 - **[simplesub-type-inference.md](./docs/decisions/2026-01-14-simplesub-type-inference.md)** - Direct port of SimpleSub reference implementation for type inference
+- **[variance-inference.md](./docs/decisions/2026-01-27-variance-inference.md)** - Automatic variance inference for type parameters, phantom type handling
+- **[inferred-interfaces.md](./docs/decisions/2026-01-27-inferred-interfaces.md)** - Sum types automatically expose common fields as structural interfaces
+- **[nominal-structural-subtyping.md](./docs/decisions/2026-01-27-nominal-structural-subtyping.md)** - Asymmetric subtyping: nominal → structural but not the reverse
 
 ### Experimental Features
 
