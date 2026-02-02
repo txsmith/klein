@@ -61,4 +61,10 @@ enum class Variance {
             Contravariant -> Covariant
             else -> this
         }
+
+    fun compose(other: Variance): Variance =
+        when (other) {
+            Contravariant -> this.flip()
+            else -> this
+        }
 }

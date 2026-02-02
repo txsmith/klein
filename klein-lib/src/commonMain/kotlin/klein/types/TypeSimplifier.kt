@@ -16,12 +16,12 @@ object TypeSimplifier {
     fun simplifyCanonical(
         type: SimpleType,
         env: TypeEnv,
-        positive: Boolean = true,
+        pol: Variance = Variance.Covariant,
         keepVars: Boolean = false,
     ): Type {
-        val scheme = CompactType.canonicalizeType(type, positive, env)
+        val scheme = CompactType.canonicalizeType(type, pol, env)
         val simplified = simplifyType(scheme, keepVars, env)
-        return coalesceType(simplified, env, keepVars)
+        return coalesceType(simplified, env, keepVars, pol)
     }
 
     /**
@@ -95,7 +95,7 @@ object TypeSimplifier {
                             val posThunk = analyze(arg, true)
                             val negThunk = analyze(arg, false)
                             val capPol = pol
-                            { posThunk().merge(negThunk(), capPol) }
+                            { posThunk().merge(negThunk(), if (capPol) Variance.Covariant else Variance.Contravariant) }
                         } else {
                             val argPol = if (variance == Variance.Contravariant) !pol else pol
                             analyze(arg, argPol)
@@ -176,7 +176,8 @@ object TypeSimplifier {
                                     // Recursive: merge bounds
                                     val boundW = recVars[w]!!
                                     val boundV = recVars[v]!!
-                                    recVars[v] = { CompactType.empty.merge(boundV(), pol).merge(boundW(), pol) }
+                                    val polVariance = if (pol) Variance.Covariant else Variance.Contravariant
+                                    recVars[v] = { CompactType.empty.merge(boundV(), polVariance).merge(boundW(), polVariance) }
                                     recVars.remove(w)
                                 } else {
                                     // Non-recursive: intersect opposite polarity co-occurrences
@@ -219,6 +220,7 @@ object TypeSimplifier {
         cty: CompactTypeScheme,
         env: TypeEnv,
         keepVars: Boolean = false,
+        pol: Variance = Variance.Covariant,
     ): Type {
         val varNames = mutableMapOf<TVar, String>()
 
@@ -366,7 +368,7 @@ object TypeSimplifier {
                                 val ctorDef = env.lookupTypeDef(ref.name) ?: error("Constructor type '${ref.name}' not registered")
                                 val paramIndex = ctorDef.typeParams.indexOfFirst { it.name == parentParam.name }
                                 if (paramIndex >= 0) ref.args[paramIndex] else null
-                            }.fold(CompactType.empty) { acc, arg -> acc.merge(arg, pol) }
+                            }.fold(CompactType.empty) { acc, arg -> acc.merge(arg, Variance.Covariant) }
                     }
                 components.add(makeRef(parentName, parentDef.typeParams, mergedArgs))
             } else {
@@ -417,6 +419,6 @@ object TypeSimplifier {
             }
         }
 
-        return go(cty.term, pol = true, inProcess = emptyMap())
+        return go(cty.term, pol = pol.isPositive, inProcess = emptyMap())
     }
 }

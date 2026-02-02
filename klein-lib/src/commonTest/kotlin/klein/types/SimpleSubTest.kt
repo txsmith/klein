@@ -95,7 +95,7 @@ class SimpleSubTest {
     fun booleans_notRecordField_error() {
         val errors = inferErrors("|x -> not x.f|({ f = 123 })")
         assertEquals(2, errors.size)
-        assertMismatch(errors[0], "Bool", "{ f: Nothing }")
+        assertMismatch(errors[0], "Bool", "{ f: Any }")
         assertMismatch(errors[1], "{ f: Num }", "Bool")
     }
 
@@ -358,7 +358,7 @@ class SimpleSubTest {
     fun booleans_notFunctionAppliedToNonFunction_error() {
         val errors = inferErrors("|f -> |x -> not f(x.u)||(false)")
         assertEquals(1, errors.size)
-        assertMismatch(errors[0], "Bool", "(Any) -> Nothing")
+        assertMismatch(errors[0], "Bool", "(Nothing) -> Any")
     }
 
     @Test

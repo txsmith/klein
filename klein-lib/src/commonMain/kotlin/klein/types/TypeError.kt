@@ -20,8 +20,8 @@ sealed class ConstraintContext {
         val supertype: SimpleType,
     ) : ConstraintContext() {
         override fun render(env: TypeEnv): String {
-            val sub = Type.print(simplifyCanonical(subtype, env, positive = true, keepVars = true))
-            val sup = Type.print(simplifyCanonical(supertype, env, positive = false, keepVars = true))
+            val sub = Type.print(simplifyCanonical(subtype, env, pol = Variance.Covariant, keepVars = true))
+            val sup = Type.print(simplifyCanonical(supertype, env, pol = Variance.Contravariant, keepVars = true))
             val name = if (paramName != null) ", paramName=$paramName" else ""
             return "Argument(paramIndex=$paramIndex$name, subtype=$sub, supertype=$sup)"
         }
@@ -32,8 +32,8 @@ sealed class ConstraintContext {
         val supertype: SimpleType,
     ) : ConstraintContext() {
         override fun render(env: TypeEnv): String {
-            val sub = Type.print(simplifyCanonical(subtype, env, positive = true, keepVars = true))
-            val sup = Type.print(simplifyCanonical(supertype, env, positive = false, keepVars = true))
+            val sub = Type.print(simplifyCanonical(subtype, env, pol = Variance.Covariant, keepVars = true))
+            val sup = Type.print(simplifyCanonical(supertype, env, pol = Variance.Contravariant, keepVars = true))
             return "FunctionResult(subtype=$sub, supertype=$sup)"
         }
     }
@@ -214,13 +214,13 @@ sealed class TypeError {
                     }
                 }
                 is ConstraintContext.Argument -> {
-                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true, keepVars = true))
-                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false, keepVars = true))
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, pol = Variance.Covariant, keepVars = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, pol = Variance.Contravariant, keepVars = true))
                     notes.add("└> $subtype cannot be passed into parameter '${ctx.paramName}: $supertype'")
                 }
                 is ConstraintContext.FunctionResult -> {
-                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, positive = true, keepVars = true))
-                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, positive = false, keepVars = true))
+                    val subtype = Type.print(simplifyCanonical(ctx.subtype, env, pol = Variance.Covariant, keepVars = true))
+                    val supertype = Type.print(simplifyCanonical(ctx.supertype, env, pol = Variance.Contravariant, keepVars = true))
                     notes.add("└> Function returns '$subtype', but '$supertype' is required")
                 }
                 is ConstraintContext.ConstructorToParent -> {

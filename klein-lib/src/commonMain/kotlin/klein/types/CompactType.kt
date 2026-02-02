@@ -62,22 +62,27 @@ data class CompactType(
          */
         fun canonicalizeType(
             ty: SimpleType,
-            positive: Boolean = true,
+            pol: Variance = Variance.Covariant,
             env: TypeEnv,
         ): CompactTypeScheme {
-            val recursive = mutableMapOf<Pair<CompactType, Boolean>, TVar>()
+            val recursive = mutableMapOf<Pair<CompactType, Variance>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
 
             // Transitively close over variables reachable through bounds
             fun closeOver(
                 initial: TVar,
-                positive: Boolean,
+                pol: Variance,
             ): Set<TVar> {
                 val result = mutableSetOf(initial)
                 val worklist = mutableListOf(initial)
                 while (worklist.isNotEmpty()) {
                     val tv = worklist.removeLast()
-                    val bounds = if (positive) tv.lowerBounds else tv.upperBounds
+                    val bounds =
+                        when (pol) {
+                            Variance.Covariant -> tv.lowerBounds
+                            Variance.Contravariant -> tv.upperBounds
+                            Variance.Invariant, Variance.Bivariant -> tv.lowerBounds + tv.upperBounds
+                        }
                     for (bound in bounds) {
                         if (bound is TVar && bound !in result) {
                             result.add(bound)
@@ -92,7 +97,7 @@ data class CompactType(
             // leaving type variables untransformed (just close over them)
             fun go0(
                 ty: SimpleType,
-                positive: Boolean,
+                pol: Variance,
             ): CompactType =
                 when (ty) {
                     TNum -> CompactType.prim(PrimType.Num)
@@ -100,39 +105,39 @@ data class CompactType(
                     TBool -> CompactType.prim(PrimType.Bool)
                     TNull -> CompactType.prim(PrimType.Null)
                     TUnit -> CompactType.prim(PrimType.Unit)
-                    is TOptional -> CompactType.optional(go0(ty.inner, positive))
-                    is TFun -> CompactType.function(ty.params.map { go0(it, !positive) }, go0(ty.result, positive))
-                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, positive) })
+                    is TOptional -> CompactType.optional(go0(ty.inner, pol))
+                    is TFun -> CompactType.function(ty.params.map { go0(it, pol.flip()) }, go0(ty.result, pol))
+                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
                     is TRef -> {
                         val typeDef = env.getTypeDef(ty.name)
-                        val hasInvariant = typeDef.typeParams.any { it.variance == Variance.Invariant }
+                        val hasInvariant = typeDef.typeParams.any { it.variance == Variance.Invariant || it.variance == Variance.Bivariant }
                         val args =
                             ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
-                                go0(arg, if (paramInfo.variance.isPositive) positive else !positive)
+                                go0(arg, pol.compose(paramInfo.variance))
                             }
                         val negArgs =
                             if (hasInvariant) {
                                 ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
-                                    go0(arg, if (paramInfo.variance.isPositive) !positive else positive)
+                                    go0(arg, pol.compose(paramInfo.variance).flip())
                                 }
                             } else {
                                 null
                             }
                         CompactType(refs = setOf(RefType(ty.name, args, negArgs)))
                     }
-                    is TVar -> CompactType(vars = closeOver(ty, positive))
+                    is TVar -> CompactType(vars = closeOver(ty, pol))
                 }
 
             // Merge bounds of all variables in a CompactType and recursively traverse
             fun go1(
                 ty: CompactType,
-                positive: Boolean,
-                inProgress: Set<Pair<CompactType, Boolean>>,
+                pol: Variance,
+                inProgress: Set<Pair<CompactType, Variance>>,
             ): CompactType {
                 if (ty.isEmpty()) return ty
 
                 // Short-circuit when a loop in bounds is detected
-                val key = ty to positive
+                val key = ty to pol
                 if (key in inProgress) {
                     val recVar = recursive.getOrPut(key) { TVar() }
                     return CompactType.variable(recVar)
@@ -140,34 +145,39 @@ data class CompactType(
                 val newInProgress = inProgress + key
 
                 // Merge bounds of all variables (excluding variable-to-variable bounds)
-                val merged =
+                val boundMerge =
                     ty.vars
                         .flatMap { tv ->
-                            val bounds = if (positive) tv.lowerBounds else tv.upperBounds
-                            bounds.filter { it !is TVar }.map { go0(it, positive) }
-                        }.fold(ty) { acc, t -> acc.merge(t, positive) }
+                            val bounds =
+                                when (pol) {
+                                    Variance.Covariant -> tv.lowerBounds
+                                    Variance.Contravariant -> tv.upperBounds
+                                    Variance.Invariant, Variance.Bivariant -> tv.lowerBounds + tv.upperBounds
+                                }
+                            bounds.filter { it !is TVar }.map { go0(it, pol) }
+                        }.fold(ty) { acc, t -> acc.merge(t, pol) }
 
                 val adapted =
                     CompactType(
-                        vars = merged.vars,
-                        prims = merged.prims,
-                        rec = merged.rec?.mapValues { (_, v) -> go1(v, positive, newInProgress) },
+                        vars = boundMerge.vars,
+                        prims = boundMerge.prims,
+                        rec = boundMerge.rec?.mapValues { (_, v) -> go1(v, pol, newInProgress) },
                         func =
-                            merged.func?.let { (params, result) ->
-                                params.map { go1(it, !positive, newInProgress) } to go1(result, positive, newInProgress)
+                            boundMerge.func?.let { (params, result) ->
+                                params.map { go1(it, pol.flip(), newInProgress) } to go1(result, pol, newInProgress)
                             },
-                        optional = merged.optional?.let { go1(it, positive, newInProgress) },
+                        optional = boundMerge.optional?.let { go1(it, pol, newInProgress) },
                         refs =
-                            merged.refs
+                            boundMerge.refs
                                 .map { ref ->
                                     val typeDef = env.getTypeDef(ref.name)
                                     RefType(
                                         ref.name,
                                         ref.args.zip(typeDef.typeParams) { arg, paramInfo ->
-                                            go1(arg, if (paramInfo.variance.isPositive) positive else !positive, newInProgress)
+                                            go1(arg, pol.compose(paramInfo.variance), newInProgress)
                                         },
                                         ref.negArgs?.zip(typeDef.typeParams) { arg, paramInfo ->
-                                            go1(arg, if (paramInfo.variance.isPositive) !positive else positive, newInProgress)
+                                            go1(arg, pol.flip().compose(paramInfo.variance), newInProgress)
                                         },
                                     )
                                 }.toSet(),
@@ -182,15 +192,16 @@ data class CompactType(
                 }
             }
 
-            val term = go1(go0(ty, positive), positive, inProgress = emptySet())
+            val term = go1(go0(ty, pol), pol, inProgress = emptySet())
             return CompactTypeScheme(term, recVars)
         }
     }
 
     fun merge(
         other: CompactType,
-        positive: Boolean,
+        pol: Variance,
     ): CompactType {
+        val positive = pol.isPositive
         val mergedVars = this.vars + other.vars
         val mergedPrims = this.prims + other.prims
         val mergedRefs = this.refs + other.refs
@@ -202,7 +213,7 @@ data class CompactType(
                 positive -> {
                     val commonKeys = this.rec.keys.intersect(other.rec.keys)
                     commonKeys.associateWith { k ->
-                        this.rec[k]!!.merge(other.rec[k]!!, positive)
+                        this.rec[k]!!.merge(other.rec[k]!!, pol)
                     }
                 }
                 else -> {
@@ -213,7 +224,7 @@ data class CompactType(
                         when {
                             t1 == null -> t2!!
                             t2 == null -> t1
-                            else -> t1.merge(t2, positive)
+                            else -> t1.merge(t2, pol)
                         }
                     }
                 }
@@ -228,9 +239,9 @@ data class CompactType(
                     val (params2, result2) = other.func
                     val mergedParams =
                         params1.zip(params2).map { (p1, p2) ->
-                            p1.merge(p2, !positive)
+                            p1.merge(p2, pol.flip())
                         }
-                    val mergedResult = result1.merge(result2, positive)
+                    val mergedResult = result1.merge(result2, pol)
                     mergedParams to mergedResult
                 }
             }
@@ -239,7 +250,7 @@ data class CompactType(
             when {
                 this.optional == null -> other.optional
                 other.optional == null -> this.optional
-                else -> this.optional.merge(other.optional, positive)
+                else -> this.optional.merge(other.optional, pol)
             }
 
         return CompactType(

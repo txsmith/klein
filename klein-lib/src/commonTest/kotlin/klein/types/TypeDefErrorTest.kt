@@ -171,7 +171,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertMismatch(errors[0], "String", "List<Nothing>")
+        assertMismatch(errors[0], "String", "List<Any>")
     }
 
     @Test
@@ -216,7 +216,7 @@ class TypeDefErrorTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size)
-        assertMismatch(errors[0], "Num", "Bad<Bad<Nothing>>")
+        assertMismatch(errors[0], "Num", "Bad<Bad<Any>>")
     }
 
     @Test
@@ -294,5 +294,4 @@ class TypeDefErrorTest {
         assertEquals(1, errors.size)
         assertTypeArityMismatch(errors[0], typeName = "Option", expected = 1, actual = 2)
     }
-
 }

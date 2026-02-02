@@ -123,7 +123,7 @@ class ConstructorBindingTest {
                 """.trimIndent(),
             )
         assertEquals(1, errors.size, "Expected exactly one error for calling bare constructor")
-        assertMismatch(errors[0], "Nil", "(Num) -> Nothing")
+        assertMismatch(errors[0], "Nil", "(Num) -> Any")
     }
 
     @Test
@@ -236,5 +236,4 @@ class ConstructorBindingTest {
             ),
         )
     }
-
 }
