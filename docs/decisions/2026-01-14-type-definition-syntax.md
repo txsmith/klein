@@ -208,6 +208,14 @@ The braces in the type definition hint that structural construction is possible.
 - Two bracket styles (`<>` for types, `{}` for fields) adds syntax to learn
 - Tick prefix requires extra character for type variables
 
+### Validation Rules
+
+The following are enforced at type definition time:
+
+- **No shadowing primitives.** `type Num = Num { x: Num }` is an error. Constructor or type names cannot reuse `Num`, `String`, `Bool`, or `Unit`.
+- **No duplicate constructors.** Constructor names must be unique across all type definitions. Two types cannot both define a `Foo` constructor.
+- **No duplicate type names.** Each `type` name must be unique.
+
 ## Grammar
 
 ```
