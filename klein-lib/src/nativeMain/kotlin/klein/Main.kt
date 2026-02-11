@@ -14,7 +14,7 @@ import platform.posix.ftell
 import platform.posix.rewind
 import platform.posix.stdin
 
-enum class TypeFormat { CANONICAL, IR_BOUNDS }
+enum class TypeFormat { CANONICAL, IR_BOUNDS, IR_COMPACT }
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -23,15 +23,24 @@ fun main(args: Array<String>) {
     }
 
     val command = args[0]
+    val knownFlags = setOf("--raw", "--verbose", "-v", "--stdin", "--canonical", "--ir-bounds", "--ir-compact")
+    val unknownFlags = args.drop(1).filter { it.startsWith("-") && it !in knownFlags }
+    if (unknownFlags.isNotEmpty()) {
+        println("Unknown option(s): ${unknownFlags.joinToString(", ")}")
+        printUsage()
+        return
+    }
+
     val rawErrors = "--raw" in args
     val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
-    val fileArg = args.drop(1).firstOrNull { !it.startsWith("--") }
+    val fileArg = args.drop(1).firstOrNull { !it.startsWith("-") }
 
     val typeFormat =
         when {
             "--canonical" in args -> TypeFormat.CANONICAL
             "--ir-bounds" in args -> TypeFormat.IR_BOUNDS
+            "--ir-compact" in args -> TypeFormat.IR_COMPACT
             else -> TypeFormat.CANONICAL
         }
 
@@ -87,8 +96,7 @@ private fun printUsage() {
           --verbose    Show nesting stack on lexer errors
 
         Type output format (for infer):
-          --canonical      Canonical type (default, merges recursive types)
-          --pre-canonical  Simplified type before canonicalization
+          --canonical      Canonical type (default)
           --ir-compact     Internal CompactType representation
           --ir-bounds      Internal SimpleType with bounds
         """.trimIndent(),
@@ -156,6 +164,7 @@ private fun infer(
             when (format) {
                 TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
                 TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
+                TypeFormat.IR_COMPACT -> TypePrinter.printCompact(type, result.env)
             }
 
         for (stmt in program.stmts) {
