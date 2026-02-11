@@ -47,6 +47,12 @@ enum class Variance {
             Contravariant -> false
         }
 
+    val isNegative: Boolean get() =
+        when (this) {
+            Contravariant, Invariant, Bivariant -> true
+            Covariant -> false
+        }
+
     fun meet(other: Variance): Variance =
         when {
             this == other -> this
@@ -64,7 +70,9 @@ enum class Variance {
 
     fun compose(other: Variance): Variance =
         when (other) {
+            Covariant -> this
             Contravariant -> this.flip()
-            else -> this
+            Invariant -> Invariant
+            Bivariant -> this
         }
 }
