@@ -84,27 +84,14 @@ object TypeSimplifier {
             val optionalThunk = ty.optional?.let { analyze(it, pol) }
             val refThunks =
                 ty.refs.map { ref ->
-                    val typeDef = env?.lookupTypeDef(ref.name)
-
-                    fun analyzeRefArg(
-                        arg: CompactType,
-                        i: Int,
-                    ): () -> CompactType {
-                        val variance = typeDef?.typeParams?.getOrNull(i)?.variance
-                        return if (variance == Variance.Invariant) {
-                            val posThunk = analyze(arg, true)
-                            val negThunk = analyze(arg, false)
-                            val capPol = pol
-                            { posThunk().merge(negThunk(), if (capPol) Variance.Covariant else Variance.Contravariant) }
-                        } else {
-                            val argPol = if (variance == Variance.Contravariant) !pol else pol
-                            analyze(arg, argPol)
-                        }
+                    fun analyzeRefArg(arg: BoundedCompactType): () -> BoundedCompactType {
+                        val lowerThunk = analyze(arg.lower, true) // lower is covariant → positive
+                        val upperThunk = analyze(arg.upper, false) // upper is contravariant → negative
+                        return { BoundedCompactType(lower = lowerThunk(), upper = upperThunk()) }
                     }
 
-                    val argThunks = ref.args.mapIndexed { i, arg -> analyzeRefArg(arg, i) }
-                    val negArgThunks = ref.negArgs?.mapIndexed { i, arg -> analyzeRefArg(arg, i) }
-                    Triple(ref.name, argThunks, negArgThunks)
+                    val argThunks = ref.args.map { arg -> analyzeRefArg(arg) }
+                    ref.name to argThunks
                 }
 
             // Return a thunk that applies substitutions during reconstruction
@@ -131,8 +118,8 @@ object TypeSimplifier {
                     optional = optionalThunk?.invoke(),
                     refs =
                         refThunks
-                            .map { (name, argThunks, negArgThunks) ->
-                                RefType(name, argThunks.map { it() }, negArgThunks?.map { it() })
+                            .map { (name, argThunks) ->
+                                RefType(name, argThunks.map { it() })
                             }.toSet(),
                 )
             }
@@ -306,77 +293,32 @@ object TypeSimplifier {
                 components.add(Type.Optional(innerType))
             }
 
-            // Add refs - in positive position, try to simplify sibling constructors to parent
-            val parentTypes = ty.refs.mapNotNull { env.lookupConstructor(it.name)?.parentType }.toSet()
-            val allSiblings =
-                pol &&
-                    ty.refs.size > 1 &&
-                    parentTypes.size == 1 &&
-                    ty.vars.isEmpty() &&
-                    ty.prims.isEmpty() &&
-                    ty.rec == null &&
-                    ty.func == null &&
-                    ty.optional == null
-
-            fun makeRef(
-                refName: String,
-                typeParams: List<TypeParamInfo>,
-                args: List<CompactType>,
-                negArgs: List<CompactType>? = null,
-            ): Type.Ref {
+            // Add refs with where clauses for invariant type args
+            for (ref in ty.refs) {
                 val whereClauses = mutableListOf<Type.WhereClause>()
                 val coalescedArgs =
-                    args.mapIndexed { i, arg ->
-                        val variance = typeParams.getOrNull(i)?.variance
-                        if (variance == Variance.Invariant && arg.vars.isNotEmpty()) {
-                            val v = arg.vars.first()
-                            val vName = varName(v)
-                            val argWithoutVar = arg.copy(vars = emptySet())
-                            val negArg = negArgs?.getOrNull(i)
-                            val negArgWithoutVar = negArg?.copy(vars = emptySet())
-                            val posType = go(argWithoutVar, true, newInProcess)
-                            val negType =
-                                if (negArgWithoutVar != null) {
-                                    go(negArgWithoutVar, false, newInProcess)
+                    ref.args.mapIndexed { i, arg ->
+                        val lowerEmpty = arg.lower.isEmpty()
+                        val upperEmpty = arg.upper.isEmpty()
+                        when {
+                            !lowerEmpty && !upperEmpty -> {
+                                val lowerType = go(arg.lower, true, newInProcess)
+                                val upperType = go(arg.upper, false, newInProcess)
+                                if (lowerType == upperType) {
+                                    lowerType
                                 } else {
-                                    go(argWithoutVar, false, newInProcess)
+                                    val v = TVar()
+                                    val vName = varName(v)
+                                    whereClauses.add(Type.WhereClause(vName, lowerType, upperType))
+                                    Type.Var(vName)
                                 }
-                            val lower = if (posType != Type.Bottom) posType else null
-                            val upper = if (negType != Type.Top) negType else null
-                            if (lower != null && upper != null && lower == upper) {
-                                lower
-                            } else {
-                                if (lower != null || upper != null) {
-                                    whereClauses.add(Type.WhereClause(vName, lower, upper))
-                                }
-                                Type.Var(vName)
                             }
-                        } else {
-                            go(arg, pol, newInProcess)
+                            !lowerEmpty -> go(arg.lower, true, newInProcess)
+                            !upperEmpty -> go(arg.upper, false, newInProcess)
+                            else -> Type.Top
                         }
                     }
-                return Type.Ref(refName, coalescedArgs, whereClauses)
-            }
-
-            if (allSiblings) {
-                val parentName = parentTypes.single()
-                val parentDef = env.lookupTypeDef(parentName) ?: error("Parent type '$parentName' not registered")
-                val mergedArgs =
-                    parentDef.typeParams.map { parentParam ->
-                        ty.refs
-                            .mapNotNull { ref ->
-                                val ctorDef = env.lookupTypeDef(ref.name) ?: error("Constructor type '${ref.name}' not registered")
-                                val paramIndex = ctorDef.typeParams.indexOfFirst { it.name == parentParam.name }
-                                if (paramIndex >= 0) ref.args[paramIndex] else null
-                            }.fold(CompactType.empty) { acc, arg -> acc.merge(arg, Variance.Covariant) }
-                    }
-                components.add(makeRef(parentName, parentDef.typeParams, mergedArgs))
-            } else {
-                for (ref in ty.refs) {
-                    val typeDef = env.lookupTypeDef(ref.name)
-                    val typeParams = typeDef?.typeParams ?: emptyList()
-                    components.add(makeRef(ref.name, typeParams, ref.args, ref.negArgs))
-                }
+                components.add(Type.Ref(ref.name, coalescedArgs, whereClauses))
             }
 
             // In positive position, if Null appears with other types, convert to optional

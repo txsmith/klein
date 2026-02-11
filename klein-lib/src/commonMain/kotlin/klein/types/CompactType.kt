@@ -13,10 +13,22 @@ import klein.types.SimpleType.*
  *
  * Reference: SimpleSub paper - https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
+
+/**
+ * Represents a type with explicit lower and upper bounds.
+ * Used for invariant type positions where we need to track both.
+ *
+ * - lower: covariant components (what values can flow out / be produced)
+ * - upper: contravariant components (what values can flow in / be consumed)
+ */
+data class BoundedCompactType(
+    val lower: CompactType = CompactType.empty,
+    val upper: CompactType = CompactType.empty,
+)
+
 data class RefType(
     val name: String,
-    val args: List<CompactType>,
-    val negArgs: List<CompactType>? = null,
+    val args: List<BoundedCompactType>,
 )
 
 data class CompactType(
@@ -47,7 +59,7 @@ data class CompactType(
 
         fun ref(
             name: String,
-            args: List<CompactType>,
+            args: List<BoundedCompactType>,
         ) = CompactType(refs = setOf(RefType(name, args)))
 
         /**
@@ -64,9 +76,55 @@ data class CompactType(
             ty: SimpleType,
             pol: Variance = Variance.Covariant,
             env: TypeEnv,
+            debug: Boolean = true,
         ): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<CompactType, Variance>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
+            var indent = 0
+
+            fun pad() = "  ".repeat(indent)
+
+            fun trace(msg: () -> String) {
+                if (debug) println(pad() + msg())
+            }
+
+            fun formatSimpleType(t: SimpleType): String =
+                when (t) {
+                    is TNum -> "TNum"
+                    is TString -> "TString"
+                    is TBool -> "TBool"
+                    is TNull -> "TNull"
+                    is TUnit -> "TUnit"
+                    is TVar -> "$t"
+                    is TOptional -> "TOptional(${formatSimpleType(t.inner)})"
+                    is TFun -> "TFun([${t.params.joinToString(", ") { formatSimpleType(it) }}], ${formatSimpleType(t.result)})"
+                    is TRecord -> "TRecord(${t.fields.map { (k, v) -> "$k: ${formatSimpleType(v)}" }})"
+                    is TRef -> "TRef(\"${t.name}\", [${t.typeArgs.joinToString(", ") { formatSimpleType(it) }}])"
+                }
+
+            fun formatCompactType(t: CompactType): String {
+                val parts = mutableListOf<String>()
+                if (t.vars.isNotEmpty()) parts.add("vars=[${t.vars.joinToString(", ") { "$it" }}]")
+                if (t.prims.isNotEmpty()) parts.add("prims=[${t.prims.joinToString(", ")}]")
+                if (t.rec != null) parts.add("rec={${t.rec.entries.joinToString(", ") { (k, v) -> "$k: ${formatCompactType(v)}" }}}")
+                if (t.func !=
+                    null
+                ) {
+                    parts.add(
+                        "func=([${t.func.first.joinToString(", ") { formatCompactType(it) }}] -> ${formatCompactType(t.func.second)})",
+                    )
+                }
+                if (t.refs.isNotEmpty()) {
+                    parts.add(
+                        "refs=[${t.refs.joinToString(", ") { ref ->
+                            "TRef(\"${ref.name}\", [${ref.args.joinToString(", ") { arg ->
+                                "Bounded(lower=${formatCompactType(arg.lower)}, upper=${formatCompactType(arg.upper)})"
+                            }}])"
+                        }}]",
+                    )
+                }
+                return "CompactType(${parts.joinToString(", ")})"
+            }
 
             // Transitively close over variables reachable through bounds
             fun closeOver(
@@ -90,109 +148,152 @@ data class CompactType(
                         }
                     }
                 }
+                trace { "closeOver($initial, $pol)  => [${result.joinToString(", ") { "$it" }}]" }
                 return result
             }
 
-            // Convert outermost layer of SimpleType to CompactType,
-            // leaving type variables untransformed (just close over them)
-            fun go0(
+            // Convert SimpleType into CompactType up to TVars and flatten transitive bounds.
+            // In a way this turns a single 'layer' of SimpleType into CompactType.
+            // TVar bounds are left as SimpleType, as this allows us to deal with cycles in the next phase
+            fun fromSimpleType(
                 ty: SimpleType,
                 pol: Variance,
-            ): CompactType =
-                when (ty) {
-                    TNum -> CompactType.prim(PrimType.Num)
-                    TString -> CompactType.prim(PrimType.String)
-                    TBool -> CompactType.prim(PrimType.Bool)
-                    TNull -> CompactType.prim(PrimType.Null)
-                    TUnit -> CompactType.prim(PrimType.Unit)
-                    is TOptional -> CompactType.optional(go0(ty.inner, pol))
-                    is TFun -> CompactType.function(ty.params.map { go0(it, pol.flip()) }, go0(ty.result, pol))
-                    is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> go0(v, pol) })
-                    is TRef -> {
-                        val typeDef = env.getTypeDef(ty.name)
-                        val hasInvariant = typeDef.typeParams.any { it.variance == Variance.Invariant || it.variance == Variance.Bivariant }
-                        val args =
-                            ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
-                                go0(arg, pol.compose(paramInfo.variance))
-                            }
-                        val negArgs =
-                            if (hasInvariant) {
+            ): CompactType {
+                trace { "fromSimpleType(${formatSimpleType(ty)}, $pol)" }
+                indent++
+                val result =
+                    when (ty) {
+                        is TNum -> CompactType.prim(PrimType.Num)
+                        is TString -> CompactType.prim(PrimType.String)
+                        is TBool -> CompactType.prim(PrimType.Bool)
+                        is TNull -> CompactType.prim(PrimType.Null)
+                        is TUnit -> CompactType.prim(PrimType.Unit)
+                        is TOptional -> CompactType.optional(fromSimpleType(ty.inner, pol))
+                        is TFun -> CompactType.function(ty.params.map { fromSimpleType(it, pol.flip()) }, fromSimpleType(ty.result, pol))
+                        is TRecord -> CompactType.record(ty.fields.mapValues { (_, v) -> fromSimpleType(v, pol) })
+                        is TRef -> {
+                            val typeDef = env.getTypeDef(ty.name)
+                            trace { "typeParams for ${ty.name}: ${typeDef.typeParams.map { it.variance }}" }
+                            val args =
                                 ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
-                                    go0(arg, pol.compose(paramInfo.variance).flip())
+                                    val composedPol = pol.compose(paramInfo.variance)
+                                    BoundedCompactType(
+                                        lower = if (composedPol.isPositive) fromSimpleType(arg, Variance.Covariant) else CompactType.empty,
+                                        upper =
+                                            if (composedPol.isNegative) {
+                                                fromSimpleType(
+                                                    arg,
+                                                    Variance.Contravariant,
+                                                )
+                                            } else {
+                                                CompactType.empty
+                                            },
+                                    )
                                 }
-                            } else {
-                                null
-                            }
-                        CompactType(refs = setOf(RefType(ty.name, args, negArgs)))
+                            CompactType(refs = setOf(RefType(ty.name, args)))
+                        }
+                        is TVar -> CompactType(vars = closeOver(ty, pol))
                     }
-                    is TVar -> CompactType(vars = closeOver(ty, pol))
-                }
+                indent--
+                trace { "  => ${formatCompactType(result)}" }
+                return result
+            }
 
-            // Merge bounds of all variables in a CompactType and recursively traverse
-            fun go1(
+            // Traverse the CompactType,
+            fun mergeBounds(
                 ty: CompactType,
                 pol: Variance,
                 inProgress: Set<Pair<CompactType, Variance>>,
             ): CompactType {
-                if (ty.isEmpty()) return ty
+                trace { "mergeBounds(${formatCompactType(ty)}, $pol)" }
+                indent++
+                if (ty.isEmpty()) {
+                    indent--
+                    trace { "  => empty" }
+                    return ty
+                }
 
                 // Short-circuit when a loop in bounds is detected
                 val key = ty to pol
                 if (key in inProgress) {
                     val recVar = recursive.getOrPut(key) { TVar() }
+                    indent--
+                    trace { "  => CYCLE, returning $recVar" }
                     return CompactType.variable(recVar)
                 }
                 val newInProgress = inProgress + key
 
-                // Merge bounds of all variables (excluding variable-to-variable bounds)
-                val boundMerge =
+                // Merge the concrete bounds of all TVars into a single type (e.g. combine record types)
+                val bounds =
                     ty.vars
                         .flatMap { tv ->
-                            val bounds =
-                                when (pol) {
-                                    Variance.Covariant -> tv.lowerBounds
-                                    Variance.Contravariant -> tv.upperBounds
-                                    Variance.Invariant, Variance.Bivariant -> tv.lowerBounds + tv.upperBounds
+                            trace { "converting concrete bounds for $tv ($pol)" }
+                            indent++
+                            val lower =
+                                tv.lowerBounds.filter { pol.isPositive && it !is TVar }.map {
+                                    trace { "$tv has lower bound $it" }
+                                    indent++
+                                    val r = fromSimpleType(it, Variance.Covariant)
+                                    indent--
+                                    r
                                 }
-                            bounds.filter { it !is TVar }.map { go0(it, pol) }
-                        }.fold(ty) { acc, t -> acc.merge(t, pol) }
+                            val upper =
+                                tv.upperBounds.filter { pol.isNegative && it !is TVar }.map {
+                                    trace { "$tv has upper bound $it" }
+                                    indent++
+                                    val r = fromSimpleType(it, Variance.Contravariant)
+                                    indent--
+                                    r
+                                }
 
-                val adapted =
+                            indent--
+                            lower + upper
+                        }.fold(ty) { acc, t -> acc.merge(t, pol) }
+                trace { "merged concrete bounds: ${formatCompactType(bounds)}" }
+
+                val result =
                     CompactType(
-                        vars = boundMerge.vars,
-                        prims = boundMerge.prims,
-                        rec = boundMerge.rec?.mapValues { (_, v) -> go1(v, pol, newInProgress) },
-                        func =
-                            boundMerge.func?.let { (params, result) ->
-                                params.map { go1(it, pol.flip(), newInProgress) } to go1(result, pol, newInProgress)
+                        vars = bounds.vars,
+                        prims = bounds.prims,
+                        rec =
+                            bounds.rec?.mapValues { (_, v) ->
+                                trace { "recursing into ${bounds.rec}" }
+                                mergeBounds(v, pol, newInProgress)
                             },
-                        optional = boundMerge.optional?.let { go1(it, pol, newInProgress) },
+                        func =
+                            bounds.func?.let { (params, result) ->
+                                params.map { mergeBounds(it, pol.flip(), newInProgress) } to mergeBounds(result, pol, newInProgress)
+                            },
+                        optional = bounds.optional?.let { mergeBounds(it, pol, newInProgress) },
                         refs =
-                            boundMerge.refs
+                            bounds.refs
                                 .map { ref ->
-                                    val typeDef = env.getTypeDef(ref.name)
+                                    trace { "recursing into $ref" }
                                     RefType(
                                         ref.name,
-                                        ref.args.zip(typeDef.typeParams) { arg, paramInfo ->
-                                            go1(arg, pol.compose(paramInfo.variance), newInProgress)
-                                        },
-                                        ref.negArgs?.zip(typeDef.typeParams) { arg, paramInfo ->
-                                            go1(arg, pol.flip().compose(paramInfo.variance), newInProgress)
+                                        ref.args.map { arg ->
+                                            BoundedCompactType(
+                                                lower = mergeBounds(arg.lower, Variance.Covariant, newInProgress),
+                                                upper = mergeBounds(arg.upper, Variance.Contravariant, newInProgress),
+                                            )
                                         },
                                     )
                                 }.toSet(),
                     )
 
                 val recVar = recursive[key]
+                indent--
                 return if (recVar != null) {
-                    recVars[recVar] = adapted
+                    recVars[recVar] = result
+                    trace { "  => recursive $recVar" }
                     CompactType.variable(recVar)
                 } else {
-                    adapted
+                    trace { "  => ${formatCompactType(result)}" }
+                    result
                 }
             }
 
-            val term = go1(go0(ty, pol), pol, inProgress = emptySet())
+            val term = mergeBounds(fromSimpleType(ty, pol), pol, inProgress = emptySet())
             return CompactTypeScheme(term, recVars)
         }
     }
