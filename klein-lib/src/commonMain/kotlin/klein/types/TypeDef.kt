@@ -70,9 +70,8 @@ enum class Variance {
 
     fun compose(other: Variance): Variance =
         when (other) {
-            Covariant -> this
             Contravariant -> this.flip()
             Invariant -> Invariant
-            Bivariant -> this
+            else -> this
         }
 }

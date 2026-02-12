@@ -36,7 +36,9 @@ object TypePrinter {
     /**
      * Printer for CompactType representation.
      */
-    private class CompactPrinter(private val recVars: Map<TVar, CompactType>) {
+    private class CompactPrinter(
+        private val recVars: Map<TVar, CompactType>,
+    ) {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
 
@@ -50,7 +52,10 @@ object TypePrinter {
                 "'$letter$suffix"
             }
 
-        private fun printType(ty: CompactType, indent: Int): String {
+        private fun printType(
+            ty: CompactType,
+            indent: Int,
+        ): String {
             if (ty.isEmpty()) return "CompactType()"
 
             val pad = "  ".repeat(indent)
@@ -58,57 +63,69 @@ object TypePrinter {
             val fields = mutableListOf<String>()
 
             if (ty.vars.isNotEmpty()) {
-                val varsStr = ty.vars.sortedByDescending { it.uid }.joinToString(", ") { v ->
-                    val bound = recVars[v]
-                    if (bound != null) "μ${varName(v)}" else varName(v)
-                }
+                val varsStr =
+                    ty.vars.sortedByDescending { it.uid }.joinToString(", ") { v ->
+                        val bound = recVars[v]
+                        if (bound != null) "μ${varName(v)}" else varName(v)
+                    }
                 fields.add("${innerPad}vars: [$varsStr]")
             }
 
             if (ty.prims.isNotEmpty()) {
-                val primsStr = ty.prims.joinToString(", ") { prim ->
-                    when (prim) {
-                        CompactType.PrimType.Num -> "Num"
-                        CompactType.PrimType.String -> "String"
-                        CompactType.PrimType.Bool -> "Bool"
-                        CompactType.PrimType.Null -> "Null"
-                        CompactType.PrimType.Unit -> "()"
+                val primsStr =
+                    ty.prims.joinToString(", ") { prim ->
+                        when (prim) {
+                            CompactType.PrimType.Num -> "Num"
+                            CompactType.PrimType.String -> "String"
+                            CompactType.PrimType.Bool -> "Bool"
+                            CompactType.PrimType.Null -> "Null"
+                            CompactType.PrimType.Unit -> "()"
+                        }
                     }
-                }
                 fields.add("${innerPad}prims: [$primsStr]")
             }
 
             ty.rec?.let { rec ->
-                val fieldsStr = rec.entries.sortedBy { it.key }.joinToString(", ") { (k, v) ->
-                    "$k: ${printType(v, indent + 2)}"
-                }
-                fields.add("${innerPad}rec: {$fieldsStr}")
+                val fieldsStr =
+                    rec.entries.sortedBy { it.key }.joinToString(",\n") { (k, v) ->
+                        "$innerPad  $k:\n${printBounded(v, indent + 3)}"
+                    }
+                fields.add("${innerPad}rec: {\n$fieldsStr\n$innerPad}")
             }
 
             ty.func?.let { (params, result) ->
-                val paramsStr = params.joinToString(", ") { printType(it, indent + 2) }
-                fields.add("${innerPad}func: ($paramsStr) -> ${printType(result, indent + 2)}")
+                val paramsStr =
+                    params
+                        .mapIndexed { i, p ->
+                            "$innerPad  param$i:\n${printBounded(p, indent + 3)}"
+                        }.joinToString(",\n")
+                val resultStr = printBounded(result, indent + 3)
+                fields.add("${innerPad}func: (\n$paramsStr\n$innerPad) ->\n$resultStr")
             }
 
             ty.optional?.let { inner ->
-                fields.add("${innerPad}optional: ${printType(inner, indent + 1)}")
+                fields.add("${innerPad}optional:\n${printBounded(inner, indent + 2)}")
             }
 
             if (ty.refs.isNotEmpty()) {
-                val refsStr = ty.refs.sortedBy { it.name }.joinToString(", ") { ref ->
-                    if (ref.args.isEmpty()) {
-                        ref.name
-                    } else {
-                        "${ref.name}<\n${ref.args.joinToString(",\n") { printBounded(it, indent + 2) }}\n$innerPad>"
+                val refsStr =
+                    ty.refs.sortedBy { it.name }.joinToString(", ") { ref ->
+                        if (ref.args.isEmpty()) {
+                            ref.name
+                        } else {
+                            "${ref.name}<\n${ref.args.joinToString(",\n") { printBounded(it, indent + 2) }}\n$innerPad>"
+                        }
                     }
-                }
                 fields.add("${innerPad}refs: [$refsStr]")
             }
 
             return "CompactType(\n${fields.joinToString(",\n")}\n$pad)"
         }
 
-        private fun printBounded(bounded: BoundedCompactType, indent: Int): String {
+        private fun printBounded(
+            bounded: BoundedCompactType,
+            indent: Int,
+        ): String {
             val pad = "  ".repeat(indent)
             val lowerEmpty = bounded.lower.isEmpty()
             val upperEmpty = bounded.upper.isEmpty()

@@ -76,21 +76,21 @@ object TypeSimplifier {
                 }
             }
 
-            val recThunks = ty.rec?.mapValues { (_, v) -> analyze(v, pol) }
+            fun analyzeBounded(b: BoundedCompactType): () -> BoundedCompactType {
+                val lowerThunk = analyze(b.lower, true)
+                val upperThunk = analyze(b.upper, false)
+                return { BoundedCompactType(lower = lowerThunk(), upper = upperThunk()) }
+            }
+
+            val recThunks = ty.rec?.mapValues { (_, v) -> analyzeBounded(v) }
             val funThunks =
                 ty.func?.let { (params, result) ->
-                    params.map { analyze(it, !pol) } to analyze(result, pol)
+                    params.map { analyzeBounded(it) } to analyzeBounded(result)
                 }
-            val optionalThunk = ty.optional?.let { analyze(it, pol) }
+            val optionalThunk = ty.optional?.let { analyzeBounded(it) }
             val refThunks =
                 ty.refs.map { ref ->
-                    fun analyzeRefArg(arg: BoundedCompactType): () -> BoundedCompactType {
-                        val lowerThunk = analyze(arg.lower, true) // lower is covariant → positive
-                        val upperThunk = analyze(arg.upper, false) // upper is contravariant → negative
-                        return { BoundedCompactType(lower = lowerThunk(), upper = upperThunk()) }
-                    }
-
-                    val argThunks = ref.args.map { arg -> analyzeRefArg(arg) }
+                    val argThunks = ref.args.map { arg -> analyzeBounded(arg) }
                     ref.name to argThunks
                 }
 
@@ -274,22 +274,32 @@ object TypeSimplifier {
                 )
             }
 
+            fun coalesceBounded(
+                b: BoundedCompactType,
+                composedPol: Boolean,
+            ): Type =
+                when {
+                    !b.lower.isEmpty() -> go(b.lower, true, newInProcess)
+                    !b.upper.isEmpty() -> go(b.upper, false, newInProcess)
+                    else -> if (composedPol) Type.Bottom else Type.Top
+                }
+
             // Add record
             ty.rec?.let { fields ->
-                val typeFields = fields.mapValues { (_, v) -> go(v, pol, newInProcess) }
+                val typeFields = fields.mapValues { (_, v) -> coalesceBounded(v, pol) }
                 components.add(Type.Record(typeFields))
             }
 
             // Add function
             ty.func?.let { (params, result) ->
-                val typeParams = params.map { go(it, !pol, newInProcess) }
-                val typeResult = go(result, pol, newInProcess)
+                val typeParams = params.map { coalesceBounded(it, !pol) }
+                val typeResult = coalesceBounded(result, pol)
                 components.add(Type.Fun(typeParams, typeResult))
             }
 
             // Add optional
             ty.optional?.let { inner ->
-                val innerType = go(inner, pol, newInProcess)
+                val innerType = coalesceBounded(inner, pol)
                 components.add(Type.Optional(innerType))
             }
 
