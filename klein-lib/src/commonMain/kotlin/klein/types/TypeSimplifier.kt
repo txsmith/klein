@@ -30,24 +30,56 @@ object TypeSimplifier {
      * Two simplifications:
      * 1. Variables that only occur in one polarity can be eliminated
      *    (positive-only → Bottom, negative-only → Top)
+     *    Example: ('a & 'b) -> ('a, 'b) is the same as 'a -> ('a, 'a)
+     *    Example: ('a & 'b) -> 'b -> ('a, 'b) is NOT the same as 'a -> 'a -> ('a, 'a)
+     *      there is no value of 'a that can make 'a -> 'a -> ('a, 'a) <: (a & b) -> b -> (a, b) work
+     *      we'd require 'a :> b | a & b <: a & b, which are NOT valid bounds!
+     *    Example: 'a -> 'b -> 'a | 'b is the same as 'a -> 'a -> 'a
+     *    Justification: the other var 'b can always be taken to be 'a & 'b (resp. a | b)
+     *       without loss of generality. Indeed, on the pos side we'll have 'a <: 'a & 'b and 'b <: 'a & 'b
+     *       and on the neg side, we'll always have 'a and 'b together, i.e., 'a & 'b
+     *
      * 2. Variables that always co-occur at the same polarity can be unified
+     *    This would arise from constraints such as: Int <: 'a, 'a <:'b and 'b <: Int
+     *      (contraints which basically say 'a =:= 'b =:= Int)
+     *    Example: 'a ∧ Int -> 'a ∨ Int is the same as Int -> Int
+     *    Currently, we only do this for primitive types.
+     *    In principle it could be done for functions and records, too.
+     *    Note: conceptually, this idea subsumes the simplification that removes variables occurring
+     *        exclusively in positive or negative positions.
+     *      Indeed, if 'a never occurs positively, it's like it always occurs both positively AND
+     *      negatively along with the type Bot, so we can replace it with Bot.
      */
     fun simplifyType(
         cty: CompactTypeScheme,
         keepVars: Boolean = false,
         env: TypeEnv? = null,
     ): CompactTypeScheme {
+        // The following three mutable collections are all constucted by calling `analyze`:
+        // - allVars is simply the collection of all TVars that occur anywhere in `cty`
+        // - recVars is the set of all recursive TVars along with their expanded type
+        // - coOccurrences is the collection of types that always co-occur with a variable at a given variance.
+
         val allVars = mutableSetOf<TVar>()
         val recVars = mutableMapOf<TVar, () -> CompactType>()
-
-        // coOccurrences: for each (polarity, variable), track what other types always appear with it
         val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
 
         // varSubst: substitution to apply during reconstruction
+        // This is populated after `analyze` runs.
         // null value = eliminate, non-null = replace with that var
+        // Note that null vs 'no substitution present' are different.
         val varSubst = mutableMapOf<TVar, TVar?>()
 
-        // Phase 1: Traverse and collect co-occurrence information
+        // Phase 1: Traverse and collect co-occurrence information, then return a thunk that reconstructs the final simplified CompactType.
+        // The thunk uses `varSubst` to reconstruct the original type while eliminating/merging variables that have been deemed redundant or equivalent.
+        //
+        // The 'architecture' of this function is a quite peculiar when you first look at it, mostly because it mixes two key concerns:
+        // - collecting co-occurrence information
+        // - reconstructing the simplified type with substitutions (that it itself doesn't calculate!)
+        //
+        // The main reason this is done this way is (supposedly) for performance: all these things are done in a single pass over the entire CompactType.
+        // Splitting the concerns would require at least two passes (potentially three if we look at recVars too).
+        // Is performance gain worth the 'clever' opaqueness? I don't know, no benchmarks have been run so we really don't know the difference it makes.
         fun analyze(
             ty: CompactType,
             pol: Boolean,
@@ -65,13 +97,13 @@ object TypeSimplifier {
                     coOccurrences[key] = newOccs
                 }
 
-                // If tv is recursive, process its bound too
-                cty.recVars[tv]?.let { bound ->
+                // If tv is recursive, also analyze its expansion
+                cty.recVars[tv]?.let { expansion ->
                     if (tv !in recVars) {
                         // Register before recursing to avoid infinite recursion
                         lateinit var goLater: () -> CompactType
                         recVars[tv] = { goLater() }
-                        goLater = analyze(bound, pol)
+                        goLater = analyze(expansion, pol)
                     }
                 }
             }

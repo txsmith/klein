@@ -12,6 +12,11 @@ import klein.types.SimpleType.*
 //
 // Reference: SimpleSub paper - https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
 
+data class CompactTypeScheme(
+    val term: CompactType,
+    val recVars: Map<TVar, CompactType> = emptyMap(),
+)
+
 /**
  * Represents a type with explicit lower and upper bounds.
  * Used for invariant type positions where we need to track both.
@@ -74,7 +79,7 @@ data class CompactType(
             ty: SimpleType,
             pol: Variance = Variance.Covariant,
             env: TypeEnv,
-            debug: Boolean = true,
+            debug: Boolean = false,
         ): CompactTypeScheme {
             val recursive = mutableMapOf<Pair<CompactType, Variance>, TVar>()
             val recVars = mutableMapOf<TVar, CompactType>()
@@ -403,8 +408,3 @@ data class CompactType(
 
     fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null && refs.isEmpty()
 }
-
-data class CompactTypeScheme(
-    val term: CompactType,
-    val recVars: Map<TVar, CompactType> = emptyMap(),
-)
