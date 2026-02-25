@@ -87,7 +87,7 @@ object TypePrinter {
 
             ty.rec?.let { rec ->
                 val fieldsStr =
-                    rec.entries.sortedBy { it.key }.joinToString(",\n") { (k, v) ->
+                    rec.fields.entries.sortedBy { it.key }.joinToString(",\n") { (k, v) ->
                         "$innerPad  $k:\n${printBounded(v, indent + 3)}"
                     }
                 fields.add("${innerPad}rec: {\n$fieldsStr\n$innerPad}")

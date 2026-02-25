@@ -27,18 +27,38 @@ data class CompactTypeScheme(
 data class BoundedCompactType(
     val lower: CompactType = CompactType.empty,
     val upper: CompactType = CompactType.empty,
-)
+) {
+    override fun toString(): String {
+        val hasLower = !lower.isEmpty()
+        val hasUpper = !upper.isEmpty()
+        return when {
+            hasLower && hasUpper -> "<+$lower, -$upper>"
+            hasLower -> "+$lower"
+            hasUpper -> "-$upper"
+            else -> "<>"
+        }
+    }
+}
 
 data class RefType(
     val name: String,
     val args: List<BoundedCompactType>,
 )
 
+data class RecordType(
+    val fields: Map<String, BoundedCompactType>,
+)
+
+data class FunctionType(
+    val params: List<BoundedCompactType>,
+    val result: BoundedCompactType,
+)
+
 data class CompactType(
     val vars: Set<TVar> = emptySet(),
     val prims: Set<PrimType> = emptySet(),
-    val rec: Map<String, BoundedCompactType>? = null,
-    val func: Pair<List<BoundedCompactType>, BoundedCompactType>? = null,
+    val rec: RecordType? = null,
+    val func: FunctionType? = null,
     val optional: BoundedCompactType? = null,
     val refs: Set<RefType> = emptySet(),
 ) {
@@ -54,9 +74,9 @@ data class CompactType(
         fun function(
             params: List<BoundedCompactType>,
             result: BoundedCompactType,
-        ) = CompactType(func = params to result)
+        ) = CompactType(func = FunctionType(params, result))
 
-        fun record(fields: Map<String, BoundedCompactType>) = CompactType(rec = fields)
+        fun record(fields: Map<String, BoundedCompactType>) = CompactType(rec = RecordType(fields))
 
         fun optional(inner: BoundedCompactType) = CompactType(optional = inner)
 
@@ -125,10 +145,10 @@ data class CompactType(
                 val parts = mutableListOf<String>()
                 if (t.vars.isNotEmpty()) parts.add("vars=[${t.vars.joinToString(", ") { "$it" }}]")
                 if (t.prims.isNotEmpty()) parts.add("prims=[${t.prims.joinToString(", ")}]")
-                if (t.rec != null) parts.add("rec={${t.rec.entries.joinToString(", ") { (k, v) -> "$k: ${formatBounded(v)}" }}}")
+                if (t.rec != null) parts.add("rec={${t.rec.fields.entries.joinToString(", ") { (k, v) -> "$k: ${formatBounded(v)}" }}}")
                 if (t.func != null) {
                     parts.add(
-                        "func=([${t.func.first.joinToString(", ") { formatBounded(it) }}] -> ${formatBounded(t.func.second)})",
+                        "func=([${t.func.params.joinToString(", ") { formatBounded(it) }}] -> ${formatBounded(t.func.result)})",
                     )
                 }
                 if (t.optional != null) parts.add("optional=${formatBounded(t.optional)}")
@@ -291,13 +311,13 @@ data class CompactType(
                             vars = bounds.vars,
                             prims = bounds.prims,
                             rec =
-                                bounds.rec?.mapValues { (_, v) ->
+                                bounds.rec?.let { r ->
                                     trace { "recursing into ${bounds.rec}" }
-                                    mergeBounded(v, pol)
+                                    RecordType(r.fields.mapValues { (_, v) -> mergeBounded(v, pol) })
                                 },
                             func =
                                 bounds.func?.let { (params, result) ->
-                                    params.map { mergeBounded(it, pol.flip()) } to mergeBounded(result, pol)
+                                    FunctionType(params.map { mergeBounded(it, pol.flip()) }, mergeBounded(result, pol))
                                 },
                             optional = bounds.optional?.let { mergeBounded(it, pol) },
                             refs =
@@ -354,22 +374,30 @@ data class CompactType(
                 this.rec == null -> other.rec
                 other.rec == null -> this.rec
                 positive -> {
-                    val commonKeys = this.rec.keys.intersect(other.rec.keys)
-                    commonKeys.associateWith { k ->
-                        mergeBounded(this.rec[k]!!, other.rec[k]!!)
-                    }
+                    val commonKeys =
+                        this.rec.fields.keys
+                            .intersect(other.rec.fields.keys)
+                    RecordType(
+                        commonKeys.associateWith { k ->
+                            mergeBounded(this.rec.fields[k]!!, other.rec.fields[k]!!)
+                        },
+                    )
                 }
                 else -> {
-                    val allKeys = this.rec.keys.union(other.rec.keys)
-                    allKeys.associateWith { k ->
-                        val t1 = this.rec[k]
-                        val t2 = other.rec[k]
-                        when {
-                            t1 == null -> t2!!
-                            t2 == null -> t1
-                            else -> mergeBounded(t1, t2)
-                        }
-                    }
+                    val allKeys =
+                        this.rec.fields.keys
+                            .union(other.rec.fields.keys)
+                    RecordType(
+                        allKeys.associateWith { k ->
+                            val t1 = this.rec.fields[k]
+                            val t2 = other.rec.fields[k]
+                            when {
+                                t1 == null -> t2!!
+                                t2 == null -> t1
+                                else -> mergeBounded(t1, t2)
+                            }
+                        },
+                    )
                 }
             }
 
@@ -385,7 +413,7 @@ data class CompactType(
                             mergeBounded(p1, p2)
                         }
                     val mergedResult = mergeBounded(result1, result2)
-                    mergedParams to mergedResult
+                    FunctionType(mergedParams, mergedResult)
                 }
             }
 
@@ -407,4 +435,15 @@ data class CompactType(
     }
 
     fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null && refs.isEmpty()
+
+    override fun toString(): String {
+        val parts = mutableListOf<String>()
+        if (vars.isNotEmpty()) parts.add("vars=$vars")
+        if (prims.isNotEmpty()) parts.add("prims=$prims")
+        if (rec != null) parts.add("rec=$rec")
+        if (func != null) parts.add("func=$func")
+        if (optional != null) parts.add("optional=$optional")
+        if (refs.isNotEmpty()) parts.add("refs=$refs")
+        return if (parts.isEmpty()) "CompactType()" else "CompactType(${parts.joinToString(", ")})"
+    }
 }

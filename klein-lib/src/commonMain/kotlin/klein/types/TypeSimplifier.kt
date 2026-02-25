@@ -21,6 +21,7 @@ object TypeSimplifier {
     ): Type {
         val scheme = CompactType.canonicalizeType(type, pol, env)
         val simplified = simplifyType(scheme, keepVars, env)
+        // val simplifiedTwice = simplifyType(simplified, keepVars, env)
         return coalesceType(simplified, env, keepVars, pol)
     }
 
@@ -77,7 +78,7 @@ object TypeSimplifier {
         // - collecting co-occurrence information
         // - reconstructing the simplified type with substitutions (that it itself doesn't calculate!)
         //
-        // The main reason this is done this way is (supposedly) for performance: all these things are done in a single pass over the entire CompactType.
+        // The main reason this is done this way is (i think) for performance: all these things are done in a single pass over the entire CompactType.
         // Splitting the concerns would require at least two passes (potentially three if we look at recVars too).
         // Is performance gain worth the 'clever' opaqueness? I don't know, no benchmarks have been run so we really don't know the difference it makes.
         fun analyze(
@@ -89,6 +90,9 @@ object TypeSimplifier {
                 val newOccs = mutableSetOf<Any>()
                 newOccs.addAll(ty.vars)
                 newOccs.addAll(ty.prims)
+                ty.rec?.let { newOccs.add(it) }
+                ty.func?.let { newOccs.add(it) }
+                newOccs.addAll(ty.refs)
                 val key = pol to tv
                 val existing = coOccurrences[key]
                 if (existing != null) {
@@ -114,7 +118,7 @@ object TypeSimplifier {
                 return { BoundedCompactType(lower = lowerThunk(), upper = upperThunk()) }
             }
 
-            val recThunks = ty.rec?.mapValues { (_, v) -> analyzeBounded(v) }
+            val recThunks = ty.rec?.fields?.mapValues { (_, v) -> analyzeBounded(v) }
             val funThunks =
                 ty.func?.let { (params, result) ->
                     params.map { analyzeBounded(it) } to analyzeBounded(result)
@@ -142,10 +146,10 @@ object TypeSimplifier {
                 CompactType(
                     vars = newVars,
                     prims = ty.prims,
-                    rec = recThunks?.mapValues { (_, thunk) -> thunk() },
+                    rec = recThunks?.let { RecordType(it.mapValues { (_, thunk) -> thunk() }) },
                     func =
                         funThunks?.let { (paramThunks, resultThunk) ->
-                            paramThunks.map { it() } to resultThunk()
+                            FunctionType(paramThunks.map { it() }, resultThunk())
                         },
                     optional = optionalThunk?.invoke(),
                     refs =
@@ -158,6 +162,17 @@ object TypeSimplifier {
         }
 
         val termThunk = analyze(cty.term, pol = true)
+
+        // DEBUG: Print co-occurrence information
+        println("=== Co-occurrence Analysis ===")
+        println("allVars: ${allVars.map { it.toString() }}")
+        println("recVars: ${recVars.keys.map { it.toString() }}")
+        for ((key, occs) in coOccurrences) {
+            val (pol, tv) = key
+            val polStr = if (pol) "+" else "-"
+            println("  $tv @ $polStr: $occs")
+        }
+        println("==============================")
 
         // Phase 2: Simplify away single-polarity non-recursive variables
         for (v in allVars) {
@@ -216,6 +231,27 @@ object TypeSimplifier {
                                 varSubst[v] = null
                             }
                         }
+                        is RefType -> {
+                            // If variable co-occurs with same ref at both polarities, eliminate it
+                            val vOppOccs = coOccurrences[!pol to v]
+                            if (vOppOccs != null && w in vOppOccs) {
+                                varSubst[v] = null
+                            }
+                        }
+                        is RecordType -> {
+                            // If variable co-occurs with same record at both polarities, eliminate it
+                            val vOppOccs = coOccurrences[!pol to v]
+                            if (vOppOccs != null && w in vOppOccs) {
+                                varSubst[v] = null
+                            }
+                        }
+                        is FunctionType -> {
+                            // If variable co-occurs with same function at both polarities, eliminate it
+                            val vOppOccs = coOccurrences[!pol to v]
+                            if (vOppOccs != null && w in vOppOccs) {
+                                varSubst[v] = null
+                            }
+                        }
                     }
                 }
             }
@@ -227,7 +263,13 @@ object TypeSimplifier {
                 .mapKeys { (k, _) -> varSubst[k] ?: k }
                 .mapValues { (_, thunk) -> thunk() }
 
-        return CompactTypeScheme(termThunk(), newRecVars)
+        val resultType = termThunk()
+
+        println("=== After simplification ===")
+        println(resultType)
+        println("==============================")
+
+        return CompactTypeScheme(resultType, newRecVars)
     }
 
     /**
@@ -276,9 +318,51 @@ object TypeSimplifier {
 
             val newInProcess = inProcess + (key to { recVar })
 
+            fun coalesceBounded(
+                b: BoundedCompactType,
+                pol: Boolean,
+            ): Type {
+                val hasLower = !b.lower.isEmpty()
+                val hasUpper = !b.upper.isEmpty()
+                return when {
+                    hasLower && hasUpper -> {
+                        // Invariant position: find common variable and use it with bounds
+                        val commonVars = b.lower.vars.intersect(b.upper.vars)
+                        when (commonVars.size) {
+                            1 -> {
+                                val commonVar = commonVars.single()
+                                val lowerBound = go(b.lower.copy(vars = b.lower.vars - commonVar), true, newInProcess)
+                                val upperBound = go(b.upper.copy(vars = b.upper.vars - commonVar), false, newInProcess)
+                                // If bounds are equal, just use that type directly
+                                // if (lowerBound == upperBound) {
+                                //     lowerBound
+                                // } else {
+                                val lower = if (lowerBound == Type.Bottom) null else lowerBound
+                                val upper = if (upperBound == Type.Top) null else upperBound
+                                Type.Var(varName(commonVar), lower, upper)
+                                // }
+                            }
+                            0 -> {
+                                val lowerType = go(b.lower, true, newInProcess)
+                                val upperType = go(b.upper, false, newInProcess)
+                                if (lowerType == upperType) {
+                                    lowerType
+                                } else {
+                                    error("Invariant type arg with no common variable: lower=$lowerType, upper=$upperType")
+                                }
+                            }
+                            else -> error("Invariant type arg with multiple common variables: $commonVars")
+                        }
+                    }
+                    hasLower -> go(b.lower, true, newInProcess)
+                    hasUpper -> go(b.upper, false, newInProcess)
+                    else -> if (pol) Type.Bottom else Type.Top
+                }
+            }
+
             val components = mutableListOf<Type>()
 
-            // Process in same order as simple-sub: vars, prims, rec, func
+            // Process in same order as simple-sub: vars, prims, rec, func, ...
             // This ensures variables at the current level are named before
             // descending into nested function types
 
@@ -306,19 +390,9 @@ object TypeSimplifier {
                 )
             }
 
-            fun coalesceBounded(
-                b: BoundedCompactType,
-                composedPol: Boolean,
-            ): Type =
-                when {
-                    !b.lower.isEmpty() -> go(b.lower, true, newInProcess)
-                    !b.upper.isEmpty() -> go(b.upper, false, newInProcess)
-                    else -> if (composedPol) Type.Bottom else Type.Top
-                }
-
             // Add record
-            ty.rec?.let { fields ->
-                val typeFields = fields.mapValues { (_, v) -> coalesceBounded(v, pol) }
+            ty.rec?.let { rec ->
+                val typeFields = rec.fields.mapValues { (_, v) -> coalesceBounded(v, pol) }
                 components.add(Type.Record(typeFields))
             }
 
@@ -335,32 +409,10 @@ object TypeSimplifier {
                 components.add(Type.Optional(innerType))
             }
 
-            // Add refs with where clauses for invariant type args
+            // Add refs
             for (ref in ty.refs) {
-                val whereClauses = mutableListOf<Type.WhereClause>()
-                val coalescedArgs =
-                    ref.args.mapIndexed { i, arg ->
-                        val lowerEmpty = arg.lower.isEmpty()
-                        val upperEmpty = arg.upper.isEmpty()
-                        when {
-                            !lowerEmpty && !upperEmpty -> {
-                                val lowerType = go(arg.lower, true, newInProcess)
-                                val upperType = go(arg.upper, false, newInProcess)
-                                if (lowerType == upperType) {
-                                    lowerType
-                                } else {
-                                    val v = TVar()
-                                    val vName = varName(v)
-                                    whereClauses.add(Type.WhereClause(vName, lowerType, upperType))
-                                    Type.Var(vName)
-                                }
-                            }
-                            !lowerEmpty -> go(arg.lower, true, newInProcess)
-                            !upperEmpty -> go(arg.upper, false, newInProcess)
-                            else -> Type.Top
-                        }
-                    }
-                components.add(Type.Ref(ref.name, coalescedArgs, whereClauses))
+                val coalescedArgs = ref.args.map { arg -> coalesceBounded(arg, pol) }
+                components.add(Type.Ref(ref.name, coalescedArgs))
             }
 
             // In positive position, if Null appears with other types, convert to optional

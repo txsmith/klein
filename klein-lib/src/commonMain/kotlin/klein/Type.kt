@@ -17,7 +17,11 @@ sealed class Type {
 
     data class Var(
         val name: String,
-    ) : Type()
+        val lower: Type? = null,
+        val upper: Type? = null,
+    ) : Type() {
+        val hasBounds: Boolean get() = lower != null || upper != null
+    }
 
     data class Fun(
         val params: List<Type>,
@@ -50,14 +54,7 @@ sealed class Type {
     data class Ref(
         val name: String,
         val args: List<Type>,
-        val whereClauses: List<WhereClause> = emptyList(),
     ) : Type()
-
-    data class WhereClause(
-        val varName: String,
-        val lowerBound: Type?,
-        val upperBound: Type?,
-    )
 
     override fun toString(): String = print(this)
 
@@ -83,19 +80,22 @@ sealed class Type {
 
         private fun printRef(ref: Ref): String {
             val args = if (ref.args.isEmpty()) "" else "<${ref.args.joinToString(", ") { print(it) }}>"
+
+            // Extract bounded Vars from args to display as where clauses
+            val boundedVars = ref.args.filterIsInstance<Var>().filter { it.hasBounds }
             val where =
-                if (ref.whereClauses.isEmpty()) {
+                if (boundedVars.isEmpty()) {
                     ""
                 } else {
                     val clauses =
-                        ref.whereClauses.joinToString(", ") { clause ->
-                            val lower = clause.lowerBound?.let { print(it) }
-                            val upper = clause.upperBound?.let { print(it) }
+                        boundedVars.joinToString(", ") { v ->
+                            val lower = v.lower?.let { print(it) }
+                            val upper = v.upper?.let { print(it) }
                             when {
-                                lower != null && upper != null -> "$lower <: ${clause.varName} <: $upper"
-                                lower != null -> "$lower <: ${clause.varName}"
-                                upper != null -> "${clause.varName} <: $upper"
-                                else -> clause.varName
+                                lower != null && upper != null -> "$lower <: ${v.name} <: $upper"
+                                lower != null -> "$lower <: ${v.name}"
+                                upper != null -> "${v.name} <: $upper"
+                                else -> v.name
                             }
                         }
                     " where $clauses"
