@@ -68,45 +68,23 @@ object TypeSimplifier {
         // - coOccurrences is the collection of types that always co-occur with a variable at a given variance.
 
         val allVars = mutableSetOf<TVar>()
-        val recVars = mutableMapOf<TVar, () -> CompactType>()
+        val recVars = mutableSetOf<TVar>()
         val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
 
-        // varSubst: substitution to apply during reconstruction
-        // This is populated after `analyze` runs.
-        // null value = eliminate, non-null = replace with that var
-        // Note that null vs 'no substitution present' are different.
-        val varSubst = mutableMapOf<TVar, TVar?>()
-
-        // Phase 1: Traverse and collect co-occurrence information, then return a thunk that reconstructs the final simplified CompactType.
-        // The thunk uses `varSubst` to reconstruct the original type while eliminating/merging variables that have been deemed redundant or equivalent.
-        //
-        // The 'architecture' of this function is a quite peculiar when you first look at it, mostly because it mixes two key concerns:
-        // - collecting co-occurrence information
-        // - reconstructing the simplified type with substitutions (that it itself doesn't calculate!)
-        //
-        // The main reason this is done this way is (i think) for performance: all these things are done in a single pass over the entire CompactType.
-        // Splitting the concerns would require at least two passes (potentially three if we look at recVars too).
-        // Is performance gain worth the 'clever' opaqueness? I don't know, no benchmarks have been run so we really don't know the difference it makes.
-        fun analyze(
+        // Phase 1: Traverse and collect co-occurrence information
+        fun collectCoOccurrences(
             ty: CompactType,
             pol: Boolean,
-        ): () -> CompactType {
+        ) {
             for (tv in ty.vars) {
                 allVars.add(tv)
                 val newOccs = mutableSetOf<Any>()
                 newOccs.addAll(ty.vars)
                 newOccs.addAll(ty.prims)
 
-                // Normalize to positive polarity: flip types when at negative
-                if (pol) {
-                    ty.rec?.let { newOccs.add(it) }
-                    ty.func?.let { newOccs.add(it) }
-                    newOccs.addAll(ty.refs)
-                } else {
-                    ty.rec?.let { newOccs.add(it.flip()) }
-                    ty.func?.let { newOccs.add(it.flip()) }
-                    newOccs.addAll(ty.refs.map { it.flip() })
-                }
+                ty.rec?.let { newOccs.add(it) }
+                ty.func?.let { newOccs.add(it) }
+                newOccs.addAll(ty.refs)
                 val key = pol to tv
                 val existing = coOccurrences[key]
                 if (existing != null) {
@@ -115,78 +93,49 @@ object TypeSimplifier {
                     coOccurrences[key] = newOccs
                 }
 
-                // If tv is recursive, also analyze its expansion
+                // If tv is recursive, also collect from its expansion
                 cty.recVars[tv]?.let { expansion ->
                     if (tv !in recVars) {
-                        // Register before recursing to avoid infinite recursion
-                        lateinit var goLater: () -> CompactType
-                        recVars[tv] = { goLater() }
-                        goLater = analyze(expansion, pol)
+                        recVars.add(tv)
+                        collectCoOccurrences(expansion, pol)
                     }
                 }
             }
 
-            fun analyzeBounded(b: BoundedCompactType): () -> BoundedCompactType {
-                val lowerThunk = analyze(b.lower, true)
-                val upperThunk = analyze(b.upper, false)
-                return { BoundedCompactType(lower = lowerThunk(), upper = upperThunk()) }
+            fun collectBounded(b: BoundedCompactType) {
+                collectCoOccurrences(b.lower, true)
+                collectCoOccurrences(b.upper, false)
             }
 
-            val recThunks = ty.rec?.fields?.mapValues { (_, v) -> analyzeBounded(v) }
-            val funThunks =
-                ty.func?.let { (params, result) ->
-                    params.map { analyzeBounded(it) } to analyzeBounded(result)
-                }
-            val optionalThunk = ty.optional?.let { analyzeBounded(it) }
-            val refThunks =
-                ty.refs.map { ref ->
-                    val argThunks = ref.args.map { arg -> analyzeBounded(arg) }
-                    ref.name to argThunks
-                }
-
-            // Return a thunk that applies substitutions during reconstruction
-            return {
-                val newVars =
-                    ty.vars
-                        .mapNotNull { tv ->
-                            // Only replace if present in substitutions map
-                            if (tv !in varSubst) {
-                                tv
-                            } else {
-                                varSubst[tv]
-                            }
-                        }.toSet()
-
-                CompactType(
-                    vars = newVars,
-                    prims = ty.prims,
-                    rec = recThunks?.let { RecordType(it.mapValues { (_, thunk) -> thunk() }) },
-                    func =
-                        funThunks?.let { (paramThunks, resultThunk) ->
-                            FunctionType(paramThunks.map { it() }, resultThunk())
-                        },
-                    optional = optionalThunk?.invoke(),
-                    refs =
-                        refThunks
-                            .map { (name, argThunks) ->
-                                RefType(name, argThunks.map { it() })
-                            }.toSet(),
-                )
+            ty.rec
+                ?.fields
+                ?.values
+                ?.forEach { collectBounded(it) }
+            ty.func?.let { (params, result) ->
+                params.forEach { collectBounded(it) }
+                collectBounded(result)
             }
+            ty.optional?.let { collectBounded(it) }
+            ty.refs.forEach { ref -> ref.args.forEach { collectBounded(it) } }
         }
 
-        val termThunk = analyze(cty.term, pol = true)
+        collectCoOccurrences(cty.term, pol = true)
 
         // DEBUG: Print co-occurrence information
         println("=== Co-occurrence Analysis ===")
         println("allVars: ${allVars.map { it.toString() }}")
-        println("recVars: ${recVars.keys.map { it.toString() }}")
+        println("recVars: ${recVars.map { it.toString() }}")
         for ((key, occs) in coOccurrences) {
             val (pol, tv) = key
             val polStr = if (pol) "+" else "-"
             println("  $tv @ $polStr: $occs")
         }
         println("==============================")
+
+        // varSubst: substitution to apply during reconstruction
+        // null value = eliminate, non-null = replace with that var
+        // Note that null vs 'no substitution present' are different.
+        val varSubst = mutableMapOf<TVar, TVar?>()
 
         // Phase 2: Simplify away single-polarity non-recursive variables
         for (v in allVars) {
@@ -221,29 +170,36 @@ object TypeSimplifier {
                                 // v and w always co-occur at this polarity - unify w into v
                                 varSubst[w] = v
 
-                                // Merge co-occurrences from opposite polarity
-                                if (w in recVars) {
-                                    // Recursive: merge bounds
-                                    val boundW = recVars[w]!!
-                                    val boundV = recVars[v]!!
-                                    val polVariance = if (pol) Variance.Covariant else Variance.Contravariant
-                                    recVars[v] = { CompactType.empty.merge(boundV(), polVariance).merge(boundW(), polVariance) }
-                                    recVars.remove(w)
-                                } else {
-                                    // Non-recursive: intersect opposite polarity co-occurrences
-                                    val vOppOccs = coOccurrences[!pol to v]
-                                    val wOppOccs = coOccurrences[!pol to w]
-                                    if (vOppOccs != null && wOppOccs != null) {
-                                        vOppOccs.retainAll(wOppOccs)
-                                        vOppOccs.add(v)
-                                    }
+                                // Intersect opposite polarity co-occurrences
+                                val vOppOccs = coOccurrences[!pol to v]
+                                val wOppOccs = coOccurrences[!pol to w]
+                                if (vOppOccs != null && wOppOccs != null) {
+                                    vOppOccs.retainAll(wOppOccs)
+                                    vOppOccs.add(v)
                                 }
                             }
                         }
-                        is PrimType, is RefType, is RecordType, is FunctionType -> {
-                            // If variable co-occurs with same type at both polarities, eliminate it
+                        is PrimType -> {
+                            // Primitives have no internal structure, so direct comparison works
                             val vOppOccs = coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
+                                varSubst[v] = null
+                            }
+                        }
+                        is RefType, is RecordType, is FunctionType -> {
+                            // These types have polarity-dependent internal structure (BoundedCompactTypes
+                            // inside them store content in lower vs upper based on polarity). To compare
+                            // across polarities, we flip to convert from current polarity's form to the
+                            // opposite polarity's form.
+                            val vOppOccs = coOccurrences[!pol to v]
+                            val flipped =
+                                when (w) {
+                                    is RefType -> w.flip()
+                                    is RecordType -> w.flip()
+                                    is FunctionType -> w.flip()
+                                    else -> w
+                                }
+                            if (vOppOccs != null && flipped in vOppOccs) {
                                 varSubst[v] = null
                             }
                         }
@@ -254,13 +210,33 @@ object TypeSimplifier {
 
         println("varSubst: $varSubst")
 
+        // Phase 4: Apply substitutions
+        fun applySubstitutions(ty: CompactType): CompactType {
+            val newVars = ty.vars.mapNotNull { tv -> if (tv !in varSubst) tv else varSubst[tv] }.toSet()
+
+            fun applyBounded(b: BoundedCompactType): BoundedCompactType =
+                BoundedCompactType(
+                    lower = applySubstitutions(b.lower),
+                    upper = applySubstitutions(b.upper),
+                )
+
+            return CompactType(
+                vars = newVars,
+                prims = ty.prims,
+                rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applyBounded(v) }) },
+                func = ty.func?.let { (params, result) -> FunctionType(params.map { applyBounded(it) }, applyBounded(result)) },
+                optional = ty.optional?.let { applyBounded(it) },
+                refs = ty.refs.map { ref -> RefType(ref.name, ref.args.map { applyBounded(it) }) }.toSet(),
+            )
+        }
+
+        val resultType = applySubstitutions(cty.term)
+
         val newRecVars =
-            recVars
+            cty.recVars
                 .filterKeys { it !in varSubst || varSubst[it] != null }
                 .mapKeys { (k, _) -> varSubst[k] ?: k }
-                .mapValues { (_, thunk) -> thunk() }
-
-        val resultType = termThunk()
+                .mapValues { (_, v) -> applySubstitutions(v) }
 
         println("=== After simplification ===")
         println(resultType)
@@ -329,10 +305,17 @@ object TypeSimplifier {
                 val hasUpper = !b.upper.isEmpty()
                 return when {
                     hasLower && hasUpper -> {
-                        // Invariant position: find common variable and use it with bounds
+                        // Invariant position: find common variable and use it with bounds.
+                        //
+                        // This is essentially a late co-occurrence check - we're detecting that a var
+                        // appears in both compartments with different surrounding types (bounds).
+                        // In principle, simplification could eliminate such vars (when bounds are
+                        // compatible, i.e., lower <: upper) and we'd synthesize a fresh var here.
+                        // But that would require subtype checking during simplification.
+                        // For now, we preserve the var through simplification and extract bounds here.
                         val commonVars = b.lower.vars.intersect(b.upper.vars)
-                        when (commonVars.size) {
-                            1 -> {
+                        when {
+                            commonVars.size == 1 -> {
                                 val commonVar = commonVars.single()
                                 val lowerBound = go(b.lower.copy(vars = b.lower.vars - commonVar), true, newInProcess)
                                 val upperBound = go(b.upper.copy(vars = b.upper.vars - commonVar), false, newInProcess)
@@ -340,7 +323,20 @@ object TypeSimplifier {
                                 val upper = if (upperBound == Type.Top) null else upperBound
                                 Type.Var(varName(commonVar), lower, upper)
                             }
-                            else -> error("Invariant type arg with no or multiple common variables: $commonVars")
+                            commonVars.isEmpty() -> {
+                                // Var was eliminated because it co-occurred with same type at both polarities.
+                                // Both bounds should coalesce to the same concrete type.
+                                val lowerType = go(b.lower, true, newInProcess)
+                                val upperType = go(b.upper, false, newInProcess)
+                                if (lowerType == upperType) {
+                                    lowerType
+                                } else {
+                                    error(
+                                        "Invariant type arg with no common variables and mismatched bounds: lower=$lowerType, upper=$upperType",
+                                    )
+                                }
+                            }
+                            else -> error("Invariant type arg with multiple common variables: $commonVars")
                         }
                     }
                     hasLower -> go(b.lower, true, newInProcess)
