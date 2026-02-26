@@ -25,16 +25,15 @@ object TypeSimplifier {
         pol: Variance = Variance.Covariant,
         keepVars: Boolean = false,
     ): Type {
-        val scheme = CompactType.canonicalizeType(type, pol, env)
-        var simplified = scheme
+        var typeToSimplify = CompactType.canonicalizeType(type, pol, env)
         var iteration = 0
         do {
             iteration++
             debug { "=== Simplification iteration $iteration ===" }
-            val (next, changed) = simplifyType(simplified, keepVars, env)
-            simplified = next
+            val (next, changed) = simplifyType(typeToSimplify, keepVars, env)
+            typeToSimplify = next
         } while (changed && iteration < 1000)
-        return coalesceType(simplified, env, keepVars, pol)
+        return coalesceType(typeToSimplify, env, keepVars, pol)
     }
 
     /**
