@@ -20,8 +20,14 @@ object TypeSimplifier {
         keepVars: Boolean = false,
     ): Type {
         val scheme = CompactType.canonicalizeType(type, pol, env)
-        val simplified = simplifyType(scheme, keepVars, env)
-        // val simplifiedTwice = simplifyType(simplified, keepVars, env)
+        var simplified = scheme
+        var iteration = 0
+        do {
+            iteration++
+            println("=== Simplification iteration $iteration ===")
+            val (next, changed) = simplifyType(simplified, keepVars, env)
+            simplified = next
+        } while (changed && iteration < 1000)
         return coalesceType(simplified, env, keepVars, pol)
     }
 
@@ -51,11 +57,11 @@ object TypeSimplifier {
      *      Indeed, if 'a never occurs positively, it's like it always occurs both positively AND
      *      negatively along with the type Bot, so we can replace it with Bot.
      */
-    fun simplifyType(
+    private fun simplifyType(
         cty: CompactTypeScheme,
         keepVars: Boolean = false,
         env: TypeEnv? = null,
-    ): CompactTypeScheme {
+    ): Pair<CompactTypeScheme, Boolean> {
         // The following three mutable collections are all constucted by calling `analyze`:
         // - allVars is simply the collection of all TVars that occur anywhere in `cty`
         // - recVars is the set of all recursive TVars along with their expanded type
@@ -90,9 +96,17 @@ object TypeSimplifier {
                 val newOccs = mutableSetOf<Any>()
                 newOccs.addAll(ty.vars)
                 newOccs.addAll(ty.prims)
-                ty.rec?.let { newOccs.add(it) }
-                ty.func?.let { newOccs.add(it) }
-                newOccs.addAll(ty.refs)
+
+                // Normalize to positive polarity: flip types when at negative
+                if (pol) {
+                    ty.rec?.let { newOccs.add(it) }
+                    ty.func?.let { newOccs.add(it) }
+                    newOccs.addAll(ty.refs)
+                } else {
+                    ty.rec?.let { newOccs.add(it.flip()) }
+                    ty.func?.let { newOccs.add(it.flip()) }
+                    newOccs.addAll(ty.refs.map { it.flip() })
+                }
                 val key = pol to tv
                 val existing = coOccurrences[key]
                 if (existing != null) {
@@ -197,6 +211,8 @@ object TypeSimplifier {
                         is TVar -> {
                             if (w == v) continue
                             if (w in varSubst) continue
+                            // If v is to be eliminated, don't unify other vars into it
+                            if (v in varSubst && varSubst[v] == null) continue
                             // Don't merge rec and non-rec vars
                             if ((v in recVars) != (w in recVars)) continue
 
@@ -224,29 +240,8 @@ object TypeSimplifier {
                                 }
                             }
                         }
-                        is PrimType -> {
-                            // If variable co-occurs with same primitive at both polarities, eliminate it
-                            val vOppOccs = coOccurrences[!pol to v]
-                            if (vOppOccs != null && w in vOppOccs) {
-                                varSubst[v] = null
-                            }
-                        }
-                        is RefType -> {
-                            // If variable co-occurs with same ref at both polarities, eliminate it
-                            val vOppOccs = coOccurrences[!pol to v]
-                            if (vOppOccs != null && w in vOppOccs) {
-                                varSubst[v] = null
-                            }
-                        }
-                        is RecordType -> {
-                            // If variable co-occurs with same record at both polarities, eliminate it
-                            val vOppOccs = coOccurrences[!pol to v]
-                            if (vOppOccs != null && w in vOppOccs) {
-                                varSubst[v] = null
-                            }
-                        }
-                        is FunctionType -> {
-                            // If variable co-occurs with same function at both polarities, eliminate it
+                        is PrimType, is RefType, is RecordType, is FunctionType -> {
+                            // If variable co-occurs with same type at both polarities, eliminate it
                             val vOppOccs = coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
                                 varSubst[v] = null
@@ -256,6 +251,8 @@ object TypeSimplifier {
                 }
             }
         }
+
+        println("varSubst: $varSubst")
 
         val newRecVars =
             recVars
@@ -269,7 +266,8 @@ object TypeSimplifier {
         println(resultType)
         println("==============================")
 
-        return CompactTypeScheme(resultType, newRecVars)
+        val changed = varSubst.isNotEmpty()
+        return CompactTypeScheme(resultType, newRecVars) to changed
     }
 
     /**
@@ -322,6 +320,11 @@ object TypeSimplifier {
                 b: BoundedCompactType,
                 pol: Boolean,
             ): Type {
+                // If bounds are equal, it's just a concrete type
+                if (b.lower == b.upper && !b.lower.isEmpty()) {
+                    return go(b.lower, true, newInProcess)
+                }
+
                 val hasLower = !b.lower.isEmpty()
                 val hasUpper = !b.upper.isEmpty()
                 return when {
@@ -333,25 +336,11 @@ object TypeSimplifier {
                                 val commonVar = commonVars.single()
                                 val lowerBound = go(b.lower.copy(vars = b.lower.vars - commonVar), true, newInProcess)
                                 val upperBound = go(b.upper.copy(vars = b.upper.vars - commonVar), false, newInProcess)
-                                // If bounds are equal, just use that type directly
-                                // if (lowerBound == upperBound) {
-                                //     lowerBound
-                                // } else {
                                 val lower = if (lowerBound == Type.Bottom) null else lowerBound
                                 val upper = if (upperBound == Type.Top) null else upperBound
                                 Type.Var(varName(commonVar), lower, upper)
-                                // }
                             }
-                            0 -> {
-                                val lowerType = go(b.lower, true, newInProcess)
-                                val upperType = go(b.upper, false, newInProcess)
-                                if (lowerType == upperType) {
-                                    lowerType
-                                } else {
-                                    error("Invariant type arg with no common variable: lower=$lowerType, upper=$upperType")
-                                }
-                            }
-                            else -> error("Invariant type arg with multiple common variables: $commonVars")
+                            else -> error("Invariant type arg with no or multiple common variables: $commonVars")
                         }
                     }
                     hasLower -> go(b.lower, true, newInProcess)

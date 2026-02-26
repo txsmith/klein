@@ -28,6 +28,8 @@ data class BoundedCompactType(
     val lower: CompactType = CompactType.empty,
     val upper: CompactType = CompactType.empty,
 ) {
+    fun flip(): BoundedCompactType = BoundedCompactType(lower = upper.flip(), upper = lower.flip())
+
     override fun toString(): String {
         val hasLower = !lower.isEmpty()
         val hasUpper = !upper.isEmpty()
@@ -43,16 +45,22 @@ data class BoundedCompactType(
 data class RefType(
     val name: String,
     val args: List<BoundedCompactType>,
-)
+) {
+    fun flip(): RefType = RefType(name, args.map { it.flip() })
+}
 
 data class RecordType(
     val fields: Map<String, BoundedCompactType>,
-)
+) {
+    fun flip(): RecordType = RecordType(fields.mapValues { (_, v) -> v.flip() })
+}
 
 data class FunctionType(
     val params: List<BoundedCompactType>,
     val result: BoundedCompactType,
-)
+) {
+    fun flip(): FunctionType = FunctionType(params.map { it.flip() }, result.flip())
+}
 
 data class CompactType(
     val vars: Set<TVar> = emptySet(),
@@ -435,6 +443,14 @@ data class CompactType(
     }
 
     fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && rec == null && func == null && optional == null && refs.isEmpty()
+
+    fun flip(): CompactType =
+        copy(
+            rec = rec?.flip(),
+            func = func?.flip(),
+            optional = optional?.flip(),
+            refs = refs.map { it.flip() }.toSet(),
+        )
 
     override fun toString(): String {
         val parts = mutableListOf<String>()

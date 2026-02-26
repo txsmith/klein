@@ -412,7 +412,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_extrusionWithThefun() {
         assertType(
-            "((('A & Num) -> 'A | Num) -> 'B) -> { l: 'B, r: Num }",
+            "(((Num) -> Num) -> 'A) -> { l: 'A, r: Num }",
             infer(
                 """
                 |k ->
