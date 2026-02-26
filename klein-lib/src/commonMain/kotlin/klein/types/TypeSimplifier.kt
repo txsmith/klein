@@ -13,6 +13,12 @@ import klein.types.SimpleType.TVar
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
 object TypeSimplifier {
+    private const val DEBUG = false
+
+    private inline fun debug(msg: () -> String) {
+        if (DEBUG) println(msg())
+    }
+
     fun simplifyCanonical(
         type: SimpleType,
         env: TypeEnv,
@@ -24,7 +30,7 @@ object TypeSimplifier {
         var iteration = 0
         do {
             iteration++
-            println("=== Simplification iteration $iteration ===")
+            debug { "=== Simplification iteration $iteration ===" }
             val (next, changed) = simplifyType(simplified, keepVars, env)
             simplified = next
         } while (changed && iteration < 1000)
@@ -62,17 +68,66 @@ object TypeSimplifier {
         keepVars: Boolean = false,
         env: TypeEnv? = null,
     ): Pair<CompactTypeScheme, Boolean> {
-        // The following three mutable collections are all constucted by calling `analyze`:
-        // - allVars is simply the collection of all TVars that occur anywhere in `cty`
-        // - recVars is the set of all recursive TVars along with their expanded type
-        // - coOccurrences is the collection of types that always co-occur with a variable at a given variance.
+        // Phase 1: Collect co-occurrence information
+        val analysis = collectCoOccurrences(cty)
 
+        debug { "=== Co-occurrence Analysis ===" }
+        debug { "allVars: ${analysis.allVars.map { it.toString() }}" }
+        debug { "recVars: ${analysis.recVars.map { it.toString() }}" }
+        if (DEBUG) {
+            for ((key, occs) in analysis.coOccurrences) {
+                val (pol, tv) = key
+                val polStr = if (pol) "+" else "-"
+                debug { "  $tv @ $polStr: $occs" }
+            }
+        }
+        debug { "==============================" }
+
+        val varSubst = mutableMapOf<TVar, TVar?>()
+
+        // Phase 2: Eliminate single-polarity variables
+        eliminateSinglePolarityVars(analysis, varSubst, keepVars)
+
+        // Phase 3: Unify co-occurring variables
+        unifyCoOccurringVars(analysis, varSubst)
+
+        debug { "varSubst: $varSubst" }
+
+        // Phase 4: Apply substitutions
+        val resultType = applySubstitutions(cty.term, varSubst)
+
+        val newRecVars =
+            cty.recVars
+                .filterKeys { it !in varSubst || varSubst[it] != null }
+                .mapKeys { (k, _) -> varSubst[k] ?: k }
+                .mapValues { (_, v) -> applySubstitutions(v, varSubst) }
+
+        debug { "=== After simplification ===" }
+        debug { resultType.toString() }
+        debug { "==============================" }
+
+        val changed = varSubst.isNotEmpty()
+        return CompactTypeScheme(resultType, newRecVars) to changed
+    }
+
+    /**
+     * Phase 1: Traverse the type and collect co-occurrence information.
+     *
+     * For each variable, we track what other types always appear alongside it at each polarity.
+     */
+
+    private data class CoOccurrenceAnalysis(
+        val allVars: Set<TVar>,
+        val recVars: Set<TVar>,
+        val coOccurrences: Map<Pair<Boolean, TVar>, Set<Any>>,
+    )
+
+    private fun collectCoOccurrences(cty: CompactTypeScheme): CoOccurrenceAnalysis {
         val allVars = mutableSetOf<TVar>()
         val recVars = mutableSetOf<TVar>()
         val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
 
-        // Phase 1: Traverse and collect co-occurrence information
-        fun collectCoOccurrences(
+        fun collect(
             ty: CompactType,
             pol: Boolean,
         ) {
@@ -81,10 +136,10 @@ object TypeSimplifier {
                 val newOccs = mutableSetOf<Any>()
                 newOccs.addAll(ty.vars)
                 newOccs.addAll(ty.prims)
-
                 ty.rec?.let { newOccs.add(it) }
                 ty.func?.let { newOccs.add(it) }
                 newOccs.addAll(ty.refs)
+
                 val key = pol to tv
                 val existing = coOccurrences[key]
                 if (existing != null) {
@@ -97,14 +152,14 @@ object TypeSimplifier {
                 cty.recVars[tv]?.let { expansion ->
                     if (tv !in recVars) {
                         recVars.add(tv)
-                        collectCoOccurrences(expansion, pol)
+                        collect(expansion, pol)
                     }
                 }
             }
 
             fun collectBounded(b: BoundedCompactType) {
-                collectCoOccurrences(b.lower, true)
-                collectCoOccurrences(b.upper, false)
+                collect(b.lower, true)
+                collect(b.upper, false)
             }
 
             ty.rec
@@ -119,41 +174,50 @@ object TypeSimplifier {
             ty.refs.forEach { ref -> ref.args.forEach { collectBounded(it) } }
         }
 
-        collectCoOccurrences(cty.term, pol = true)
+        collect(cty.term, pol = true)
+        return CoOccurrenceAnalysis(
+            allVars = allVars.toSet(),
+            recVars = recVars.toSet(),
+            coOccurrences = coOccurrences.mapValues { (_, v) -> v.toSet() },
+        )
+    }
 
-        // DEBUG: Print co-occurrence information
-        println("=== Co-occurrence Analysis ===")
-        println("allVars: ${allVars.map { it.toString() }}")
-        println("recVars: ${recVars.map { it.toString() }}")
-        for ((key, occs) in coOccurrences) {
-            val (pol, tv) = key
-            val polStr = if (pol) "+" else "-"
-            println("  $tv @ $polStr: $occs")
-        }
-        println("==============================")
-
-        // varSubst: substitution to apply during reconstruction
-        // null value = eliminate, non-null = replace with that var
-        // Note that null vs 'no substitution present' are different.
-        val varSubst = mutableMapOf<TVar, TVar?>()
-
-        // Phase 2: Simplify away single-polarity non-recursive variables
-        for (v in allVars) {
-            if (v in recVars) continue
-            val posOccs = coOccurrences[true to v]
-            val negOccs = coOccurrences[false to v]
+    /**
+     * Phase 2: Eliminate variables that only occur at one polarity.
+     *
+     * Variables appearing only positively can be replaced with Bottom (they only flow out).
+     * Variables appearing only negatively can be replaced with Top (they only flow in).
+     */
+    private fun eliminateSinglePolarityVars(
+        analysis: CoOccurrenceAnalysis,
+        varSubst: MutableMap<TVar, TVar?>,
+        keepVars: Boolean,
+    ) {
+        for (v in analysis.allVars) {
+            if (v in analysis.recVars) continue
+            val posOccs = analysis.coOccurrences[true to v]
+            val negOccs = analysis.coOccurrences[false to v]
             if ((posOccs != null && negOccs == null) || (posOccs == null && negOccs != null)) {
                 if (keepVars && v.lowerBounds.isEmpty() && v.upperBounds.isEmpty()) continue
                 varSubst[v] = null // eliminate
             }
         }
+    }
 
-        // Phase 3: Unify co-occurring variables (process in descending uid order like SimpleSub)
-        for (v in allVars.sortedByDescending { it.uid }) {
+    /**
+     * Phase 3: Unify variables that always co-occur, and eliminate variables
+     * that co-occur with the same concrete type at both polarities.
+     */
+    private fun unifyCoOccurringVars(
+        analysis: CoOccurrenceAnalysis,
+        varSubst: MutableMap<TVar, TVar?>,
+    ) {
+        // Process in descending uid order like SimpleSub
+        for (v in analysis.allVars.sortedByDescending { it.uid }) {
             if (v in varSubst) continue
 
             for (pol in listOf(true, false)) {
-                val vOccs = coOccurrences[pol to v] ?: continue
+                val vOccs = analysis.coOccurrences[pol to v] ?: continue
 
                 for (w in vOccs.toList()) {
                     when (w) {
@@ -163,25 +227,17 @@ object TypeSimplifier {
                             // If v is to be eliminated, don't unify other vars into it
                             if (v in varSubst && varSubst[v] == null) continue
                             // Don't merge rec and non-rec vars
-                            if ((v in recVars) != (w in recVars)) continue
+                            if ((v in analysis.recVars) != (w in analysis.recVars)) continue
 
-                            val wOccs = coOccurrences[pol to w] ?: continue
+                            val wOccs = analysis.coOccurrences[pol to w] ?: continue
                             if (v in wOccs) {
                                 // v and w always co-occur at this polarity - unify w into v
                                 varSubst[w] = v
-
-                                // Intersect opposite polarity co-occurrences
-                                val vOppOccs = coOccurrences[!pol to v]
-                                val wOppOccs = coOccurrences[!pol to w]
-                                if (vOppOccs != null && wOppOccs != null) {
-                                    vOppOccs.retainAll(wOppOccs)
-                                    vOppOccs.add(v)
-                                }
                             }
                         }
                         is PrimType -> {
                             // Primitives have no internal structure, so direct comparison works
-                            val vOppOccs = coOccurrences[!pol to v]
+                            val vOppOccs = analysis.coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
                                 varSubst[v] = null
                             }
@@ -191,7 +247,7 @@ object TypeSimplifier {
                             // inside them store content in lower vs upper based on polarity). To compare
                             // across polarities, we flip to convert from current polarity's form to the
                             // opposite polarity's form.
-                            val vOppOccs = coOccurrences[!pol to v]
+                            val vOppOccs = analysis.coOccurrences[!pol to v]
                             val flipped =
                                 when (w) {
                                     is RefType -> w.flip()
@@ -207,43 +263,28 @@ object TypeSimplifier {
                 }
             }
         }
+    }
 
-        println("varSubst: $varSubst")
+    private fun applySubstitutions(
+        ty: CompactType,
+        varSubst: Map<TVar, TVar?>,
+    ): CompactType {
+        val newVars = ty.vars.mapNotNull { tv -> if (tv !in varSubst) tv else varSubst[tv] }.toSet()
 
-        // Phase 4: Apply substitutions
-        fun applySubstitutions(ty: CompactType): CompactType {
-            val newVars = ty.vars.mapNotNull { tv -> if (tv !in varSubst) tv else varSubst[tv] }.toSet()
-
-            fun applyBounded(b: BoundedCompactType): BoundedCompactType =
-                BoundedCompactType(
-                    lower = applySubstitutions(b.lower),
-                    upper = applySubstitutions(b.upper),
-                )
-
-            return CompactType(
-                vars = newVars,
-                prims = ty.prims,
-                rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applyBounded(v) }) },
-                func = ty.func?.let { (params, result) -> FunctionType(params.map { applyBounded(it) }, applyBounded(result)) },
-                optional = ty.optional?.let { applyBounded(it) },
-                refs = ty.refs.map { ref -> RefType(ref.name, ref.args.map { applyBounded(it) }) }.toSet(),
+        fun applyBounded(b: BoundedCompactType): BoundedCompactType =
+            BoundedCompactType(
+                lower = applySubstitutions(b.lower, varSubst),
+                upper = applySubstitutions(b.upper, varSubst),
             )
-        }
 
-        val resultType = applySubstitutions(cty.term)
-
-        val newRecVars =
-            cty.recVars
-                .filterKeys { it !in varSubst || varSubst[it] != null }
-                .mapKeys { (k, _) -> varSubst[k] ?: k }
-                .mapValues { (_, v) -> applySubstitutions(v) }
-
-        println("=== After simplification ===")
-        println(resultType)
-        println("==============================")
-
-        val changed = varSubst.isNotEmpty()
-        return CompactTypeScheme(resultType, newRecVars) to changed
+        return CompactType(
+            vars = newVars,
+            prims = ty.prims,
+            rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applyBounded(v) }) },
+            func = ty.func?.let { (params, result) -> FunctionType(params.map { applyBounded(it) }, applyBounded(result)) },
+            optional = ty.optional?.let { applyBounded(it) },
+            refs = ty.refs.map { ref -> RefType(ref.name, ref.args.map { applyBounded(it) }) }.toSet(),
+        )
     }
 
     /**
