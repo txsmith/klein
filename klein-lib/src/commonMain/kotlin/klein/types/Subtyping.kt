@@ -161,8 +161,8 @@ class Subtyping(
                     if (lhsCtor == null || lhsCtor.parentType != rhs.name) {
                         errors.add(
                             TypeError.TypeMismatch(
-                                simplifyCanonical(lhs, env, pol = Variance.Covariant),
-                                simplifyCanonical(rhs, env, pol = Variance.Contravariant),
+                                simplifyCanonical(lhs, env, pol = true),
+                                simplifyCanonical(rhs, env, pol = false),
                                 span,
                                 context,
                             ),
@@ -203,8 +203,8 @@ class Subtyping(
             else -> {
                 errors.add(
                     TypeError.TypeMismatch(
-                        simplifyCanonical(lhs, env, pol = Variance.Covariant),
-                        simplifyCanonical(rhs, env, pol = Variance.Contravariant),
+                        simplifyCanonical(lhs, env, pol = true),
+                        simplifyCanonical(rhs, env, pol = false),
                         span,
                         context,
                     ),

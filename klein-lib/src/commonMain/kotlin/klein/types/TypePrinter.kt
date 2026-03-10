@@ -10,14 +10,14 @@ object TypePrinter {
     fun print(type: Type): String = Type.print(type)
 
     /**
-     * Print CompactType representation after canonicalization but before coalescing.
+     * Print TypeComponents representation after canonicalization but before coalescing.
      */
     fun printCompact(
         type: SimpleType,
         env: TypeEnv,
     ): String {
-        val scheme = CompactType.canonicalizeType(type, Variance.Covariant, env)
-        return CompactPrinter(scheme.recVars).print(scheme.term)
+        val scheme = TypeComponents.canonicalizeType(type, true, env)
+        return CompactPrinter(scheme.recVars).print(scheme.term, scheme.pol)
     }
 
     /**
@@ -34,15 +34,18 @@ object TypePrinter {
     fun printRaw(type: SimpleType): String = RawPrinter().print(type)
 
     /**
-     * Printer for CompactType representation.
+     * Printer for TypeComponents representation.
      */
     private class CompactPrinter(
-        private val recVars: Map<TVar, CompactType>,
+        private val recVars: Map<TVar, TypeComponents>,
     ) {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
 
-        fun print(ty: CompactType): String = printType(ty, indent = 0)
+        fun print(term: TypeComponents, pol: Boolean): String {
+            val prefix = if (pol) "+" else "-"
+            return "$prefix${printType(term, indent = 0)}"
+        }
 
         private fun varName(tv: TVar): String =
             varNames.getOrPut(tv) {
@@ -53,10 +56,10 @@ object TypePrinter {
             }
 
         private fun printType(
-            ty: CompactType,
+            ty: TypeComponents,
             indent: Int,
         ): String {
-            if (ty.isEmpty()) return "CompactType()"
+            if (ty.isEmpty()) return "TypeComponents()"
 
             val pad = "  ".repeat(indent)
             val innerPad = "  ".repeat(indent + 1)
@@ -75,11 +78,11 @@ object TypePrinter {
                 val primsStr =
                     ty.prims.joinToString(", ") { prim ->
                         when (prim) {
-                            CompactType.PrimType.Num -> "Num"
-                            CompactType.PrimType.String -> "String"
-                            CompactType.PrimType.Bool -> "Bool"
-                            CompactType.PrimType.Null -> "Null"
-                            CompactType.PrimType.Unit -> "()"
+                            TypeComponents.PrimType.Num -> "Num"
+                            TypeComponents.PrimType.String -> "String"
+                            TypeComponents.PrimType.Bool -> "Bool"
+                            TypeComponents.PrimType.Null -> "Null"
+                            TypeComponents.PrimType.Unit -> "()"
                         }
                     }
                 fields.add("${innerPad}prims: [$primsStr]")
@@ -88,7 +91,7 @@ object TypePrinter {
             ty.rec?.let { rec ->
                 val fieldsStr =
                     rec.fields.entries.sortedBy { it.key }.joinToString(",\n") { (k, v) ->
-                        "$innerPad  $k:\n${printBounded(v, indent + 3)}"
+                        "$innerPad  $k:\n${printSub(v, indent + 3)}"
                     }
                 fields.add("${innerPad}rec: {\n$fieldsStr\n$innerPad}")
             }
@@ -97,14 +100,14 @@ object TypePrinter {
                 val paramsStr =
                     params
                         .mapIndexed { i, p ->
-                            "$innerPad  param$i:\n${printBounded(p, indent + 3)}"
+                            "$innerPad  param$i:\n${printSub(p, indent + 3)}"
                         }.joinToString(",\n")
-                val resultStr = printBounded(result, indent + 3)
+                val resultStr = printSub(result, indent + 3)
                 fields.add("${innerPad}func: (\n$paramsStr\n$innerPad) ->\n$resultStr")
             }
 
             ty.optional?.let { inner ->
-                fields.add("${innerPad}optional:\n${printBounded(inner, indent + 2)}")
+                fields.add("${innerPad}optional:\n${printSub(inner, indent + 2)}")
             }
 
             if (ty.refs.isNotEmpty()) {
@@ -113,28 +116,29 @@ object TypePrinter {
                         if (ref.args.isEmpty()) {
                             ref.name
                         } else {
-                            "${ref.name}<\n${ref.args.joinToString(",\n") { printBounded(it, indent + 2) }}\n$innerPad>"
+                            "${ref.name}<\n${ref.args.joinToString(",\n") { arg ->
+                                when (arg) {
+                                    is RefArg.Resolved -> printSub(arg.components, indent + 2)
+                                    is RefArg.Invariant -> {
+                                        val invPad = "  ".repeat(indent + 2)
+                                        "${invPad}inv(+${printType(arg.pos, indent + 3)}, -${printType(arg.neg, indent + 3)})"
+                                    }
+                                }
+                            }}\n$innerPad>"
                         }
                     }
                 fields.add("${innerPad}refs: [$refsStr]")
             }
 
-            return "CompactType(\n${fields.joinToString(",\n")}\n$pad)"
+            return "TypeComponents(\n${fields.joinToString(",\n")}\n$pad)"
         }
 
-        private fun printBounded(
-            bounded: BoundedCompactType,
+        private fun printSub(
+            ty: TypeComponents,
             indent: Int,
         ): String {
             val pad = "  ".repeat(indent)
-            val lowerEmpty = bounded.lower.isEmpty()
-            val upperEmpty = bounded.upper.isEmpty()
-
-            val fields = mutableListOf<String>()
-            if (!lowerEmpty) fields.add("${pad}lower: ${printType(bounded.lower, indent)}")
-            if (!upperEmpty) fields.add("${pad}upper: ${printType(bounded.upper, indent)}")
-
-            return fields.joinToString(",\n")
+            return if (ty.isEmpty()) pad else "$pad${printType(ty, indent)}"
         }
     }
 

@@ -97,7 +97,7 @@ private fun printUsage() {
 
         Type output format (for infer):
           --canonical      Canonical type (default)
-          --ir-compact     Internal CompactType representation
+          --ir-compact     Internal TypeComponents representation
           --ir-bounds      Internal SimpleType with bounds
         """.trimIndent(),
     )
