@@ -23,6 +23,7 @@ object Klein {
     data class InferenceResult(
         val program: Program,
         val type: Type,
+        val leastUpperBound: Type,
         val errors: List<TypeError>,
     ) {
         val hasErrors: Boolean get() = errors.isNotEmpty()
@@ -36,9 +37,14 @@ object Klein {
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program, env)
 
+        val type = TypeSimplifier.simplifyCanonical(result.type, result.env)
+        // TODO: produce leastUpperBound from tightBound once Component is implemented
+        val leastUpperBound = type
+
         return InferenceResult(
             program = program,
-            type = TypeSimplifier.simplifyCanonical(result.type, result.env),
+            type = type,
+            leastUpperBound = leastUpperBound,
             errors = result.errors,
         )
     }

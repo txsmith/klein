@@ -16,6 +16,19 @@ fun infer(
     return result.type
 }
 
+/**
+ * Infer the type with LUB/GLB simplification via tightBound.
+ * Unions collapse to their LUB, intersections collapse to their GLB.
+ */
+fun inferLUB(
+    source: String,
+    env: TypeEnv = TypeEnv.empty(),
+): Type {
+    val result = Klein.infer(source, env)
+    check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
+    return result.leastUpperBound
+}
+
 fun inferErrors(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
