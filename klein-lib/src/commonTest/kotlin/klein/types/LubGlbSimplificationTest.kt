@@ -212,6 +212,22 @@ class LubGlbSimplificationTest {
         )
     }
 
+    @Test
+    fun sameRef_invariantParam_showsBounds() {
+        // Invariant type arg with non-equal bounds should show where clause.
+        assertType(
+            "Ref<'A> where Dog <: 'A <: { name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+                """.trimIndent(),
+            ),
+        )
+    }
+
     // --- Unrelated refs ---
 
     @Test
@@ -255,6 +271,76 @@ class LubGlbSimplificationTest {
                 x = Dog("Fido")
                 y = { name = "bare" }
                 if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Pure record merging ---
+
+    @Test
+    fun records_lub_keepsOnlyCommonFields() {
+        // Positive position: LUB of {a, b, c} and {b, c, d} keeps only {b, c}.
+        assertType(
+            "{ b: Num, c: String }",
+            inferLUB(
+                """
+                if true then { a = 1, b = 2, c = "x" } else { b = 3, c = "y", d = true }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun records_glb_keepsAllFields() {
+        // Negative position (function param): GLB of {a, b} and {b, c} keeps {a, b, c}.
+        assertType(
+            "({ a: Num, b: Num, c: Num }) -> Num",
+            inferLUB(
+                """
+                fun f(x) =
+                    y = x.a + x.b
+                    z = x.b + x.c
+                    y
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Pure function merging ---
+
+    @Test
+    fun functions_lub_mergesParamsAndResult() {
+        // Positive position: LUB of two functions.
+        // Params are contravariant (GLB): keeps all fields from both.
+        // Result is covariant (LUB): keeps only common fields.
+        assertType(
+            "(Num) -> { b: Num }",
+            inferLUB(
+                """
+                f = |x -> { a = x + 1, b = x + 2 }|
+                g = |x -> { b = x + 3, c = x + 4 }|
+                if true then f else g
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun functions_glb_mergesParamsAndResult() {
+        // Negative position (param of outer function): GLB of two functions.
+        // Params are covariant (LUB): keeps only common fields = {b}.
+        // Result is contravariant (GLB): keeps all demanded fields = {a, c}.
+        assertType(
+            "(({ b: Num }) -> Num) -> Num",
+            inferLUB(
+                """
+                fun outer(f) =
+                    r1 = f({ a = 1, b = 2 })
+                    r2 = f({ b = 3, c = 4 })
+                    r1+r2
+                outer
                 """.trimIndent(),
             ),
         )
@@ -435,6 +521,61 @@ class LubGlbSimplificationTest {
                 x = Cons(h1, Nil)
                 y = Cons(h2, Nil)
                 if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Optional + non-optional merging ---
+
+    @Test
+    fun optionalAndRecord_inParam_glbDropsOptional() {
+        // x is used with both ?. (constrains to {name: ...}?) and direct access (constrains to {name: ...}).
+        // GLB of {name: 'A}? & {name: 'A} = {name: 'A} (non-optional is stricter).
+        assertType(
+            "({ name: 'A }) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                    _ = x?.name
+                    x.name
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun optionalAndRecord_inParam_differentFields_glbMergesThenDropsOptional() {
+        // x?.name constrains to {name: ...}?, x.age constrains to {age: ...}.
+        // GLB merges records (all fields) and drops the optional.
+        assertType(
+            "({ age: 'A, name: Any }) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                    _ = x?.name
+                    x.age
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Vars + tightBound ---
+
+    @Test
+    fun varsAndBound_paramConnectedToReturn() {
+        // x has both a var (connecting to return) and a Num bound (from x + 1).
+        // The var must be preserved so the return type stays connected.
+        assertType(
+            "('A & Num) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                  _ = x + 1
+                  x
+                f
                 """.trimIndent(),
             ),
         )

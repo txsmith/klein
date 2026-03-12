@@ -12,6 +12,18 @@ import klein.types.TypeComponents.PrimType
  *
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
+private class VarNamer {
+    private val varNames = mutableMapOf<TVar, String>()
+
+    fun varName(v: TVar): String =
+        varNames.getOrPut(v) {
+            val idx = varNames.size
+            val letter = 'A' + (idx % 26)
+            val suffix = if (idx >= 26) "${idx / 26}" else ""
+            "'$letter$suffix"
+        }
+}
+
 object TypeSimplifier {
     private const val DEBUG = false
 
@@ -19,12 +31,12 @@ object TypeSimplifier {
         if (DEBUG) println(msg())
     }
 
-    fun simplifyCanonical(
+    fun simplify(
         type: SimpleType,
         env: TypeEnv,
         pol: Boolean = true,
         keepVars: Boolean = false,
-    ): Type {
+    ): TypeScheme {
         var typeToSimplify = TypeComponents.canonicalizeType(type, pol, env)
         var iteration = 0
         do {
@@ -33,8 +45,15 @@ object TypeSimplifier {
             val (next, changed) = simplifyType(typeToSimplify, keepVars, env)
             typeToSimplify = next
         } while (changed && iteration < 1000)
-        return coalesceType(typeToSimplify, env, keepVars)
+        return typeToSimplify
     }
+
+    fun simplifyCanonical(
+        type: SimpleType,
+        env: TypeEnv,
+        pol: Boolean = true,
+        keepVars: Boolean = false,
+    ): Type = coalesceType(simplify(type, env, pol, keepVars), env, keepVars)
 
     /**
      * Simplifies a TypeScheme by performing co-occurrence analysis.
@@ -265,6 +284,30 @@ object TypeSimplifier {
         }
     }
 
+    private fun applyComponentSubstitutions(
+        comp: Component,
+        varSubst: Map<TVar, TVar?>,
+    ): Component =
+        when (comp) {
+            is PrimComponent -> comp
+            is RecordType -> RecordType(comp.fields.mapValues { (_, v) -> applySubstitutions(v, varSubst) })
+            is FunctionType -> FunctionType(
+                comp.params.map { applySubstitutions(it, varSubst) },
+                applySubstitutions(comp.result, varSubst),
+            )
+            is OptionalComponent -> OptionalComponent(applySubstitutions(comp.inner, varSubst))
+            is RefType -> RefType(comp.name, comp.args.map { arg ->
+                when (arg) {
+                    is RefArg.Resolved -> RefArg.Resolved(applySubstitutions(arg.components, varSubst), arg.pol)
+                    is RefArg.Invariant -> RefArg.Invariant(
+                        varSubst[arg.tvar] ?: arg.tvar,
+                        applySubstitutions(arg.pos, varSubst),
+                        applySubstitutions(arg.neg, varSubst),
+                    )
+                }
+            })
+        }
+
     private fun applySubstitutions(
         ty: TypeComponents,
         varSubst: Map<TVar, TVar?>,
@@ -274,6 +317,7 @@ object TypeSimplifier {
         return TypeComponents(
             vars = newVars,
             prims = ty.prims,
+            nullable = ty.nullable,
             rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applySubstitutions(v, varSubst) }) },
             func =
                 ty.func?.let { (params, result) ->
@@ -292,6 +336,7 @@ object TypeSimplifier {
                     }
                 })
             }.toSet(),
+            tightBound = ty.tightBound?.let { applyComponentSubstitutions(it, varSubst) },
         )
     }
 
@@ -305,15 +350,8 @@ object TypeSimplifier {
         env: TypeEnv,
         keepVars: Boolean = false,
     ): Type {
-        val varNames = mutableMapOf<TVar, String>()
-
-        fun varName(v: TVar): String =
-            varNames.getOrPut(v) {
-                val idx = varNames.size
-                val letter = 'A' + (idx % 26)
-                val suffix = if (idx >= 26) "${idx / 26}" else ""
-                "'$letter$suffix"
-            }
+        val namer = VarNamer()
+        fun varName(v: TVar) = namer.varName(v)
 
         val functions =
             object {
@@ -386,7 +424,6 @@ object TypeSimplifier {
                                 PrimType.Num -> Type.Num
                                 PrimType.String -> Type.Str
                                 PrimType.Bool -> Type.Bool
-                                PrimType.Null -> Type.Null
                                 PrimType.Unit -> Type.Unit
                             },
                         )
@@ -413,27 +450,23 @@ object TypeSimplifier {
                         components.add(Type.Ref(ref.name, coalescedArgs))
                     }
 
-                    val hasNullPrim = PrimType.Null in ty.prims
-                    val hasOtherComponents = components.any { it != Type.Null }
-                    val wrapInOptional = pol && hasNullPrim && hasOtherComponents
+                    val hasOtherComponents = components.isNotEmpty()
+                    val wrapInOptional = pol && ty.nullable && hasOtherComponents
 
-                    val componentsWithoutNull =
-                        if (wrapInOptional) {
-                            components.filter { it != Type.Null }
-                        } else {
-                            components
-                        }
+                    if (ty.nullable && !hasOtherComponents) {
+                        components.add(Type.Null)
+                    }
 
                     val baseResult =
-                        if (componentsWithoutNull.isEmpty()) {
+                        if (components.isEmpty()) {
                             if (pol) Type.Bottom else Type.Top
-                        } else if (componentsWithoutNull.size == 1) {
-                            componentsWithoutNull[0]
+                        } else if (components.size == 1) {
+                            components[0]
                         } else {
                             if (pol) {
-                                componentsWithoutNull.reduce { acc, t -> Type.Union(acc, t) }
+                                components.reduce { acc, t -> Type.Union(acc, t) }
                             } else {
-                                componentsWithoutNull.reduce { acc, t -> Type.Inter(acc, t) }
+                                components.reduce { acc, t -> Type.Inter(acc, t) }
                             }
                         }
 
@@ -458,5 +491,88 @@ object TypeSimplifier {
         } else {
             functions.go(term, cty.pol, emptyMap())
         }
+    }
+
+    /**
+     * Coalesce a TypeScheme into a Type by reading tightBound at every level.
+     * This produces the LUB (positive) or GLB (negative) — no unions or intersections.
+     * Returns Top/Bottom when tightBound is null (incompatible components).
+     */
+    fun coalesceLeastUpperBound(
+        cty: TypeScheme,
+        env: TypeEnv,
+    ): Type {
+        val namer = VarNamer()
+        fun varName(v: TVar) = namer.varName(v)
+
+        val functions =
+            object {
+                fun goComponents(ty: TypeComponents, pol: Boolean): Type {
+                    val parts = mutableListOf<Type>()
+                    for (v in ty.vars) parts.add(Type.Var(varName(v)))
+                    if (ty.tightBound != null) parts.add(goComponent(ty.tightBound, pol))
+
+                    val base = when {
+                        parts.isNotEmpty() && pol -> parts.reduce { acc, t -> Type.Union(acc, t) }
+                        parts.isNotEmpty() -> parts.reduce { acc, t -> Type.Inter(acc, t) }
+                        ty.nullable -> Type.Null
+                        pol -> Type.Bottom
+                        else -> Type.Top
+                    }
+
+                    return if (ty.nullable && base != Type.Null) Type.Optional(base) else base
+                }
+
+                fun goComponent(
+                    comp: Component,
+                    pol: Boolean,
+                ): Type =
+                    when (comp) {
+                        is PrimComponent ->
+                            when (comp.prim) {
+                                PrimType.Num -> Type.Num
+                                PrimType.String -> Type.Str
+                                PrimType.Bool -> Type.Bool
+                                PrimType.Unit -> Type.Unit
+                            }
+
+                        is RecordType -> {
+                            val typeFields = comp.fields.mapValues { (_, v) -> goComponents(v, pol) }
+                            Type.Record(typeFields)
+                        }
+
+                        is FunctionType -> {
+                            val typeParams = comp.params.map { goComponents(it, !pol) }
+                            val typeResult = goComponents(comp.result, pol)
+                            Type.Fun(typeParams, typeResult)
+                        }
+
+                        is OptionalComponent -> Type.Optional(goComponents(comp.inner, pol))
+
+                        is RefType -> {
+                            val coalescedArgs = comp.args.map { arg ->
+                                when (arg) {
+                                    is RefArg.Resolved -> goComponents(arg.components, arg.pol)
+                                    is RefArg.Invariant -> {
+                                        val lowerRest = arg.pos.copy(vars = arg.pos.vars - arg.tvar)
+                                        val upperRest = arg.neg.copy(vars = arg.neg.vars - arg.tvar)
+                                        if (lowerRest == upperRest && !lowerRest.isEmpty()) {
+                                            goComponents(lowerRest, true)
+                                        } else {
+                                            val lowerBound = goComponents(lowerRest, true)
+                                            val upperBound = goComponents(upperRest, false)
+                                            val lowerT = if (lowerBound == Type.Top) null else lowerBound
+                                            val upperT = if (upperBound == Type.Bottom) null else upperBound
+                                            Type.Var(varName(arg.tvar), lowerT, upperT)
+                                        }
+                                    }
+                                }
+                            }
+                            Type.Ref(comp.name, coalescedArgs)
+                        }
+                    }
+            }
+
+        return functions.goComponents(cty.term, cty.pol)
     }
 }

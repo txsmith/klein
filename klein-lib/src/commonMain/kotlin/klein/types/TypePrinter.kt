@@ -81,7 +81,6 @@ object TypePrinter {
                             TypeComponents.PrimType.Num -> "Num"
                             TypeComponents.PrimType.String -> "String"
                             TypeComponents.PrimType.Bool -> "Bool"
-                            TypeComponents.PrimType.Null -> "Null"
                             TypeComponents.PrimType.Unit -> "()"
                         }
                     }

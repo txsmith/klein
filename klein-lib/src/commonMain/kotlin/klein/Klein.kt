@@ -37,9 +37,9 @@ object Klein {
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program, env)
 
-        val type = TypeSimplifier.simplifyCanonical(result.type, result.env)
-        // TODO: produce leastUpperBound from tightBound once Component is implemented
-        val leastUpperBound = type
+        val scheme = TypeSimplifier.simplify(result.type, result.env)
+        val type = TypeSimplifier.coalesceType(scheme, result.env)
+        val leastUpperBound = TypeSimplifier.coalesceLeastUpperBound(scheme, result.env)
 
         return InferenceResult(
             program = program,
