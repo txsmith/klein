@@ -47,6 +47,7 @@ class InferredInterfaceTest {
                 H(A(42)).ab.x
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -263,6 +264,7 @@ class InferredInterfaceTest {
                 H(ToNum(|x -> x + 1|)).p.f
                 """.trimIndent(),
             ),
+            expectedLub = "(Num) -> Any",
         )
     }
 
@@ -310,6 +312,7 @@ class InferredInterfaceTest {
                 m.x
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -325,6 +328,7 @@ class InferredInterfaceTest {
                 H(A(|x -> 42|)).h.f
                 """.trimIndent(),
             ),
+            expectedLub = "(Nothing) -> Num",
         )
     }
 
@@ -340,6 +344,7 @@ class InferredInterfaceTest {
                 H(A({ inner = 42 })).n.data.inner
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -372,6 +377,7 @@ class InferredInterfaceTest {
                 { x = h.m.x, y = h.m.y }
                 """.trimIndent(),
             ),
+            expectedLub = "{ x: Any, y: Any }",
         )
     }
 
@@ -388,6 +394,7 @@ class InferredInterfaceTest {
                 H(NumBox(Container(42))).b.c.value
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -404,6 +411,7 @@ class InferredInterfaceTest {
                 H(NumList(Nil)).m.items
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -435,6 +443,7 @@ class InferredInterfaceTest {
                 H(A(|{ x = 42 }|)).f.make
                 """.trimIndent(),
             ),
+            expectedLub = "() -> { x: Any }",
         )
     }
 
@@ -451,6 +460,7 @@ class InferredInterfaceTest {
                 H(A(|check -> check(42)|)).v.validate
                 """.trimIndent(),
             ),
+            expectedLub = "((Any) -> Bool) -> Bool",
         )
     }
 

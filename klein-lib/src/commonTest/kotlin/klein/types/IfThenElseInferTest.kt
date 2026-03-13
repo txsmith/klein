@@ -13,7 +13,7 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_differentBranchTypes() {
-        assertType("Num | String", infer("if true then 1 else \"hello\""))
+        assertType("Num | String", infer("if true then 1 else \"hello\""), expectedLub = "Any")
     }
 
     @Test
@@ -88,12 +88,12 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithCommonFieldIncompatibleTypes() {
-        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = \"hello\" }"))
+        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = \"hello\" }"), expectedLub = "{ x: Any }")
     }
 
     @Test
     fun ifThenElse_recordBranchesWithMixedCompatibility() {
-        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"))
+        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"), expectedLub = "{ a: Num, b: Any }")
     }
 
     @Test
@@ -103,17 +103,17 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithNestedIncompatiblePrim() {
-        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"))
+        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"), expectedLub = "{ r: { x: Any } }")
     }
 
     @Test
     fun ifThenElse_recordBranchesWithNestedPrimAndRecord() {
-        assertType("{ x: Num | { a: Num } }", infer("if true then { x = 1 } else { x = { a = 2 } }"))
+        assertType("{ x: Num | { a: Num } }", infer("if true then { x = 1 } else { x = { a = 2 } }"), expectedLub = "{ x: Any }")
     }
 
     @Test
     fun ifThenElse_incompatibleBranches_primAndRecord() {
-        assertType("Num | { x: Num }", infer("if true then 0 else { x = 3 }"))
+        assertType("Num | { x: Num }", infer("if true then 0 else { x = 3 }"), expectedLub = "Any")
     }
 
     @Test
@@ -126,6 +126,7 @@ class IfThenElseInferTest {
                 f(|x -> x|, true, 0, {x=3})
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 
@@ -141,6 +142,7 @@ class IfThenElseInferTest {
                 f("hello")
                 """.trimIndent(),
             ),
+            expectedLub = "Any",
         )
     }
 }

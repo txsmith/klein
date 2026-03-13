@@ -487,6 +487,8 @@ data class TypeComponents(
 
     fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
 
+    fun hasConcreteComponents(): Boolean = prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
+
     override fun toString(): String {
         val parts = mutableListOf<String>()
         if (vars.isNotEmpty()) parts.add("vars=$vars")

@@ -411,6 +411,7 @@ class TypeDefInferenceTest {
                 Cons(1, Cons("hello", Nil))
                 """.trimIndent(),
             ),
+            expectedLub = "Cons<Any>",
         )
     }
 
@@ -439,6 +440,7 @@ class TypeDefInferenceTest {
                 Node(Leaf(1), Leaf("wrong"))
                 """.trimIndent(),
             ),
+            expectedLub = "Node<Any>",
         )
     }
 

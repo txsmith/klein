@@ -4,30 +4,25 @@ import klein.Klein
 import klein.Type
 import kotlin.test.assertEquals
 
+data class InferResult(val type: Type, val leastUpperBound: Type)
+
 /**
- * Infer the type of a Klein expression with canonicalization.
+ * Infer the type of a Klein expression, asserting no errors.
+ * Returns both the canonicalized type and the LUB-simplified type.
  */
 fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): Type {
+): InferResult {
     val result = Klein.infer(source, env)
     check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
-    return result.type
+    return InferResult(result.type, result.leastUpperBound)
 }
 
-/**
- * Infer the type with LUB/GLB simplification via tightBound.
- * Unions collapse to their LUB, intersections collapse to their GLB.
- */
 fun inferLUB(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): Type {
-    val result = Klein.infer(source, env)
-    check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
-    return result.leastUpperBound
-}
+): Type = infer(source, env).leastUpperBound
 
 fun inferErrors(
     source: String,
@@ -35,16 +30,30 @@ fun inferErrors(
 ): List<TypeError> = Klein.infer(source, env).errors
 
 /**
- * Assert that two Types are equal.
+ * Assert that the type and LUB match expected values.
+ * When expectedLub is not specified, the LUB is expected to match the regular type.
  */
 fun assertType(
     expected: Type,
-    actual: Type,
-) = assertEquals(expected, actual)
+    actual: InferResult,
+    expectedLub: String = Type.print(expected),
+) {
+    assertEquals(expected, actual.type, "type")
+    assertEquals(expectedLub, Type.print(actual.leastUpperBound), "leastUpperBound")
+}
+
+fun assertType(
+    expected: String,
+    actual: InferResult,
+    expectedLub: String = expected,
+) {
+    assertEquals(expected, Type.print(actual.type), "type")
+    assertEquals(expectedLub, Type.print(actual.leastUpperBound), "leastUpperBound")
+}
 
 /**
- * Assert that a type prints to the expected string.
- * Convenience for simple type assertions.
+ * Assert that a single Type prints to the expected string.
+ * Used by LubGlbSimplificationTest which tests LUB output directly.
  */
 fun assertType(
     expected: String,

@@ -509,8 +509,9 @@ object TypeSimplifier {
             object {
                 fun goComponents(ty: TypeComponents, pol: Boolean): Type {
                     val parts = mutableListOf<Type>()
-                    for (v in ty.vars) parts.add(Type.Var(varName(v)))
+                    for (v in ty.vars.sortedByDescending { it.uid }) parts.add(Type.Var(varName(v)))
                     if (ty.tightBound != null) parts.add(goComponent(ty.tightBound, pol))
+                    else if (ty.hasConcreteComponents()) parts.add(if (pol) Type.Top else Type.Bottom)
 
                     val base = when {
                         parts.isNotEmpty() && pol -> parts.reduce { acc, t -> Type.Union(acc, t) }
