@@ -1,0 +1,4 @@
+type Animal = Cat { purrs: String } | Dog { barks: String }
+
+q = if true then Cat("purr") else Dog("wafwaf")
+q.purrs
