@@ -259,7 +259,7 @@ data class TypeComponents(
                                         }
                                     }
                                 }
-                            }.fold(ty) { acc, t -> acc.merge(t, pol) }
+                            }.fold(ty) { acc, t -> acc.merge(t, pol, env) }
                     trace { "merged concrete bounds: ${formatTypeComponents(bounds)}" }
 
                     fun flattenComponent(comp: Component, pol: Boolean): Component =
@@ -340,12 +340,13 @@ data class TypeComponents(
             left: RecordType,
             right: RecordType,
             pol: Boolean,
+            env: TypeEnv? = null,
         ): RecordType {
             return if (pol) {
                 val commonKeys = left.fields.keys.intersect(right.fields.keys)
                 RecordType(
                     commonKeys.associateWith { k ->
-                        left.fields[k]!!.merge(right.fields[k]!!, pol)
+                        left.fields[k]!!.merge(right.fields[k]!!, pol, env)
                     },
                 )
             } else {
@@ -357,7 +358,7 @@ data class TypeComponents(
                         when {
                             t1 == null -> t2!!
                             t2 == null -> t1
-                            else -> t1.merge(t2, pol)
+                            else -> t1.merge(t2, pol, env)
                         }
                     },
                 )
@@ -368,12 +369,13 @@ data class TypeComponents(
             left: FunctionType,
             right: FunctionType,
             pol: Boolean,
+            env: TypeEnv? = null,
         ): FunctionType {
             val mergedParams =
                 left.params.zip(right.params).map { (p1, p2) ->
-                    p1.merge(p2, !pol)
+                    p1.merge(p2, !pol, env)
                 }
-            val mergedResult = left.result.merge(right.result, pol)
+            val mergedResult = left.result.merge(right.result, pol, env)
             return FunctionType(mergedParams, mergedResult)
         }
 
@@ -390,8 +392,9 @@ data class TypeComponents(
             opt: OptionalComponent,
             other: Component,
             pol: Boolean,
+            env: TypeEnv? = null,
         ): Component? {
-            val merged = opt.inner.merge(componentToTypeComponents(other), pol)
+            val merged = opt.inner.merge(componentToTypeComponents(other), pol, env)
             return if (pol) {
                 // LUB: T? | U = (T | U)?
                 merged.tightBound?.let { OptionalComponent(merged) }
@@ -405,6 +408,7 @@ data class TypeComponents(
             left: Component?,
             right: Component?,
             pol: Boolean,
+            env: TypeEnv? = null,
         ): Component? {
             if (left == null) return right
             if (right == null) return left
@@ -414,64 +418,209 @@ data class TypeComponents(
                     if (left.prim == right.prim) left else null
 
                 left is RecordType && right is RecordType ->
-                    mergeRecords(left, right, pol)
+                    mergeRecords(left, right, pol, env)
 
                 left is FunctionType && right is FunctionType ->
-                    mergeFunctions(left, right, pol)
+                    mergeFunctions(left, right, pol, env)
 
                 left is OptionalComponent && right is OptionalComponent ->
-                    OptionalComponent(left.inner.merge(right.inner, pol))
+                    OptionalComponent(left.inner.merge(right.inner, pol, env))
 
                 // Optional + non-optional
-                left is OptionalComponent -> mergeOptionalWithOther(left, right, pol)
-                right is OptionalComponent -> mergeOptionalWithOther(right, left, pol)
+                left is OptionalComponent -> mergeOptionalWithOther(left, right, pol, env)
+                right is OptionalComponent -> mergeOptionalWithOther(right, left, pol, env)
 
-                // Same-kind: ref — TODO next chunk
-                left is RefType && right is RefType -> null
+                // Ref + ref
+                left is RefType && right is RefType ->
+                    if (left == right) left
+                    else if (env != null) mergeRefTypes(left, right, pol, env)
+                    else null
 
-                // Ref + record — TODO next chunk
-                left is RefType && right is RecordType -> null
-                left is RecordType && right is RefType -> null
-
-                // Cross-kind: incompatible
+                // Cross-kind (ref+record, ref+prim, etc.): incompatible
                 else -> null
             }
+        }
+
+        // --- Ref merging helpers ---
+
+        private fun mergeRefTypes(
+            left: RefType,
+            right: RefType,
+            pol: Boolean,
+            env: TypeEnv,
+        ): Component? {
+            // Same-name ref: merge type args by variance
+            if (left.name == right.name) {
+                return mergeSameNameRefs(left, right, pol, env)
+            }
+
+            val leftCtor = env.lookupConstructor(left.name)
+            val rightCtor = env.lookupConstructor(right.name)
+
+            // Sibling constructors: merge to parent in positive, Nothing in negative
+            if (leftCtor != null && rightCtor != null && leftCtor.parentType == rightCtor.parentType) {
+                return if (pol) mergeSiblingRefs(left, right, leftCtor, rightCtor, env) else null
+            }
+
+            // Constructor + parent
+            if (leftCtor != null && leftCtor.parentType == right.name) {
+                return if (pol) mergeConstructorWithParent(left, leftCtor, right, env) else null
+            }
+            if (rightCtor != null && rightCtor.parentType == left.name) {
+                return if (pol) mergeConstructorWithParent(right, rightCtor, left, env) else null
+            }
+
+            // Unrelated refs: no merge, keep as union
+            return null
+        }
+
+        private fun mergeSameNameRefs(
+            left: RefType,
+            right: RefType,
+            pol: Boolean,
+            env: TypeEnv,
+        ): Component? {
+            val typeDef = env.lookupTypeDef(left.name) ?: return null
+            val mergedArgs = mutableListOf<RefArg>()
+
+            for (i in left.args.indices) {
+                val leftArg = left.args[i]
+                val rightArg = right.args[i]
+                val param = typeDef.typeParams[i]
+
+                when (param.variance) {
+                    Variance.Invariant -> {
+                        if (leftArg == rightArg) {
+                            mergedArgs.add(leftArg)
+                        } else {
+                            // Can't merge invariant args that differ — keep as union
+                            return null
+                        }
+                    }
+                    Variance.Contravariant -> {
+                        val merged = mergeRefArgComponents(leftArg, rightArg, !pol, env)
+                        mergedArgs.add(RefArg.Resolved(merged, !pol))
+                    }
+                    else -> {
+                        val merged = mergeRefArgComponents(leftArg, rightArg, pol, env)
+                        mergedArgs.add(RefArg.Resolved(merged, pol))
+                    }
+                }
+            }
+
+            return RefType(left.name, mergedArgs)
+        }
+
+        private fun mergeSiblingRefs(
+            left: RefType,
+            right: RefType,
+            leftCtor: ConstructorInfo,
+            rightCtor: ConstructorInfo,
+            env: TypeEnv,
+        ): Component? {
+            val parentDef = env.getTypeDef(leftCtor.parentType)
+            val leftDef = env.getTypeDef(left.name)
+            val rightDef = env.getTypeDef(right.name)
+
+            val leftArgMap = leftDef.typeParams.zip(left.args).associate { (p, a) -> p.name to a }
+            val rightArgMap = rightDef.typeParams.zip(right.args).associate { (p, a) -> p.name to a }
+
+            val parentArgs = parentDef.typeParams.map { param ->
+                val leftArg = leftArgMap[param.name]
+                val rightArg = rightArgMap[param.name]
+                when {
+                    leftArg == null && rightArg == null -> RefArg.Resolved(empty, true)
+                    leftArg == null -> rightArg!!
+                    rightArg == null -> leftArg
+                    else -> {
+                        val argPol = if (param.variance == Variance.Contravariant) false else true
+                        RefArg.Resolved(mergeRefArgComponents(leftArg, rightArg, argPol, env), argPol)
+                    }
+                }
+            }
+
+            return RefType(parentDef.name, parentArgs)
+        }
+
+        private fun mergeConstructorWithParent(
+            ctorRef: RefType,
+            ctor: ConstructorInfo,
+            parentRef: RefType,
+            env: TypeEnv,
+        ): Component? {
+            val parentDef = env.getTypeDef(ctor.parentType)
+            val ctorDef = env.getTypeDef(ctorRef.name)
+
+            val ctorArgMap = ctorDef.typeParams.zip(ctorRef.args).associate { (p, a) -> p.name to a }
+            val parentArgMap = parentDef.typeParams.zip(parentRef.args).associate { (p, a) -> p.name to a }
+
+            val mergedArgs = parentDef.typeParams.map { param ->
+                val ctorArg = ctorArgMap[param.name]
+                val parentArg = parentArgMap[param.name]
+                when {
+                    ctorArg == null && parentArg == null -> RefArg.Resolved(empty, true)
+                    ctorArg == null -> parentArg!!
+                    parentArg == null -> ctorArg
+                    else -> {
+                        val argPol = if (param.variance == Variance.Contravariant) false else true
+                        RefArg.Resolved(mergeRefArgComponents(ctorArg, parentArg, argPol, env), argPol)
+                    }
+                }
+            }
+
+            return RefType(parentDef.name, mergedArgs)
+        }
+
+        private fun mergeRefArgComponents(
+            left: RefArg,
+            right: RefArg,
+            pol: Boolean,
+            env: TypeEnv,
+        ): TypeComponents {
+            val leftTC = when (left) {
+                is RefArg.Resolved -> left.components
+                is RefArg.Invariant -> if (pol) left.pos else left.neg
+            }
+            val rightTC = when (right) {
+                is RefArg.Resolved -> right.components
+                is RefArg.Invariant -> if (pol) right.pos else right.neg
+            }
+            return leftTC.merge(rightTC, pol, env)
         }
     }
 
     fun merge(
         other: TypeComponents,
         pol: Boolean,
+        env: TypeEnv? = null,
     ): TypeComponents {
         val mergedVars = this.vars + other.vars
         val mergedPrims = this.prims + other.prims
         val mergedNullable = this.nullable || other.nullable
-        // TODO: merge refs by LUB/GLB. A wrinkle is invariant type args —
-        // they would need to be equal. Constraint checking already takes care of that for us.
         val mergedRefs = this.refs + other.refs
 
         val mergedRec =
             when {
                 this.rec == null -> other.rec
                 other.rec == null -> this.rec
-                else -> mergeRecords(this.rec, other.rec, pol)
+                else -> mergeRecords(this.rec, other.rec, pol, env)
             }
 
         val mergedFun =
             when {
                 this.func == null -> other.func
                 other.func == null -> this.func
-                else -> mergeFunctions(this.func, other.func, pol)
+                else -> mergeFunctions(this.func, other.func, pol, env)
             }
 
         val mergedOptional =
             when {
                 this.optional == null -> other.optional
                 other.optional == null -> this.optional
-                else -> this.optional.merge(other.optional, pol)
+                else -> this.optional.merge(other.optional, pol, env)
             }
 
-        val mergedTightBound = mergeTightBounds(this.tightBound, other.tightBound, pol)
+        val mergedTightBound = mergeTightBounds(this.tightBound, other.tightBound, pol, env)
 
         return TypeComponents(
             vars = mergedVars,
