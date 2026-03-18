@@ -454,23 +454,8 @@ data class TypeComponents(
                 return mergeSameNameRefs(left, right, pol, env)
             }
 
-            val leftCtor = env.lookupConstructor(left.name)
-            val rightCtor = env.lookupConstructor(right.name)
-
-            // Sibling constructors: merge to parent in positive, Nothing in negative
-            if (leftCtor != null && rightCtor != null && leftCtor.parentType == rightCtor.parentType) {
-                return if (pol) mergeSiblingRefs(left, right, leftCtor, rightCtor, env) else null
-            }
-
-            // Constructor + parent
-            if (leftCtor != null && leftCtor.parentType == right.name) {
-                return if (pol) mergeConstructorWithParent(left, leftCtor, right, env) else null
-            }
-            if (rightCtor != null && rightCtor.parentType == left.name) {
-                return if (pol) mergeConstructorWithParent(right, rightCtor, left, env) else null
-            }
-
-            // Unrelated refs: no merge, keep as union
+            // Sibling and constructor+parent merging disabled — will be handled
+            // at constraint solving time (option 3 in constructor-type-options.md)
             return null
         }
 
