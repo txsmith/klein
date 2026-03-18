@@ -117,7 +117,7 @@ class LubGlbSimplificationTest {
     @Test
     fun sameParentRef_covariantParam_lubsTypeArgs() {
         assertType(
-            "List<Animal>",
+            "Cons<Animal>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -138,7 +138,7 @@ class LubGlbSimplificationTest {
         // LUB of Sink<Dog> | Sink<Cat> GLBs the args.
         // Dog and Cat are disjoint constructors, so their GLB is Nothing.
         assertType(
-            "Sink<Nothing>",
+            "Drain<Nothing>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -191,7 +191,7 @@ class LubGlbSimplificationTest {
         // Contravariant arg: GLB of Dog, Cat = Nothing (disjoint constructors)
         // Covariant arg: LUB of Num, String = Any (unrelated prims)
         assertType(
-            "Transform<Nothing, Any>",
+            "Xform<Nothing, Any>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
