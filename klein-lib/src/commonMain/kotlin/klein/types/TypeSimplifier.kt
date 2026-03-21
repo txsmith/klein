@@ -510,8 +510,14 @@ object TypeSimplifier {
                 fun goComponents(ty: TypeComponents, pol: Boolean): Type {
                     val parts = mutableListOf<Type>()
                     for (v in ty.vars.sortedByDescending { it.uid }) parts.add(Type.Var(varName(v)))
-                    if (ty.tightBound != null) parts.add(goComponent(ty.tightBound, pol))
-                    else if (ty.hasConcreteComponents()) parts.add(if (pol) Type.Top else Type.Bottom)
+                    if (ty.tightBound != null) {
+                        parts.add(goComponent(ty.tightBound, pol))
+                    } else if (ty.hasConcreteComponents()) {
+                        // tightBound is null but concrete components exist — couldn't simplify.
+                        // Fall back to regular coalescing (show the union/intersection).
+                        val regularScheme = TypeScheme(ty.copy(vars = emptySet()), cty.recVars, pol)
+                        parts.add(coalesceType(regularScheme, env))
+                    }
 
                     val base = when {
                         parts.isNotEmpty() && pol -> parts.reduce { acc, t -> Type.Union(acc, t) }

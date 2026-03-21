@@ -47,7 +47,7 @@ class InferredInterfaceTest {
                 H(A(42)).ab.x
                 """.trimIndent(),
             ),
-            expectedLub = "Any",
+            expectedLub = "Num | String",
         )
     }
 
@@ -264,7 +264,7 @@ class InferredInterfaceTest {
                 H(ToNum(|x -> x + 1|)).p.f
                 """.trimIndent(),
             ),
-            expectedLub = "(Num) -> Any",
+            expectedLub = "(Num) -> Num | String",
         )
     }
 
@@ -312,7 +312,7 @@ class InferredInterfaceTest {
                 m.x
                 """.trimIndent(),
             ),
-            expectedLub = "Any",
+            expectedLub = "Num | String",
         )
     }
 
@@ -328,7 +328,7 @@ class InferredInterfaceTest {
                 H(A(|x -> 42|)).h.f
                 """.trimIndent(),
             ),
-            expectedLub = "(Nothing) -> Num",
+            expectedLub = "(Num & String) -> Num",
         )
     }
 
@@ -344,7 +344,7 @@ class InferredInterfaceTest {
                 H(A({ inner = 42 })).n.data.inner
                 """.trimIndent(),
             ),
-            expectedLub = "Any",
+            expectedLub = "Num | String",
         )
     }
 
@@ -377,7 +377,7 @@ class InferredInterfaceTest {
                 { x = h.m.x, y = h.m.y }
                 """.trimIndent(),
             ),
-            expectedLub = "{ x: Any, y: Any }",
+            expectedLub = "{ x: Num | String, y: Bool | Num }",
         )
     }
 
@@ -394,7 +394,7 @@ class InferredInterfaceTest {
                 H(NumBox(Container(42))).b.c.value
                 """.trimIndent(),
             ),
-            expectedLub = "Any",
+            expectedLub = "Num | String",
         )
     }
 
@@ -411,7 +411,7 @@ class InferredInterfaceTest {
                 H(NumList(Nil)).m.items
                 """.trimIndent(),
             ),
-            expectedLub = "Any",
+            expectedLub = "List<Num | String>",
         )
     }
 
@@ -443,7 +443,7 @@ class InferredInterfaceTest {
                 H(A(|{ x = 42 }|)).f.make
                 """.trimIndent(),
             ),
-            expectedLub = "() -> { x: Any }",
+            expectedLub = "() -> { x: Num | String }",
         )
     }
 
@@ -460,7 +460,7 @@ class InferredInterfaceTest {
                 H(A(|check -> check(42)|)).v.validate
                 """.trimIndent(),
             ),
-            expectedLub = "((Any) -> Bool) -> Bool",
+            expectedLub = "((Num | String) -> Bool) -> Bool",
         )
     }
 

@@ -1,4 +1,8 @@
-type Animal = Cat { purrs: String } | Dog { barks: String }
+type Dog = Dog { name: String }
+type ForceDog = ForceDog { d: Dog }
 
-q = if true then Cat("purr") else Dog("wafwaf")
-q.purrs
+fun f(i) =
+  i.name
+  _ = ForceDog(i)
+
+d = if true then { name = "Paco" } else Dog("Paco")

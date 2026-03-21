@@ -1,6 +1,6 @@
 # Constructor Type Design: Three Options
 
-**Status:** Leaning Option 3. Option 2's unions risk becoming word salad in displayed types.
+**Status:** Decided — Option 2 with structural expansion for unrelated refs. Option 3 rejected because eager sibling merging destroys structural precision (adding a sibling to a union can break field access).
 
 ## Context
 

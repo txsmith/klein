@@ -243,7 +243,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
-            expectedLub = "((Any) -> 'A) -> { a: 'A, b: 'A }",
+            expectedLub = "((Bool | Num) -> 'A) -> { a: 'A, b: 'A }",
         )
     }
 
@@ -337,7 +337,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
-            expectedLub = "((Any) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
+            expectedLub = "((Bool | Num) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
         )
     }
 
@@ -353,7 +353,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
-            expectedLub = "((Any) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
+            expectedLub = "((Num | { t: Bool }) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
         )
     }
 
@@ -394,7 +394,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
-            expectedLub = "((('A) -> 'A | Any) -> Any) -> { u: 'A | Num, v: 'A | Bool }",
+            expectedLub = "((('A) -> 'A | Bool | Num) -> Any) -> { u: 'A | Num, v: 'A | Bool }",
         )
     }
 
@@ -524,7 +524,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
-            expectedLub = "(Nothing) -> Num",
+            expectedLub = "({ v: 'A } & (('A) -> Any)) -> Num",
         )
     }
 
@@ -540,7 +540,7 @@ class SimpleSubTest {
                 |b -> if b then object1 else object2|
                 """.trimIndent(),
             ),
-            expectedLub = "(Bool) -> { x: Num, y: Any }",
+            expectedLub = "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
         )
     }
 
@@ -604,7 +604,7 @@ class SimpleSubTest {
                 |b -> if b then object1 else object2|
                 """.trimIndent(),
             ),
-            expectedLub = "(Bool) -> { x: Num, y: Any }",
+            expectedLub = "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
         )
     }
 }

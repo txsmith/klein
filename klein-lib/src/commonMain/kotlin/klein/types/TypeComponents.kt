@@ -605,7 +605,12 @@ data class TypeComponents(
                 else -> this.optional.merge(other.optional, pol, env)
             }
 
-        val mergedTightBound = mergeTightBounds(this.tightBound, other.tightBound, pol, env)
+        // If either side has concrete components but no tightBound (couldn't simplify),
+        // propagate null — don't let the other side's tightBound win.
+        val mergedTightBound =
+            if (this.tightBound == null && this.hasConcreteComponents()) null
+            else if (other.tightBound == null && other.hasConcreteComponents()) null
+            else mergeTightBounds(this.tightBound, other.tightBound, pol, env)
 
         return TypeComponents(
             vars = mergedVars,

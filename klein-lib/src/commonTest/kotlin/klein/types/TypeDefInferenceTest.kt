@@ -20,13 +20,14 @@ class TypeDefInferenceTest {
     @Test
     fun basicEnum_bothConstructorsJoinToParent() {
         assertType(
-            "MyBool",
+            "False | True",
             infer(
                 """
                 type MyBool = True | False
                 if true then True else False
                 """.trimIndent(),
             ),
+            expectedLub = "MyBool",
         )
     }
 
@@ -177,26 +178,28 @@ class TypeDefInferenceTest {
     @Test
     fun bareConstructor_joinWithTypedConstructor() {
         assertType(
-            "List<Num>",
+            "Cons<Num> | Nil",
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 if true then Nil else Cons(1, Nil)
                 """.trimIndent(),
             ),
+            expectedLub = "List<Num>",
         )
     }
 
     @Test
     fun siblingConstructors_mergeTypeArgsByPosition() {
         assertType(
-            "List<Num | String>",
+            "Cons<Num> | Cons<String>",
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
                 if true then Cons(1, Nil) else Cons("hi", Nil)
                 """.trimIndent(),
             ),
+            expectedLub = "Cons<Num | String>",
         )
     }
 
@@ -340,7 +343,7 @@ class TypeDefInferenceTest {
     @Test
     fun eitherType_bothSubtypeParent() {
         assertType(
-            "Either<String, Num>",
+            "Left<String> | Right<Num>",
             infer(
                 """
                 type Either<'A, 'B> = Left { value: 'A } | Right { value: 'B }
@@ -348,6 +351,7 @@ class TypeDefInferenceTest {
                 if true then Left("error") else Right(42)
                 """.trimIndent(),
             ),
+            expectedLub = "Either<String, Num>",
         )
     }
 
@@ -411,7 +415,7 @@ class TypeDefInferenceTest {
                 Cons(1, Cons("hello", Nil))
                 """.trimIndent(),
             ),
-            expectedLub = "Cons<Any>",
+            expectedLub = "Cons<Num | String>",
         )
     }
 
@@ -440,7 +444,7 @@ class TypeDefInferenceTest {
                 Node(Leaf(1), Leaf("wrong"))
                 """.trimIndent(),
             ),
-            expectedLub = "Node<Any>",
+            expectedLub = "Node<Num | String>",
         )
     }
 

@@ -19,9 +19,10 @@ class LubGlbSimplificationTest {
     }
 
     @Test
-    fun siblings_twoOfThree_joinToParent() {
+    fun siblings_twoOfThree_staysAsUnion() {
+        // Non-exhaustive: only 2 of 3 constructors present. Stays as union.
         assertType(
-            "Light",
+            "Red | Yellow",
             inferLUB(
                 """
                 type Light = Red | Yellow | Green
@@ -46,9 +47,10 @@ class LubGlbSimplificationTest {
 
     @Test
     fun siblings_multipleTypeParams_mergeByPosition() {
-        // Both type params are covariant. LUB of String, Num = Any. LUB of Num, Bool = Any.
+        // Both type params are covariant. All constructors present → parent.
+        // Type args: 'A = String | Num, 'B = Num | Bool (no Top/Bottom merging).
         assertType(
-            "Either<Any, Any>",
+            "Either<Num | String, Bool | Num>",
             inferLUB(
                 """
                 type Either<'A, 'B> = Left { value: 'A } | Right { value: 'B }
@@ -102,9 +104,9 @@ class LubGlbSimplificationTest {
 
     @Test
     fun sameConstructor_differentTypeArgs_mergesTypeArgs() {
-        // Cons is covariant in 'A. LUB of Num and String = Any.
+        // Cons is covariant in 'A. LUB of Num and String stays as union (no Top/Bottom merging).
         assertType(
-            "Cons<Any>",
+            "Cons<Num | String>",
             inferLUB(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
@@ -135,10 +137,9 @@ class LubGlbSimplificationTest {
     @Test
     fun sameRef_contravariantParam_glbsTypeArgs() {
         // 'A only appears in input position, so it's contravariant.
-        // LUB of Sink<Dog> | Sink<Cat> GLBs the args.
-        // Dog and Cat are disjoint constructors, so their GLB is Nothing.
+        // LUB of Drain<Dog> | Drain<Cat> GLBs the args: Dog & Cat.
         assertType(
-            "Drain<Nothing>",
+            "Drain<Cat & Dog>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -158,27 +159,27 @@ class LubGlbSimplificationTest {
     }
 
     @Test
-    fun sameRef_invariantParam_fallsBackToStructural() {
+    fun sameRef_invariantParam_showsWhereClause() {
         // 'A appears in both input and output, so it's invariant.
-        // Handler<Dog> | Handler<Cat> can't merge args, falls back to structural record.
-        // Input position GLBs: Dog & Cat = Nothing. Output position LUBs: Dog | Cat = Animal.
+        // Handler<Dog> | Handler<Cat> can't merge args directly.
+        // Invariant bounds: lower = Dog & Cat (GLB), upper = Dog | Cat = Animal (exhaustive LUB).
         assertType(
-            "{run: (Nothing) -> Animal}",
+            "Handle<'A> where Cat & Dog <: 'A <: Animal",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
                 type Handler<'A> = Handle { run: ('A) -> 'A }
                 type DogBox = DogBox { value: Dog }
                 type CatBox = CatBox { value: Cat }
-                x = Handle(|d ->
+                handleDog = Handle(|d ->
                   _ = DogBox(d)
                   d
                 |)
-                y = Handle(|c ->
+                handleCat = Handle(|c ->
                   _ = CatBox(c)
                   c
                 |)
-                if true then x else y
+                if true then handleDog else handleCat
                 """.trimIndent(),
             ),
         )
@@ -187,11 +188,11 @@ class LubGlbSimplificationTest {
     @Test
     fun sameRef_mixedVariance_eachArgSimplifiedByVariance() {
         // 'A is contravariant (input only), 'B is covariant (output only)
-        // LUB of Transform<Dog, Num> | Transform<Cat, String>
-        // Contravariant arg: GLB of Dog, Cat = Nothing (disjoint constructors)
-        // Covariant arg: LUB of Num, String = Any (unrelated prims)
+        // LUB of Xform<Dog, Num> | Xform<Cat, String>
+        // Contravariant arg: GLB of Dog, Cat = Dog & Cat
+        // Covariant arg: LUB of Num, String = Num | String
         assertType(
-            "Xform<Nothing, Any>",
+            "Xform<Cat & Dog, Num | String>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -234,7 +235,7 @@ class LubGlbSimplificationTest {
     fun unrelatedRefs_commonFields_fallBackToStructuralRecord() {
         // Dog and Fish are from different type families but both have a name field
         assertType(
-            "{name: String}",
+            "{ name: String }",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -246,9 +247,10 @@ class LubGlbSimplificationTest {
     }
 
     @Test
-    fun unrelatedRefs_noCommonStructure_becomesTop() {
+    fun unrelatedRefs_noCommonStructure_staysAsUnion() {
+        // Red and Some are unrelated, no common fields. Stays as union.
         assertType(
-            "Any",
+            "Red | Some<Num>",
             inferLUB(
                 """
                 type Light = Red | Green
@@ -264,7 +266,7 @@ class LubGlbSimplificationTest {
     @Test
     fun refAndRecord_fallsBackToRecordLub() {
         assertType(
-            "{name: String}",
+            "{ name: String }",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -354,7 +356,7 @@ class LubGlbSimplificationTest {
         // LUB keeps common fields, LUBs field types.
         // LUB of Num and String = Any (unrelated prims).
         assertType(
-            "{value: Any}",
+            "{ value: Num | String }",
             inferLUB(
                 """
                 type Box = NumBox { value: Num } | EmptyBox
@@ -370,7 +372,7 @@ class LubGlbSimplificationTest {
         // Dog has name + age, Fish has name + fins.
         // LUB keeps only the common field: name.
         assertType(
-            "{name: String}",
+            "{ name: String }",
             inferLUB(
                 """
                 type Animal = Dog { name: String, age: Num }
@@ -386,7 +388,7 @@ class LubGlbSimplificationTest {
         // Ref has name + age, record has name + color.
         // LUB keeps only name.
         assertType(
-            "{name: String}",
+            "{ name: String }",
             inferLUB(
                 """
                 type Animal = Dog { name: String, age: Num }
@@ -402,7 +404,7 @@ class LubGlbSimplificationTest {
     fun refAndRecord_recordHasExtraFields_onlyCommonFieldsKept() {
         // Record is wider than the ref's structure, but LUB only keeps common fields.
         assertType(
-            "{name: String}",
+            "{ name: String }",
             inferLUB(
                 """
                 type Animal = Dog { name: String }
@@ -420,7 +422,7 @@ class LubGlbSimplificationTest {
     fun unrelatedRefs_inFunctionParam_glbKeepsAllFields() {
         // x must satisfy both Dog and Fish constraints → GLB keeps all fields.
         assertType(
-            "({name: String, age: Num, fins: Num}) -> String",
+            "({ name: String, age: Num, fins: Num }) -> String",
             inferLUB(
                 """
                 type Animal = Dog { name: String, age: Num }
@@ -441,7 +443,7 @@ class LubGlbSimplificationTest {
     fun refAndRecord_inFunctionParam_glbKeepsAllFields() {
         // x must satisfy both Dog and {color: String} constraints → GLB keeps all fields.
         assertType(
-            "({name: String, age: Num, color: String}) -> String",
+            "({ name: String, age: Num, color: String }) -> String",
             inferLUB(
                 """
                 type Animal = Dog { name: String, age: Num }
@@ -463,7 +465,7 @@ class LubGlbSimplificationTest {
         // GLB keeps all fields, GLBs common field types.
         // GLB of Num and String = Nothing (unrelated prims).
         assertType(
-            "({value: Nothing}) -> Nothing",
+            "({ value: Num & String }) -> Num & String",
             inferLUB(
                 """
                 type Box = NumBox { value: Num }
@@ -500,9 +502,9 @@ class LubGlbSimplificationTest {
     fun nested_invariantInsideCovariant() {
         // List is covariant, Handler is invariant.
         // Cons<Handler<Dog>> | Cons<Handler<Cat>> → same constructor, LUB the args →
-        //   Handler<Dog> | Handler<Cat> → invariant, falls back to structural
+        //   Handler<Dog> | Handler<Cat> → invariant, shows where clause
         assertType(
-            "Cons<{run: (Nothing) -> Animal}>",
+            "Cons<Handle<'A> where Cat & Dog <: 'A <: Animal>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }

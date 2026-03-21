@@ -61,7 +61,7 @@ class NominalStructuralTest {
                 Cons(1, Cons("two", Nil))
                 """.trimIndent(),
             ),
-            expectedLub = "Cons<Any>",
+            expectedLub = "Cons<Num | String>",
         )
     }
 
