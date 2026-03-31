@@ -9,9 +9,6 @@ We're implementing LUB/GLB type simplification so that displayed types collapse 
 - **Option 2** — keep constructor union types. No constraint-level merging. See `docs/ideas/constructor-type-options.md`.
 - **No Top/Bottom merging for now** — `Num | String` stays as `Num | String` (not `Any`). Revisit after pattern matching is designed.
 - **null tightBound fallback** — when tightBound is null but concrete components exist, fall back to regular type (union/intersection) instead of Top/Bottom.
-- **Exhaustive-only sibling merging** — only merge siblings to parent when ALL constructors are present.
-- **Structural expansion for unrelated refs** — `Dog | Fish` → `{ name: String }` (common fields). Needs pre-canonicalized ifaces.
-- **Intersection simplification** — ref & ref = Nothing, ref & prim = Nothing, prim & prim (different) = Nothing. Record & record = structural merge (all fields). Ref & record stays as-is (structural subtyping).
 
 ## What's done
 
@@ -34,42 +31,60 @@ We're implementing LUB/GLB type simplification so that displayed types collapse 
   - 3 other (invariant where clause, nested cases)
 - **3 TypeDefInferenceTest** — exhaustive sibling LUB (same as above)
 
+## Simplification avenues
+
+Six distinct simplification rules, roughly in priority order:
+
+### 1. Exhaustive constructor union → parent type
+If a union contains ALL constructors of a parent type, replace with the parent.
+- `Dog | Cat` → `Animal` (when those are all of Animal's constructors)
+- `Nil | Cons<Num>` → `List<Num>`
+- `Red | Yellow` stays as `Red | Yellow` (Green missing from Light)
+
+Relevant to pattern matching: this is the type-level exhaustiveness check.
+
+### 2. Subtype elimination
+If A <: B, eliminate A from unions (A | B → B) and B from intersections (A & B → A).
+- `Dog | { name: String }` → `{ name: String }` (Dog <: {name: String})
+- `Dog & { name: String }` → `Dog` (Dog <: {name: String})
+- `Cons<Num> | List<Num>` → `List<Num>` (Cons <: List)
+
+### 3. Same-name ref merging
+Merge type args by variance. **Already implemented.**
+- `Cons<Num> | Cons<String>` → `Cons<Num | String>`
+- `Drain<Dog> | Drain<Cat>` → `Drain<Dog & Cat>` (contravariant)
+- `Handle<Dog> | Handle<Cat>` → where clause (invariant, can't merge)
+
+### 4. Unrelated ref union → structural expansion (deferred)
+Expand unrelated refs to their structural records and merge common fields.
+- `Dog | Fish` → `{ name: String }`
+
+Deferred: depends on pattern matching design (might prefer keeping the union if pattern matching can discriminate bare unions). Requires pre-canonicalizing constructor ifaces.
+
+### 5. Empty nominal intersection → Nothing (low priority)
+No value can inhabit two nominal types that are not subtypes of the other.
+- `Dog & Fish` → Nothing (different type families)
+- `Dog & Cat` → Nothing (different constructors, same family)
+- `Num & String` → Nothing
+- `Ref & Prim` → Nothing
+
+Note: Record & Record merges structurally (already handled). Ref & Record stays as-is (valid structural subtyping, falls under subtype elimination).
+
+### 6. Unrelated union → Any (low priority)
+Last-pass: unions with no common operations collapse to Any.
+- `Num | String` → `Any`
+- `Num | Dog` → `Any`
+
+Deferred until pattern matching design clarifies observational equivalence.
+
 ## What's next
 
-### 1. Re-enable exhaustive sibling merging
-Add exhaustiveness check to `mergeSiblingRefs`: count constructors of the parent type, only merge when all are present. Re-enable sibling and constructor+parent paths in `mergeRefTypes`.
+### Implement #1 and #2
+Re-enable sibling merging with exhaustiveness check. Implement subtype elimination for Ref|Record and Constructor|Parent cases.
 
-Fixes: ~8 LubGlb tests + 3 TypeDefInference tests.
+Fixes: ~11 LubGlb tests + 3 TypeDefInference tests.
 
-### 2. Pre-canonicalize constructor ifaces
-In `fromSimpleType` for `TRef`, also canonicalize the constructor's iface fields (substituting type param TVars with actual type args via the same `fromSimpleType`). Store the resulting `RecordType` on the `RefType`. `flattenBounds` flattens it like any other nested TypeComponents.
-
-This is the foundation for structural expansion and ref+record merging.
-
-### 3. Structural expansion for unrelated refs and ref+record
-During merge: when encountering ref+record, expand the ref to its pre-canonicalized record, merge records, nullify the ref. For unrelated refs, expand both and merge.
-
-Fixes: ~9 LubGlb tests.
-
-### 4. Intersection simplification
-Simplify intersections of nominal types:
-- `Ref & Ref` (different constructors) → Nothing
-- `Ref & Prim` → Nothing
-- `Prim & Prim` (different) → Nothing
-- `Record & Record` → structural merge (all fields)
-- `Ref & Record` → stays as-is (valid structural subtyping)
-
-This can happen either in `mergeTightBounds` (negative position) or as a post-processing step.
-
-### 5. Remove tightBound (optional, future)
-With pre-canonicalized ifaces, `tightBound` becomes partially redundant:
-- Same-name ref merging can happen in `merge` by intelligently merging the refs set
-- Ref+record merging: expand and merge during `merge`
-- Cross-kind detection moves to coalescing
-
-May simplify the architecture but not blocking.
-
-### 6. Recursive type support
+### Recursive type support
 Handle `as` clauses in `coalesceLeastUpperBound` to fix 24 RecursiveFunctionTest failures.
 
 ## Key files
