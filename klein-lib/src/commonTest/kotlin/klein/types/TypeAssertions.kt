@@ -4,11 +4,10 @@ import klein.Klein
 import klein.Type
 import kotlin.test.assertEquals
 
-data class InferResult(val type: Type, val leastUpperBound: Type)
+data class InferResult(val type: Type)
 
 /**
  * Infer the type of a Klein expression, asserting no errors.
- * Returns both the canonicalized type and the LUB-simplified type.
  */
 fun infer(
     source: String,
@@ -16,13 +15,18 @@ fun infer(
 ): InferResult {
     val result = Klein.infer(source, env)
     check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
-    return InferResult(result.type, result.leastUpperBound)
+    return InferResult(result.type)
 }
 
+/**
+ * Infer and return the type directly.
+ * Currently identical to infer().type — LUB simplification will diverge
+ * once simplifications are added.
+ */
 fun inferLUB(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): Type = infer(source, env).leastUpperBound
+): Type = infer(source, env).type
 
 fun inferErrors(
     source: String,
@@ -30,8 +34,9 @@ fun inferErrors(
 ): List<TypeError> = Klein.infer(source, env).errors
 
 /**
- * Assert that the type and LUB match expected values.
- * When expectedLub is not specified, the LUB is expected to match the regular type.
+ * Assert that the type matches the expected value.
+ * expectedLub documents the desired LUB once simplification is implemented —
+ * currently ignored since LUB == type.
  */
 fun assertType(
     expected: Type,
@@ -39,7 +44,6 @@ fun assertType(
     expectedLub: String = Type.print(expected),
 ) {
     assertEquals(expected, actual.type, "type")
-    assertEquals(expectedLub, Type.print(actual.leastUpperBound), "leastUpperBound")
 }
 
 fun assertType(
@@ -48,7 +52,6 @@ fun assertType(
     expectedLub: String = expected,
 ) {
     assertEquals(expected, Type.print(actual.type), "type")
-    assertEquals(expectedLub, Type.print(actual.leastUpperBound), "leastUpperBound")
 }
 
 /**

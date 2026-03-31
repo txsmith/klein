@@ -23,7 +23,6 @@ object Klein {
     data class InferenceResult(
         val program: Program,
         val type: Type,
-        val leastUpperBound: Type,
         val errors: List<TypeError>,
     ) {
         val hasErrors: Boolean get() = errors.isNotEmpty()
@@ -39,12 +38,10 @@ object Klein {
 
         val scheme = TypeSimplifier.simplify(result.type, result.env)
         val type = TypeSimplifier.coalesceType(scheme, result.env)
-        val leastUpperBound = TypeSimplifier.coalesceLeastUpperBound(scheme, result.env)
 
         return InferenceResult(
             program = program,
             type = type,
-            leastUpperBound = leastUpperBound,
             errors = result.errors,
         )
     }

@@ -91,6 +91,5 @@ Handle `as` clauses in `coalesceLeastUpperBound` to fix 24 RecursiveFunctionTest
 
 - `klein-lib/src/commonMain/kotlin/klein/types/TypeComponents.kt` — `TypeComponents`, `merge`, `mergeTightBounds`
 - `klein-lib/src/commonMain/kotlin/klein/types/TypeSimplifier.kt` — `coalesceType`, `coalesceLeastUpperBound`
-- `klein-lib/src/commonMain/kotlin/klein/Klein.kt` — `InferenceResult.leastUpperBound`
 - `klein-lib/src/commonTest/kotlin/klein/types/LubGlbSimplificationTest.kt` — LUB test suite
 - `docs/ideas/constructor-type-options.md` — design options comparison
