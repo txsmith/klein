@@ -21,9 +21,7 @@ data class TypeScheme(
 /**
  * Represents a type argument for a ref type.
  *
- * Most type args are simply resolved to a TypeComponents. Invariant type args
- * on refs genuinely need both bounds (positive and negative), which is captured
- * by the Invariant variant.
+ * Most type args are simply resolved to a TypeComponents, this means they have only lower or upper bounds. Invariant type args on refs genuinely carry both bounds (positive and negative).
  */
 sealed class RefArg {
     data class Resolved(val components: TypeComponents, val pol: Boolean) : RefArg()
@@ -312,7 +310,7 @@ data class TypeComponents(
             left: RecordType,
             right: RecordType,
             pol: Boolean,
-            env: TypeEnv? = null,
+            env: TypeEnv,
         ): RecordType {
             return if (pol) {
                 val commonKeys = left.fields.keys.intersect(right.fields.keys)
@@ -341,7 +339,7 @@ data class TypeComponents(
             left: FunctionType,
             right: FunctionType,
             pol: Boolean,
-            env: TypeEnv? = null,
+            env: TypeEnv,
         ): FunctionType {
             val mergedParams =
                 left.params.zip(right.params).map { (p1, p2) ->
@@ -350,17 +348,69 @@ data class TypeComponents(
             val mergedResult = left.result.merge(right.result, pol, env)
             return FunctionType(mergedParams, mergedResult)
         }
+
+        /**
+         * Merge two ref sets. Same-name refs have their type args merged by variance.
+         * Different-name refs accumulate.
+         */
+        private fun mergeRefs(
+            left: Set<RefType>,
+            right: Set<RefType>,
+            env: TypeEnv,
+        ): Set<RefType> {
+            if (left.isEmpty()) return right
+            if (right.isEmpty()) return left
+
+            val byName = left.associateBy { it.name }.toMutableMap()
+
+            for (ref in right) {
+                val existing = byName[ref.name]
+                if (existing != null) {
+                    byName[ref.name] = mergeSameNameRefs(existing, ref, env)
+                } else {
+                    byName[ref.name] = ref
+                }
+            }
+
+            return byName.values.toSet()
+        }
+
+        private fun mergeSameNameRefs(
+            left: RefType,
+            right: RefType,
+            env: TypeEnv,
+        ): RefType {
+            val mergedArgs = left.args.zip(right.args) { leftArg, rightArg ->
+                when {
+                    leftArg is RefArg.Invariant && rightArg is RefArg.Invariant -> {
+                        if (leftArg == rightArg) leftArg
+                        else {
+                            fun strip(tc: TypeComponents, tvar: TVar) = tc.copy(vars = tc.vars - tvar)
+                            val mergedPos = strip(leftArg.pos, leftArg.tvar).merge(strip(rightArg.pos, rightArg.tvar), true, env)
+                            val mergedNeg = strip(leftArg.neg, leftArg.tvar).merge(strip(rightArg.neg, rightArg.tvar), false, env)
+                            RefArg.Invariant(TVar(), mergedPos, mergedNeg)
+                        }
+                    }
+                    else -> {
+                        leftArg as RefArg.Resolved
+                        rightArg as RefArg.Resolved
+                        RefArg.Resolved(leftArg.components.merge(rightArg.components, leftArg.pol, env), leftArg.pol)
+                    }
+                }
+            }
+            return RefType(left.name, mergedArgs)
+        }
     }
 
     fun merge(
         other: TypeComponents,
         pol: Boolean,
-        env: TypeEnv? = null,
+        env: TypeEnv,
     ): TypeComponents {
         val mergedVars = this.vars + other.vars
         val mergedPrims = this.prims + other.prims
         val mergedNullable = this.nullable || other.nullable
-        val mergedRefs = this.refs + other.refs
+        val mergedRefs = mergeRefs(this.refs, other.refs, env)
 
         val mergedRec =
             when {

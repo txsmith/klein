@@ -1,0 +1,8 @@
+type Dog = Dog { name: String }
+type ForceDog = ForceDog { d: Dog }
+
+fun f(i) =
+  i.name
+  _ = ForceDog(i)
+
+d = if true then { name = "Paco" } else Dog("Paco")

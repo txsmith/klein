@@ -162,9 +162,35 @@ class LubGlbSimplificationTest {
     fun sameRef_invariantParam_showsWhereClause() {
         // 'A appears in both input and output, so it's invariant.
         // Handler<Dog> | Handler<Cat> can't merge args directly.
-        // Invariant bounds: lower = Dog & Cat (GLB), upper = Dog | Cat = Animal (exhaustive LUB).
+        // DogBox/CatBox constrain from input side (upper bound), so Dog & Cat appear as upper bound.
         assertType(
-            "Handle<'A> where Cat & Dog <: 'A <: Animal",
+            "Handle<'A> where Dog | Cat <: 'A <: Cat & Dog",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Handler<'A> = Handle { run: ('A) -> 'A }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                handleDog = Handle(|d ->
+                  _ = DogBox(d)
+                  Dog("d")
+                |)
+                handleCat = Handle(|c ->
+                  _ = CatBox(c)
+                  Cat("c")
+                |)
+                if true then handleDog else handleCat
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameRef_invariantParam_upperBoundOnly() {
+        // DogBox/CatBox constrain from input side only — no concrete lower bounds.
+        // Only upper bound shows in where clause.
+        assertType(
+            "Handle<'A> where 'A <: Cat & Dog",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -504,7 +530,7 @@ class LubGlbSimplificationTest {
         // Cons<Handler<Dog>> | Cons<Handler<Cat>> → same constructor, LUB the args →
         //   Handler<Dog> | Handler<Cat> → invariant, shows where clause
         assertType(
-            "Cons<Handle<'A> where Cat & Dog <: 'A <: Animal>",
+            "Cons<Handle<'A> where Dog | Cat <: 'A <: Cat & Dog>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }

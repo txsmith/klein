@@ -192,7 +192,7 @@ class TypeDefInferenceTest {
     @Test
     fun siblingConstructors_mergeTypeArgsByPosition() {
         assertType(
-            "Cons<Num> | Cons<String>",
+            "Cons<Num | String>",
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }

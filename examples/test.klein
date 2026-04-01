@@ -1,8 +1,13 @@
-type Dog = Dog { name: String }
-type ForceDog = ForceDog { d: Dog }
-
-fun f(i) =
-  i.name
-  _ = ForceDog(i)
-
-d = if true then { name = "Paco" } else Dog("Paco")
+type Animal = Dog { name: String } | Cat { name: String }
+type Handler<'A> = Handle { run: ('A) -> 'A }
+type DogBox = DogBox { value: Dog }
+type CatBox = CatBox { value: Cat }
+h1 = Handle(|d ->
+  _ = DogBox(d)
+  d
+|)
+h2 = Handle(|c ->
+  _ = CatBox(c)
+  c
+|)
+r = if true then h1 else h2
