@@ -26,9 +26,50 @@ data class TypeScheme(
 sealed class RefArg {
     data class Resolved(val components: TypeComponents, val pol: Boolean) : RefArg()
 
-    data class Invariant(val tvar: TVar, val pos: TypeComponents, val neg: TypeComponents) : RefArg()
+    data class Invariant(val tvar: TVar, val pos: TypeComponents, val neg: TypeComponents) : RefArg() {
+        /**
+         * Check if the positive and negative bounds are semantically equal,
+         * meaning the type is the same regardless of polarity (a "tight sandwich").
+         *
+         * Structurally equal TypeComponents can still differ semantically when they
+         * contain multiple components in the same slot (e.g., prims={Num, String}
+         * renders as Num | String in positive but Num & String in negative).
+         *
+         * Returns true only when the bounds are equal AND polarity-independent
+         * (at most one component per slot, recursively).
+         */
+        fun hasEqualBounds(): Boolean {
+            val strippedPos = pos.copy(vars = pos.vars - tvar)
+            val strippedNeg = neg.copy(vars = neg.vars - tvar)
+            return strippedPos == strippedNeg
+                && !strippedPos.isEmpty()
+                && isPolarityIndependent(strippedPos)
+        }
+
+        private fun isPolarityIndependent(tc: TypeComponents): Boolean {
+            val componentCount = tc.prims.size +
+                (if (tc.rec != null) 1 else 0) +
+                (if (tc.func != null) 1 else 0) +
+                (if (tc.optional != null) 1 else 0) +
+                tc.allRefs().size
+            if (componentCount > 1) return false
+
+            return (tc.rec?.fields?.values?.all { isPolarityIndependent(it) } ?: true)
+                && (tc.func?.let { it.params.all { p -> isPolarityIndependent(p) } && isPolarityIndependent(it.result) } ?: true)
+                && (tc.optional?.let { isPolarityIndependent(it) } ?: true)
+                && tc.allRefs().all { ref ->
+                    ref.args.all { arg ->
+                        when (arg) {
+                            is Resolved -> isPolarityIndependent(arg.components)
+                            is Invariant -> arg.hasEqualBounds()
+                        }
+                    }
+                }
+        }
+    }
 }
 
+// TODO: Carry relevant TypeDefInfo to avoid repeated env lookups during merging
 data class RefType(
     val name: String,
     val args: List<RefArg>,
@@ -53,6 +94,8 @@ sealed class RefFamily {
     data class All(val ref: RefType) : RefFamily()
 }
 
+// TODO: Add map/fold methods to TypeComponents to reduce duplication in recursive traversals
+//   (flattenBounds, applySubstitutions, isPolarityIndependent, etc. all walk the same structure)
 data class TypeComponents(
     val vars: Set<TVar> = emptySet(),
     val prims: Set<PrimType> = emptySet(),
@@ -419,6 +462,8 @@ data class TypeComponents(
 
             left is RefFamily.Some && right is RefFamily.Some -> {
                 val all = left.constructors + right.constructors
+                // TODO: Could just compare counts instead of building sets
+                //   (same-name refs are already deduplicated, so merged.size == allCtors.size suffices)
                 val allCtors = env.allConstructors().filter { it.parentType == parentName }
                 val presentNames = all.map { it.name }.toSet()
 
@@ -435,7 +480,7 @@ data class TypeComponents(
                     RefFamily.All(foldRefs(emptyParent, all, env))
                 } else {
                     val byName = all.groupBy { it.name }
-                    RefFamily.Some(byName.map { (name, refs) -> foldRefs(refs.first(), refs.drop(1), env) })
+                    RefFamily.Some(byName.map { (_, refs) -> foldRefs(refs.first(), refs.drop(1), env) })
                 }
             }
 

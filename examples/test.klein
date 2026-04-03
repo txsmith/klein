@@ -1,12 +1,6 @@
-type Func<'A> = In { f: 'A -> Bool, o: 'A } | Out { o: 'A }
+type Func<'A> = In { f: 'A -> 'A } | Out { o: 'A }
 type Anim = Dog | Cat
 type ForceDog = ForceDog { d: Dog }
-type ForceCat = ForceCat { c: Cat }
-
-in = In( |d ->
-  _ = ForceDog(d)
-  true
-|, Dog)
-
-
+in = In( |d -> ForceDog(d).d |)
+out = Out(Cat)
 r = if true then in else out

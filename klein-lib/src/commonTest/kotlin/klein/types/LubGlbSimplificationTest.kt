@@ -166,10 +166,10 @@ class LubGlbSimplificationTest {
     @Test
     fun sameConstructor_phantomTypeParam_mergesArgs() {
         // Same constructor with phantom type param.
-        // On<Num> | On<String> — phantom 'A is invariant. Both bounds are structurally
-        // equal ({Num, String}) so it collapses to a concrete type.
+        // On<Num> | On<String> — phantom 'A is invariant.
+        // Bounds are structurally equal but not polarity-independent → where clause.
         assertType(
-            "Switch<Num | String>",
+            "Switch<'A> where Num | String <: 'A <: Num & String",
             inferLUB(
                 """
                 type Switch<'A> = On | Off
@@ -289,6 +289,27 @@ class LubGlbSimplificationTest {
                   c
                 |)
                 if true then handleDog else handleCat
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceWithInvariantConstructor_correctBounds() {
+        // In has invariant 'A (f: 'A -> 'A), Out has covariant 'A (o: 'A).
+        // Exhaustive: In + Out = all of Func. Parent 'A is invariant.
+        // Lower bound (positive): Dog | Cat (Dog from In's output, Cat from Out's output).
+        // Upper bound (negative): Dog (from In's input, Out has no negative contribution).
+        assertType(
+            "Func<'A> where Cat | Dog <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Cat)
+                if true then in else out
                 """.trimIndent(),
             ),
         )

@@ -351,8 +351,8 @@ object TypeSimplifier {
                             val tv = arg.tvar
                             val lowerRest = arg.pos.copy(vars = arg.pos.vars - tv)
                             val upperRest = arg.neg.copy(vars = arg.neg.vars - tv)
-                            // If both bounds are equal, it's a concrete type — no variable needed
-                            if (lowerRest == upperRest && !lowerRest.isEmpty()) {
+                            // If both bounds are semantically equal, collapse to the type directly
+                            if (arg.hasEqualBounds()) {
                                 go(lowerRest, true, inProcess)
                             } else {
                                 val lowerBound = go(lowerRest, true, inProcess)
