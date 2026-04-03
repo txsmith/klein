@@ -401,7 +401,7 @@ class InferredInterfaceTest {
     @Test
     fun listLikeTypes_differentElementTypes_unifiesRecursively() {
         assertType(
-            "List<Num> | List<String>",
+            "List<Num | String>",
             infer(
                 """
                 type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil

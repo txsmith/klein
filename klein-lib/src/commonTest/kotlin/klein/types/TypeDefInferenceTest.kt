@@ -20,7 +20,7 @@ class TypeDefInferenceTest {
     @Test
     fun basicEnum_bothConstructorsJoinToParent() {
         assertType(
-            "False | True",
+            "MyBool",
             infer(
                 """
                 type MyBool = True | False
@@ -178,7 +178,7 @@ class TypeDefInferenceTest {
     @Test
     fun bareConstructor_joinWithTypedConstructor() {
         assertType(
-            "Cons<Num> | Nil",
+            "List<Num>",
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
@@ -343,7 +343,7 @@ class TypeDefInferenceTest {
     @Test
     fun eitherType_bothSubtypeParent() {
         assertType(
-            "Left<String> | Right<Num>",
+            "Either<String, Num>",
             infer(
                 """
                 type Either<'A, 'B> = Left { value: 'A } | Right { value: 'B }

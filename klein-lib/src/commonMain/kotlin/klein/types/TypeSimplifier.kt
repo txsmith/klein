@@ -158,7 +158,7 @@ object TypeSimplifier {
                         newOccs.addAll(ty.prims)
                         ty.rec?.let { newOccs.add(it) }
                         ty.func?.let { newOccs.add(it) }
-                        newOccs.addAll(ty.refs)
+                        newOccs.addAll(ty.allRefs())
 
                         val key = pol to tv
                         val existing = coOccurrences[key]
@@ -186,7 +186,7 @@ object TypeSimplifier {
                         collect(result, pol)
                     }
                     ty.optional?.let { collect(it, pol) }
-                    ty.refs.forEach { ref ->
+                    ty.allRefs().forEach { ref ->
                         ref.args.forEach { arg ->
                             when (arg) {
                                 is RefArg.Resolved -> {
@@ -313,9 +313,13 @@ object TypeSimplifier {
                     FunctionType(params.map { applySubstitutions(it, varSubst) }, applySubstitutions(result, varSubst))
                 },
             optional = ty.optional?.let { applySubstitutions(it, varSubst) },
-            refs = ty.refs.map { ref ->
-                RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
-            }.toSet(),
+            refs = ty.refs.mapValues { (_, family) ->
+                fun applyToRef(ref: RefType) = RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
+                when (family) {
+                    is RefFamily.All -> RefFamily.All(applyToRef(family.ref))
+                    is RefFamily.Some -> RefFamily.Some(family.constructors.map { applyToRef(it) })
+                }
+            },
         )
     }
 
@@ -424,7 +428,7 @@ object TypeSimplifier {
                         components.add(Type.Optional(innerType))
                     }
 
-                    for (ref in ty.refs) {
+                    for (ref in ty.allRefs()) {
                         val coalescedArgs = ref.args.map { arg -> coalesceRefArg(arg, pol, newInProcess) }
                         components.add(Type.Ref(ref.name, coalescedArgs))
                     }

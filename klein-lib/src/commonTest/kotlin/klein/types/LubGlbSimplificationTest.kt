@@ -100,6 +100,89 @@ class LubGlbSimplificationTest {
         )
     }
 
+    @Test
+    fun singleConstructor_staysAsConstructorType() {
+        // Single-constructor types should show the constructor name, not the parent.
+        // Wrap is the only constructor of Wrapper, but the type should be Wrap<Num>.
+        assertType(
+            "Wrap<Num>",
+            inferLUB(
+                """
+                type Wrapper<'A> = Wrap { value: 'A }
+                Wrap(42)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_phantomTypeParam_collapsesToParent() {
+        // 'A is a phantom type param — not used in any constructor's fields.
+        // Both constructors are bare (no fields, no type args).
+        // Exhaustive: On + Off = all of Switch. Phantom param stays free.
+        assertType(
+            "Switch<'A>",
+            inferLUB(
+                """
+                type Switch<'A> = On | Off
+                if true then On else Off
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_phantomWithUsedParam_collapsesToParent() {
+        // 'A is used by Val, 'B is phantom (not used by any constructor's fields).
+        // Exhaustive: Val + Empty = all of Tagged.
+        // 'A gets Num from Val, 'B stays free (phantom, no contributions).
+        assertType(
+            "Tagged<Num, 'A>",
+            inferLUB(
+                """
+                type Tagged<'A, 'B> = Val { v: 'A } | Empty
+                if true then Val(42) else Empty
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_sharedCovariantParam_mergesArgs() {
+        // Either<'A> has a single covariant param used by both constructors.
+        // Exhaustive: Left<Num> | Right<String> = all of Either.
+        // Type arg merges covariantly: Num | String.
+        assertType(
+            "Either<Num | String>",
+            inferLUB(
+                """
+                type Either<'A> = Left { value: 'A } | Right { value: 'A }
+                if true then Left(42) else Right("hello")
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameConstructor_phantomTypeParam_mergesArgs() {
+        // Same constructor with phantom type param.
+        // On<Num> | On<String> — phantom 'A is invariant. Both bounds are structurally
+        // equal ({Num, String}) so it collapses to a concrete type.
+        assertType(
+            "Switch<Num | String>",
+            inferLUB(
+                """
+                type Switch<'A> = On | Off
+                type ForceNum = ForceNum { s: Switch<Num> }
+                type ForceStr = ForceStr { s: Switch<String> }
+                x = ForceNum(On).s
+                y = ForceStr(On).s
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
     // --- Same-name refs with different type args ---
 
     @Test
@@ -234,6 +317,52 @@ class LubGlbSimplificationTest {
                   "hi"
                 |)
                 if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceConstructors_collapsesToParent() {
+        // 'A is contravariant in In (function param) and covariant in Out (field).
+        // Parent Func has invariant 'A. Exhaustive: In + Out = all constructors.
+        // When collapsing to parent, type arg becomes invariant with both bounds.
+        assertType(
+            "Func<'A> where Cat <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> Bool } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d ->
+                  _ = ForceDog(d)
+                  true
+                |)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_invariantAndCovariantConstructors_collapsesToParent() {
+        // In has invariant 'A (appears in both input and output), Out has covariant 'A.
+        // Parent's 'A is invariant. Exhaustive: In + Out = all constructors.
+        // This tests merging Invariant + Resolved RefArgs during collapse.
+        assertType(
+            "Func<'A> where Cat <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d ->
+                  _ = ForceDog(d)
+                  d
+                |)
+                out = Out(Cat)
+                if true then in else out
                 """.trimIndent(),
             ),
         )

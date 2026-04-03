@@ -111,7 +111,7 @@ object TypePrinter {
 
             if (ty.refs.isNotEmpty()) {
                 val refsStr =
-                    ty.refs.sortedBy { it.name }.joinToString(", ") { ref ->
+                    ty.allRefs().sortedBy { it.name }.joinToString(", ") { ref ->
                         if (ref.args.isEmpty()) {
                             ref.name
                         } else {
