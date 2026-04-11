@@ -174,7 +174,10 @@ object TypeSimplifier {
                         }
                     }
 
-                    ty.rec ?.fields ?.values ?.forEach { collect(it, pol) }
+                    ty.rec
+                        ?.fields
+                        ?.values
+                        ?.forEach { collect(it, pol) }
                     ty.func?.let { (params, result) ->
                         params.forEach { collect(it, !pol) }
                         collect(result, pol)
@@ -284,11 +287,12 @@ object TypeSimplifier {
     ): RefArg =
         when (arg) {
             is RefArg.Resolved -> RefArg.Resolved(applySubstitutions(arg.components, varSubst), arg.pol)
-            is RefArg.Invariant -> RefArg.Invariant(
-                varSubst[arg.tvar] ?: arg.tvar,
-                applySubstitutions(arg.pos, varSubst),
-                applySubstitutions(arg.neg, varSubst),
-            )
+            is RefArg.Invariant ->
+                RefArg.Invariant(
+                    varSubst[arg.tvar] ?: arg.tvar,
+                    applySubstitutions(arg.pos, varSubst),
+                    applySubstitutions(arg.neg, varSubst),
+                )
         }
 
     private fun applySubstitutions(
@@ -307,13 +311,14 @@ object TypeSimplifier {
                     FunctionType(params.map { applySubstitutions(it, varSubst) }, applySubstitutions(result, varSubst))
                 },
             optional = ty.optional?.let { applySubstitutions(it, varSubst) },
-            refs = ty.refs.mapValues { (_, family) ->
-                fun applyToRef(ref: RefType) = RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
-                when  {
-                    family.parent != null -> RefFamily(parent = applyToRef(family.parent), family.constructors.map { applyToRef(it) })
-                    else -> RefFamily(parent = null, family.constructors.map { applyToRef(it) })
-                }
-            },
+            refs =
+                ty.refs.mapValues { (_, family) ->
+                    fun applyToRef(ref: RefType) = RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
+                    when {
+                        family.parent != null -> RefFamily(parent = applyToRef(family.parent), family.constructors.map { applyToRef(it) })
+                        else -> RefFamily(parent = null, family.constructors.map { applyToRef(it) })
+                    }
+                },
         )
     }
 
@@ -328,6 +333,7 @@ object TypeSimplifier {
         keepVars: Boolean = false,
     ): Type {
         val namer = VarNamer()
+
         fun varName(v: TVar) = namer.varName(v)
 
         val ops =
@@ -469,5 +475,4 @@ object TypeSimplifier {
             ops.go(term, cty.pol, emptyMap())
         }
     }
-
 }

@@ -24,9 +24,16 @@ data class TypeScheme(
  * Most type args are simply resolved to a TypeComponents, this means they have only lower or upper bounds. Invariant type args on refs genuinely carry both bounds (positive and negative).
  */
 sealed class RefArg {
-    data class Resolved(val components: TypeComponents, val pol: Boolean) : RefArg()
+    data class Resolved(
+        val components: TypeComponents,
+        val pol: Boolean,
+    ) : RefArg()
 
-    data class Invariant(val tvar: TVar, val pos: TypeComponents, val neg: TypeComponents) : RefArg() {
+    data class Invariant(
+        val tvar: TVar,
+        val pos: TypeComponents,
+        val neg: TypeComponents,
+    ) : RefArg() {
         /**
          * Check if the positive and negative bounds are semantically equal,
          * meaning the type is the same regardless of polarity (a "tight sandwich").
@@ -41,23 +48,29 @@ sealed class RefArg {
         fun hasEqualBounds(): Boolean {
             val strippedPos = pos.copy(vars = pos.vars - tvar)
             val strippedNeg = neg.copy(vars = neg.vars - tvar)
-            return strippedPos == strippedNeg
-                && !strippedPos.isEmpty()
-                && isPolarityIndependent(strippedPos)
+            return strippedPos == strippedNeg &&
+                !strippedPos.isEmpty() &&
+                isPolarityIndependent(strippedPos)
         }
 
         private fun isPolarityIndependent(tc: TypeComponents): Boolean {
-            val componentCount = tc.prims.size +
-                (if (tc.rec != null) 1 else 0) +
-                (if (tc.func != null) 1 else 0) +
-                (if (tc.optional != null) 1 else 0) +
-                tc.allRefs().size
+            val componentCount =
+                tc.prims.size +
+                    (if (tc.rec != null) 1 else 0) +
+                    (if (tc.func != null) 1 else 0) +
+                    (if (tc.optional != null) 1 else 0) +
+                    tc.allRefs().size
             if (componentCount > 1) return false
 
-            return (tc.rec?.fields?.values?.all { isPolarityIndependent(it) } ?: true)
-                && (tc.func?.let { it.params.all { p -> isPolarityIndependent(p) } && isPolarityIndependent(it.result) } ?: true)
-                && (tc.optional?.let { isPolarityIndependent(it) } ?: true)
-                && tc.allRefs().all { ref ->
+            return (
+                tc.rec
+                    ?.fields
+                    ?.values
+                    ?.all { isPolarityIndependent(it) } ?: true
+            ) &&
+                (tc.func?.let { it.params.all { p -> isPolarityIndependent(p) } && isPolarityIndependent(it.result) } ?: true) &&
+                (tc.optional?.let { isPolarityIndependent(it) } ?: true) &&
+                tc.allRefs().all { ref ->
                     ref.args.all { arg ->
                         when (arg) {
                             is Resolved -> isPolarityIndependent(arg.components)
@@ -87,7 +100,10 @@ data class FunctionType(
 /**
  * A family of refs sharing the same parent type.
  */
-data class RefFamily(val parent: RefType?, val constructors: List<RefType>) {
+data class RefFamily(
+    val parent: RefType?,
+    val constructors: List<RefType>,
+) {
     // override fun toString(): String =
     //     // if (parent != null) {
     //         // parent.toString()
@@ -133,21 +149,24 @@ data class TypeComponents(
             val refType = RefType(name, args)
             val ctor = env.lookupConstructor(name)
             val parentName = ctor?.parentType ?: name
-            val family = if (ctor == null) {
-                // Parent ref (e.g. List<Num>) → expand to all constructors
-                val parentDef = env.getTypeDef(name)
-                val parentArgMap = parentDef.typeParams.zip(args).associate { (p, a) -> p.name to a }
-                val constructors = env.allConstructors()
-                    .filter { it.parentType == name }
-                    .map { ctorInfo ->
-                        val ctorDef = env.getTypeDef(ctorInfo.name)
-                        val ctorArgs = ctorDef.typeParams.map { param -> parentArgMap[param.name]!! }
-                        RefType(ctorInfo.name, ctorArgs)
-                    }
-                RefFamily(parent = refType, constructors)
-            } else {
-                RefFamily(parent = null, listOf(refType))
-            }
+            val family =
+                if (ctor == null) {
+                    // Parent ref (e.g. List<Num>) → expand to all constructors
+                    val parentDef = env.getTypeDef(name)
+                    val parentArgMap = parentDef.typeParams.zip(args).associate { (p, a) -> p.name to a }
+                    val constructors =
+                        env
+                            .allConstructors()
+                            .filter { it.parentType == name }
+                            .map { ctorInfo ->
+                                val ctorDef = env.getTypeDef(ctorInfo.name)
+                                val ctorArgs = ctorDef.typeParams.map { param -> parentArgMap[param.name]!! }
+                                RefType(ctorInfo.name, ctorArgs)
+                            }
+                    RefFamily(parent = refType, constructors)
+                } else {
+                    RefFamily(parent = null, listOf(refType))
+                }
             return TypeComponents(refs = mapOf(parentName to family))
         }
 
@@ -252,8 +271,8 @@ data class TypeComponents(
             fun fromSimpleType(
                 ty: SimpleType,
                 pol: Boolean,
-            ): TypeComponents {
-                return traced({ "fromSimpleType(${formatSimpleType(ty)}, $pol)" }) {
+            ): TypeComponents =
+                traced({ "fromSimpleType(${formatSimpleType(ty)}, $pol)" }) {
                     when (ty) {
                         is TNum -> TypeComponents.prim(PrimType.Num)
                         is TString -> TypeComponents.prim(PrimType.String)
@@ -273,11 +292,12 @@ data class TypeComponents(
                             val args =
                                 ty.typeArgs.zip(typeDef.typeParams) { arg, paramInfo ->
                                     when (paramInfo.variance) {
-                                        Variance.Invariant -> RefArg.Invariant(
-                                            tvar = (arg as? TVar) ?: TVar(),
-                                            pos = fromSimpleType(arg, true),
-                                            neg = fromSimpleType(arg, false),
-                                        )
+                                        Variance.Invariant ->
+                                            RefArg.Invariant(
+                                                tvar = (arg as? TVar) ?: TVar(),
+                                                pos = fromSimpleType(arg, true),
+                                                neg = fromSimpleType(arg, false),
+                                            )
                                         Variance.Contravariant -> RefArg.Resolved(fromSimpleType(arg, !pol), pol = !pol)
                                         else -> RefArg.Resolved(fromSimpleType(arg, pol), pol = pol)
                                     }
@@ -287,7 +307,6 @@ data class TypeComponents(
                         is TVar -> TypeComponents(vars = closeOver(ty, pol))
                     }
                 }.also { trace { "  => ${formatTypeComponents(it)}" } }
-            }
 
             fun flattenBounds(
                 ty: TypeComponents,
@@ -333,16 +352,16 @@ data class TypeComponents(
                         args.map { arg ->
                             when (arg) {
                                 is RefArg.Resolved -> RefArg.Resolved(flattenBounds(arg.components, arg.pol, newInProgress), arg.pol)
-                                is RefArg.Invariant -> RefArg.Invariant(
-                                    arg.tvar,
-                                    flattenBounds(arg.pos, true, newInProgress),
-                                    flattenBounds(arg.neg, false, newInProgress),
-                                )
+                                is RefArg.Invariant ->
+                                    RefArg.Invariant(
+                                        arg.tvar,
+                                        flattenBounds(arg.pos, true, newInProgress),
+                                        flattenBounds(arg.neg, false, newInProgress),
+                                    )
                             }
                         }
 
-                    fun flattenRefType(ref: RefType): RefType =
-                        RefType(ref.name, flattenRefArgs(ref.args))
+                    fun flattenRefType(ref: RefType): RefType = RefType(ref.name, flattenRefArgs(ref.args))
 
                     val result =
                         TypeComponents(
@@ -364,7 +383,7 @@ data class TypeComponents(
                             optional = bounds.optional?.let { flattenBounds(it, pol, newInProgress) },
                             refs =
                                 bounds.refs.mapValues { (_, family) ->
-                                    val flatConstructors = family.constructors.map{ flattenRefType(it) }
+                                    val flatConstructors = family.constructors.map { flattenRefType(it) }
                                     val flatParent = family.parent?.let { flattenRefType(it) }
                                     RefFamily(flatParent, flatConstructors)
                                 },
@@ -390,8 +409,8 @@ data class TypeComponents(
             right: RecordType,
             pol: Boolean,
             env: TypeEnv,
-        ): RecordType {
-            return if (pol) {
+        ): RecordType =
+            if (pol) {
                 val commonKeys = left.fields.keys.intersect(right.fields.keys)
                 RecordType(
                     commonKeys.associateWith { k ->
@@ -412,7 +431,6 @@ data class TypeComponents(
                     },
                 )
             }
-        }
 
         private fun mergeFunctions(
             left: FunctionType,
@@ -440,11 +458,12 @@ data class TypeComponents(
             val result = left.toMutableMap()
             for ((parentName, rightFamily) in right) {
                 val leftFamily = result[parentName]
-                result[parentName] = if (leftFamily != null) {
-                    mergeFamily(leftFamily, rightFamily, parentName, pol, env)
-                } else {
-                    rightFamily
-                }
+                result[parentName] =
+                    if (leftFamily != null) {
+                        mergeFamily(leftFamily, rightFamily, parentName, pol, env)
+                    } else {
+                        rightFamily
+                    }
             }
             return result
         }
@@ -456,11 +475,10 @@ data class TypeComponents(
             pol: Boolean,
             env: TypeEnv,
         ): RefFamily {
-
             val allCtors = left.constructors + right.constructors
 
             return when {
-                left.parent != null && right.parent != null-> {
+                left.parent != null && right.parent != null -> {
                     RefFamily(foldRefs(left.parent, listOf(right.parent), env), allCtors)
                 }
 
@@ -481,13 +499,17 @@ data class TypeComponents(
                     val isSingleCtorType = allPossibleCtors.size == 1 && allPossibleCtors[0].name != parentName
                     if (pol && !isSingleCtorType && presentNames.containsAll(allPossibleCtors.map { it.name }.toSet())) {
                         val parentDef = env.getTypeDef(parentName)
-                        val emptyParent = RefType(parentName, parentDef.typeParams.map { param ->
-                            when (param.variance) {
-                                Variance.Invariant -> RefArg.Invariant(TVar(), empty, empty)
-                                Variance.Contravariant -> RefArg.Resolved(empty, false)
-                                else -> RefArg.Resolved(empty, true)
-                            }
-                        })
+                        val emptyParent =
+                            RefType(
+                                parentName,
+                                parentDef.typeParams.map { param ->
+                                    when (param.variance) {
+                                        Variance.Invariant -> RefArg.Invariant(TVar(), empty, empty)
+                                        Variance.Contravariant -> RefArg.Resolved(empty, false)
+                                        else -> RefArg.Resolved(empty, true)
+                                    }
+                                },
+                            )
                         RefFamily(parent = foldRefs(emptyParent, allCtors, env), allCtors)
                     } else {
                         val byName = allCtors.groupBy { it.name }
@@ -510,20 +532,22 @@ data class TypeComponents(
             val baseDef = env.getTypeDef(base.name)
             val initial = baseDef.typeParams.zip(base.args).associate { (p, a) -> p.name to a }
 
-            val merged = rest.fold(initial) { currentArgs, ref ->
-                val refDef = env.getTypeDef(ref.name)
-                val refArgMap = refDef.typeParams.zip(ref.args).associate { (p, a) -> p.name to a }
+            val merged =
+                rest.fold(initial) { currentArgs, ref ->
+                    val refDef = env.getTypeDef(ref.name)
+                    val refArgMap = refDef.typeParams.zip(ref.args).associate { (p, a) -> p.name to a }
 
-                baseDef.typeParams.associate { param ->
-                    val current = currentArgs[param.name]!!
-                    val incoming = refArgMap[param.name]
-                    param.name to if (incoming != null) {
-                        mergeRefArg(current, incoming, env)
-                    } else {
-                        current
+                    baseDef.typeParams.associate { param ->
+                        val current = currentArgs[param.name]!!
+                        val incoming = refArgMap[param.name]
+                        param.name to
+                            if (incoming != null) {
+                                mergeRefArg(current, incoming, env)
+                            } else {
+                                current
+                            }
                     }
                 }
-            }
 
             return RefType(base.name, baseDef.typeParams.map { merged[it.name]!! })
         }
@@ -534,15 +558,17 @@ data class TypeComponents(
          * For Invariant: strip the arg's own tvar (it's the bounded variable, not part of
          *   the bound) but keep other vars so flattenBounds can resolve them later.
          */
-        private fun toPos(arg: RefArg): TypeComponents = when (arg) {
-            is RefArg.Resolved -> if (arg.pol) arg.components else empty
-            is RefArg.Invariant -> arg.pos
-        }
+        private fun toPos(arg: RefArg): TypeComponents =
+            when (arg) {
+                is RefArg.Resolved -> if (arg.pol) arg.components else empty
+                is RefArg.Invariant -> arg.pos
+            }
 
-        private fun toNeg(arg: RefArg): TypeComponents = when (arg) {
-            is RefArg.Resolved -> if (!arg.pol) arg.components else empty
-            is RefArg.Invariant -> arg.neg
-        }
+        private fun toNeg(arg: RefArg): TypeComponents =
+            when (arg) {
+                is RefArg.Resolved -> if (!arg.pol) arg.components else empty
+                is RefArg.Invariant -> arg.neg
+            }
 
         private fun mergeRefArg(
             left: RefArg,
@@ -613,24 +639,29 @@ data class TypeComponents(
         )
     }
 
-    fun isEmpty(): Boolean = vars.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
+    fun isEmpty(): Boolean =
+        vars.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
 
     fun hasConcreteComponents(): Boolean = prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
 
-    fun allRefs(): Set<RefType> = refs.flatMap { (_, family) ->
-        when {
-            family.parent != null -> family.constructors.ifEmpty { listOf(family.parent) }
-            else -> family.constructors
-        }
-    }.toSet()
+    fun allRefs(): Set<RefType> =
+        refs
+            .flatMap { (_, family) ->
+                when {
+                    family.parent != null -> family.constructors.ifEmpty { listOf(family.parent) }
+                    else -> family.constructors
+                }
+            }.toSet()
 
     /** Get refs for display and co-occurrance analysis, uses parent ref for exhaustive families. */
-    fun displayRefs(): Set<RefType> = refs.flatMap { (_, family) ->
-        when {
-            family.parent != null -> listOf(family.parent)
-            else -> family.constructors
-        }
-    }.toSet()
+    fun displayRefs(): Set<RefType> =
+        refs
+            .flatMap { (_, family) ->
+                when {
+                    family.parent != null -> listOf(family.parent)
+                    else -> family.constructors
+                }
+            }.toSet()
 
     override fun toString(): String {
         val parts = mutableListOf<String>()

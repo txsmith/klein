@@ -41,7 +41,10 @@ data class SourceSpan(
 
             fun gutter(n: Int?) = if (n != null) n.toString().padStart(gutterWidth) else " ".repeat(gutterWidth)
 
-            fun StringBuilder.appendMessageLines(msg: String?, gutterStr: String) {
+            fun StringBuilder.appendMessageLines(
+                msg: String?,
+                gutterStr: String,
+            ) {
                 appendLine()
                 if (msg != null) {
                     for (line in msg.lines()) {

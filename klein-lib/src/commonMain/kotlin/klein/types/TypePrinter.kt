@@ -42,7 +42,10 @@ object TypePrinter {
         private val varNames = mutableMapOf<TVar, String>()
         private var nextVarId = 0
 
-        fun print(term: TypeComponents, pol: Boolean): String {
+        fun print(
+            term: TypeComponents,
+            pol: Boolean,
+        ): String {
             val prefix = if (pol) "+" else "-"
             return "$prefix${printType(term, indent = 0)}"
         }

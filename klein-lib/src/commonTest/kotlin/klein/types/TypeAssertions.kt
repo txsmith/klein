@@ -4,7 +4,9 @@ import klein.Klein
 import klein.Type
 import kotlin.test.assertEquals
 
-data class InferResult(val type: Type)
+data class InferResult(
+    val type: Type,
+)
 
 /**
  * Infer the type of a Klein expression, asserting no errors.

@@ -93,7 +93,11 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithMixedCompatibility() {
-        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"), expectedLub = "{ a: Num, b: Num | String }")
+        assertType(
+            "{ a: Num, b: Num | String }",
+            infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"),
+            expectedLub = "{ a: Num, b: Num | String }",
+        )
     }
 
     @Test
@@ -103,12 +107,20 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithNestedIncompatiblePrim() {
-        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"), expectedLub = "{ r: { x: Num | String } }")
+        assertType(
+            "{ r: { x: Num | String } }",
+            infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"),
+            expectedLub = "{ r: { x: Num | String } }",
+        )
     }
 
     @Test
     fun ifThenElse_recordBranchesWithNestedPrimAndRecord() {
-        assertType("{ x: Num | { a: Num } }", infer("if true then { x = 1 } else { x = { a = 2 } }"), expectedLub = "{ x: Num | { a: Num } }")
+        assertType(
+            "{ x: Num | { a: Num } }",
+            infer("if true then { x = 1 } else { x = { a = 2 } }"),
+            expectedLub = "{ x: Num | { a: Num } }",
+        )
     }
 
     @Test
