@@ -1,6 +1,6 @@
 # Constructor Type Design: Three Options
 
-**Status:** Decided — Option 2 with structural expansion for unrelated refs. Option 3 rejected because eager sibling merging destroys structural precision (adding a sibling to a union can break field access).
+**Status:** Implemented option 2. Option 3 rejected because eager sibling merging destroys structural precision (adding a sibling to a union can break field access). Structural expansion for unrelated refs deferred (see `docs/ideas/type-simplification-future.md`).
 
 ## Context
 
@@ -49,13 +49,13 @@ See also: `docs/ideas/constructors-produce-parent-type.md`
 - Users may find `Dog | Cat` confusing if they don't know the type system
 
 ### Implementation
-Mostly what we already have. Key simplification: non-exhaustive unions just stay as unions (no structural expansion needed). The LUB either shows the parent type (exhaustive) or shows the same union as the regular type. This kills `expandRefToRecord`, `simpleTypeToComponents`, `mergeRefsStructurally`, `mergeRefAndRecord`.
-
-Surviving ref merge logic:
+Ref merge rules:
 1. Identical refs → identity
 2. Same-name refs, different args → merge args by variance
-3. Exhaustive siblings → parent type (needs exhaustiveness check)
-4. Everything else → null tightBound → union stays as-is
+3. Exhaustive siblings → parent type with merged args (positive polarity only)
+4. Everything else → union stays as-is
+
+Co-occurrence analysis uses the parent ref's merged args so invariant type parameters simplify correctly.
 
 ## Option 3: Merge sibling bounds during constraint solving
 
