@@ -1,10 +1,6 @@
 package klein
 
-import klein.types.SimpleType
-import klein.types.TypeEnv
-import klein.types.TypePrinter
-import klein.types.TypeSimplifier
-import klein.types.Typer
+import klein.types.*
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
@@ -18,7 +14,7 @@ import platform.posix.ftell
 import platform.posix.rewind
 import platform.posix.stdin
 
-enum class TypeFormat { CANONICAL, PRE_CANONICAL, IR_COMPACT, IR_BOUNDS }
+enum class TypeFormat { CANONICAL, IR_BOUNDS, IR_COMPACT }
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -27,17 +23,24 @@ fun main(args: Array<String>) {
     }
 
     val command = args[0]
+    val knownFlags = setOf("--raw", "--verbose", "-v", "--stdin", "--canonical", "--ir-bounds", "--ir-compact")
+    val unknownFlags = args.drop(1).filter { it.startsWith("-") && it !in knownFlags }
+    if (unknownFlags.isNotEmpty()) {
+        println("Unknown option(s): ${unknownFlags.joinToString(", ")}")
+        printUsage()
+        return
+    }
+
     val rawErrors = "--raw" in args
     val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
-    val fileArg = args.drop(1).firstOrNull { !it.startsWith("--") }
+    val fileArg = args.drop(1).firstOrNull { !it.startsWith("-") }
 
     val typeFormat =
         when {
             "--canonical" in args -> TypeFormat.CANONICAL
-            "--pre-canonical" in args -> TypeFormat.PRE_CANONICAL
-            "--ir-compact" in args -> TypeFormat.IR_COMPACT
             "--ir-bounds" in args -> TypeFormat.IR_BOUNDS
+            "--ir-compact" in args -> TypeFormat.IR_COMPACT
             else -> TypeFormat.CANONICAL
         }
 
@@ -93,9 +96,8 @@ private fun printUsage() {
           --verbose    Show nesting stack on lexer errors
 
         Type output format (for infer):
-          --canonical      Canonical type (default, merges recursive types)
-          --pre-canonical  Simplified type before canonicalization
-          --ir-compact     Internal CompactType representation
+          --canonical      Canonical type (default)
+          --ir-compact     Internal TypeComponents representation
           --ir-bounds      Internal SimpleType with bounds
         """.trimIndent(),
     )
@@ -156,12 +158,13 @@ private fun infer(
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program, TypeEnv.empty())
 
+        println("Inference result:")
+
         fun formatType(type: SimpleType): String =
             when (format) {
-                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type))
-                TypeFormat.PRE_CANONICAL -> Type.print(TypeSimplifier.simplify(type))
-                TypeFormat.IR_COMPACT -> TypeSimplifier.simplify(type).toString()
+                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
                 TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
+                TypeFormat.IR_COMPACT -> TypePrinter.printCompact(type, result.env)
             }
 
         for (stmt in program.stmts) {
@@ -174,6 +177,9 @@ private fun infer(
                     val type = result.env.lookupAndInstantiate(stmt.name)!!
                     println("${stmt.name} : ${formatType(type)}")
                 }
+                is TypeDef -> {
+                    println("type ${stmt.name}")
+                }
                 is Expr -> {
                     val type = result.exprTypes[stmt.span] ?: result.type
                     val exprSource = source.substring(stmt.span.start, stmt.span.end)
@@ -183,7 +189,11 @@ private fun infer(
         }
 
         for (error in result.errors) {
-            printError(source, error.span, error.message, rawErrors)
+            if (rawErrors) {
+                printRawError(error, result.env)
+            } else {
+                printError(source, error.span, error.render(result.env), rawOutput = false)
+            }
         }
     } catch (e: LexerError) {
         printError(source, e.span, e.message ?: "Lexer error", rawErrors)
@@ -191,6 +201,18 @@ private fun infer(
         printError(source, e.span, e.message ?: "Parse error", rawErrors)
     } catch (e: NotImplementedError) {
         println("Type inference not yet implemented: ${e.message}")
+    }
+}
+
+private fun printRawError(
+    error: TypeError,
+    env: TypeEnv,
+) {
+    println("Error: ${error.renderMessage(env)} at ${error.span}")
+    if (error.context.isNotEmpty()) {
+        for (ctx in error.context) {
+            println("  ${ctx.render(env)}")
+        }
     }
 }
 

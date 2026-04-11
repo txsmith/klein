@@ -26,13 +26,13 @@ SimpleSub-style type inference with subtyping.
 
 ### Phase 2: Type Definitions
 
-Constructors are first-class functions with named parameters, called positionally or structurally.
+Constructors are first-class functions with named parameters, called positionally.
 
 ```klein
-type Money = Money(value: Num)
-type Color = Red(intensity: Num) | Green(intensity: Num) | Blue(intensity: Num)
-type Option('A) = Some(value: 'A) | None
-type List('A) = Cons(head: 'A, tail: List('A)) | Nil
+type Money = Money { value: Num }
+type Color = Red { intensity: Num } | Green { intensity: Num } | Blue { intensity: Num }
+type Option<'A> = Some { value: 'A } | None
+type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
 ```
 
 Nominal types subsume their structural equivalents: `Money <: { value: Num }`.
@@ -41,10 +41,10 @@ Nominal types subsume their structural equivalents: `Money <: { value: Num }`.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Constructor definitions | TODO | `type T = C(field: Type)` |
-| Sum types | TODO | `type T = A(...) \| B(...)` |
+| Constructor definitions | TODO | `type T = C { field: Type }` |
+| Sum types | TODO | `type T = A { ... } \| B { ... }` |
 | Bare constructors | TODO | `None`, `Nil` (no params) |
-| Type parameters | TODO | `type Option('A) = ...` |
+| Type parameters | TODO | `type Option<'A> = ...` |
 | First-class constructors | TODO | `nums.map(Some)` |
 | Nominal subtyping | TODO | `Money <: { value: Num }` |
 
@@ -72,8 +72,7 @@ Lower priority. Add as needed.
 | Tuple accessors `._1` | TODO | New field access pattern |
 | For comprehensions | TODO | `for x in xs yield expr` |
 | Tilde operator `~` | TODO | `f~` transforms to record-accepting |
-| Structural calls | TODO | `f { x = 1 }` desugars to `f~({ x = 1 })` |
-| Record spread `...` | TODO | `{ ...r, x = 1 }`, `f { ...r }` |
+| Record spread `...` | TODO | `{ ...r, x = 1 }` |
 
 ### Phase 5: Advanced Features
 

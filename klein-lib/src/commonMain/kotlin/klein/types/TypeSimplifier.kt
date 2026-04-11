@@ -1,169 +1,276 @@
 package klein.types
 
 import klein.Type
-import klein.types.CompactType.PrimType
 import klein.types.SimpleType.TVar
+import klein.types.TypeComponents.PrimType
 
 /**
  * Type simplification following the SimpleSub algorithm.
  *
  * Pipeline:
- *   SimpleType → CompactType (fromSimpleType) → simplified CompactType → Type
+ *   SimpleType → TypeComponents (canonicalizeType) → simplified TypeComponents → Type
  *
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
+private class VarNamer {
+    private val varNames = mutableMapOf<TVar, String>()
+
+    fun varName(v: TVar): String =
+        varNames.getOrPut(v) {
+            val idx = varNames.size
+            val letter = 'A' + (idx % 26)
+            val suffix = if (idx >= 26) "${idx / 26}" else ""
+            "'$letter$suffix"
+        }
+}
+
 object TypeSimplifier {
-    fun simplify(type: SimpleType): Type {
-        val scheme = CompactType.fromSimpleType(type)
-        val simplified = simplifyType(scheme)
-        return coalesceType(simplified)
+    private const val DEBUG = false
+
+    private inline fun debug(msg: () -> String) {
+        if (DEBUG) println(msg())
     }
 
-    /**
-     * Like simplify, but uses canonicalization to merge co-occurring recursive types.
-     * This produces simpler types when multiple recursive types with different cycle
-     * lengths are merged (e.g., in a union).
-     */
-    fun simplifyCanonical(type: SimpleType): Type {
-        val scheme = CompactType.canonicalizeType(type)
-        val simplified = simplifyType(scheme)
-        return coalesceType(simplified)
+    fun simplify(
+        type: SimpleType,
+        env: TypeEnv,
+        pol: Boolean = true,
+        keepVars: Boolean = false,
+    ): TypeScheme {
+        var typeToSimplify = TypeComponents.canonicalizeType(type, pol, env)
+        var iteration = 0
+        do {
+            iteration++
+            debug { "=== Simplification iteration $iteration ===" }
+            val (next, changed) = simplifyType(typeToSimplify, keepVars, env)
+            typeToSimplify = next
+        } while (changed && iteration < 1000)
+        return typeToSimplify
     }
 
+    fun simplifyCanonical(
+        type: SimpleType,
+        env: TypeEnv,
+        pol: Boolean = true,
+        keepVars: Boolean = false,
+    ): Type = coalesceType(simplify(type, env, pol, keepVars), env, keepVars)
+
     /**
-     * Simplifies a CompactTypeScheme by performing co-occurrence analysis.
+     * Simplifies a TypeScheme by performing co-occurrence analysis.
      *
      * Two simplifications:
      * 1. Variables that only occur in one polarity can be eliminated
      *    (positive-only → Bottom, negative-only → Top)
+     *    Example: ('a & 'b) -> ('a, 'b) is the same as 'a -> ('a, 'a)
+     *    Example: ('a & 'b) -> 'b -> ('a, 'b) is NOT the same as 'a -> 'a -> ('a, 'a)
+     *      there is no value of 'a that can make 'a -> 'a -> ('a, 'a) <: (a & b) -> b -> (a, b) work
+     *      we'd require 'a :> b | a & b <: a & b, which are NOT valid bounds!
+     *    Example: 'a -> 'b -> 'a | 'b is the same as 'a -> 'a -> 'a
+     *    Justification: the other var 'b can always be taken to be 'a & 'b (resp. a | b)
+     *       without loss of generality. Indeed, on the pos side we'll have 'a <: 'a & 'b and 'b <: 'a & 'b
+     *       and on the neg side, we'll always have 'a and 'b together, i.e., 'a & 'b
+     *
      * 2. Variables that always co-occur at the same polarity can be unified
+     *    This would arise from constraints such as: Int <: 'a, 'a <:'b and 'b <: Int
+     *      (contraints which basically say 'a =:= 'b =:= Int)
+     *    Example: 'a ∧ Int -> 'a ∨ Int is the same as Int -> Int
+     *    Note: conceptually, this idea subsumes the simplification that removes variables occurring
+     *        exclusively in positive or negative positions.
+     *      Indeed, if 'a never occurs positively, it's like it always occurs both positively AND
+     *      negatively along with the type Bot, so we can replace it with Bot.
      */
-    fun simplifyType(cty: CompactTypeScheme): CompactTypeScheme {
-        val allVars = mutableSetOf<TVar>()
-        val recVars = mutableMapOf<TVar, () -> CompactType>()
+    private fun simplifyType(
+        cty: TypeScheme,
+        keepVars: Boolean = false,
+        env: TypeEnv? = null,
+    ): Pair<TypeScheme, Boolean> {
+        // Phase 1: Collect co-occurrence information
+        val analysis = collectCoOccurrences(cty)
 
-        // coOccurrences: for each (polarity, variable), track what other types always appear with it
-        val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
+        debug { "=== Co-occurrence Analysis ===" }
+        debug { "allVars: ${analysis.allVars.map { it.toString() }}" }
+        debug { "recVars: ${analysis.recVars.map { it.toString() }}" }
+        if (DEBUG) {
+            for ((key, occs) in analysis.coOccurrences) {
+                val (pol, tv) = key
+                val polStr = if (pol) "+" else "-"
+                debug { "  $tv @ $polStr: $occs" }
+            }
+        }
+        debug { "==============================" }
 
-        // varSubst: substitution to apply during reconstruction
-        // null value = eliminate, non-null = replace with that var
         val varSubst = mutableMapOf<TVar, TVar?>()
 
-        // Phase 1: Traverse and collect co-occurrence information
-        fun analyze(
-            ty: CompactType,
-            pol: Boolean,
-        ): () -> CompactType {
-            for (tv in ty.vars) {
-                allVars.add(tv)
-                val newOccs = mutableSetOf<Any>()
-                newOccs.addAll(ty.vars)
-                newOccs.addAll(ty.prims)
-                val key = pol to tv
-                val existing = coOccurrences[key]
-                if (existing != null) {
-                    existing.retainAll(newOccs)
-                } else {
-                    coOccurrences[key] = newOccs
-                }
+        // Phase 2: Eliminate single-polarity variables
+        eliminateSinglePolarityVars(analysis, varSubst, keepVars)
 
-                // If tv is recursive, process its bound too
-                cty.recVars[tv]?.let { bound ->
-                    if (tv !in recVars) {
-                        // Register before recursing to avoid infinite recursion
-                        lateinit var goLater: () -> CompactType
-                        recVars[tv] = { goLater() }
-                        goLater = analyze(bound, pol)
+        // Phase 3: Unify co-occurring variables
+        unifyCoOccurringVars(analysis, varSubst)
+
+        debug { "varSubst: $varSubst" }
+
+        // Phase 4: Apply substitutions
+        val resultType = applySubstitutions(cty.term, varSubst)
+
+        val newRecVars =
+            cty.recVars
+                .filterKeys { it !in varSubst || varSubst[it] != null }
+                .mapKeys { (k, _) -> varSubst[k] ?: k }
+                .mapValues { (_, v) -> applySubstitutions(v, varSubst) }
+
+        debug { "=== After simplification ===" }
+        debug { resultType.toString() }
+        debug { "==============================" }
+
+        val changed = varSubst.isNotEmpty()
+        return TypeScheme(resultType, newRecVars, cty.pol) to changed
+    }
+
+    /**
+     * Phase 1: Traverse the type and collect co-occurrence information.
+     *
+     * For each variable, we track what other types always appear alongside it at each polarity.
+     */
+
+    private data class CoOccurrenceAnalysis(
+        val allVars: Set<TVar>,
+        val recVars: Set<TVar>,
+        val coOccurrences: Map<Pair<Boolean, TVar>, Set<Any>>,
+    )
+
+    private fun collectCoOccurrences(cty: TypeScheme): CoOccurrenceAnalysis {
+        val allVars = mutableSetOf<TVar>()
+        val recVars = mutableSetOf<TVar>()
+        val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
+
+        val ops =
+            object {
+                fun collect(
+                    ty: TypeComponents,
+                    pol: Boolean,
+                ) {
+                    for (tv in ty.vars) {
+                        allVars.add(tv)
+                        val newOccs = mutableSetOf<Any>()
+                        newOccs.addAll(ty.vars)
+                        newOccs.addAll(ty.prims)
+                        ty.rec?.let { newOccs.add(it) }
+                        ty.func?.let { newOccs.add(it) }
+                        newOccs.addAll(ty.allRefs())
+
+                        val existing = coOccurrences[pol to tv]
+                        if (existing != null) {
+                            existing.retainAll(newOccs)
+                        } else {
+                            coOccurrences[pol to tv] = newOccs
+                        }
+
+                        // If tv is recursive, also collect from its expansion
+                        cty.recVars[tv]?.let { expansion ->
+                            if (tv !in recVars) {
+                                recVars.add(tv)
+                                collect(expansion, pol)
+                            }
+                        }
+                    }
+
+                    ty.rec
+                        ?.fields
+                        ?.values
+                        ?.forEach { collect(it, pol) }
+                    ty.func?.let { (params, result) ->
+                        params.forEach { collect(it, !pol) }
+                        collect(result, pol)
+                    }
+                    ty.optional?.let { collect(it, pol) }
+                    ty.displayRefs().forEach { ref ->
+                        ref.args.forEach { arg ->
+                            when (arg) {
+                                is RefArg.Resolved -> {
+                                    collect(arg.components, arg.pol)
+                                }
+                                is RefArg.Invariant -> {
+                                    collect(arg.pos, true)
+                                    collect(arg.neg, false)
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            val recThunks = ty.rec?.mapValues { (_, v) -> analyze(v, pol) }
-            val funThunks =
-                ty.func?.let { (params, result) ->
-                    params.map { analyze(it, !pol) } to analyze(result, pol)
-                }
-            val optionalThunk = ty.optional?.let { analyze(it, pol) }
+        ops.collect(cty.term, cty.pol)
+        return CoOccurrenceAnalysis(
+            allVars = allVars.toSet(),
+            recVars = recVars.toSet(),
+            coOccurrences = coOccurrences.mapValues { (_, v) -> v.toSet() },
+        )
+    }
 
-            // Return a thunk that applies substitutions during reconstruction
-            return {
-                val newVars =
-                    ty.vars
-                        .mapNotNull { tv ->
-                            // Only replace if present in substitutions map
-                            if (tv !in varSubst) {
-                                tv
-                            } else {
-                                varSubst[tv]
-                            }
-                        }.toSet()
-
-                CompactType(
-                    vars = newVars,
-                    prims = ty.prims,
-                    rec = recThunks?.mapValues { (_, thunk) -> thunk() },
-                    func =
-                        funThunks?.let { (paramThunks, resultThunk) ->
-                            paramThunks.map { it() } to resultThunk()
-                        },
-                    optional = optionalThunk?.invoke(),
-                )
-            }
-        }
-
-        val termThunk = analyze(cty.term, pol = true)
-
-        // Phase 2: Simplify away single-polarity non-recursive variables
-        for (v in allVars) {
-            if (v in recVars) continue
-            val posOccs = coOccurrences[true to v]
-            val negOccs = coOccurrences[false to v]
+    /**
+     * Phase 2: Eliminate variables that only occur at one polarity.
+     *
+     * Variables appearing only positively can be replaced with Bottom (they only flow out).
+     * Variables appearing only negatively can be replaced with Top (they only flow in).
+     */
+    private fun eliminateSinglePolarityVars(
+        analysis: CoOccurrenceAnalysis,
+        varSubst: MutableMap<TVar, TVar?>,
+        keepVars: Boolean,
+    ) {
+        for (v in analysis.allVars) {
+            if (v in analysis.recVars) continue
+            val posOccs = analysis.coOccurrences[true to v]
+            val negOccs = analysis.coOccurrences[false to v]
             if ((posOccs != null && negOccs == null) || (posOccs == null && negOccs != null)) {
+                if (keepVars && v.lowerBounds.isEmpty() && v.upperBounds.isEmpty()) continue
                 varSubst[v] = null // eliminate
             }
         }
+    }
 
-        // Phase 3: Unify co-occurring variables (process in descending uid order like SimpleSub)
-        for (v in allVars.sortedByDescending { it.uid }) {
+    /**
+     * Phase 3: Unify variables that always co-occur, and eliminate variables
+     * that co-occur with the same concrete type at both polarities.
+     */
+    private fun unifyCoOccurringVars(
+        analysis: CoOccurrenceAnalysis,
+        varSubst: MutableMap<TVar, TVar?>,
+    ) {
+        // Process in descending uid order like SimpleSub
+        for (v in analysis.allVars.sortedByDescending { it.uid }) {
             if (v in varSubst) continue
 
             for (pol in listOf(true, false)) {
-                val vOccs = coOccurrences[pol to v] ?: continue
+                val vOccs = analysis.coOccurrences[pol to v] ?: continue
 
                 for (w in vOccs.toList()) {
                     when (w) {
                         is TVar -> {
                             if (w == v) continue
                             if (w in varSubst) continue
+                            // If v is to be eliminated, don't unify other vars into it
+                            if (v in varSubst && varSubst[v] == null) continue
                             // Don't merge rec and non-rec vars
-                            if ((v in recVars) != (w in recVars)) continue
+                            if ((v in analysis.recVars) != (w in analysis.recVars)) continue
 
-                            val wOccs = coOccurrences[pol to w] ?: continue
+                            val wOccs = analysis.coOccurrences[pol to w] ?: continue
                             if (v in wOccs) {
                                 // v and w always co-occur at this polarity - unify w into v
                                 varSubst[w] = v
-
-                                // Merge co-occurrences from opposite polarity
-                                if (w in recVars) {
-                                    // Recursive: merge bounds
-                                    val boundW = recVars[w]!!
-                                    val boundV = recVars[v]!!
-                                    recVars[v] = { CompactType.empty.merge(boundV(), pol).merge(boundW(), pol) }
-                                    recVars.remove(w)
-                                } else {
-                                    // Non-recursive: intersect opposite polarity co-occurrences
-                                    val vOppOccs = coOccurrences[!pol to v]
-                                    val wOppOccs = coOccurrences[!pol to w]
-                                    if (vOppOccs != null && wOppOccs != null) {
-                                        vOppOccs.retainAll(wOppOccs)
-                                        vOppOccs.add(v)
-                                    }
-                                }
                             }
                         }
                         is PrimType -> {
-                            // If variable co-occurs with same primitive at both polarities, eliminate it
-                            val vOppOccs = coOccurrences[!pol to v]
+                            // Primitives have no internal structure, so direct comparison works
+                            val vOppOccs = analysis.coOccurrences[!pol to v]
+                            if (vOppOccs != null && w in vOppOccs) {
+                                varSubst[v] = null
+                            }
+                        }
+                        is RefType, is RecordType, is FunctionType -> {
+                            // Since sub-components no longer carry polarity, structural equality
+                            // across polarities works by direct comparison.
+                            val vOppOccs = analysis.coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
                                 varSubst[v] = null
                             }
@@ -172,142 +279,200 @@ object TypeSimplifier {
                 }
             }
         }
+    }
 
-        val newRecVars =
-            recVars
-                .filterKeys { it !in varSubst || varSubst[it] != null }
-                .mapKeys { (k, _) -> varSubst[k] ?: k }
-                .mapValues { (_, thunk) -> thunk() }
+    private fun applyRefArgSubstitutions(
+        arg: RefArg,
+        varSubst: Map<TVar, TVar?>,
+    ): RefArg =
+        when (arg) {
+            is RefArg.Resolved -> RefArg.Resolved(applySubstitutions(arg.components, varSubst), arg.pol)
+            is RefArg.Invariant ->
+                RefArg.Invariant(
+                    varSubst[arg.tvar] ?: arg.tvar,
+                    applySubstitutions(arg.pos, varSubst),
+                    applySubstitutions(arg.neg, varSubst),
+                )
+        }
 
-        return CompactTypeScheme(termThunk(), newRecVars)
+    private fun applySubstitutions(
+        ty: TypeComponents,
+        varSubst: Map<TVar, TVar?>,
+    ): TypeComponents {
+        val newVars = ty.vars.mapNotNull { tv -> if (tv !in varSubst) tv else varSubst[tv] }.toSet()
+
+        return TypeComponents(
+            vars = newVars,
+            prims = ty.prims,
+            nullable = ty.nullable,
+            rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applySubstitutions(v, varSubst) }) },
+            func =
+                ty.func?.let { (params, result) ->
+                    FunctionType(params.map { applySubstitutions(it, varSubst) }, applySubstitutions(result, varSubst))
+                },
+            optional = ty.optional?.let { applySubstitutions(it, varSubst) },
+            refs =
+                ty.refs.mapValues { (_, family) ->
+                    fun applyToRef(ref: RefType) = RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
+                    when {
+                        family.parent != null -> RefFamily(parent = applyToRef(family.parent), family.constructors.map { applyToRef(it) })
+                        else -> RefFamily(parent = null, family.constructors.map { applyToRef(it) })
+                    }
+                },
+        )
     }
 
     /**
-     * Coalesces a CompactTypeScheme into a Type.
+     * Coalesces a TypeScheme into a Type.
      * Uses hash-consing to tie recursive type knots tighter.
      * Variable names are assigned on first encounter during traversal.
      */
-    fun coalesceType(cty: CompactTypeScheme): Type {
-        val varNames = mutableMapOf<TVar, String>()
+    fun coalesceType(
+        cty: TypeScheme,
+        env: TypeEnv,
+        keepVars: Boolean = false,
+    ): Type {
+        val namer = VarNamer()
 
-        fun varName(v: TVar): String =
-            varNames.getOrPut(v) {
-                val idx = varNames.size
-                val letter = 'A' + (idx % 26)
-                val suffix = if (idx >= 26) "${idx / 26}" else ""
-                "'$letter$suffix"
-            }
+        fun varName(v: TVar) = namer.varName(v)
 
-        fun go(
-            ty: CompactType,
-            pol: Boolean,
-            inProcess: Map<Pair<CompactType, Boolean>, () -> Type.Var>,
-        ): Type {
-            val key = ty to pol
-            inProcess[key]?.let { return it() }
+        val ops =
+            object {
+                fun coalesceRefArg(
+                    arg: RefArg,
+                    pol: Boolean,
+                    inProcess: Map<Pair<TypeComponents, Boolean>, () -> Type.Var>,
+                ): Type =
+                    when (arg) {
+                        is RefArg.Resolved -> {
+                            go(arg.components, arg.pol, inProcess)
+                        }
+                        is RefArg.Invariant -> {
+                            val tv = arg.tvar
+                            val lowerRest = arg.pos.copy(vars = arg.pos.vars - tv)
+                            val upperRest = arg.neg.copy(vars = arg.neg.vars - tv)
+                            // If both bounds are semantically equal, collapse to the type directly
+                            if (arg.hasEqualBounds()) {
+                                go(lowerRest, true, inProcess)
+                            } else {
+                                val lowerBound = go(lowerRest, true, inProcess)
+                                val upperBound = go(upperRest, false, inProcess)
+                                val lowerT = if (lowerBound == Type.Bottom) null else lowerBound
+                                val upperT = if (upperBound == Type.Top) null else upperBound
+                                Type.Var(varName(tv), lowerT, upperT)
+                            }
+                        }
+                    }
 
-            if (ty.isEmpty()) {
-                return if (pol) Type.Bottom else Type.Top
-            }
+                fun go(
+                    ty: TypeComponents,
+                    pol: Boolean,
+                    inProcess: Map<Pair<TypeComponents, Boolean>, () -> Type.Var>,
+                ): Type {
+                    val key = ty to pol
+                    inProcess[key]?.let { return it() }
 
-            var isRecursive = false
-            val recVar by lazy {
-                isRecursive = true
-                val v = TVar()
-                Type.Var(varName(v))
-            }
+                    if (ty.isEmpty()) {
+                        if (keepVars) {
+                            val v = TVar()
+                            return Type.Var(varName(v))
+                        }
+                        return if (pol) Type.Bottom else Type.Top
+                    }
 
-            val newInProcess = inProcess + (key to { recVar })
+                    var isRecursive = false
+                    val recVar by lazy {
+                        isRecursive = true
+                        val v = TVar()
+                        Type.Var(varName(v))
+                    }
 
-            val components = mutableListOf<Type>()
+                    val newInProcess = inProcess + (key to { recVar })
 
-            // Process in same order as simple-sub: vars, prims, rec, func
-            // This ensures variables at the current level are named before
-            // descending into nested function types
+                    val components = mutableListOf<Type>()
 
-            // Add variables (non-recursive ones become type vars, recursive ones expand)
-            // Process in descending uid order to match simple-sub's variable naming
-            for (v in ty.vars.sortedByDescending { it.uid }) {
-                val bound = cty.recVars[v]
-                if (bound != null) {
-                    components.add(go(bound, pol, newInProcess))
-                } else {
-                    components.add(Type.Var(varName(v)))
-                }
-            }
+                    // Process in same order as simple-sub: vars, prims, rec, func, ...
+                    for (v in ty.vars.sortedByDescending { it.uid }) {
+                        val bound = cty.recVars[v]
+                        if (bound != null) {
+                            components.add(go(bound, pol, newInProcess))
+                        } else {
+                            components.add(Type.Var(varName(v)))
+                        }
+                    }
 
-            // Add primitives
-            for (prim in ty.prims) {
-                components.add(
-                    when (prim) {
-                        PrimType.Num -> Type.Num
-                        PrimType.String -> Type.Str
-                        PrimType.Bool -> Type.Bool
-                        PrimType.Null -> Type.Null
-                        PrimType.Unit -> Type.Unit
-                    },
-                )
-            }
+                    for (prim in ty.prims) {
+                        components.add(
+                            when (prim) {
+                                PrimType.Num -> Type.Num
+                                PrimType.String -> Type.Str
+                                PrimType.Bool -> Type.Bool
+                                PrimType.Unit -> Type.Unit
+                            },
+                        )
+                    }
 
-            // Add record
-            ty.rec?.let { fields ->
-                val typeFields = fields.mapValues { (_, v) -> go(v, pol, newInProcess) }
-                components.add(Type.Record(typeFields))
-            }
+                    ty.rec?.let { rec ->
+                        val typeFields = rec.fields.mapValues { (_, v) -> go(v, pol, newInProcess) }
+                        components.add(Type.Record(typeFields))
+                    }
 
-            // Add function
-            ty.func?.let { (params, result) ->
-                val typeParams = params.map { go(it, !pol, newInProcess) }
-                val typeResult = go(result, pol, newInProcess)
-                components.add(Type.Fun(typeParams, typeResult))
-            }
+                    ty.func?.let { (params, result) ->
+                        val typeParams = params.map { go(it, !pol, newInProcess) }
+                        val typeResult = go(result, pol, newInProcess)
+                        components.add(Type.Fun(typeParams, typeResult))
+                    }
 
-            // Add optional
-            ty.optional?.let { inner ->
-                val innerType = go(inner, pol, newInProcess)
-                components.add(Type.Optional(innerType))
-            }
+                    ty.optional?.let { inner ->
+                        val innerType = go(inner, pol, newInProcess)
+                        components.add(Type.Optional(innerType))
+                    }
 
-            // In positive position, if Null appears with other types, convert to optional
-            // e.g., Num | Null becomes Num?
-            val hasNullPrim = PrimType.Null in ty.prims
-            val hasOtherComponents = components.any { it != Type.Null }
-            val wrapInOptional = pol && hasNullPrim && hasOtherComponents
+                    for (ref in ty.displayRefs()) {
+                        val coalescedArgs = ref.args.map { arg -> coalesceRefArg(arg, pol, newInProcess) }
+                        components.add(Type.Ref(ref.name, coalescedArgs))
+                    }
 
-            val componentsWithoutNull =
-                if (wrapInOptional) {
-                    components.filter { it != Type.Null }
-                } else {
-                    components
-                }
+                    val hasOtherComponents = components.isNotEmpty()
+                    val wrapInOptional = pol && ty.nullable && hasOtherComponents
 
-            val baseResult =
-                if (componentsWithoutNull.isEmpty()) {
-                    if (pol) Type.Bottom else Type.Top
-                } else if (componentsWithoutNull.size == 1) {
-                    componentsWithoutNull[0]
-                } else {
-                    if (pol) {
-                        componentsWithoutNull.reduce { acc, t -> Type.Union(acc, t) }
+                    if (ty.nullable && !hasOtherComponents) {
+                        components.add(Type.Null)
+                    }
+
+                    val baseResult =
+                        if (components.isEmpty()) {
+                            if (pol) Type.Bottom else Type.Top
+                        } else if (components.size == 1) {
+                            components[0]
+                        } else {
+                            if (pol) {
+                                components.reduce { acc, t -> Type.Union(acc, t) }
+                            } else {
+                                components.reduce { acc, t -> Type.Inter(acc, t) }
+                            }
+                        }
+
+                    val result =
+                        if (wrapInOptional) {
+                            Type.Optional(baseResult)
+                        } else {
+                            baseResult
+                        }
+
+                    return if (isRecursive) {
+                        Type.Rec(recVar.name, result)
                     } else {
-                        componentsWithoutNull.reduce { acc, t -> Type.Inter(acc, t) }
+                        result
                     }
                 }
-
-            val result =
-                if (wrapInOptional) {
-                    Type.Optional(baseResult)
-                } else {
-                    baseResult
-                }
-
-            return if (isRecursive) {
-                Type.Rec(recVar.name, result)
-            } else {
-                result
             }
-        }
 
-        return go(cty.term, pol = true, inProcess = emptyMap())
+        val term = cty.term
+        return if (term.isEmpty()) {
+            if (cty.pol) Type.Bottom else Type.Top
+        } else {
+            ops.go(term, cty.pol, emptyMap())
+        }
     }
 }

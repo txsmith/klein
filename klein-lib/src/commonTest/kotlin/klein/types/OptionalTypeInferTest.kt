@@ -362,7 +362,7 @@ class OptionalTypeInferTest {
                 else null
         """.trimIndent()
         // Result should be (Num | String)?
-        assertType("(Bool, Bool) -> (Num | String)?", infer(code + "\ntriChoice"))
+        assertType("(Bool, Bool) -> (Num | String)?", infer(code + "\ntriChoice"), expectedLub = "(Bool, Bool) -> (Num | String)??")
     }
 
     @Test

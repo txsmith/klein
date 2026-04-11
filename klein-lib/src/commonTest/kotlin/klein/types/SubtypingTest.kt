@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SubtypingTest {
-    private fun subtype(): Subtyping = Subtyping()
+    private fun subtype(): Subtyping = Subtyping(TypeEnv.empty())
 
     @Test
     fun intSubtypeOfInt() {
@@ -146,7 +146,7 @@ class SubtypingTest {
         val f2 = SimpleType.TFun(listOf(SimpleType.TNum, SimpleType.TNum), SimpleType.TNum)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertEquals(1, sub.getErrors().size)
-        assertTrue(sub.getErrors()[0] is TypeError.ArityMismatch)
+        assertCallArityMismatch(sub.getErrors()[0], expected = 1, actual = 2)
     }
 
     @Test
@@ -156,7 +156,7 @@ class SubtypingTest {
         val f2 = SimpleType.TFun(listOf(SimpleType.TNum), SimpleType.TNum)
         sub.constrain(f1, f2, SourceSpan.zero)
         assertEquals(1, sub.getErrors().size)
-        assertTrue(sub.getErrors()[0] is TypeError.ArityMismatch)
+        assertCallArityMismatch(sub.getErrors()[0], expected = 0, actual = 1)
     }
 
     @Test

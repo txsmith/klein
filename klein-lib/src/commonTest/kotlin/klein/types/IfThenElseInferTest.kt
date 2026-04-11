@@ -13,14 +13,14 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_differentBranchTypes() {
-        assertType("Num | String", infer("if true then 1 else \"hello\""))
+        assertType("Num | String", infer("if true then 1 else \"hello\""), expectedLub = "Num | String")
     }
 
     @Test
     fun ifThenElse_conditionMustBeBool() {
-        val result = inferWithErrors("if 1 then 2 else 3")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("if 1 then 2 else 3")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -50,9 +50,9 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_noElse_conditionMustBeBool() {
-        val result = inferWithErrors("if 1 then 2")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("if 1 then 2")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.TypeMismatch)
     }
 
     @Test
@@ -77,8 +77,8 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_conditionUsedInElse() {
-        val result = inferWithErrors("|x -> |y -> if x then y else x||")
-        assertEquals(0, result.errors.size, "Intersection from conditional should type-check: ${result.errors}")
+        val errors = inferErrors("|x -> |y -> if x then y else x||")
+        assertEquals(0, errors.size, "Intersection from conditional should type-check: $errors")
     }
 
     @Test
@@ -88,12 +88,16 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithCommonFieldIncompatibleTypes() {
-        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = \"hello\" }"))
+        assertType("{ x: Num | String }", infer("if true then { x = 1 } else { x = \"hello\" }"), expectedLub = "{ x: Num | String }")
     }
 
     @Test
     fun ifThenElse_recordBranchesWithMixedCompatibility() {
-        assertType("{ a: Num, b: Num | String }", infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"))
+        assertType(
+            "{ a: Num, b: Num | String }",
+            infer("if true then { a = 1, b = 2 } else { a = 3, b = \"hi\" }"),
+            expectedLub = "{ a: Num, b: Num | String }",
+        )
     }
 
     @Test
@@ -103,17 +107,25 @@ class IfThenElseInferTest {
 
     @Test
     fun ifThenElse_recordBranchesWithNestedIncompatiblePrim() {
-        assertType("{ r: { x: Num | String } }", infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"))
+        assertType(
+            "{ r: { x: Num | String } }",
+            infer("if true then { r = { x = 1 } } else { r = { x = \"hi\" } }"),
+            expectedLub = "{ r: { x: Num | String } }",
+        )
     }
 
     @Test
     fun ifThenElse_recordBranchesWithNestedPrimAndRecord() {
-        assertType("{ x: Num | { a: Num } }", infer("if true then { x = 1 } else { x = { a = 2 } }"))
+        assertType(
+            "{ x: Num | { a: Num } }",
+            infer("if true then { x = 1 } else { x = { a = 2 } }"),
+            expectedLub = "{ x: Num | { a: Num } }",
+        )
     }
 
     @Test
     fun ifThenElse_incompatibleBranches_primAndRecord() {
-        assertType("Num | { x: Num }", infer("if true then 0 else { x = 3 }"))
+        assertType("Num | { x: Num }", infer("if true then 0 else { x = 3 }"), expectedLub = "Num | { x: Num }")
     }
 
     @Test
@@ -126,6 +138,7 @@ class IfThenElseInferTest {
                 f(|x -> x|, true, 0, {x=3})
                 """.trimIndent(),
             ),
+            expectedLub = "Num | { x: Num }",
         )
     }
 
@@ -141,6 +154,7 @@ class IfThenElseInferTest {
                 f("hello")
                 """.trimIndent(),
             ),
+            expectedLub = "Num | String",
         )
     }
 }

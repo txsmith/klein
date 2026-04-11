@@ -15,7 +15,7 @@ data class ProgramResult(
 
 class Typer {
     private val errors = mutableListOf<TypeError>()
-    private val subtyping = Subtyping()
+    private lateinit var subtyping: Subtyping
 
     fun getErrors(): List<TypeError> = errors + subtyping.getErrors()
 
@@ -23,6 +23,7 @@ class Typer {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
+        subtyping = Subtyping(env)
         val (type, exprTypes) = inferTopLevelStmts(program.stmts, env)
         return ProgramResult(type, env, getErrors(), exprTypes)
     }
@@ -31,36 +32,44 @@ class Typer {
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
-        val scopeEnv = env.enterBindingScope()
-        val funDefs = mutableMapOf<String, Pair<FunDef, SimpleType>>()
+        processTypeDefs(stmts.filterIsInstance<TypeDef>(), env)
+        processFunDefs(stmts.filterIsInstance<FunDef>(), env)
+        return inferBlockStmts(stmts, env)
+    }
 
-        // Loop through all stmts to fish out FunDefs, bind them with a TVar.
-        for (stmt in stmts) {
-            if (stmt is FunDef) {
-                if (env.contains(stmt.name)) {
-                    errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
-                } else {
-                    val typeVar = scopeEnv.freshVar()
-                    funDefs[stmt.name] = stmt to typeVar
-                    env.bind(stmt.name, typeVar)
-                }
+    private fun processFunDefs(
+        funDefs: List<FunDef>,
+        env: TypeEnv,
+    ) {
+        if (funDefs.isEmpty()) return
+
+        val scopeEnv = env.enterBindingScope()
+        val funDefBindings = mutableMapOf<String, Pair<FunDef, SimpleType>>()
+
+        // Pass 1: Bind all with TVars (enables mutual recursion)
+        for (funDef in funDefs) {
+            if (env.contains(funDef.name)) {
+                errors.add(TypeError.DuplicateBinding(funDef.name, funDef.span))
+            } else {
+                val typeVar = scopeEnv.freshVar()
+                funDefBindings[funDef.name] = funDef to typeVar
+                env.bind(funDef.name, typeVar)
+                env.registerFunDef(FunDefInfo(funDef.name, funDef.params))
             }
         }
 
-        // Infer all found FunDefs, recursion is now possible because all are bound to a TVar.
-        for ((funDef, typeVar) in funDefs.values) {
+        // Pass 2: Infer types
+        for ((funDef, typeVar) in funDefBindings.values) {
             val rhsEnv = env.enterBindingScope()
             rhsEnv.bind(funDef.name, typeVar)
             val type = inferFunction(funDef.params, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
             subtyping.constrain(type, typeVar, funDef.span)
         }
 
-        // After inference we don't need the TVars bound before, so override all bound functions with their actual type.
-        for ((name, pair) in funDefs) {
+        // Pass 3: Generalize to polymorphic bindings
+        for ((name, pair) in funDefBindings) {
             env.bindPolymorphic(name, pair.second)
         }
-
-        return inferBlockStmts(stmts, env)
     }
 
     fun infer(
@@ -110,6 +119,7 @@ class Typer {
                         exprTypes[stmt.span] = type
                         type
                     }
+                    is TypeDef -> TUnit
                 }
         }
         return Pair(lastType, exprTypes)
@@ -136,7 +146,7 @@ class Typer {
             val childEnv = env.child(ImplicitParamContext.Available(implicitType))
             val bodyType = infer(body, childEnv)
             if (body.usesImplicitParam) {
-                TFun(listOf(implicitType), bodyType)
+                TFun(listOf(implicitType), bodyType, listOf("."))
             } else {
                 TFun(emptyList(), bodyType)
             }
@@ -153,7 +163,7 @@ class Typer {
                 childEnv.bind(name, type)
             }
             val bodyType = infer(body, childEnv)
-            TFun(paramTypes, bodyType)
+            TFun(paramTypes, bodyType, params)
         }
     }
 
@@ -165,14 +175,23 @@ class Typer {
             return inferSafeMethodCall(expr.callee, expr.args, expr.span, env)
         }
 
+        val calleeName =
+            when (expr.callee) {
+                is Ident -> expr.callee.name
+                is FieldAccess -> expr.callee.field
+                else -> null // TODO what if lambda?
+            }
+
         val calleeType = infer(expr.callee, env)
         val argTypes = expr.args.map { infer(it, env) }
         val resultType = env.freshVar()
 
+        val context = listOf(ConstraintContext.FunctionCall(calleeName?.let { env.lookupFunDef(it) }, expr.args.map { it.span }))
         subtyping.constrain(
             calleeType,
             TFun(argTypes, resultType),
             expr.span,
+            context,
         )
 
         return resultType
@@ -189,6 +208,7 @@ class Typer {
         val returnType = env.freshVar()
 
         val funType = TFun(argTypes, returnType)
+
         subtyping.constrain(targetType, TOptional(TRecord(mapOf(callee.field to funType))), span)
 
         return TOptional(returnType)
@@ -303,7 +323,10 @@ class Typer {
         val targetType = infer(expr.target, env)
         val fieldType = env.freshVar()
         subtyping.constrain(targetType, TOptional(TRecord(mapOf(expr.field to fieldType))), expr.span)
-        return TOptional(fieldType)
+        val result = env.freshVar()
+        subtyping.constrain(fieldType, result, expr.span)
+        subtyping.constrain(TNull, result, expr.span)
+        return result
     }
 
     private fun inferIfThenElse(
@@ -324,6 +347,13 @@ class Typer {
         } else {
             TUnit
         }
+    }
+
+    private fun processTypeDefs(
+        typeDefs: List<TypeDef>,
+        env: TypeEnv,
+    ) {
+        TypeDefPreprocessor(subtyping, errors).process(typeDefs, env)
     }
 
     companion object {

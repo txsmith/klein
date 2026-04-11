@@ -41,6 +41,18 @@ data class SourceSpan(
 
             fun gutter(n: Int?) = if (n != null) n.toString().padStart(gutterWidth) else " ".repeat(gutterWidth)
 
+            fun StringBuilder.appendMessageLines(
+                msg: String?,
+                gutterStr: String,
+            ) {
+                appendLine()
+                if (msg != null) {
+                    for (line in msg.lines()) {
+                        appendLine("$gutterStr  |   $line")
+                    }
+                }
+            }
+
             appendLine("${gutter(null)}  |")
             for (lineNum in startLine..endLine) {
                 val line = lines.getOrElse(lineNum - 1) { "" }
@@ -50,18 +62,12 @@ data class SourceSpan(
                 if (isMultiLine && lineNum == errorLineEnd) {
                     append("${gutter(null)}  | ")
                     append("^".repeat(maxOf(1, colEnd)))
-                    if (message != null) {
-                        append(" $message")
-                    }
-                    appendLine()
+                    appendMessageLines(message, gutter(null))
                 } else if (!isMultiLine && lineNum == errorLineStart) {
                     append("${gutter(null)}  | ")
                     append(" ".repeat(colStart))
                     append("^".repeat(maxOf(1, colEnd - colStart)))
-                    if (message != null) {
-                        append(" $message")
-                    }
-                    appendLine()
+                    appendMessageLines(message, gutter(null))
                 }
             }
         }

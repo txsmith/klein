@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  */
 class OptionalSubtypingTest {
 
-    private fun subtype(): Subtyping = Subtyping()
+    private fun subtype(): Subtyping = Subtyping(TypeEnv.empty())
 
     // =========================================================================
     // SECTION 1: TNull Reflexivity and Identity

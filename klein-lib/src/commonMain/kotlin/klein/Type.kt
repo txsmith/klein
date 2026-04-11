@@ -17,7 +17,11 @@ sealed class Type {
 
     data class Var(
         val name: String,
-    ) : Type()
+        val lower: Type? = null,
+        val upper: Type? = null,
+    ) : Type() {
+        val hasBounds: Boolean get() = lower != null || upper != null
+    }
 
     data class Fun(
         val params: List<Type>,
@@ -47,6 +51,11 @@ sealed class Type {
         val inner: Type,
     ) : Type()
 
+    data class Ref(
+        val name: String,
+        val args: List<Type>,
+    ) : Type()
+
     override fun toString(): String = print(this)
 
     companion object {
@@ -66,7 +75,33 @@ sealed class Type {
                 is Union -> printUnion(type)
                 is Inter -> printInter(type)
                 is Optional -> "${printWithParensIfNeeded(type.inner, isUnionOrInter = false)}?"
+                is Ref -> printRef(type)
             }
+
+        private fun printRef(ref: Ref): String {
+            val args = if (ref.args.isEmpty()) "" else "<${ref.args.joinToString(", ") { print(it) }}>"
+
+            // Extract bounded Vars from args to display as where clauses
+            val boundedVars = ref.args.filterIsInstance<Var>().filter { it.hasBounds }
+            val where =
+                if (boundedVars.isEmpty()) {
+                    ""
+                } else {
+                    val clauses =
+                        boundedVars.joinToString(", ") { v ->
+                            val lower = v.lower?.let { print(it) }
+                            val upper = v.upper?.let { print(it) }
+                            when {
+                                lower != null && upper != null -> "$lower <: ${v.name} <: $upper"
+                                lower != null -> "$lower <: ${v.name}"
+                                upper != null -> "${v.name} <: $upper"
+                                else -> v.name
+                            }
+                        }
+                    " where $clauses"
+                }
+            return "${ref.name}$args$where"
+        }
 
         private fun printFun(fn: Fun): String {
             val params = "(${fn.params.joinToString(", ") { print(it) }})"
@@ -120,13 +155,14 @@ sealed class Type {
                 Null -> 4
                 is Optional -> 5
                 Unit -> 6
-                is Record -> 7
-                is Fun -> 8
-                Top -> 9
-                Bottom -> 10
-                is Union -> 11
-                is Inter -> 12
-                is Rec -> 13
+                is Ref -> 7
+                is Record -> 8
+                is Fun -> 9
+                Top -> 10
+                Bottom -> 11
+                is Union -> 12
+                is Inter -> 13
+                is Rec -> 14
             }
 
         private fun printWithParensIfNeeded(

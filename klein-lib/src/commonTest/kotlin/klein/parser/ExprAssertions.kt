@@ -1,13 +1,17 @@
 package klein.parser
 
+import klein.AppliedTypeExpr
 import klein.Apply
 import klein.BinaryOp
 import klein.Block
 import klein.BoolLiteral
+import klein.Constructor
 import klein.DoubleLiteral
 import klein.Expr
 import klein.FieldAccess
+import klein.FieldDecl
 import klein.FunDef
+import klein.FunctionTypeExpr
 import klein.Ident
 import klein.IfThenElse
 import klein.ImplicitParam
@@ -16,13 +20,20 @@ import klein.Lambda
 import klein.Lexer
 import klein.NullLiteral
 import klein.Operator
+import klein.ParseError
 import klein.Parser
 import klein.Program
 import klein.RecordLiteral
+import klein.RecordTypeExpr
 import klein.SafeFieldAccess
 import klein.SourceSpan
 import klein.Stmt
 import klein.StringLiteral
+import klein.TupleTypeExpr
+import klein.TypeDef
+import klein.TypeExpr
+import klein.TypeName
+import klein.TypeVar
 import klein.UnaryOp
 import klein.UnaryOperator
 import klein.Val
@@ -187,6 +198,42 @@ fun funDef(
     body: Expr,
 ) = FunDef(name, params.toList(), body, noSpan)
 
+fun typeDef(
+    name: String,
+    typeParams: List<String> = emptyList(),
+    vararg constructors: Constructor,
+) = TypeDef(name, typeParams, constructors.toList(), noSpan)
+
+fun constructor(
+    name: String,
+    vararg fields: FieldDecl,
+) = Constructor(name, fields.toList(), noSpan)
+
+fun field(
+    name: String,
+    type: TypeExpr,
+) = FieldDecl(name, type, noSpan)
+
+fun typeName(name: String) = TypeName(name, noSpan)
+
+fun typeVar(name: String) = TypeVar(name, noSpan)
+
+fun appliedType(
+    name: String,
+    vararg args: TypeExpr,
+) = AppliedTypeExpr(name, args.toList(), noSpan)
+
+fun functionType(
+    paramType: TypeExpr,
+    returnType: TypeExpr,
+) = FunctionTypeExpr(listOf(paramType), returnType, noSpan)
+
+fun functionType(returnType: TypeExpr) = FunctionTypeExpr(emptyList(), returnType, noSpan)
+
+fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSpan)
+
+fun recordType(vararg fields: Pair<String, TypeExpr>) = RecordTypeExpr(fields.toList(), noSpan)
+
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseStmt()
@@ -201,8 +248,39 @@ fun Stmt.stripSpan(): Stmt =
     when (this) {
         is Val -> Val(name, value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params, body.stripSpans(), noSpan)
+        is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
         is Expr -> stripSpans()
     }
+
+fun Constructor.stripSpan(): Constructor = Constructor(name, fields.map { it.stripSpan() }, noSpan)
+
+fun FieldDecl.stripSpan(): FieldDecl = FieldDecl(name, type.stripSpan(), noSpan)
+
+fun TypeExpr.stripSpan(): TypeExpr =
+    when (this) {
+        is TypeName -> TypeName(name, noSpan)
+        is TypeVar -> TypeVar(name, noSpan)
+        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan)
+        is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
+        is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
+        is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
+    }
+
+fun parseTypeDef(source: String): TypeDef {
+    val tokens = Lexer(source).tokenize().toList()
+    val stmt = Parser(tokens).parseStmt()
+    if (stmt !is TypeDef) {
+        throw ParseError("Expected type definition", stmt.span)
+    }
+    return stmt
+}
+
+fun assertTypeDefEquals(
+    actual: TypeDef,
+    expected: TypeDef,
+) {
+    assertEqualsPretty(expected, actual.stripSpan() as TypeDef)
+}
 
 fun assertStmtEquals(
     actual: Stmt,

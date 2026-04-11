@@ -24,6 +24,61 @@ data class FunDef(
     override val span: SourceSpan,
 ) : Stmt()
 
+data class TypeDef(
+    val name: String,
+    val typeParams: List<String>,
+    val constructors: List<Constructor>,
+    override val span: SourceSpan,
+) : Stmt()
+
+data class Constructor(
+    val name: String,
+    val fields: List<FieldDecl>,
+    val span: SourceSpan,
+)
+
+data class FieldDecl(
+    val name: String,
+    val type: TypeExpr,
+    val span: SourceSpan,
+)
+
+sealed class TypeExpr {
+    abstract val span: SourceSpan
+}
+
+data class TypeName(
+    val name: String,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class AppliedTypeExpr(
+    val name: String,
+    val args: List<TypeExpr>,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class TypeVar(
+    val name: String,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class FunctionTypeExpr(
+    val paramTypes: List<TypeExpr>,
+    val returnType: TypeExpr,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class TupleTypeExpr(
+    val elements: List<TypeExpr>,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class RecordTypeExpr(
+    val fields: List<Pair<String, TypeExpr>>,
+    override val span: SourceSpan,
+) : TypeExpr()
+
 @Serializable
 sealed class Expr : Stmt() {
     abstract override val span: SourceSpan
@@ -133,6 +188,7 @@ val Expr.usesImplicitParam: Boolean
                         is Expr -> stmt.usesImplicitParam
                         is Val -> stmt.value.usesImplicitParam
                         is FunDef -> false
+                        is TypeDef -> false
                     }
                 }
         }

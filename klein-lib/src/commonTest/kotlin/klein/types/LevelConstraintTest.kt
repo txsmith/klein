@@ -34,11 +34,11 @@ class LevelConstraintTest {
             a
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "id should remain polymorphic even after being used with Int. Errors: ${result.errors}",
+            errors.size,
+            "id should remain polymorphic even after being used with Int. Errors: $errors",
         )
     }
 
@@ -59,11 +59,11 @@ class LevelConstraintTest {
             f(true)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Returned id should be polymorphic and work with Bool. Errors: ${result.errors}",
+            errors.size,
+            "Returned id should be polymorphic and work with Bool. Errors: $errors",
         )
     }
 
@@ -88,11 +88,11 @@ class LevelConstraintTest {
             a
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Multiple uses shouldn't constrain the returned id. Errors: ${result.errors}",
+            errors.size,
+            "Multiple uses shouldn't constrain the returned id. Errors: $errors",
         )
     }
 
@@ -117,11 +117,11 @@ class LevelConstraintTest {
             g(true)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Deeply nested returns should preserve polymorphism. Errors: ${result.errors}",
+            errors.size,
+            "Deeply nested returns should preserve polymorphism. Errors: $errors",
         )
     }
 
@@ -142,12 +142,12 @@ class LevelConstraintTest {
             h(42)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         // h should return Bool (the captured x), so this should work
         assertEquals(
             0,
-            result.errors.size,
-            "Nested function should capture parameter correctly. Errors: ${result.errors}",
+            errors.size,
+            "Nested function should capture parameter correctly. Errors: $errors",
         )
     }
 
@@ -171,11 +171,11 @@ class LevelConstraintTest {
             a
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Inner polymorphic function should be usable polymorphically after return. Errors: ${result.errors}",
+            errors.size,
+            "Inner polymorphic function should be usable polymorphically after return. Errors: $errors",
         )
     }
 
@@ -196,12 +196,12 @@ class LevelConstraintTest {
             cell.get(true)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         // This should succeed - get and set should be independent
         assertEquals(
             0,
-            result.errors.size,
-            "cell.get and cell.set should have independent type variables. Errors: ${result.errors}",
+            errors.size,
+            "cell.get and cell.set should have independent type variables. Errors: $errors",
         )
     }
 
@@ -229,11 +229,11 @@ class LevelConstraintTest {
             f(42)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "id should be polymorphic at all levels. Errors: ${result.errors}",
+            errors.size,
+            "id should be polymorphic at all levels. Errors: $errors",
         )
     }
 
@@ -257,12 +257,12 @@ class LevelConstraintTest {
             g(3)
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         // g should return Bool (captured x), this should work
         assertEquals(
             0,
-            result.errors.size,
-            "Captured variable from intermediate level should work. Errors: ${result.errors}",
+            errors.size,
+            "Captured variable from intermediate level should work. Errors: $errors",
         )
     }
 
@@ -279,11 +279,9 @@ class LevelConstraintTest {
             f + true
             """.trimIndent()
 
-        val result = inferWithErrors(program)
-        assertTrue(
-            result.errors.isNotEmpty(),
-            "Should fail: can't add Num and Bool",
-        )
+        val errors = inferErrors(program)
+        assertEquals(1, errors.size, "Should fail: can't add Num and Bool")
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     /**
@@ -298,11 +296,9 @@ class LevelConstraintTest {
             result
             """.trimIndent()
 
-        val result = inferWithErrors(program)
-        assertTrue(
-            result.errors.isNotEmpty(),
-            "Should fail: can't add Bool and Num",
-        )
+        val errors = inferErrors(program)
+        assertEquals(1, errors.size, "Should fail: can't add Bool and Num")
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     /**
@@ -322,11 +318,11 @@ class LevelConstraintTest {
             wrapper()
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Inner usage only should work fine. Errors: ${result.errors}",
+            errors.size,
+            "Inner usage only should work fine. Errors: $errors",
         )
     }
 
@@ -343,11 +339,11 @@ class LevelConstraintTest {
             a
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             0,
-            result.errors.size,
-            "Same level, different uses should work. Errors: ${result.errors}",
+            errors.size,
+            "Same level, different uses should work. Errors: $errors",
         )
     }
 
@@ -380,13 +376,13 @@ class LevelConstraintTest {
             result
             """.trimIndent()
 
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         val resultType = infer(program)
 
         assertEquals(
             0,
-            result.errors.size,
-            "Should have no errors. Errors: ${result.errors}",
+            errors.size,
+            "Should have no errors. Errors: $errors",
         )
 
         // The result should be Num (from myK returning g(42)), not Nothing

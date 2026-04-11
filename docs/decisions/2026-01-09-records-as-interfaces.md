@@ -84,7 +84,7 @@ Type classes add implicit resolution machinery that's powerful but complex. For 
 - Simple mental model: records are just data
 - No "where does this instance come from?" confusion
 - Easy to test with mock implementations
-- Works with structural typing and row polymorphism
+- Works with structural typing and width subtyping
 
 **Negative:**
 - Must pass implementations explicitly

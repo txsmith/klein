@@ -26,7 +26,8 @@ sealed class TypeBinding {
         val generalizationLevel: Int,
         val body: SimpleType,
     ) : TypeBinding() {
-        fun instantiate(currentLevel: Int): SimpleType = body.freshenAbove(generalizationLevel, currentLevel)
+        fun instantiate(currentLevel: Int): Pair<SimpleType, Map<SimpleType.TVar, SimpleType.TVar>> =
+            body.freshenAbove(generalizationLevel, currentLevel)
     }
 }
 
@@ -35,6 +36,9 @@ class TypeEnv(
     private val bindings: MutableMap<String, TypeBinding> = mutableMapOf(),
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
     val level: Int = 0,
+    private val typeDefs: MutableMap<String, TypeDefInfo> = mutableMapOf(),
+    private val constructors: MutableMap<String, ConstructorInfo> = mutableMapOf(),
+    private val funDefs: MutableMap<String, FunDefInfo> = mutableMapOf(),
 ) {
     fun lookupAndInstantiate(
         name: String,
@@ -44,7 +48,7 @@ class TypeEnv(
         if (binding != null) {
             return when (binding) {
                 is TypeBinding.Mono -> binding.type
-                is TypeBinding.Poly -> binding.instantiate(currentLevel)
+                is TypeBinding.Poly -> binding.instantiate(currentLevel).component1()
             }
         }
         return parent?.lookupAndInstantiate(name, currentLevel)
@@ -69,9 +73,52 @@ class TypeEnv(
     fun freshVar(): SimpleType.TVar = SimpleType.TVar(level)
 
     fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
-        TypeEnv(parent = this, implicitParam = implicitParam, level = level)
+        TypeEnv(
+            parent = this,
+            implicitParam = implicitParam,
+            level = level,
+            typeDefs = typeDefs,
+            constructors = constructors,
+            funDefs = funDefs,
+        )
 
-    fun enterBindingScope(): TypeEnv = TypeEnv(parent = this, implicitParam = implicitParam, level = level + 1)
+    fun enterBindingScope(): TypeEnv =
+        TypeEnv(
+            parent = this,
+            implicitParam = implicitParam,
+            level = level + 1,
+            typeDefs = typeDefs,
+            constructors = constructors,
+            funDefs = funDefs,
+        )
+
+    fun registerTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
+    fun updateTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
+    fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
+
+    fun getTypeDef(name: String): TypeDefInfo = typeDefs[name] ?: error("Type '$name' not registered")
+
+    fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
+
+    fun registerConstructor(info: ConstructorInfo) {
+        constructors[info.name] = info
+    }
+
+    fun lookupConstructor(name: String): ConstructorInfo? = constructors[name]
+
+    fun allConstructors(): Collection<ConstructorInfo> = constructors.values
+
+    fun registerFunDef(info: FunDefInfo) {
+        funDefs[info.name] = info
+    }
+
+    fun lookupFunDef(name: String): FunDefInfo? = funDefs[name]
 
     companion object {
         fun empty(): TypeEnv = TypeEnv()

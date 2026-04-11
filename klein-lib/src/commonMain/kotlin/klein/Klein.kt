@@ -36,9 +36,12 @@ object Klein {
         val program = Parser(tokens).parseProgram()
         val result = Typer.infer(program, env)
 
+        val scheme = TypeSimplifier.simplify(result.type, result.env)
+        val type = TypeSimplifier.coalesceType(scheme, result.env)
+
         return InferenceResult(
             program = program,
-            type = TypeSimplifier.simplifyCanonical(result.type),
+            type = type,
             errors = result.errors,
         )
     }

@@ -2,7 +2,6 @@ package klein.types
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class SimpleSubTest {
     @Test
@@ -80,23 +79,24 @@ class SimpleSubTest {
 
     @Test
     fun booleans_succTrue_error() {
-        val result = inferWithErrors("true + 1")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("true + 1")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test
     fun booleans_succNotX_error() {
-        val result = inferWithErrors("|x -> (not x) + 1|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("|x -> (not x) + 1|")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test
     fun booleans_notRecordField_error() {
-        val result = inferWithErrors("|x -> not x.f|({ f = 123 })")
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.any { it is TypeError.TypeMismatch })
+        val errors = inferErrors("|x -> not x.f|({ f = 123 })")
+        assertEquals(2, errors.size)
+        assertMismatch(errors[0], "Bool", "{ f: Any }")
+        assertMismatch(errors[1], "{ f: Num }", "Bool")
     }
 
     @Test
@@ -141,16 +141,16 @@ class SimpleSubTest {
 
     @Test
     fun records_missingField_error() {
-        val result = inferWithErrors("{ a = 123, b = true }.c")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        val errors = inferErrors("{ a = 123, b = true }.c")
+        assertEquals(1, errors.size)
+        assertMissingField(errors[0], "c")
     }
 
     @Test
     fun records_missingFieldInFunction_error() {
-        val result = inferWithErrors("|x -> { a = x }.b|")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        val errors = inferErrors("|x -> { a = x }.b|")
+        assertEquals(1, errors.size)
+        assertMissingField(errors[0], "b")
     }
 
     @Test
@@ -243,6 +243,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
+            expectedLub = "((Bool | Num) -> 'A) -> { a: 'A, b: 'A }",
         )
     }
 
@@ -336,6 +337,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
+            expectedLub = "((Bool | Num) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
         )
     }
 
@@ -351,13 +353,15 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
+            expectedLub = "((Num | { t: Bool }) -> 'A) -> { u: { a: Num, b: 'A }, v: { a: Bool, b: 'A } }",
         )
     }
 
     @Test
     fun booleans_notFunctionAppliedToNonFunction_error() {
-        val result = inferWithErrors("|f -> |x -> not f(x.u)||(false)")
-        assertTrue(result.errors.isNotEmpty())
+        val errors = inferErrors("|f -> |x -> not f(x.u)||(false)")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Bool", "(Nothing) -> Any")
     }
 
     @Test
@@ -390,6 +394,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
+            expectedLub = "((('A) -> 'A | Bool | Num) -> Any) -> { u: 'A | Num, v: 'A | Bool }",
         )
     }
 
@@ -411,7 +416,7 @@ class SimpleSubTest {
     @Test
     fun letPoly_extrusionWithThefun() {
         assertType(
-            "((('A & Num) -> 'A | Num) -> 'B) -> { l: 'B, r: Num }",
+            "(((Num) -> Num) -> 'A) -> { l: 'A, r: Num }",
             infer(
                 """
                 |k ->
@@ -519,6 +524,7 @@ class SimpleSubTest {
                 |
                 """.trimIndent(),
             ),
+            expectedLub = "({ v: 'A } & (('A) -> Any)) -> Num",
         )
     }
 
@@ -534,6 +540,7 @@ class SimpleSubTest {
                 |b -> if b then object1 else object2|
                 """.trimIndent(),
             ),
+            expectedLub = "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
         )
     }
 
@@ -597,6 +604,7 @@ class SimpleSubTest {
                 |b -> if b then object1 else object2|
                 """.trimIndent(),
             ),
+            expectedLub = "(Bool) -> { x: Num, y: Bool | (('A) -> 'A) }",
         )
     }
 }

@@ -21,6 +21,8 @@ sealed class ExpectedToken {
 
         return when (this) {
             is Ident -> other is Ident && name == other.name
+            is UpperIdent -> other is UpperIdent && name == other.name
+            is TypeVar -> other is TypeVar && name == other.name
             is Number -> other is Number && text == other.text
             is Str -> other is Str && value == other.value
             is Symbol -> other is Symbol && text == other.text && (kind == null || kind == other.kind)
@@ -35,6 +37,8 @@ sealed class ExpectedToken {
         val indentSuffix = if (indent != null) "@$indent" else ""
         return when (this) {
             is Ident -> "ident($name)$indentSuffix"
+            is UpperIdent -> "upperIdent($name)$indentSuffix"
+            is TypeVar -> "typeVar($name)$indentSuffix"
             is Number -> "num($text)$indentSuffix"
             is Str -> "str($value)$indentSuffix"
             is Symbol -> (if (text.length == 1) "sym('$text')" else "sym(\"$text\")") + indentSuffix
@@ -46,6 +50,18 @@ sealed class ExpectedToken {
     }
 
     data class Ident(
+        val name: String,
+        override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
+    ) : ExpectedToken()
+
+    data class UpperIdent(
+        val name: String,
+        override val span: klein.SourceSpan? = null,
+        override val indent: Int? = null,
+    ) : ExpectedToken()
+
+    data class TypeVar(
         val name: String,
         override val span: klein.SourceSpan? = null,
         override val indent: Int? = null,
@@ -104,6 +120,18 @@ fun ident(
     span: klein.SourceSpan? = null,
     indent: Int? = null,
 ) = ExpectedToken.Ident(name, span, indent)
+
+fun upperIdent(
+    name: String,
+    span: klein.SourceSpan? = null,
+    indent: Int? = null,
+) = ExpectedToken.UpperIdent(name, span, indent)
+
+fun typeVar(
+    name: String,
+    span: klein.SourceSpan? = null,
+    indent: Int? = null,
+) = ExpectedToken.TypeVar(name, span, indent)
 
 fun num(
     text: String,
@@ -213,6 +241,8 @@ fun assertTokens(
 private fun Token.toExpected(): ExpectedToken =
     when (kind) {
         IDENT -> ExpectedToken.Ident(text!!, span, indent)
+        UPPER_IDENT -> ExpectedToken.UpperIdent(text!!, span, indent)
+        TYPE_VAR -> ExpectedToken.TypeVar(text!!, span, indent)
         INT, DOUBLE -> ExpectedToken.Number(text!!, span, indent)
         STRING -> ExpectedToken.Str(text!!, span, indent)
         PIPE -> ExpectedToken.Pipe(span, indent)

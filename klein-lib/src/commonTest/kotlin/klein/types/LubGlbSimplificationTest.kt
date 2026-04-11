@@ -1,0 +1,817 @@
+package klein.types
+
+import kotlin.test.Ignore
+import kotlin.test.Test
+
+class LubGlbSimplificationTest {
+    // --- Sibling constructors ---
+
+    @Test
+    fun siblings_bareEnumConstructors_joinToParent() {
+        assertType(
+            "MyBool",
+            inferLUB(
+                """
+                type MyBool = True | False
+                if true then True else False
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun siblings_twoOfThree_staysAsUnion() {
+        // Non-exhaustive: only 2 of 3 constructors present. Stays as union.
+        assertType(
+            "Red | Yellow",
+            inferLUB(
+                """
+                type Light = Red | Yellow | Green
+                if true then Red else Yellow
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun siblings_constructorsWithFields_joinToParent() {
+        assertType(
+            "Animal",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                if true then Dog("Fido") else Cat("Whiskers")
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun siblings_multipleTypeParams_mergeByPosition() {
+        // Both type params are covariant. All constructors present → parent.
+        // Type args: 'A = String | Num, 'B = Num | Bool (no Top/Bottom merging).
+        assertType(
+            "Either<Num | String, Bool | Num>",
+            inferLUB(
+                """
+                type Either<'A, 'B> = Left { value: 'A } | Right { value: 'B }
+                if true then Left("error") else if true then Right(42) else if true then Left(1) else Right(true)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun bareAndTyped_joinToParent() {
+        assertType(
+            "List<Num>",
+            inferLUB(
+                """
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                if true then Nil else Cons(1, Nil)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun allConstructors_simplifyToParent() {
+        assertType(
+            "Result<String, Num>",
+            inferLUB(
+                """
+                type Result<'A, 'B> = Ok { value: 'A } | Err { error: 'B } | Unknown
+                if true then Ok("yes") else if true then Err(404) else Unknown
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun constructorAndParent_joinToParent() {
+        assertType(
+            "List<Num>",
+            inferLUB(
+                """
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                xs = Cons(1, Nil)
+                if true then xs else xs.tail
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun singleConstructor_staysAsConstructorType() {
+        // Single-constructor types should show the constructor name, not the parent.
+        // Wrap is the only constructor of Wrapper, but the type should be Wrap<Num>.
+        assertType(
+            "Wrap<Num>",
+            inferLUB(
+                """
+                type Wrapper<'A> = Wrap { value: 'A }
+                Wrap(42)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_phantomTypeParam_collapsesToParent() {
+        // 'A is a phantom type param — not used in any constructor's fields.
+        // Both constructors are bare (no fields, no type args).
+        // Exhaustive: On + Off = all of Switch. Phantom param stays free.
+        assertType(
+            "Switch<'A>",
+            inferLUB(
+                """
+                type Switch<'A> = On | Off
+                if true then On else Off
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_phantomWithUsedParam_collapsesToParent() {
+        // 'A is used by Val, 'B is phantom (not used by any constructor's fields).
+        // Exhaustive: Val + Empty = all of Tagged.
+        // 'A gets Num from Val, 'B stays free (phantom, no contributions).
+        assertType(
+            "Tagged<Num, 'A>",
+            inferLUB(
+                """
+                type Tagged<'A, 'B> = Val { v: 'A } | Empty
+                if true then Val(42) else Empty
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_sharedCovariantParam_mergesArgs() {
+        // Either<'A> has a single covariant param used by both constructors.
+        // Exhaustive: Left<Num> | Right<String> = all of Either.
+        // Type arg merges covariantly: Num | String.
+        assertType(
+            "Either<Num | String>",
+            inferLUB(
+                """
+                type Either<'A> = Left { value: 'A } | Right { value: 'A }
+                if true then Left(42) else Right("hello")
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameConstructor_phantomTypeParam_mergesArgs() {
+        // Same constructor with phantom type param.
+        // On<Num> | On<String> — phantom 'A is invariant.
+        // Bounds are structurally equal but not polarity-independent → where clause.
+        assertType(
+            "Switch<'A> where Num | String <: 'A <: Num & String",
+            inferLUB(
+                """
+                type Switch<'A> = On | Off
+                type ForceNum = ForceNum { s: Switch<Num> }
+                type ForceStr = ForceStr { s: Switch<String> }
+                x = ForceNum(On).s
+                y = ForceStr(On).s
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Same-name refs with different type args ---
+
+    @Test
+    fun sameConstructor_differentTypeArgs_mergesTypeArgs() {
+        // Cons is covariant in 'A. LUB of Num and String stays as union (no Top/Bottom merging).
+        assertType(
+            "Cons<Num | String>",
+            inferLUB(
+                """
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                if true then Cons(1, Nil) else Cons("hi", Nil)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameParentRef_covariantParam_lubsTypeArgs() {
+        assertType(
+            "Cons<Animal>",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                x = Cons(Dog("Fido"), Nil)
+                y = Cons(Cat("Whiskers"), Nil)
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Variance-aware type arg merging ---
+
+    @Test
+    fun sameRef_contravariantParam_glbsTypeArgs() {
+        // 'A only appears in input position, so it's contravariant.
+        // LUB of Drain<Dog> | Drain<Cat> GLBs the args: Dog & Cat.
+        assertType(
+            "Drain<Cat & Dog>",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Sink<'A> = Drain { consume: ('A) -> Unit }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                x = Drain(|d ->
+                  _ = DogBox(d)
+                |)
+                y = Drain(|c ->
+                  _ = CatBox(c)
+                |)
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameRef_invariantParam_showsWhereClause() {
+        // 'A appears in both input and output, so it's invariant.
+        // Handler<Dog> | Handler<Cat> can't merge args directly.
+        // DogBox/CatBox constrain from input side (upper bound), so Dog & Cat appear as upper bound.
+        assertType(
+            "Handle<'A> where Animal <: 'A <: Cat & Dog",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Handler<'A> = Handle { run: ('A) -> 'A }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                handleDog = Handle(|d ->
+                  _ = DogBox(d)
+                  Dog("d")
+                |)
+                handleCat = Handle(|c ->
+                  _ = CatBox(c)
+                  Cat("c")
+                |)
+                if true then handleDog else handleCat
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameRef_invariantParam_upperBoundOnly() {
+        // DogBox/CatBox constrain from input side only — no concrete lower bounds.
+        // Only upper bound shows in where clause.
+        assertType(
+            "Handle<'A> where 'A <: Cat & Dog",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Handler<'A> = Handle { run: ('A) -> 'A }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                handleDog = Handle(|d ->
+                  _ = DogBox(d)
+                  d
+                |)
+                handleCat = Handle(|c ->
+                  _ = CatBox(c)
+                  c
+                |)
+                if true then handleDog else handleCat
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nonExhaustive_mixedVarianceWithInvariantConstructor_correctBounds() {
+        // Same as exhaustive version but with Fish added to Anim,
+        // so Dog|Cat is non-exhaustive and doesn't collapse to Anim.
+        assertType(
+            "Func<'A> where Cat | Dog <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat | Fish
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceWithSameConcreteType_collapsesToConcreteArg() {
+        // In has invariant 'A (f: 'A -> 'A), Out has covariant 'A (o: 'A).
+        // Both constrained to Dog, so the merged Invariant has Dog at both polarities.
+        // Co-occurrence analysis should eliminate the tvar entirely → Func<Dog>.
+        assertType(
+            "Func<Dog>",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Dog)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceWithInvariantConstructor_correctBounds() {
+        // In has invariant 'A (f: 'A -> 'A), Out has covariant 'A (o: 'A).
+        // Exhaustive: In + Out = all of Func. Parent 'A is invariant.
+        // Lower bound (positive): Dog | Cat (Dog from In's output, Cat from Out's output).
+        // Upper bound (negative): Dog (from In's input, Out has no negative contribution).
+        assertType(
+            "Func<'A> where Anim <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameRef_mixedVariance_eachArgSimplifiedByVariance() {
+        // 'A is contravariant (input only), 'B is covariant (output only)
+        // LUB of Xform<Dog, Num> | Xform<Cat, String>
+        // Contravariant arg: GLB of Dog, Cat = Dog & Cat
+        // Covariant arg: LUB of Num, String = Num | String
+        assertType(
+            "Xform<Cat & Dog, Num | String>",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Transform<'A, 'B> = Xform { run: ('A) -> 'B }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                x = Xform(|d ->
+                  _ = DogBox(d)
+                  1
+                |)
+                y = Xform(|c ->
+                  _ = CatBox(c)
+                  "hi"
+                |)
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceConstructors_collapsesToParent() {
+        // 'A is contravariant in In (function param) and covariant in Out (field).
+        // Parent Func has invariant 'A. Exhaustive: In + Out = all constructors.
+        // When collapsing to parent, type arg becomes invariant with both bounds.
+        assertType(
+            "Func<'A> where Cat <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> Bool } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d ->
+                  _ = ForceDog(d)
+                  true
+                |)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_invariantAndCovariantConstructors_collapsesToParent() {
+        // In has invariant 'A (appears in both input and output), Out has covariant 'A.
+        // Parent's 'A is invariant. Exhaustive: In + Out = all constructors.
+        // This tests merging Invariant + Resolved RefArgs during collapse.
+        assertType(
+            "Func<'A> where Cat <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d ->
+                  _ = ForceDog(d)
+                  d
+                |)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sameRef_invariantParam_showsBounds() {
+        // Invariant type arg with non-equal bounds should show where clause.
+        assertType(
+            "Ref<'A> where Dog <: 'A <: { name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, breed: String } | Cat { name: String }
+                type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+                Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Unrelated refs ---
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun unrelatedRefs_commonFields_fallBackToStructuralRecord() {
+        // Dog and Fish are from different type families but both have a name field
+        assertType(
+            "{ name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Sea = Fish { name: String } | Coral
+                if true then Dog("Fido") else Fish("Nemo")
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun unrelatedRefs_noCommonStructure_staysAsUnion() {
+        // Red and Some are unrelated, no common fields. Stays as union.
+        assertType(
+            "Red | Some<Num>",
+            inferLUB(
+                """
+                type Light = Red | Green
+                type Option<'A> = None | Some { value: 'A }
+                if true then Red else Some(1)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Ref + record ---
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun refAndRecord_fallsBackToRecordLub() {
+        assertType(
+            "{ name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                x = Dog("Fido")
+                y = { name = "bare" }
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Pure record merging ---
+
+    @Test
+    fun records_lub_keepsOnlyCommonFields() {
+        // Positive position: LUB of {a, b, c} and {b, c, d} keeps only {b, c}.
+        assertType(
+            "{ b: Num, c: String }",
+            inferLUB(
+                """
+                if true then { a = 1, b = 2, c = "x" } else { b = 3, c = "y", d = true }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun records_glb_keepsAllFields() {
+        // Negative position (function param): GLB of {a, b} and {b, c} keeps {a, b, c}.
+        assertType(
+            "({ a: Num, b: Num, c: Num }) -> Num",
+            inferLUB(
+                """
+                fun f(x) =
+                    y = x.a + x.b
+                    z = x.b + x.c
+                    y
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Pure function merging ---
+
+    @Test
+    fun functions_lub_mergesParamsAndResult() {
+        // Positive position: LUB of two functions.
+        // Params are contravariant (GLB): keeps all fields from both.
+        // Result is covariant (LUB): keeps only common fields.
+        assertType(
+            "(Num) -> { b: Num }",
+            inferLUB(
+                """
+                f = |x -> { a = x + 1, b = x + 2 }|
+                g = |x -> { b = x + 3, c = x + 4 }|
+                if true then f else g
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun functions_glb_mergesParamsAndResult() {
+        // Negative position (param of outer function): GLB of two functions.
+        // Params are covariant (LUB): keeps only common fields = {b}.
+        // Result is contravariant (GLB): keeps all demanded fields = {a, c}.
+        assertType(
+            "(({ b: Num }) -> Num) -> Num",
+            inferLUB(
+                """
+                fun outer(f) =
+                    r1 = f({ a = 1, b = 2 })
+                    r2 = f({ b = 3, c = 4 })
+                    r1+r2
+                outer
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Structural record merging (LUB, positive) ---
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun unrelatedRefs_commonFieldsDifferentTypes_lubsFieldTypes() {
+        // Both have a `value` field but with different types.
+        // LUB keeps common fields, LUBs field types.
+        // LUB of Num and String = Any (unrelated prims).
+        assertType(
+            "{ value: Num | String }",
+            inferLUB(
+                """
+                type Box = NumBox { value: Num } | EmptyBox
+                type Tag = StrTag { value: String } | NoTag
+                if true then NumBox(42) else StrTag("hi")
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun unrelatedRefs_partialOverlap_onlyCommonFieldsKept() {
+        // Dog has name + age, Fish has name + fins.
+        // LUB keeps only the common field: name.
+        assertType(
+            "{ name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, age: Num }
+                type Sea = Fish { name: String, fins: Num }
+                if true then Dog("Fido", 3) else Fish("Nemo", 2)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun refAndRecord_partialOverlap_onlyCommonFieldsKept() {
+        // Ref has name + age, record has name + color.
+        // LUB keeps only name.
+        assertType(
+            "{ name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, age: Num }
+                x = Dog("Fido", 3)
+                y = { name = "bare", color = "red" }
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun refAndRecord_recordHasExtraFields_onlyCommonFieldsKept() {
+        // Record is wider than the ref's structure, but LUB only keeps common fields.
+        assertType(
+            "{ name: String }",
+            inferLUB(
+                """
+                type Animal = Dog { name: String }
+                x = Dog("Fido")
+                y = { name = "bare", age = 5, color = "red" }
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Structural record merging (GLB, negative) ---
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun unrelatedRefs_inFunctionParam_glbKeepsAllFields() {
+        // x must satisfy both Dog and Fish constraints → GLB keeps all fields.
+        assertType(
+            "({ name: String, age: Num, fins: Num }) -> String",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, age: Num }
+                type Sea = Fish { name: String, fins: Num }
+                type DogBox = DogBox { value: Dog }
+                type FishBox = FishBox { value: Fish }
+                fun f(x) =
+                    _ = DogBox(x)
+                    _ = FishBox(x)
+                    x.name
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun refAndRecord_inFunctionParam_glbKeepsAllFields() {
+        // x must satisfy both Dog and {color: String} constraints → GLB keeps all fields.
+        assertType(
+            "({ name: String, age: Num, color: String }) -> String",
+            inferLUB(
+                """
+                type Animal = Dog { name: String, age: Num }
+                type DogBox = DogBox { value: Dog }
+                fun f(x) =
+                    _ = DogBox(x)
+                    _ = x.color
+                    x.name
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun unrelatedRefs_inFunctionParam_commonFieldTypesGlbd() {
+        // x must satisfy both NumBox and StrTag constraints.
+        // Both have `value` but with different types.
+        // GLB keeps all fields, GLBs common field types.
+        // GLB of Num and String = Nothing (unrelated prims).
+        assertType(
+            "({ value: Num & String }) -> Num & String",
+            inferLUB(
+                """
+                type Box = NumBox { value: Num }
+                type Tag = StrTag { value: String }
+                type NumBoxBox = NumBoxBox { value: NumBox }
+                type StrTagBox = StrTagBox { value: StrTag }
+                fun f(x) =
+                    _ = NumBoxBox(x)
+                    _ = StrTagBox(x)
+                    x.value
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Nested simplification ---
+
+    @Test
+    fun nested_siblingsSimplifyInsideTypeArg() {
+        assertType(
+            "Cons<Option<Num>>",
+            inferLUB(
+                """
+                type Option<'A> = None | Some { value: 'A }
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                Cons(if true then None else Some(42), Nil)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nested_invariantInsideCovariant() {
+        // List is covariant, Handler is invariant.
+        // Cons<Handler<Dog>> | Cons<Handler<Cat>> → same constructor, LUB the args →
+        //   Handler<Dog> | Handler<Cat> → invariant, shows where clause
+        assertType(
+            "Cons<Handle<'A> where 'A <: Cat & Dog>",
+            inferLUB(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                type Handler<'A> = Handle { run: ('A) -> 'A }
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                type DogBox = DogBox { value: Dog }
+                type CatBox = CatBox { value: Cat }
+                h1 = Handle(|d ->
+                  _ = DogBox(d)
+                  d
+                |)
+                h2 = Handle(|c ->
+                  _ = CatBox(c)
+                  c
+                |)
+                x = Cons(h1, Nil)
+                y = Cons(h2, Nil)
+                if true then x else y
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Optional + non-optional merging ---
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun optionalAndRecord_inParam_glbDropsOptional() {
+        // x is used with both ?. (constrains to {name: ...}?) and direct access (constrains to {name: ...}).
+        // GLB of {name: 'A}? & {name: 'A} = {name: 'A} (non-optional is stricter).
+        assertType(
+            "({ name: 'A }) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                    _ = x?.name
+                    x.name
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
+    fun optionalAndRecord_inParam_differentFields_glbMergesThenDropsOptional() {
+        // x?.name constrains to {name: ...}?, x.age constrains to {age: ...}.
+        // GLB merges records (all fields) and drops the optional.
+        assertType(
+            "({ age: 'A, name: Any }) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                    _ = x?.name
+                    x.age
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Vars + tightBound ---
+
+    @Test
+    fun varsAndBound_paramConnectedToReturn() {
+        // x has both a var (connecting to return) and a Num bound (from x + 1).
+        // The var must be preserved so the return type stays connected.
+        assertType(
+            "('A & Num) -> 'A",
+            inferLUB(
+                """
+                fun f(x) =
+                  _ = x + 1
+                  x
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Function return ---
+
+    @Test
+    fun functionReturn_siblingsSimplifyToParent() {
+        assertType(
+            "(Bool) -> Option<Num>",
+            inferLUB(
+                """
+                type Option<'A> = None | Some { value: 'A }
+                fun maybe(b) = if b then Some(42) else None
+                maybe
+                """.trimIndent(),
+            ),
+        )
+    }
+}

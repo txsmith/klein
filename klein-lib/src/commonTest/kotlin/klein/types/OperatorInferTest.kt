@@ -3,7 +3,6 @@ package klein.types
 import klein.Type
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class OperatorInferTest {
     @Test
@@ -98,29 +97,30 @@ class OperatorInferTest {
 
     @Test
     fun add_stringPlusString_fails() {
-        val result = inferWithErrors("\"a\" + \"b\"")
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("\"a\" + \"b\"")
+        assertMismatch(errors[0], "String", "Num")
     }
 
     @Test
     fun and_intAndInt_fails() {
-        val result = inferWithErrors("1 and 2")
-        assertTrue(result.errors.isNotEmpty())
-        assertTrue(result.errors.all { it is TypeError.TypeMismatch })
+        val errors = inferErrors("1 and 2")
+        assertEquals(2, errors.size)
+        assertMismatch(errors[0], "Num", "Bool")
+        assertMismatch(errors[1], "Num", "Bool")
     }
 
     @Test
     fun not_int_fails() {
-        val result = inferWithErrors("not 1")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("not 1")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Num", "Bool")
     }
 
     @Test
     fun neg_bool_fails() {
-        val result = inferWithErrors("-true")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.TypeMismatch)
+        val errors = inferErrors("-true")
+        assertEquals(1, errors.size)
+        assertMismatch(errors[0], "Bool", "Num")
     }
 
     @Test

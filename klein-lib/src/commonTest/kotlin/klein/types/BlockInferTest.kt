@@ -91,8 +91,8 @@ class BlockInferTest {
 
     @Test
     fun block_scoping_innerDoesNotLeakOut() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 f = |
                   x = 1
@@ -100,8 +100,8 @@ class BlockInferTest {
                 x
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.UnboundVariable)
+        assertEquals(1, errors.size)
+        assertUnbound(errors[0], "x")
     }
 
     @Test
@@ -120,8 +120,8 @@ class BlockInferTest {
 
     @Test
     fun block_duplicateBinding() {
-        val result =
-            inferWithErrors(
+        val errors =
+            inferErrors(
                 """
                 |
                   x = 1
@@ -130,8 +130,8 @@ class BlockInferTest {
                 |
                 """.trimIndent(),
             )
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.DuplicateBinding)
+        assertEquals(1, errors.size)
+        assertDuplicateBinding(errors[0], "x")
     }
 
     @Test
@@ -212,8 +212,8 @@ class BlockInferTest {
               a
             |
             """.trimIndent()
-        val result = inferWithErrors(program)
-        assertEquals(0, result.errors.size)
+        val errors = inferErrors(program)
+        assertEquals(0, errors.size)
     }
 
     @Test
@@ -229,8 +229,8 @@ class BlockInferTest {
             b = f(true)
             a
             """.trimIndent()
-        val result = inferWithErrors(program)
-        assertEquals(0, result.errors.size)
+        val errors = inferErrors(program)
+        assertEquals(0, errors.size)
     }
 
     @Test
@@ -245,8 +245,8 @@ class BlockInferTest {
             g = f(1)
             g(true)
             """.trimIndent()
-        val result = inferWithErrors(program)
-        assertEquals(0, result.errors.size)
+        val errors = inferErrors(program)
+        assertEquals(0, errors.size)
     }
 
     @Test
@@ -257,10 +257,10 @@ class BlockInferTest {
             h = escape_direct(true)
             h(42) + 1
             """.trimIndent()
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertTrue(
-            result.errors.any { it is TypeError.TypeMismatch },
-            "Expected type mismatch error for Bool + 1, but got: ${result.errors}",
+            errors.any { it is TypeError.TypeMismatch },
+            "Expected type mismatch error for Bool + 1, but got: $errors",
         )
     }
 
@@ -275,10 +275,10 @@ class BlockInferTest {
             h = escape(true)
             h(42) + 1
             """.trimIndent()
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertTrue(
-            result.errors.any { it is TypeError.TypeMismatch },
-            "Expected type mismatch error for Bool + 1, but got: ${result.errors}",
+            errors.any { it is TypeError.TypeMismatch },
+            "Expected type mismatch error for Bool + 1, but got: $errors",
         )
     }
 
@@ -294,10 +294,10 @@ class BlockInferTest {
             |
             outer(42)
             """.trimIndent()
-        val result = inferWithErrors(program)
+        val errors = inferErrors(program)
         assertEquals(
             emptyList(),
-            result.errors,
+            errors,
             "Expected no errors - each inner call should get fresh type variables",
         )
     }
@@ -333,8 +333,8 @@ class BlockInferTest {
               { a = f(0), b = f(true) }
             |
             """.trimIndent()
-        val result = inferWithErrors(program)
-        assertEquals(0, result.errors.size, "Let-polymorphism with union input should type-check: ${result.errors}")
+        val errors = inferErrors(program)
+        assertEquals(0, errors.size, "Let-polymorphism with union input should type-check: $errors")
     }
 
     @Test
@@ -360,8 +360,8 @@ class BlockInferTest {
 
     @Test
     fun block_twiceCombinator() {
-        val result = inferWithErrors("|f -> |x -> f(f(x))||")
-        assertEquals(0, result.errors.size, "Twice combinator should type-check: ${result.errors}")
+        val errors = inferErrors("|f -> |x -> f(f(x))||")
+        assertEquals(0, errors.size, "Twice combinator should type-check: $errors")
     }
 
     @Test

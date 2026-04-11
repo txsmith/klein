@@ -74,6 +74,10 @@ class Lexer(
                 listOf(string())
             }
 
+            c == '\'' -> {
+                listOf(typeVar())
+            }
+
             c == '|' -> {
                 advance()
                 listOf(token(PIPE, SourceSpan(start, pos)))
@@ -158,10 +162,30 @@ class Lexer(
 
     private fun identOrKeyword(): Token {
         val start = pos
+        val firstChar = source[start]
         val text = consumeWhile { it.isLetterOrDigit() || it == '_' }
         val span = SourceSpan(start, pos)
-        val kind = TokenKind.fromKeyword(text) ?: IDENT
+
+        // Check if it's a keyword first
+        val keywordKind = TokenKind.fromKeyword(text)
+        if (keywordKind != null) {
+            return token(keywordKind, span, text)
+        }
+
+        // Distinguish between UPPER_IDENT and IDENT based on first character
+        val kind = if (firstChar.isUpperCase()) UPPER_IDENT else IDENT
         return token(kind, span, text)
+    }
+
+    private fun typeVar(): Token {
+        val start = pos
+        advance('\'')
+        val next = peek()
+        if (next == null || !next.isUpperCase()) {
+            throw LexerError("Type variable must start with uppercase letter after '", SourceSpan(start, pos))
+        }
+        val name = consumeWhile { it.isLetterOrDigit() || it == '_' }
+        return token(TYPE_VAR, SourceSpan(start, pos), name)
     }
 
     private fun string(): Token {

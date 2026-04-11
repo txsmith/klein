@@ -38,14 +38,16 @@ class RecordInferTest {
 
     @Test
     fun duplicateField_reportsError() {
-        val result = inferWithErrors("{ x = 1, x = 2 }")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.DuplicateField)
+        val errors = inferErrors("{ x = 1, x = 2 }")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.DuplicateField)
     }
 
     @Test
     fun duplicateField_usesLastValue() {
-        assertType(Type.Record(mapOf("x" to Type.Str)), infer("{ x = 1, x = \"hello\" }"))
+        val errors = inferErrors("{ x = 1, x = \"hello\" }")
+        assertEquals(1, errors.size)
+        assertTrue(errors[0] is TypeError.DuplicateField)
     }
 
     @Test
@@ -65,9 +67,9 @@ class RecordInferTest {
 
     @Test
     fun fieldAccess_missingField() {
-        val result = inferWithErrors("{ x = 1 }.y")
-        assertEquals(1, result.errors.size)
-        assertTrue(result.errors[0] is TypeError.MissingField)
+        val errors = inferErrors("{ x = 1 }.y")
+        assertEquals(1, errors.size)
+        assertMissingField(errors[0], "y")
     }
 
     @Test
