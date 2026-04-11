@@ -86,12 +86,14 @@ data class FunctionType(
 
 /**
  * A family of refs sharing the same parent type.
- * - Some: a partial set of constructors (not yet exhaustive)
- * - All: all constructors present, collapsed to the parent ref with merged type args
  */
-sealed class RefFamily {
-    data class Some(val constructors: List<RefType>) : RefFamily()
-    data class All(val ref: RefType) : RefFamily()
+data class RefFamily(val parent: RefType?, val constructors: List<RefType>) {
+    // override fun toString(): String =
+    //     // if (parent != null) {
+    //         // parent.toString()
+    //     // } else {
+    //         constructors.toString()
+    //     // }
 }
 
 // TODO: Add map/fold methods to TypeComponents to reduce duplication in recursive traversals
@@ -132,10 +134,19 @@ data class TypeComponents(
             val ctor = env.lookupConstructor(name)
             val parentName = ctor?.parentType ?: name
             val family = if (ctor == null) {
-                // Parent ref (e.g. List<Num>) → All
-                RefFamily.All(refType)
+                // Parent ref (e.g. List<Num>) → expand to all constructors
+                val parentDef = env.getTypeDef(name)
+                val parentArgMap = parentDef.typeParams.zip(args).associate { (p, a) -> p.name to a }
+                val constructors = env.allConstructors()
+                    .filter { it.parentType == name }
+                    .map { ctorInfo ->
+                        val ctorDef = env.getTypeDef(ctorInfo.name)
+                        val ctorArgs = ctorDef.typeParams.map { param -> parentArgMap[param.name]!! }
+                        RefType(ctorInfo.name, ctorArgs)
+                    }
+                RefFamily(parent = refType, constructors)
             } else {
-                RefFamily.Some(listOf(refType))
+                RefFamily(parent = null, listOf(refType))
             }
             return TypeComponents(refs = mapOf(parentName to family))
         }
@@ -330,6 +341,9 @@ data class TypeComponents(
                             }
                         }
 
+                    fun flattenRefType(ref: RefType): RefType =
+                        RefType(ref.name, flattenRefArgs(ref.args))
+
                     val result =
                         TypeComponents(
                             vars = bounds.vars,
@@ -350,18 +364,9 @@ data class TypeComponents(
                             optional = bounds.optional?.let { flattenBounds(it, pol, newInProgress) },
                             refs =
                                 bounds.refs.mapValues { (_, family) ->
-                                    when (family) {
-                                        is RefFamily.All -> {
-                                            trace { "recursing into ${family.ref}" }
-                                            RefFamily.All(RefType(family.ref.name, flattenRefArgs(family.ref.args)))
-                                        }
-                                        is RefFamily.Some -> RefFamily.Some(
-                                            family.constructors.map { ref ->
-                                                trace { "recursing into $ref" }
-                                                RefType(ref.name, flattenRefArgs(ref.args))
-                                            },
-                                        )
-                                    }
+                                    val flatConstructors = family.constructors.map{ flattenRefType(it) }
+                                    val flatParent = family.parent?.let { flattenRefType(it) }
+                                    RefFamily(flatParent, flatConstructors)
                                 },
                         )
 
@@ -450,41 +455,46 @@ data class TypeComponents(
             parentName: String,
             pol: Boolean,
             env: TypeEnv,
-        ): RefFamily = when {
-            left is RefFamily.All && right is RefFamily.All ->
-                RefFamily.All(foldRefs(left.ref, listOf(right.ref), env))
+        ): RefFamily {
 
-            left is RefFamily.All && right is RefFamily.Some ->
-                RefFamily.All(foldRefs(left.ref, right.constructors, env))
+            val allCtors = left.constructors + right.constructors
 
-            left is RefFamily.Some && right is RefFamily.All ->
-                RefFamily.All(foldRefs(right.ref, left.constructors, env))
+            return when {
+                left.parent != null && right.parent != null-> {
+                    RefFamily(foldRefs(left.parent, listOf(right.parent), env), allCtors)
+                }
 
-            left is RefFamily.Some && right is RefFamily.Some -> {
-                val all = left.constructors + right.constructors
-                // TODO: Could just compare counts instead of building sets
-                //   (same-name refs are already deduplicated, so merged.size == allCtors.size suffices)
-                val allCtors = env.allConstructors().filter { it.parentType == parentName }
-                val presentNames = all.map { it.name }.toSet()
+                left.parent != null -> {
+                    RefFamily(foldRefs(left.parent, right.constructors, env), allCtors)
+                }
 
-                val isSingleCtorType = allCtors.size == 1 && allCtors[0].name != parentName
-                if (pol && !isSingleCtorType && presentNames.containsAll(allCtors.map { it.name }.toSet())) {
-                    val parentDef = env.getTypeDef(parentName)
-                    val emptyParent = RefType(parentName, parentDef.typeParams.map { param ->
-                        when (param.variance) {
-                            Variance.Invariant -> RefArg.Invariant(TVar(), empty, empty)
-                            Variance.Contravariant -> RefArg.Resolved(empty, false)
-                            else -> RefArg.Resolved(empty, true)
-                        }
-                    })
-                    RefFamily.All(foldRefs(emptyParent, all, env))
-                } else {
-                    val byName = all.groupBy { it.name }
-                    RefFamily.Some(byName.map { (_, refs) -> foldRefs(refs.first(), refs.drop(1), env) })
+                right.parent != null -> {
+                    RefFamily(foldRefs(right.parent, left.constructors, env), allCtors)
+                }
+
+                else -> {
+                    // TODO: Could just compare counts instead of building sets
+                    //   (same-name refs are already deduplicated, so merged.size == allPossibleCtors.size suffices)
+                    val allPossibleCtors = env.allConstructors().filter { it.parentType == parentName }
+                    val presentNames = allCtors.map { it.name }.toSet()
+
+                    val isSingleCtorType = allPossibleCtors.size == 1 && allPossibleCtors[0].name != parentName
+                    if (pol && !isSingleCtorType && presentNames.containsAll(allPossibleCtors.map { it.name }.toSet())) {
+                        val parentDef = env.getTypeDef(parentName)
+                        val emptyParent = RefType(parentName, parentDef.typeParams.map { param ->
+                            when (param.variance) {
+                                Variance.Invariant -> RefArg.Invariant(TVar(), empty, empty)
+                                Variance.Contravariant -> RefArg.Resolved(empty, false)
+                                else -> RefArg.Resolved(empty, true)
+                            }
+                        })
+                        RefFamily(parent = foldRefs(emptyParent, allCtors, env), allCtors)
+                    } else {
+                        val byName = allCtors.groupBy { it.name }
+                        RefFamily(parent = null, byName.map { (_, refs) -> foldRefs(refs.first(), refs.drop(1), env) })
+                    }
                 }
             }
-
-            else -> error("unreachable")
         }
 
         /**
@@ -518,16 +528,20 @@ data class TypeComponents(
             return RefType(base.name, baseDef.typeParams.map { merged[it.name]!! })
         }
 
-        /** Extract the positive (output) bound of a RefArg. */
-        private fun posBound(arg: RefArg): TypeComponents = when (arg) {
+        /**
+         * Project a RefArg into pos/neg TypeComponents for invariant merging.
+         * For Resolved: the components go to the matching polarity, empty to the other.
+         * For Invariant: strip the arg's own tvar (it's the bounded variable, not part of
+         *   the bound) but keep other vars so flattenBounds can resolve them later.
+         */
+        private fun toPos(arg: RefArg): TypeComponents = when (arg) {
             is RefArg.Resolved -> if (arg.pol) arg.components else empty
-            is RefArg.Invariant -> arg.pos.copy(vars = arg.pos.vars - arg.tvar)
+            is RefArg.Invariant -> arg.pos
         }
 
-        /** Extract the negative (input) bound of a RefArg. */
-        private fun negBound(arg: RefArg): TypeComponents = when (arg) {
+        private fun toNeg(arg: RefArg): TypeComponents = when (arg) {
             is RefArg.Resolved -> if (!arg.pol) arg.components else empty
-            is RefArg.Invariant -> arg.neg.copy(vars = arg.neg.vars - arg.tvar)
+            is RefArg.Invariant -> arg.neg
         }
 
         private fun mergeRefArg(
@@ -542,10 +556,18 @@ data class TypeComponents(
                 return RefArg.Resolved(left.components.merge(right.components, left.pol, env), left.pol)
             }
 
-            // General case: merge as invariant with both bounds
-            val mergedPos = posBound(left).merge(posBound(right), true, env)
-            val mergedNeg = negBound(left).merge(negBound(right), false, env)
-            return RefArg.Invariant(TVar(), mergedPos, mergedNeg)
+            // General case: merge as invariant with both bounds.
+            // The tvar is added to both pos and neg so that:
+            //   1. Co-occurrence analysis can unify inference tvars into it
+            //   2. Coalescing can strip it (and unified vars) from the bounds
+            val tvar = TVar()
+            val mergedPos = toPos(left).merge(toPos(right), true, env)
+            val mergedNeg = toNeg(left).merge(toNeg(right), false, env)
+            return RefArg.Invariant(
+                tvar,
+                mergedPos.copy(vars = mergedPos.vars + tvar),
+                mergedNeg.copy(vars = mergedNeg.vars + tvar),
+            )
         }
     }
 
@@ -595,11 +617,18 @@ data class TypeComponents(
 
     fun hasConcreteComponents(): Boolean = prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
 
-    /** Get all refs as a flat set (for coalescing). */
     fun allRefs(): Set<RefType> = refs.flatMap { (_, family) ->
-        when (family) {
-            is RefFamily.All -> listOf(family.ref)
-            is RefFamily.Some -> family.constructors
+        when {
+            family.parent != null -> family.constructors.ifEmpty { listOf(family.parent) }
+            else -> family.constructors
+        }
+    }.toSet()
+
+    /** Get refs for display and co-occurrance analysis, uses parent ref for exhaustive families. */
+    fun displayRefs(): Set<RefType> = refs.flatMap { (_, family) ->
+        when {
+            family.parent != null -> listOf(family.parent)
+            else -> family.constructors
         }
     }.toSet()
 
@@ -611,7 +640,7 @@ data class TypeComponents(
         if (rec != null) parts.add("rec=$rec")
         if (func != null) parts.add("func=$func")
         if (optional != null) parts.add("optional=$optional")
-        if (refs.isNotEmpty()) parts.add("refs=$refs")
+        if (refs.isNotEmpty()) parts.add("refs=${refs.values}")
         return if (parts.isEmpty()) "TypeComponents()" else "TypeComponents(${parts.joinToString(", ")})"
     }
 }

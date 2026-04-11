@@ -74,8 +74,6 @@ object TypeSimplifier {
      *    This would arise from constraints such as: Int <: 'a, 'a <:'b and 'b <: Int
      *      (contraints which basically say 'a =:= 'b =:= Int)
      *    Example: 'a ∧ Int -> 'a ∨ Int is the same as Int -> Int
-     *    Currently, we only do this for primitive types.
-     *    In principle it could be done for functions and records, too.
      *    Note: conceptually, this idea subsumes the simplification that removes variables occurring
      *        exclusively in positive or negative positions.
      *      Indeed, if 'a never occurs positively, it's like it always occurs both positively AND
@@ -145,7 +143,7 @@ object TypeSimplifier {
         val recVars = mutableSetOf<TVar>()
         val coOccurrences = mutableMapOf<Pair<Boolean, TVar>, MutableSet<Any>>()
 
-        val functions =
+        val ops =
             object {
                 fun collect(
                     ty: TypeComponents,
@@ -160,12 +158,11 @@ object TypeSimplifier {
                         ty.func?.let { newOccs.add(it) }
                         newOccs.addAll(ty.allRefs())
 
-                        val key = pol to tv
-                        val existing = coOccurrences[key]
+                        val existing = coOccurrences[pol to tv]
                         if (existing != null) {
                             existing.retainAll(newOccs)
                         } else {
-                            coOccurrences[key] = newOccs
+                            coOccurrences[pol to tv] = newOccs
                         }
 
                         // If tv is recursive, also collect from its expansion
@@ -177,16 +174,13 @@ object TypeSimplifier {
                         }
                     }
 
-                    ty.rec
-                        ?.fields
-                        ?.values
-                        ?.forEach { collect(it, pol) }
+                    ty.rec ?.fields ?.values ?.forEach { collect(it, pol) }
                     ty.func?.let { (params, result) ->
                         params.forEach { collect(it, !pol) }
                         collect(result, pol)
                     }
                     ty.optional?.let { collect(it, pol) }
-                    ty.allRefs().forEach { ref ->
+                    ty.displayRefs().forEach { ref ->
                         ref.args.forEach { arg ->
                             when (arg) {
                                 is RefArg.Resolved -> {
@@ -202,7 +196,7 @@ object TypeSimplifier {
                 }
             }
 
-        functions.collect(cty.term, cty.pol)
+        ops.collect(cty.term, cty.pol)
         return CoOccurrenceAnalysis(
             allVars = allVars.toSet(),
             recVars = recVars.toSet(),
@@ -315,9 +309,9 @@ object TypeSimplifier {
             optional = ty.optional?.let { applySubstitutions(it, varSubst) },
             refs = ty.refs.mapValues { (_, family) ->
                 fun applyToRef(ref: RefType) = RefType(ref.name, ref.args.map { applyRefArgSubstitutions(it, varSubst) })
-                when (family) {
-                    is RefFamily.All -> RefFamily.All(applyToRef(family.ref))
-                    is RefFamily.Some -> RefFamily.Some(family.constructors.map { applyToRef(it) })
+                when  {
+                    family.parent != null -> RefFamily(parent = applyToRef(family.parent), family.constructors.map { applyToRef(it) })
+                    else -> RefFamily(parent = null, family.constructors.map { applyToRef(it) })
                 }
             },
         )
@@ -336,7 +330,7 @@ object TypeSimplifier {
         val namer = VarNamer()
         fun varName(v: TVar) = namer.varName(v)
 
-        val functions =
+        val ops =
             object {
                 fun coalesceRefArg(
                     arg: RefArg,
@@ -428,7 +422,7 @@ object TypeSimplifier {
                         components.add(Type.Optional(innerType))
                     }
 
-                    for (ref in ty.allRefs()) {
+                    for (ref in ty.displayRefs()) {
                         val coalescedArgs = ref.args.map { arg -> coalesceRefArg(arg, pol, newInProcess) }
                         components.add(Type.Ref(ref.name, coalescedArgs))
                     }
@@ -472,7 +466,7 @@ object TypeSimplifier {
         return if (term.isEmpty()) {
             if (cty.pol) Type.Bottom else Type.Top
         } else {
-            functions.go(term, cty.pol, emptyMap())
+            ops.go(term, cty.pol, emptyMap())
         }
     }
 

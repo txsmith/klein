@@ -247,7 +247,7 @@ class LubGlbSimplificationTest {
         // Handler<Dog> | Handler<Cat> can't merge args directly.
         // DogBox/CatBox constrain from input side (upper bound), so Dog & Cat appear as upper bound.
         assertType(
-            "Handle<'A> where Dog | Cat <: 'A <: Cat & Dog",
+            "Handle<'A> where Animal <: 'A <: Cat & Dog",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
@@ -295,13 +295,52 @@ class LubGlbSimplificationTest {
     }
 
     @Test
+    fun nonExhaustive_mixedVarianceWithInvariantConstructor_correctBounds() {
+        // Same as exhaustive version but with Fish added to Anim,
+        // so Dog|Cat is non-exhaustive and doesn't collapse to Anim.
+        assertType(
+            "Func<'A> where Cat | Dog <: 'A <: Dog",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat | Fish
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Cat)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun exhaustive_mixedVarianceWithSameConcreteType_collapsesToConcreteArg() {
+        // In has invariant 'A (f: 'A -> 'A), Out has covariant 'A (o: 'A).
+        // Both constrained to Dog, so the merged Invariant has Dog at both polarities.
+        // Co-occurrence analysis should eliminate the tvar entirely → Func<Dog>.
+        assertType(
+            "Func<Dog>",
+            inferLUB(
+                """
+                type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
+                type Anim = Dog | Cat
+                type ForceDog = ForceDog { d: Dog }
+                in = In(|d -> ForceDog(d).d|)
+                out = Out(Dog)
+                if true then in else out
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
     fun exhaustive_mixedVarianceWithInvariantConstructor_correctBounds() {
         // In has invariant 'A (f: 'A -> 'A), Out has covariant 'A (o: 'A).
         // Exhaustive: In + Out = all of Func. Parent 'A is invariant.
         // Lower bound (positive): Dog | Cat (Dog from In's output, Cat from Out's output).
         // Upper bound (negative): Dog (from In's input, Out has no negative contribution).
         assertType(
-            "Func<'A> where Cat | Dog <: 'A <: Dog",
+            "Func<'A> where Anim <: 'A <: Dog",
             inferLUB(
                 """
                 type Func<'A> = In { f: ('A) -> 'A } | Out { o: 'A }
@@ -680,7 +719,7 @@ class LubGlbSimplificationTest {
         // Cons<Handler<Dog>> | Cons<Handler<Cat>> → same constructor, LUB the args →
         //   Handler<Dog> | Handler<Cat> → invariant, shows where clause
         assertType(
-            "Cons<Handle<'A> where Dog | Cat <: 'A <: Cat & Dog>",
+            "Cons<Handle<'A> where 'A <: Cat & Dog>",
             inferLUB(
                 """
                 type Animal = Dog { name: String } | Cat { name: String }
