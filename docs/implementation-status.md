@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** Parser complete for core expression features. Type inference implemented (SimpleSub). No interpreter.
+**Current state:** Parser and type inference complete for core expressions and type declarations. Type definitions with sum types, generics, variance inference, and LUB/GLB simplification. No interpreter.
 
 ## Parser
 
@@ -65,8 +65,6 @@
 
 | Feature | Notes |
 |---------|-------|
-| Type definitions | `type Person = Person { name: String }` |
-| Sum types | `type Color = Red \| Green \| Blue` |
 | Type aliases | `type Money = Num` |
 | Extension methods | `fun f(on x: T)` |
 | Modules | `module Name` |
@@ -95,14 +93,21 @@ See [type-system.md](type-system.md) for design and [simplesub-type-inference.md
 | Recursive types | `{ head: Num, tail: a } as a` |
 | Union/intersection | `a \| b`, `a & b` |
 | Type simplification | Canonicalization of recursive types |
+| Type definitions | `type Option<'A> = Some { value: 'A } \| None` |
+| Sum types | `type Color = Red \| Green \| Blue` |
+| Generics | `List<'A>`, `Option<'A>` with variance inference |
+| Nominal types | `type Person = Person { ... }` creates nominal type |
+| Nominal → structural subtyping | `Dog <: { name: String }` |
+| Constructor binding | First-class constructor functions |
+| Inferred interfaces | Common fields across constructors |
+| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
 
 ### Not Started
 
 | Feature | Notes |
 |---------|-------|
-| Sum types | `Ok { value: t } \| Err { error: e }` |
-| Generics | `List<'A>`, `Option<'A>` |
-| Nominal types | `type Person = Person { ... }` creates nominal type |
+| Pattern matching | `match x with \| Some v -> v \| None -> 0` |
+| Type annotations | `fun f(x: Num)`, `x: Num = 1` |
 | Kleene types | `T?`, `T*`, `T+` (experimental) |
 
 ## Interpreter

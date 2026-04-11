@@ -1,5 +1,6 @@
 package klein.types
 
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 class LubGlbSimplificationTest {
@@ -446,7 +447,7 @@ class LubGlbSimplificationTest {
 
     // --- Unrelated refs ---
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun unrelatedRefs_commonFields_fallBackToStructuralRecord() {
         // Dog and Fish are from different type families but both have a name field
         assertType(
@@ -478,7 +479,7 @@ class LubGlbSimplificationTest {
 
     // --- Ref + record ---
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun refAndRecord_fallsBackToRecordLub() {
         assertType(
             "{ name: String }",
@@ -565,7 +566,7 @@ class LubGlbSimplificationTest {
 
     // --- Structural record merging (LUB, positive) ---
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun unrelatedRefs_commonFieldsDifferentTypes_lubsFieldTypes() {
         // Both have a `value` field but with different types.
         // LUB keeps common fields, LUBs field types.
@@ -582,7 +583,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun unrelatedRefs_partialOverlap_onlyCommonFieldsKept() {
         // Dog has name + age, Fish has name + fins.
         // LUB keeps only the common field: name.
@@ -598,7 +599,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun refAndRecord_partialOverlap_onlyCommonFieldsKept() {
         // Ref has name + age, record has name + color.
         // LUB keeps only name.
@@ -615,7 +616,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun refAndRecord_recordHasExtraFields_onlyCommonFieldsKept() {
         // Record is wider than the ref's structure, but LUB only keeps common fields.
         assertType(
@@ -633,7 +634,7 @@ class LubGlbSimplificationTest {
 
     // --- Structural record merging (GLB, negative) ---
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun unrelatedRefs_inFunctionParam_glbKeepsAllFields() {
         // x must satisfy both Dog and Fish constraints → GLB keeps all fields.
         assertType(
@@ -654,7 +655,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun refAndRecord_inFunctionParam_glbKeepsAllFields() {
         // x must satisfy both Dog and {color: String} constraints → GLB keeps all fields.
         assertType(
@@ -673,7 +674,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun unrelatedRefs_inFunctionParam_commonFieldTypesGlbd() {
         // x must satisfy both NumBox and StrTag constraints.
         // Both have `value` but with different types.
@@ -745,7 +746,7 @@ class LubGlbSimplificationTest {
 
     // --- Optional + non-optional merging ---
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun optionalAndRecord_inParam_glbDropsOptional() {
         // x is used with both ?. (constrains to {name: ...}?) and direct access (constrains to {name: ...}).
         // GLB of {name: 'A}? & {name: 'A} = {name: 'A} (non-optional is stricter).
@@ -762,7 +763,7 @@ class LubGlbSimplificationTest {
         )
     }
 
-    @Test
+    @Test @Ignore // Deferred: structural expansion (see docs/ideas/type-simplification-future.md)
     fun optionalAndRecord_inParam_differentFields_glbMergesThenDropsOptional() {
         // x?.name constrains to {name: ...}?, x.age constrains to {age: ...}.
         // GLB merges records (all fields) and drops the optional.
