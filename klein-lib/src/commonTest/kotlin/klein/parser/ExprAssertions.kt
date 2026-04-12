@@ -2,6 +2,7 @@ package klein.parser
 
 import klein.AppliedTypeExpr
 import klein.Apply
+import klein.Ascription
 import klein.BinaryOp
 import klein.Block
 import klein.BoolLiteral
@@ -20,6 +21,7 @@ import klein.Lambda
 import klein.Lexer
 import klein.NullLiteral
 import klein.Operator
+import klein.Param
 import klein.ParseError
 import klein.Parser
 import klein.Program
@@ -58,10 +60,17 @@ fun neg(operand: Expr) = UnaryOp(UnaryOperator.Neg, operand, noSpan)
 
 fun not(operand: Expr) = UnaryOp(UnaryOperator.Not, operand, noSpan)
 
+fun param(name: String, type: TypeExpr? = null) = Param(name, type)
+
 fun lambda(
     vararg params: String,
     body: Expr,
-) = Lambda(params.toList(), body, noSpan)
+) = Lambda(params.map { Param(it) }, body, noSpan)
+
+fun lambda(
+    params: List<Param>,
+    body: Expr,
+) = Lambda(params, body, noSpan)
 
 fun call(
     callee: Expr,
@@ -165,7 +174,7 @@ fun Expr.stripSpans(): Expr =
         is Ident -> Ident(name, noSpan)
         is UnaryOp -> UnaryOp(op, operand.stripSpans(), noSpan)
         is BinaryOp -> BinaryOp(left.stripSpans(), op, right.stripSpans(), noSpan)
-        is Lambda -> Lambda(params, body.stripSpans(), noSpan)
+        is Lambda -> Lambda(params.map { it.stripSpan() }, body.stripSpans(), noSpan)
         is Apply -> Apply(callee.stripSpans(), args.map { it.stripSpans() }, noSpan)
         is Block -> Block(stmts.map { it.stripSpan() }, noSpan)
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
@@ -173,6 +182,7 @@ fun Expr.stripSpans(): Expr =
         is SafeFieldAccess -> SafeFieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
         is RecordLiteral -> RecordLiteral(fields.map { (name, value) -> name to value.stripSpans() }, noSpan)
+        is Ascription -> Ascription(expr.stripSpans(), type.stripSpan(), noSpan)
     }
 
 fun parse(source: String): Expr {
@@ -190,13 +200,26 @@ fun assertExprEquals(
 fun valStmt(
     name: String,
     value: Expr,
-) = Val(name, value, noSpan)
+    typeAnnotation: TypeExpr? = null,
+) = Val(name, value, noSpan, typeAnnotation)
 
 fun funDef(
     name: String,
     vararg params: String,
     body: Expr,
-) = FunDef(name, params.toList(), body, noSpan)
+) = FunDef(name, params.map { Param(it) }, body, noSpan)
+
+fun funDef(
+    name: String,
+    params: List<Param>,
+    body: Expr,
+    returnType: TypeExpr? = null,
+) = FunDef(name, params, body, noSpan, returnType)
+
+fun ascription(
+    expr: Expr,
+    type: TypeExpr,
+) = Ascription(expr, type, noSpan)
 
 fun typeDef(
     name: String,
@@ -246,11 +269,13 @@ fun parseTopLevel(source: String): Stmt {
 
 fun Stmt.stripSpan(): Stmt =
     when (this) {
-        is Val -> Val(name, value.stripSpans(), noSpan)
-        is FunDef -> FunDef(name, params, body.stripSpans(), noSpan)
+        is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
+        is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
         is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
         is Expr -> stripSpans()
     }
+
+fun Param.stripSpan(): Param = Param(name, typeAnnotation?.stripSpan())
 
 fun Constructor.stripSpan(): Constructor = Constructor(name, fields.map { it.stripSpan() }, noSpan)
 

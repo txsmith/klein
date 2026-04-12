@@ -85,7 +85,7 @@ class Typer {
         for (funDef in funDefs) {
             val typeVar = scopeEnv.freshVar()
             env.bind(funDef.name, typeVar)
-            env.registerFunDef(FunDefInfo(funDef.name, funDef.params))
+            env.registerFunDef(FunDefInfo(funDef.name, funDef.params.map { it.name }))
             bound.add(funDef to typeVar)
         }
 
@@ -93,7 +93,7 @@ class Typer {
         for ((funDef, typeVar) in bound) {
             val rhsEnv = env.enterBindingScope()
             rhsEnv.bind(funDef.name, typeVar)
-            val type = inferFunction(funDef.params, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
+            val type = inferFunction(funDef.params.map { it.name }, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
             subtyping.constrain(type, typeVar, funDef.span)
         }
 
@@ -150,13 +150,14 @@ class Typer {
             is Ident -> inferIdent(expr, env)
             is BinaryOp -> inferBinaryOp(expr, env)
             is UnaryOp -> inferUnaryOp(expr, env)
-            is Lambda -> inferFunction(expr.params, expr.body, expr.span, env)
+            is Lambda -> inferFunction(expr.params.map { it.name }, expr.body, expr.span, env)
             is Apply -> inferApply(expr, env)
             is RecordLiteral -> inferRecordLiteral(expr, env)
             is FieldAccess -> inferFieldAccess(expr, env)
             is SafeFieldAccess -> inferSafeFieldAccess(expr, env)
             is IfThenElse -> inferIfThenElse(expr, env)
             is ImplicitParam -> inferImplicitParam(expr, env)
+            is Ascription -> infer(expr.expr, env) // TODO: Phase 2 will constrain against annotation
             is Block -> inferBlockStmts(expr.stmts, env.child()).first
         }
 

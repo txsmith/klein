@@ -15,13 +15,20 @@ data class Val(
     val name: String,
     val value: Expr,
     override val span: SourceSpan,
+    val typeAnnotation: TypeExpr? = null,
 ) : Stmt()
+
+data class Param(
+    val name: String,
+    val typeAnnotation: TypeExpr? = null,
+)
 
 data class FunDef(
     val name: String,
-    val params: List<String>,
+    val params: List<Param>,
     val body: Expr,
     override val span: SourceSpan,
+    val returnType: TypeExpr? = null,
 ) : Stmt()
 
 data class TypeDef(
@@ -127,7 +134,7 @@ data class UnaryOp(
 ) : Expr()
 
 data class Lambda(
-    val params: List<String>,
+    val params: List<Param>,
     val body: Expr,
     override val span: SourceSpan,
 ) : Expr()
@@ -176,6 +183,7 @@ val Expr.usesImplicitParam: Boolean
             is Lambda -> false
             is Apply -> callee.usesImplicitParam || args.any { it.usesImplicitParam }
             is RecordLiteral -> fields.any { it.second.usesImplicitParam }
+            is Ascription -> expr.usesImplicitParam
             is FieldAccess -> target.usesImplicitParam
             is SafeFieldAccess -> target.usesImplicitParam
             is IfThenElse ->
@@ -210,6 +218,12 @@ val Expr.children: List<Expr>
 
 data class RecordLiteral(
     val fields: List<Pair<String, Expr>>,
+    override val span: SourceSpan,
+) : Expr()
+
+data class Ascription(
+    val expr: Expr,
+    val type: TypeExpr,
     override val span: SourceSpan,
 ) : Expr()
 

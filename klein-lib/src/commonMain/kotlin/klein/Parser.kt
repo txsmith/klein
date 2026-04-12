@@ -61,9 +61,15 @@ class Parser(
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
+        val returnType = if (peek().kind == COLON) {
+            advance()
+            parseTypeExpr()
+        } else {
+            null
+        }
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
-        return FunDef(name.text!!, params, body, funToken.span + body.span)
+        return FunDef(name.text!!, params, body, funToken.span + body.span, returnType)
     }
 
     private fun parseTypeDef(): TypeDef {
@@ -321,25 +327,42 @@ class Parser(
         }
     }
 
-    private fun parseFunParams(): List<String> {
+    private fun parseFunParams(): List<Param> {
         if (peek().kind == RPAREN) return emptyList()
 
-        val params = mutableListOf<String>()
-        params.add(expectIdentifier("Expected parameter name").text!!)
+        val params = mutableListOf<Param>()
+        params.add(parseAnnotatedParam())
 
         while (peek().kind == COMMA) {
             advance()
-            params.add(expectIdentifier("Expected parameter name").text!!)
+            params.add(parseAnnotatedParam())
         }
 
         return params
     }
 
+    private fun parseAnnotatedParam(): Param {
+        val name = expectIdentifier("Expected parameter name")
+        val typeAnnotation = if (peek().kind == COLON) {
+            advance()
+            parseTypeExpr()
+        } else {
+            null
+        }
+        return Param(name.text!!, typeAnnotation)
+    }
+
     private fun parseBinding(): Val {
         val name = expectIdentifier("Expected identifier")
+        val typeAnnotation = if (peek().kind == COLON) {
+            advance()
+            parseTypeExpr()
+        } else {
+            null
+        }
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
-        return Val(name.text!!, value, name.span + value.span)
+        return Val(name.text!!, value, name.span + value.span, typeAnnotation)
     }
 
     private fun parseBlockOrExpr(): Expr = if (isBlockStart()) parseBlock() else parseExpr()
@@ -462,8 +485,15 @@ class Parser(
             LPAREN -> {
                 advance()
                 val expr = parseExpr()
-                expectAndAdvance(RPAREN, message = "Expected ')'")
-                expr
+                if (peek().kind == COLON) {
+                    advance()
+                    val type = parseTypeExpr()
+                    val close = expectAndAdvance(RPAREN, message = "Expected ')'")
+                    Ascription(expr, type, token.span + close.span)
+                } else {
+                    expectAndAdvance(RPAREN, message = "Expected ')'")
+                    expr
+                }
             }
 
             PIPE -> {
@@ -509,13 +539,13 @@ class Parser(
         return Lambda(params, body, open.span + close.span)
     }
 
-    private fun parseLambdaParams(): List<String> {
+    private fun parseLambdaParams(): List<Param> {
         val token = peek()
 
         // Check if a keyword is being used as a parameter name
         if (token.kind.keyword != null) {
             val next = peekAt(1)
-            if (next.kind == ARROW || next.kind == COMMA) {
+            if (next.kind == ARROW || next.kind == COMMA || next.kind == COLON) {
                 throw ParseError("Expected parameter name, got keyword '${token.kind.keyword}'", token.span)
             }
         }
@@ -523,18 +553,25 @@ class Parser(
         if (token.kind != IDENT) return emptyList()
 
         val next = peekAt(1)
-        if (next.kind != ARROW && next.kind != COMMA) return emptyList()
+        if (next.kind != ARROW && next.kind != COMMA && next.kind != COLON) return emptyList()
 
-        val params = mutableListOf<String>()
+        val params = mutableListOf<Param>()
         while (peek().kind == IDENT) {
             val ident = advance()
-            params.add(ident.text!!)
+            val typeAnnotation = if (peek().kind == COLON) {
+                advance()
+                // Use typeAtom to avoid consuming '->' as function type arrow
+                parseTypeAtom()
+            } else {
+                null
+            }
+            params.add(Param(ident.text!!, typeAnnotation))
 
             if (peek().kind == COMMA) {
                 advance()
                 // Check for keyword after comma
                 val afterComma = peek()
-                if (afterComma.kind.keyword != null && (peekAt(1).kind == ARROW || peekAt(1).kind == COMMA)) {
+                if (afterComma.kind.keyword != null && (peekAt(1).kind == ARROW || peekAt(1).kind == COMMA || peekAt(1).kind == COLON)) {
                     throw ParseError("Expected parameter name, got keyword '${afterComma.kind.keyword}'", afterComma.span)
                 }
                 if (afterComma.kind != IDENT) {
@@ -623,7 +660,8 @@ class Parser(
         return SafeFieldAccess(target, field.text!!, target.span + field.span)
     }
 
-    private fun isBinding(): Boolean = peek().kind == IDENT && peekAt(1).kind == EQ
+    private fun isBinding(): Boolean =
+        peek().kind == IDENT && (peekAt(1).kind == EQ || peekAt(1).kind == COLON)
 
     private fun endsWithBlock(stmt: Stmt): Boolean =
         when (stmt) {

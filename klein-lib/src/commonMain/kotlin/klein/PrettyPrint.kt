@@ -19,10 +19,16 @@ fun Token.prettyPrint(): String {
 fun Stmt.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
     return when (this) {
-        is Val -> "${pad}Val($name) =\n${value.prettyPrint(indent + 1)}"
+        is Val -> {
+            val annot = if (typeAnnotation != null) ": ${typeAnnotation.prettyPrint()}" else ""
+            "${pad}Val($name$annot) =\n${value.prettyPrint(indent + 1)}"
+        }
         is FunDef -> {
-            val paramsStr = params.joinToString(", ")
-            "${pad}Fun $name($paramsStr) =\n${body.prettyPrint(indent + 1)}"
+            val paramsStr = params.joinToString(", ") { p ->
+                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
+            }
+            val retStr = if (returnType != null) ": ${returnType.prettyPrint()}" else ""
+            "${pad}Fun $name($paramsStr)$retStr =\n${body.prettyPrint(indent + 1)}"
         }
         is TypeDef -> {
             val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
@@ -68,8 +74,10 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         is UnaryOp -> "${pad}$op\n${operand.prettyPrint(indent + 1)}"
         is BinaryOp -> "${pad}$op\n${left.prettyPrint(indent + 1)}\n${right.prettyPrint(indent + 1)}"
         is Lambda -> {
-            val params = if (params.isEmpty()) "" else params.joinToString(", ")
-            "${pad}Lambda($params)\n${body.prettyPrint(indent + 1)}"
+            val paramsStr = if (params.isEmpty()) "" else params.joinToString(", ") { p ->
+                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
+            }
+            "${pad}Lambda($paramsStr)\n${body.prettyPrint(indent + 1)}"
         }
         is Apply -> {
             val argsStr = args.joinToString("\n") { it.prettyPrint(indent + 2) }
@@ -93,5 +101,6 @@ fun Expr.prettyPrint(indent: Int = 0): String {
                 }
             "${pad}Record\n$fieldsStr"
         }
+        is Ascription -> "${pad}Ascription(${type.prettyPrint()})\n${expr.prettyPrint(indent + 1)}"
     }
 }
