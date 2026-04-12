@@ -61,12 +61,7 @@ class Parser(
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
-        val returnType = if (peek().kind == COLON) {
-            advance()
-            parseTypeExpr()
-        } else {
-            null
-        }
+        val returnType = parseOptionalTypeAnnotation()
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
         return FunDef(name.text!!, params, body, funToken.span + body.span, returnType)
@@ -159,7 +154,7 @@ class Parser(
             }
 
         val endSpan = fields.lastOrNull()?.span ?: nameToken.span
-        return Constructor(nameToken.text!!, fields, nameToken.span + endSpan)
+        return Constructor(nameToken.text, fields, nameToken.span + endSpan)
     }
 
     private fun parseConstructorFields(): List<FieldDecl> {
@@ -205,7 +200,7 @@ class Parser(
         expectAndAdvance(COLON, message = "Expected ':'")
         val type = parseTypeExpr()
 
-        return FieldDecl(nameToken.text!!, type, nameToken.span + type.span)
+        return FieldDecl(nameToken.text, type, nameToken.span + type.span)
     }
 
     private fun parseTypeExpr(): TypeExpr {
@@ -341,25 +336,24 @@ class Parser(
         return params
     }
 
-    private fun parseAnnotatedParam(): Param {
-        val name = expectIdentifier("Expected parameter name")
-        val typeAnnotation = if (peek().kind == COLON) {
+    private fun parseOptionalTypeAnnotation(typeParser: () -> TypeExpr = ::parseTypeExpr): TypeExpr? =
+        if (peek().kind == COLON) {
             advance()
-            parseTypeExpr()
+            typeParser()
         } else {
             null
         }
-        return Param(name.text!!, typeAnnotation)
+
+    private fun parseAnnotatedParam(): Param {
+        val name = expectIdentifier("Expected parameter name")
+        val typeAnnotation = parseOptionalTypeAnnotation()
+        val span = name.span + (typeAnnotation?.span ?: name.span)
+        return Param(name.text!!, typeAnnotation, span)
     }
 
     private fun parseBinding(): Val {
         val name = expectIdentifier("Expected identifier")
-        val typeAnnotation = if (peek().kind == COLON) {
-            advance()
-            parseTypeExpr()
-        } else {
-            null
-        }
+        val typeAnnotation = parseOptionalTypeAnnotation()
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
         return Val(name.text!!, value, name.span + value.span, typeAnnotation)
@@ -558,14 +552,10 @@ class Parser(
         val params = mutableListOf<Param>()
         while (peek().kind == IDENT) {
             val ident = advance()
-            val typeAnnotation = if (peek().kind == COLON) {
-                advance()
-                // Use typeAtom to avoid consuming '->' as function type arrow
-                parseTypeAtom()
-            } else {
-                null
-            }
-            params.add(Param(ident.text!!, typeAnnotation))
+            // Use typeAtom to avoid consuming '->' as function type arrow
+            val typeAnnotation = parseOptionalTypeAnnotation(::parseTypeAtom)
+            val span = ident.span + (typeAnnotation?.span ?: ident.span)
+            params.add(Param(ident.text!!, typeAnnotation, span))
 
             if (peek().kind == COMMA) {
                 advance()

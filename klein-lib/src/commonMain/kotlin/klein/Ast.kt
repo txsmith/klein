@@ -21,6 +21,7 @@ data class Val(
 data class Param(
     val name: String,
     val typeAnnotation: TypeExpr? = null,
+    val span: SourceSpan = SourceSpan.zero,
 )
 
 data class FunDef(
