@@ -101,6 +101,19 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun typeVarAnnotation_bodyMustRespectReturnType_nested() {
+        // Body returns Option<Num>, but declared return is Option<'A>
+        val errors = inferErrors(
+            """
+            type Option<'A> = None | Some { value: 'A }
+            fun f(x: 'A): Option<'A> = Some(42)
+            f
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
     fun typeVarAnnotation_mixedWithConcrete() {
         // x: 'A, y: Num — 'A is unconstrained, y is fixed
         assertType("('A, Num) -> 'A", infer("fun f(x: 'A, y: Num) = x\nf"))
@@ -110,6 +123,13 @@ class AnnotationInferTest {
     fun typeVarAnnotation_sharedAcrossParams() {
         // Both params share 'A, so they must unify
         assertType("('A, 'A) -> 'A", infer("fun f(x: 'A, y: 'A) = x\nf"))
+    }
+
+    @Test
+    fun typeVarAnnotation_bodyCannotConstrainTypeVar() {
+        // x and y are 'A (opaque) — body can't assume 'A supports +
+        val errors = inferErrors("fun f(x: 'A, y: 'A) = x + y\nf")
+        assertEquals(1, errors.size)
     }
 
     @Test
@@ -169,5 +189,262 @@ class AnnotationInferTest {
     fun functionTypeAnnotation_mismatch() {
         val errors = inferErrors("f: Num -> String = |x -> x + 1|")
         assertEquals(1, errors.size)
+    }
+
+    // --- Type variable scoping ---
+
+    @Test
+    fun typeVar_sharedBetweenParamAndLocalBinding() {
+        // 'A in the local annotation refers to the same 'A from the param
+        // xs is NOT generalized because 'A is bound by the function
+        assertType(
+            "('A) -> List<'A>",
+            infer(
+                """
+                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+                fun f(x: 'A) =
+                  xs: List<'A> = Cons(x, Nil)
+                  xs
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun typeVar_localAnnotationRejectsNewTypeVar() {
+        // 'B is not introduced in the function signature — error
+        val errors = inferErrors(
+            """
+            type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+            fun f(x) =
+              xs: List<'B> = Nil
+              xs
+            f
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun typeVar_localBindingConstrainedByFunctionScope() {
+        // 'A from param, used in local binding — local val has the param's type
+        assertType(
+            "(Num) -> Num",
+            infer(
+                """
+                fun f(x: 'A) =
+                  y: 'A = x + 1
+                  y
+                f(1)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Record field annotations ---
+
+    @Test
+    fun recordField_concreteAnnotation() {
+        assertType(
+            "{ x: Num }",
+            infer("{ x: Num = 42 }"),
+        )
+    }
+
+    @Test
+    fun recordField_concreteAnnotation_mismatch() {
+        val errors = inferErrors("{ x: Num = \"hello\" }")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun recordField_lambdaIdentityBecomesMonomorphic() {
+        assertType(
+            "{ id: (Num) -> Num }",
+            infer("{ id = |x: Num -> x| }"),
+        )
+    }
+
+    @Test
+    fun recordField_lambdaAnnotation_mismatchAtCallSite() {
+        val errors = inferErrors(
+            """
+            r = { f = |x: Num -> x| }
+            r.f("hello")
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun recordField_lambdaAnnotation_bodyCannotConstrainTypeVar() {
+        val errors = inferErrors("{ f = |x: 'A -> x + 1| }")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun recordField_funDefWithAnnotatedParams() {
+        assertType(
+            "{ double: (Num) -> Num }",
+            infer(
+                """
+                {
+                  fun double(x: Num): Num = x * 2
+                }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun recordField_typeVarAnnotationAtTopLevel() {
+        assertType(
+            "('A) -> 'A",
+            infer(
+                """
+                r = { id: 'A -> 'A = |x -> x| }
+                r.id
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun recordField_typeVarInsideFunction_rejectsNewTypeVar() {
+        val errors = inferErrors(
+            """
+            fun f(x) =
+              r = { id: 'B -> 'B = |y -> y| }
+              r.id(x)
+            f
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun recordField_typeVarInsideFunction_canReferenceSignature() {
+        assertType(
+            "('A) -> { wrapped: 'A }",
+            infer(
+                """
+                fun f(x: 'A) =
+                  { wrapped: 'A = x }
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    // --- Nesting and shadowing ---
+
+    @Test
+    fun nestedFunction_innerIntroducesOwnTypeVars() {
+        assertType(
+            "(Num) -> ('A) -> 'A",
+            infer(
+                """
+                fun outer(x: Num) =
+                  fun inner(y: 'A): 'A = y
+                  inner
+                outer
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedFunction_shadowsOuterTypeVar() {
+        // 'A in inner's signature is a NEW skolem that shadows outer's 'A
+        val errors = inferErrors(
+            """
+            fun outer(x: 'A) =
+              fun inner(y: 'A) = y + 1
+              inner(x)
+            outer
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun nestedLambda_shadowsOuterTypeVar() {
+        // 'A in the inner lambda is a NEW skolem that shadows outer's 'A
+        // inner body does y + 1 which constrains inner's 'A to Num — but it's rigid
+        val errors = inferErrors(
+            """
+            fun outer(x: 'A) =
+              inner = |y: 'A -> y + 1|
+              inner(x)
+            outer
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun nestedLambda_introducesOwnTypeVars() {
+        assertType(
+            "(Num) -> ('A) -> 'A",
+            infer(
+                """
+                fun outer(x: Num) =
+                  |y: 'A -> y|
+                outer
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedLambda_localBindingRefersToInnerScope() {
+        // y: 'B inside the inner lambda refers to inner's 'B, not outer's 'A
+        assertType(
+            "('A) -> ('B) -> 'B",
+            infer(
+                """
+                fun outer(x: 'A) =
+                  |z: 'B ->
+                    y: 'B = z
+                    y
+                  |
+                outer
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun nestedLambda_localBindingCannotReferToOuterTypeVar() {
+        // Inside the lambda, 'A from outer's signature is not in scope for local bindings
+        val errors = inferErrors(
+            """
+            fun outer(x: 'A) =
+              inner = |z ->
+                y: 'A = z
+                y
+              |
+              inner(x)
+            outer
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun deeplyNested_eachLevelHasOwnScope() {
+        assertType(
+            "('A) -> ('B) -> ('C) -> 'C",
+            infer(
+                """
+                fun f(x: 'A) =
+                  |y: 'B ->
+                    |z: 'C -> z|
+                  |
+                f
+                """.trimIndent(),
+            ),
+        )
     }
 }
