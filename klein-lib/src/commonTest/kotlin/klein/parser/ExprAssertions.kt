@@ -25,6 +25,7 @@ import klein.Param
 import klein.ParseError
 import klein.Parser
 import klein.Program
+import klein.RecordField
 import klein.RecordLiteral
 import klein.RecordTypeExpr
 import klein.SafeFieldAccess
@@ -162,7 +163,14 @@ fun safeFieldAccess(
 
 fun implicitParam() = ImplicitParam(noSpan)
 
-fun record(vararg fields: Pair<String, Expr>) = RecordLiteral(fields.toList(), noSpan)
+fun record(vararg fields: Pair<String, Expr>) =
+    RecordLiteral(fields.map { (name, value) -> RecordField(name, value) }, noSpan)
+
+fun annotatedRecord(vararg fields: RecordField) =
+    RecordLiteral(fields.toList(), noSpan)
+
+fun recordField(name: String, value: Expr, typeAnnotation: TypeExpr? = null) =
+    RecordField(name, value, typeAnnotation)
 
 fun Expr.stripSpans(): Expr =
     when (this) {
@@ -181,7 +189,7 @@ fun Expr.stripSpans(): Expr =
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
         is SafeFieldAccess -> SafeFieldAccess(target.stripSpans(), field, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
-        is RecordLiteral -> RecordLiteral(fields.map { (name, value) -> name to value.stripSpans() }, noSpan)
+        is RecordLiteral -> RecordLiteral(fields.map { RecordField(it.name, it.value.stripSpans(), it.typeAnnotation?.stripSpan()) }, noSpan)
         is Ascription -> Ascription(expr.stripSpans(), type.stripSpan(), noSpan)
     }
 

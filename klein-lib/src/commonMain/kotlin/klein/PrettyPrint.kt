@@ -96,8 +96,9 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         is ImplicitParam -> "${pad}ImplicitParam"
         is RecordLiteral -> {
             val fieldsStr =
-                fields.joinToString("\n") { (name, value) ->
-                    "$pad  $name:\n${value.prettyPrint(indent + 2)}"
+                fields.joinToString("\n") { field ->
+                    val annot = if (field.typeAnnotation != null) ": ${field.typeAnnotation.prettyPrint()}" else ""
+                    "$pad  ${field.name}$annot:\n${field.value.prettyPrint(indent + 2)}"
                 }
             "${pad}Record\n$fieldsStr"
         }

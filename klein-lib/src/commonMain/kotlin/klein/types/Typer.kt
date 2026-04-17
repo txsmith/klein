@@ -363,11 +363,11 @@ class Typer {
         env: TypeEnv,
     ): SimpleType {
         val fieldTypes = mutableMapOf<String, SimpleType>()
-        for ((name, value) in expr.fields) {
-            if (name in fieldTypes) {
-                errors.add(TypeError.DuplicateField(name, expr.span))
+        for (field in expr.fields) {
+            if (field.name in fieldTypes) {
+                errors.add(TypeError.DuplicateField(field.name, expr.span))
             }
-            fieldTypes[name] = infer(value, env)
+            fieldTypes[field.name] = infer(field.value, env)
         }
         return TRecord(fieldTypes)
     }

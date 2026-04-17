@@ -1,5 +1,6 @@
 package klein.parser
 
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 class AnnotationTest {
@@ -202,6 +203,59 @@ class AnnotationTest {
                 lambda("x", body = id("x")),
                 typeAnnotation = functionType(typeVar("A"), typeVar("B")),
             )
+        )
+    }
+
+    // --- Record field annotations ---
+
+    @Test
+    fun recordFieldAnnotation() {
+        val expr = parse("{ x: Num = 42 }")
+        assertExprEquals(
+            expr,
+            annotatedRecord(recordField("x", int(42), typeAnnotation = typeName("Num"))),
+        )
+    }
+
+    @Test
+    fun recordFieldAnnotationWithTypeVar() {
+        val expr = parse("{ id: 'A -> 'A = |x -> x| }")
+        assertExprEquals(
+            expr,
+            annotatedRecord(recordField("id", lambda("x", body = id("x")), typeAnnotation = functionType(typeVar("A"), typeVar("A")))),
+        )
+    }
+
+    @Ignore // Fun defs inside records not yet supported in parser
+    @Test
+    fun funDefInsideRecord() {
+        val expr = parse("{ fun double(x: Num): Num = x * 2 }")
+        // Should parse as a record with a function-valued field
+    }
+
+    // --- Nested function definitions ---
+
+    @Ignore // Nested fun defs not yet supported in parser
+    @Test
+    fun nestedFunDef() {
+        val stmt = parseTopLevel(
+            """
+            fun outer(x) =
+              fun inner(y) = y + 1
+              inner(x)
+            """.trimIndent()
+        )
+    }
+
+    @Ignore // Nested fun defs not yet supported in parser
+    @Test
+    fun nestedFunDefWithAnnotations() {
+        val stmt = parseTopLevel(
+            """
+            fun outer(x: 'A) =
+              fun inner(y: 'B): 'B = y
+              inner(x)
+            """.trimIndent()
         )
     }
 }

@@ -183,7 +183,7 @@ val Expr.usesImplicitParam: Boolean
             is UnaryOp -> operand.usesImplicitParam
             is Lambda -> false
             is Apply -> callee.usesImplicitParam || args.any { it.usesImplicitParam }
-            is RecordLiteral -> fields.any { it.second.usesImplicitParam }
+            is RecordLiteral -> fields.any { it.value.usesImplicitParam }
             is Ascription -> expr.usesImplicitParam
             is FieldAccess -> target.usesImplicitParam
             is SafeFieldAccess -> target.usesImplicitParam
@@ -211,14 +211,20 @@ val Expr.children: List<Expr>
             is UnaryOp -> listOf(operand)
             is Lambda -> listOf(body)
             is Apply -> listOf(callee) + args
-            is RecordLiteral -> fields.map { it.second }
+            is RecordLiteral -> fields.map { it.value }
+            is Ascription -> listOf(expr)
             is FieldAccess -> listOf(target)
             is SafeFieldAccess -> listOf(target)
             is IfThenElse -> listOfNotNull(condition, thenBranch, elseBranch)
         }
 
+data class RecordField(
+    val name: String,
+    val value: Expr,
+    val typeAnnotation: TypeExpr? = null,
+)
 data class RecordLiteral(
-    val fields: List<Pair<String, Expr>>,
+    val fields: List<RecordField>,
     override val span: SourceSpan,
 ) : Expr()
 

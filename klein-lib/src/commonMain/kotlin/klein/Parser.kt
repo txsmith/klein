@@ -578,21 +578,24 @@ class Parser(
 
     private fun parseRecordLiteral(open: Token): RecordLiteral {
         advance()
-        val fields = mutableListOf<Pair<String, Expr>>()
+        val fields = mutableListOf<RecordField>()
 
         while (peek().kind != RBRACE && peek().kind != EOF) {
             val nameToken = expectIdentifier("Expected field name")
             val name = nameToken.text!!
 
+            val typeAnnotation = parseOptionalTypeAnnotation()
             val value =
                 if (peek().kind == EQ) {
                     advance()
                     parseExpr()
+                } else if (typeAnnotation != null) {
+                    throw ParseError("Expected '=' after type annotation", peek().span)
                 } else {
                     Ident(name, nameToken.span)
                 }
 
-            fields.add(name to value)
+            fields.add(RecordField(name, value, typeAnnotation))
 
             if (peek().kind == COMMA) {
                 advance()
