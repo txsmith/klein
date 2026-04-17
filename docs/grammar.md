@@ -21,12 +21,12 @@ constructor_params = '{' field_decl (',' field_decl)* '}'
 
 field_decl  = IDENT ':' type
 
-fun_def     = 'fun' IDENT '(' params? ')' '=' block_or_expr
+fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 
 stmt        = binding
             | expr
 
-binding     = IDENT '=' block_or_expr
+binding     = IDENT (':' type)? '=' block_or_expr
 
 block_or_expr = block
               | expr
@@ -35,7 +35,9 @@ block       = NEWLINE INDENT stmt+ DEDENT
 
 lambda      = '|' (params '->')? block_or_expr '|'
 
-params      = IDENT (',' IDENT)*
+params      = param (',' param)*
+
+param       = IDENT (':' type)?
 
 expr        = apply (binop apply)*
 
@@ -47,7 +49,7 @@ atom        = INT
             | BOOL
             | IDENT
             | unaryop atom
-            | '(' expr ')'
+            | '(' expr (':' type)? ')'
             | lambda
             | if_expr
             | implicit_param
@@ -59,7 +61,9 @@ implicit_param = '.' IDENT?
 
 record      = '{' (field (',' field)* ','?)? '}'
 
-field       = IDENT ('=' expr)?
+field       = IDENT ':' type '=' expr       # annotated field
+            | IDENT '=' expr               # field with value
+            | IDENT                         # shorthand: { x } means { x = x }
 
 args        = expr (',' expr)*
 
@@ -86,6 +90,7 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | block          | `parseBlock()`        |
 | lambda         | `parseLambda()`       |
 | params         | `parseLambdaParams()` / `parseFunParams()` |
+| param          | `parseAnnotatedParam()` |
 | expr           | `parseExpr()` / `parseExprAtPrecedence()` |
 | apply          | `parseApply()`        |
 | atom           | `parseAtom()`         |

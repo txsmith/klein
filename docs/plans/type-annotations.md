@@ -85,23 +85,25 @@ From the MLstruct paper (Parreaux & Chau) and MLscript codebase:
 
 Both parameter annotations and expression ascription produce the same result: `fun f(x: T) = x` and `fun f x = (x: T)` both give `T -> T`.
 
+### Departure from MLscript: rigid type variables
+
+Klein departs from MLscript on type variables in annotations. In MLscript, bare `'a` is a fresh inference variable (flexible); rigidity requires explicit `forall`. Klein does not have `forall`, so type variables in annotations are **rigid (skolems)** by default. See [decision doc](../decisions/2026-04-12-rigid-type-variables-in-annotations.md) for full rationale.
+
+This means `fun f(x: 'A) = x + 1` is a type error — the body cannot assume `'A` is `Num`. The annotation is a contract: the function must work for any `'A`.
+
 ## Implementation
 
-### Phase 1: Parser
+### Phase 1: Parser ✓
 
-Extend parameter parsing and binding parsing to accept optional `: Type` annotations.
+Implemented. All annotation forms parse correctly:
 
-- `params` becomes `annotated_params` — each param is `name` or `name: Type`
-- `fun_def` gains optional return type after params: `fun f(x: Num): Num = ...`
-- `binding` gains optional type: `x: Num = 42`
-- Reuse the existing type expression parser (already handles `Num`, `List<Num>`, `Num -> Num`, record types, etc.)
-
-AST changes:
-- `FunDef.params: List<String>` → `List<Param>` where `Param(name: String, typeAnnotation: TypeExpr?)`
-- `FunDef.returnType: TypeExpr?` (new field)
-- `Val.typeAnnotation: TypeExpr?` (new field)
-- Lambda params similarly extended
-- New AST node: `Ascription(expr: Expr, type: TypeExpr)` for expression ascription
+- `Param(name, typeAnnotation?, span)` — used by both `fun` params and lambda params
+- `FunDef.returnType: TypeExpr?` — optional return type after `)`
+- `Val.typeAnnotation: TypeExpr?` — binding annotations
+- `Ascription(expr, type, span)` — expression ascription `(expr : Type)`
+- `RecordField(name, value, typeAnnotation?)` — record field annotations `{ x: Num = 42 }`
+- `parseOptionalTypeAnnotation()` — shared helper for all annotation sites
+- Lambda param annotations use `parseTypeAtom()` to avoid consuming `->` as function type arrow
 
 ### Phase 2: Type checker
 
@@ -166,7 +168,38 @@ Handles:
 - Applied types: `List<Num>` → `TRef("List", [TNum])`
 - Function types: `Num -> String` → `TFun([TNum], TString)`
 - Record types: `{ x: Num }` → `TRecord({"x": TNum})`
-- Type variables: `'A` → fresh or looked-up TVar
+- Type variables: `'A` → looked-up or new skolem (rigid type variable)
+
+### Type variable scoping
+
+Type variables in annotations are rigid (skolems). See [decision doc](../decisions/2026-04-12-rigid-type-variables-in-annotations.md).
+
+**Inside functions:** type variables must be introduced in the function signature (params or return type). Local annotations can reference signature-introduced variables but cannot introduce new ones.
+
+```klein
+fun f(x: 'A): 'A = x
+# Both 'A refer to the same skolem. f : ('A) -> 'A
+
+fun f(x: 'A) =
+  xs: List<'A> = Cons(x, Nil)   # ok: 'A is from the signature
+  xs
+# f : ('A) -> List<'A>
+
+fun f(x: 'A) = x + 1   # ERROR: can't assume 'A supports +
+
+fun f(x) =
+  xs: List<'B> = Nil   # ERROR: 'B not introduced in signature
+  xs
+```
+
+**At the top level:** type variables are universally quantified via let-generalization.
+
+```klein
+xs: List<'B> = Nil       # ok: 'B generalized, xs : forall 'B. List<'B>
+ys = xs ++ listOf(42)    # ok: 'B instantiated to Num
+```
+
+Implementation: `resolveTypeExpr` takes a `skolemScope: MutableMap<String, TSkolem>` parameter. For functions, `inferFunction` populates this map from signature annotations (params + return type), then passes it to body annotations — unknown type variables in the body are an error. For top-level bindings, the map starts empty and new skolems are created on demand. Skolems behave as opaque base types in the constraint solver — only equal to themselves.
 
 ### Error messages
 
@@ -195,13 +228,25 @@ The annotation source span should be included for good error reporting.
 - Ascription mismatch: `(42 : String)` produces type error
 - Ascription in binding: `x = (Dog("Rex", 3) : Animal)` binds x as `Animal`
 
-## Future: bounded polymorphism
+## Future considerations
 
-Not part of this implementation. If sealing proves too restrictive, a future extension could add bounded polymorphism via explicit type variables in annotations:
+### Bounded polymorphism
+
+Not part of this implementation. A future extension could add bounded polymorphism:
 
 ```
 fun f(x: 'A & Animal): 'A = x
 // f: ('A) -> 'A where 'A <: Animal
 ```
 
-This would require "checked mode" (skolem-like behavior) for the annotation's type variable, where the body is verified against the bound rather than being allowed to constrain it further.
+Since type variables are already rigid, this would extend skolems with upper bounds — the body sees `'A` as opaque but knows it has at least `Animal`'s interface.
+
+### Wildcard annotations
+
+If partial annotations prove useful (specifying structure without committing to type arguments), a wildcard syntax could be added:
+
+```
+xs: List<_> = someExpression   # "I know it's a List, infer the element type"
+```
+
+This would be a fresh inference variable (flexible), distinct from `'A` which is rigid. It avoids overloading the meaning of type variables.
