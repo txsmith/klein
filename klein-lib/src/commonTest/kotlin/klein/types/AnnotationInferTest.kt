@@ -92,11 +92,11 @@ class AnnotationInferTest {
         )
     }
 
-    // @Test
-    // fun typeVar_namesFollowAnnotations() {
-    //     // Needs: TVar nameHint so declared names survive printing
-    //     assertType("('B) -> 'B", infer("fun f(x: 'B): 'B = x\nf"))
-    // }
+    @Test
+    fun typeVar_namesFollowAnnotations() {
+        // 'B in param/return resolves to the same tvar with nameHint "B" so it survives printing
+        assertType("('B) -> 'B", infer("fun f(x: 'B): 'B = x\nf"))
+    }
 
 
     // @Test

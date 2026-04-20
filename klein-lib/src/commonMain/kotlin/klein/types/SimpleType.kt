@@ -51,10 +51,12 @@ sealed class SimpleType {
         override val level: Int = 0,
         val lowerBounds: MutableSet<SimpleType> = mutableSetOf(),
         val upperBounds: MutableSet<SimpleType> = mutableSetOf(),
+        val nameHint: String? = null,
     ) : SimpleType() {
         val uid: Int = nextUid++
 
         override fun toString(): String {
+            if (nameHint != null) return "'$nameHint"
             val letter = 'A' + (uid % 26)
             val suffix = if (uid >= 26) "${uid / 26}" else ""
             return "'$letter$suffix"
@@ -128,7 +130,9 @@ sealed class SimpleType {
         ): SimpleType =
             when (typeExpr) {
                 is TypeVar ->
-                    typeVarMap.getOrPut(typeExpr.name) { env.freshVar() }
+                    typeVarMap.getOrPut(typeExpr.name) {
+                        env.freshVar(nameHint = typeExpr.name)
+                    }
 
                 is TypeName ->
                     fromName(typeExpr.name)
@@ -201,7 +205,7 @@ sealed class SimpleType {
                     // Check if we've already started processing this TVar
                     varMap[ty]?.let { return it }
                     // Create fresh TVar first (without bounds) to handle cycles
-                    val fresh = TVar(currentLevel)
+                    val fresh = TVar(currentLevel, nameHint = ty.nameHint)
                     varMap[ty] = fresh
                     // Process bounds in order to preserve relative UID ordering
                     // of type variables (important for simplification)

@@ -525,4 +525,32 @@ class TypeDefInferenceTest {
             ),
         )
     }
+
+    // --- Type variable name preservation ---
+
+    @Test
+    fun typeDef_preservesTypeVarName_inConstructor() {
+        assertType(
+            "('L) -> Left<'L>",
+            infer(
+                """
+                type Either<'L, 'R> = Left { value: 'L } | Right { value: 'R }
+                Left
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun typeDef_preservesMultipleTypeVarNames_inConstructor() {
+        assertType(
+            "(('Key) -> 'Value) -> Map<'Key, 'Value>",
+            infer(
+                """
+                type Map<'Key, 'Value> = Map { get: 'Key -> 'Value }
+                Map
+                """.trimIndent(),
+            ),
+        )
+    }
 }

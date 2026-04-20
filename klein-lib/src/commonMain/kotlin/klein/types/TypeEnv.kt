@@ -70,7 +70,7 @@ class TypeEnv(
         bindings[name] = TypeBinding.Poly(level, type)
     }
 
-    fun freshVar(): SimpleType.TVar = SimpleType.TVar(level)
+    fun freshVar(nameHint: String? = null): SimpleType.TVar = SimpleType.TVar(level, nameHint = nameHint)
 
     fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
         TypeEnv(

@@ -14,14 +14,32 @@ import klein.types.TypeComponents.PrimType
  */
 private class VarNamer {
     private val varNames = mutableMapOf<TVar, String>()
+    private val usedNames = mutableSetOf<String>()
+    private var nextIdx = 0
 
     fun varName(v: TVar): String =
         varNames.getOrPut(v) {
-            val idx = varNames.size
-            val letter = 'A' + (idx % 26)
-            val suffix = if (idx >= 26) "${idx / 26}" else ""
-            "'$letter$suffix"
+            val name = v.nameHint?.let { hint -> uniquify("'$hint") } ?: nextGenericName()
+            usedNames.add(name)
+            name
         }
+
+    private fun uniquify(candidate: String): String {
+        if (candidate !in usedNames) return candidate
+        var n = 1
+        while ("$candidate$n" in usedNames) n++
+        return "$candidate$n"
+    }
+
+    private fun nextGenericName(): String {
+        while (true) {
+            val letter = 'A' + (nextIdx % 26)
+            val suffix = if (nextIdx >= 26) "${nextIdx / 26}" else ""
+            val name = "'$letter$suffix"
+            nextIdx++
+            if (name !in usedNames) return name
+        }
+    }
 }
 
 object TypeSimplifier {

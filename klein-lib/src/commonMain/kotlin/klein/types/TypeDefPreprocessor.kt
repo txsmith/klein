@@ -41,7 +41,9 @@ class TypeDefPreprocessor(
             }
 
             validTypeDefs.add(typeDef)
-            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, polyEnv.freshVar()) }
+            val typeParams = typeDef.typeParams.map { name ->
+                TypeParamInfo(name, Variance.Bivariant, polyEnv.freshVar(nameHint = name))
+            }
             val isSingleConstructorType = typeDef.constructors.size == 1 && typeDef.constructors[0].name == typeDef.name
             val parentIface: SimpleType = if (isSingleConstructorType) TRecord(emptyMap()) else polyEnv.freshVar()
 
