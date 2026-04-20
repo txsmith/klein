@@ -1,5 +1,6 @@
 package klein.types
 
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -553,4 +554,7 @@ class TypeDefInferenceTest {
             ),
         )
     }
+
+    // --- Any and Nothing in field types ---
+
 }

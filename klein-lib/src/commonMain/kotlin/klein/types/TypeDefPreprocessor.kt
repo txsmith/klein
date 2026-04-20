@@ -112,50 +112,7 @@ class TypeDefPreprocessor(
     private fun resolveNames(env: TypeEnv) {
         for (ctor in env.allConstructors()) {
             for (field in ctor.fields) {
-                validateTypeExprNames(field.type, env)
-            }
-        }
-    }
-
-    private fun validateTypeExprNames(
-        typeExpr: TypeExpr,
-        env: TypeEnv,
-    ) {
-        when (typeExpr) {
-            is TypeVar -> {}
-            is TypeName -> {
-                if (typeExpr.name in SimpleType.primitiveNames) return
-                val typeDef = env.lookupTypeDef(typeExpr.name)
-                if (typeDef == null) {
-                    errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-                } else if (typeDef.typeParams.isNotEmpty()) {
-                    errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, 0, typeExpr.span))
-                }
-            }
-            is AppliedTypeExpr -> {
-                val typeDef = env.lookupTypeDef(typeExpr.name)
-                if (typeDef == null) {
-                    errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-                } else if (typeExpr.args.size != typeDef.typeParams.size) {
-                    errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
-                }
-                for (arg in typeExpr.args) {
-                    validateTypeExprNames(arg, env)
-                }
-            }
-            is FunctionTypeExpr -> {
-                for (param in typeExpr.paramTypes) validateTypeExprNames(param, env)
-                validateTypeExprNames(typeExpr.returnType, env)
-            }
-            is TupleTypeExpr -> {
-                for (element in typeExpr.elements) {
-                    validateTypeExprNames(element, env)
-                }
-            }
-            is RecordTypeExpr -> {
-                for ((_, fieldType) in typeExpr.fields) {
-                    validateTypeExprNames(fieldType, env)
-                }
+                SimpleType.validateTypeExprNames(field.type, env, errors)
             }
         }
     }

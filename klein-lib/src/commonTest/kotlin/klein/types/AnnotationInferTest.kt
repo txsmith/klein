@@ -93,6 +93,13 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun typeVar_paramNameFollowsIntoReturn() {
+        // 'B in the return type is part of the signature — introduces it
+        // x is returned as 'B, so x must be 'B too
+        assertType("('B) -> 'B", infer("fun f(x: 'B) = x\nf"))
+    }
+
+    @Test
     fun typeVar_namesFollowAnnotations() {
         // 'B in param/return resolves to the same tvar with nameHint "B" so it survives printing
         assertType("('B) -> 'B", infer("fun f(x: 'B): 'B = x\nf"))
@@ -233,6 +240,26 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun annotation_unknownTypeName() {
+        val errors = inferErrors("fun f(x: UnknownType) = x\nf")
+        assertEquals(1, errors.size)
+        assertUnbound(errors[0], "UnknownType")
+    }
+
+    @Test
+    fun annotation_typeArityMismatch() {
+        val errors = inferErrors(
+            """
+            type Option<'A> = None | Some { value: 'A }
+            fun f(x: Option) = x
+            f
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+        assertTypeArityMismatch(errors[0], "Option", expected = 1, actual = 0)
+    }
+
+    @Test
     fun recordAnnotation_hidesExtraFields() {
         // Annotation has fewer fields than the value — width subtyping accepts the value,
         // but the extra fields become invisible to callers
@@ -254,6 +281,7 @@ class AnnotationInferTest {
         // x is returned as 'B, so x must be 'B too
         assertType("('B) -> 'B", infer("fun f(x): 'B = x\nf"))
     }
+
 
     // @Test
     // fun typeVar_ascriptionRejectsNewTypeVar() {

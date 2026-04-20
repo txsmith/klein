@@ -116,6 +116,54 @@ sealed class SimpleType {
         fun fromName(name: String): SimpleType? = primitivesByName[name]
 
         /**
+         * Validate that all type names in a type expression are defined and used with correct arity.
+         * Accumulates errors in the provided list; does not return anything.
+         */
+        fun validateTypeExprNames(
+            typeExpr: TypeExpr,
+            env: TypeEnv,
+            errors: MutableList<TypeError>,
+        ) {
+            when (typeExpr) {
+                is TypeVar -> {}
+                is TypeName -> {
+                    if (typeExpr.name in primitiveNames) return
+                    val typeDef = env.lookupTypeDef(typeExpr.name)
+                    if (typeDef == null) {
+                        errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                    } else if (typeDef.typeParams.isNotEmpty()) {
+                        errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, 0, typeExpr.span))
+                    }
+                }
+                is AppliedTypeExpr -> {
+                    val typeDef = env.lookupTypeDef(typeExpr.name)
+                    if (typeDef == null) {
+                        errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                    } else if (typeExpr.args.size != typeDef.typeParams.size) {
+                        errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
+                    }
+                    for (arg in typeExpr.args) {
+                        validateTypeExprNames(arg, env, errors)
+                    }
+                }
+                is FunctionTypeExpr -> {
+                    for (param in typeExpr.paramTypes) validateTypeExprNames(param, env, errors)
+                    validateTypeExprNames(typeExpr.returnType, env, errors)
+                }
+                is TupleTypeExpr -> {
+                    for (element in typeExpr.elements) {
+                        validateTypeExprNames(element, env, errors)
+                    }
+                }
+                is RecordTypeExpr -> {
+                    for ((_, fieldType) in typeExpr.fields) {
+                        validateTypeExprNames(fieldType, env, errors)
+                    }
+                }
+            }
+        }
+
+        /**
          * Convert a parsed type expression to a SimpleType.
          *
          * @param typeExpr The type expression to resolve
@@ -134,21 +182,29 @@ sealed class SimpleType {
                         env.freshVar(nameHint = typeExpr.name)
                     }
 
-                is TypeName ->
-                    fromName(typeExpr.name)
-                        ?: if (env.lookupTypeDef(typeExpr.name) != null) {
+                is TypeName -> {
+                    val prim = fromName(typeExpr.name)
+                    val typeDef = env.lookupTypeDef(typeExpr.name)
+                    when {
+                        prim != null -> prim
+                        typeDef != null && typeDef.typeParams.isEmpty() ->
                             TRef(typeExpr.name, emptyList(), typeExpr.span)
-                        } else {
-                            env.freshVar()
-                        }
+                        // Malformed (unknown or arity mismatch): fall back to freshVar.
+                        // Validation is expected to have reported an error separately.
+                        else -> env.freshVar()
+                    }
+                }
 
-                is AppliedTypeExpr ->
-                    if (env.lookupTypeDef(typeExpr.name) != null) {
+                is AppliedTypeExpr -> {
+                    val typeDef = env.lookupTypeDef(typeExpr.name)
+                    if (typeDef != null && typeDef.typeParams.size == typeExpr.args.size) {
                         val args = typeExpr.args.map { fromTypeExpr(it, typeVarMap, env) }
                         TRef(typeExpr.name, args, typeExpr.span)
                     } else {
+                        // Malformed (unknown or arity mismatch): fall back to freshVar.
                         env.freshVar()
                     }
+                }
 
                 is FunctionTypeExpr ->
                     TFun(

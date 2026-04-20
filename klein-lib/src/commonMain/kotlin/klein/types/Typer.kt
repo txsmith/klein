@@ -464,7 +464,10 @@ class Typer {
         typeExpr: TypeExpr,
         env: TypeEnv,
         typeVarMap: MutableMap<String, SimpleType> = mutableMapOf(),
-    ): SimpleType = SimpleType.fromTypeExpr(typeExpr, typeVarMap, env)
+    ): SimpleType {
+        SimpleType.validateTypeExprNames(typeExpr, env, errors)
+        return SimpleType.fromTypeExpr(typeExpr, typeVarMap, env)
+    }
 
     companion object {
         fun infer(
