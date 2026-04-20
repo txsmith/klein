@@ -46,6 +46,10 @@ class Subtyping(
             lhs is TNull && rhs is TNull -> return
             lhs is TUnit && rhs is TUnit -> return
 
+            // Top and Bottom: universal super/sub type
+            rhs is TTop -> return
+            lhs is TBottom -> return
+
             lhs is TVar -> {
                 if (rhs.level <= lhs.level) {
                     lhs.upperBounds.add(rhs)

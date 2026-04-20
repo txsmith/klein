@@ -123,7 +123,7 @@ data class TypeComponents(
     val optional: TypeComponents? = null,
     val refs: Map<String, RefFamily> = emptyMap(),
 ) {
-    enum class PrimType { Num, String, Bool, Unit }
+    enum class PrimType { Num, String, Bool, Unit, Top, Bottom }
 
     companion object {
         val empty = TypeComponents()
@@ -216,6 +216,8 @@ data class TypeComponents(
                     is TBool -> "TBool"
                     is TNull -> "TNull"
                     is TUnit -> "TUnit"
+                    is TTop -> "TTop"
+                    is TBottom -> "TBottom"
                     is TVar -> "$t"
                     is TOptional -> "TOptional(${formatSimpleType(t.inner)})"
                     is TFun -> "TFun([${t.params.joinToString(", ") { formatSimpleType(it) }}], ${formatSimpleType(t.result)})"
@@ -279,6 +281,8 @@ data class TypeComponents(
                         is TBool -> TypeComponents.prim(PrimType.Bool)
                         is TNull -> TypeComponents(nullable = true)
                         is TUnit -> TypeComponents.prim(PrimType.Unit)
+                        is TTop -> TypeComponents.prim(PrimType.Top)
+                        is TBottom -> TypeComponents.prim(PrimType.Bottom)
                         is TOptional -> TypeComponents.optional(fromSimpleType(ty.inner, pol))
                         is TFun ->
                             TypeComponents.function(

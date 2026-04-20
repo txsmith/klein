@@ -85,6 +85,8 @@ object TypePrinter {
                             TypeComponents.PrimType.String -> "String"
                             TypeComponents.PrimType.Bool -> "Bool"
                             TypeComponents.PrimType.Unit -> "()"
+                            TypeComponents.PrimType.Top -> "Any"
+                            TypeComponents.PrimType.Bottom -> "Nothing"
                         }
                     }
                 fields.add("${innerPad}prims: [$primsStr]")
@@ -198,7 +200,7 @@ object TypePrinter {
 
         private fun printType(type: SimpleType): String =
             when (type) {
-                TNum, TString, TBool, TNull, TUnit -> type.toString()
+                TNum, TString, TBool, TNull, TUnit, TTop, TBottom -> type.toString()
                 is TOptional -> "${printType(type.inner)}?"
                 is TVar -> varName(type)
                 is TFun -> printFun(type)

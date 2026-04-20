@@ -426,6 +426,8 @@ object TypeSimplifier {
                                 PrimType.String -> Type.Str
                                 PrimType.Bool -> Type.Bool
                                 PrimType.Unit -> Type.Unit
+                                PrimType.Top -> Type.Top
+                                PrimType.Bottom -> Type.Bottom
                             },
                         )
                     }

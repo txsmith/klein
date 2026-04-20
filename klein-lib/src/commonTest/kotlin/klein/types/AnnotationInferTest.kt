@@ -247,6 +247,37 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun annotation_anyAcceptsAnyValue() {
+        assertType("Any", infer("x: Any = 42\nx"))
+    }
+
+    @Test
+    fun annotation_nothingRejectsValues() {
+        // Nothing is the bottom type — no value inhabits it
+        val errors = inferErrors("x: Nothing = 42")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun annotation_anyInFunctionParam() {
+        // (Any) -> Num accepts any input
+        assertType("(Any) -> Num", infer("fun f(x: Any): Num = 42\nf"))
+    }
+
+    @Test
+    fun annotation_anyAcceptsAnySubtype() {
+        // Anything is a subtype of Any
+        assertType("(Any) -> Num", infer("fun f(x: Any): Num = 42\nf(\"hello\")\nf"))
+    }
+
+    @Test
+    fun annotation_nothingIsSubtypeOfAny() {
+        // Nothing flows into anything (including Num via a polymorphic function)
+        val errors = inferErrors("fun f(x: Nothing): Num = 42\nf")
+        assertEquals(0, errors.size)
+    }
+
+    @Test
     fun annotation_typeArityMismatch() {
         val errors = inferErrors(
             """

@@ -18,6 +18,8 @@ sealed class SimpleType {
         Str("String", TString),
         Bool("Bool", TBool),
         Unit("Unit", TUnit),
+        Top("Any", TTop),
+        Bottom("Nothing", TBottom),
     }
 
     object TNum : SimpleType() {
@@ -38,6 +40,14 @@ sealed class SimpleType {
 
     object TUnit : SimpleType() {
         override fun toString(): String = "Unit"
+    }
+
+    object TTop : SimpleType() {
+        override fun toString(): String = "Any"
+    }
+
+    object TBottom : SimpleType() {
+        override fun toString(): String = "Nothing"
     }
 
     data class TOptional(

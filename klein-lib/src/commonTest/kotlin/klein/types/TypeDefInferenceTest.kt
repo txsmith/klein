@@ -557,4 +557,31 @@ class TypeDefInferenceTest {
 
     // --- Any and Nothing in field types ---
 
+    @Test
+    fun typeDef_anyFieldType() {
+        assertType(
+            "Box",
+            infer(
+                """
+                type Box = Box { item: Any }
+                Box(42)
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun typeDef_nothingFieldType() {
+        // A field of type Nothing means the constructor can never be applied
+        // (there's no value of type Nothing)
+        assertType(
+            "(Nothing) -> Never",
+            infer(
+                """
+                type Never = Never { absurd: Nothing }
+                Never
+                """.trimIndent(),
+            ),
+        )
+    }
 }
