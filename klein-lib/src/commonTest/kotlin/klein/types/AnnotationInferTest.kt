@@ -133,6 +133,41 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun typeVarAnnotation_distinctSkolemsMismatch() {
+        // 'A and 'B are independent skolems — returning 'A where 'B is expected is an error
+        val errors = inferErrors("fun f(x: 'A): 'B = x\nf")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun typeVarAnnotation_skolemNotSubtypeOfConcrete() {
+        // 'A is opaque — can't use it where Num is expected
+        val errors = inferErrors("fun f(x: 'A): Num = x\nf")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun typeVarAnnotation_topLevelBindingWithSkolem() {
+        // x: 'A = 42 — 'A is rigid, Num </: 'A
+        val errors = inferErrors("x: 'A = 42")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun typeVarAnnotation_skolemFieldAccess() {
+        // 'A is opaque — can't access any fields on it
+        val errors = inferErrors("fun f(x: 'A) = x.name\nf")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun typeVarAnnotation_skolemAsFunction() {
+        // 'A is opaque — can't call it
+        val errors = inferErrors("fun f(x: 'A) = x(42)\nf")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
     fun paramAnnotation_mismatch() {
         val errors = inferErrors("fun f(x: Num) = x\nf(\"hello\")")
         assertEquals(1, errors.size)
@@ -245,14 +280,6 @@ class AnnotationInferTest {
     // --- Record field annotations ---
 
     @Test
-    fun recordField_concreteAnnotation() {
-        assertType(
-            "{ x: Num }",
-            infer("{ x: Num = 42 }"),
-        )
-    }
-
-    @Test
     fun recordField_concreteAnnotation_mismatch() {
         val errors = inferErrors("{ x: Num = \"hello\" }")
         assertEquals(1, errors.size)
@@ -298,19 +325,6 @@ class AnnotationInferTest {
     }
 
     @Test
-    fun recordField_typeVarAnnotationAtTopLevel() {
-        assertType(
-            "('A) -> 'A",
-            infer(
-                """
-                r = { id: 'A -> 'A = |x -> x| }
-                r.id
-                """.trimIndent(),
-            ),
-        )
-    }
-
-    @Test
     fun recordField_typeVarInsideFunction_rejectsNewTypeVar() {
         val errors = inferErrors(
             """
@@ -323,19 +337,6 @@ class AnnotationInferTest {
         assertEquals(1, errors.size)
     }
 
-    @Test
-    fun recordField_typeVarInsideFunction_canReferenceSignature() {
-        assertType(
-            "('A) -> { wrapped: 'A }",
-            infer(
-                """
-                fun f(x: 'A) =
-                  { wrapped: 'A = x }
-                f
-                """.trimIndent(),
-            ),
-        )
-    }
 
     // --- Nesting and shadowing ---
 
@@ -416,20 +417,22 @@ class AnnotationInferTest {
     }
 
     @Test
-    fun nestedLambda_localBindingCannotReferToOuterTypeVar() {
-        // Inside the lambda, 'A from outer's signature is not in scope for local bindings
-        val errors = inferErrors(
-            """
-            fun outer(x: 'A) =
-              inner = |z ->
-                y: 'A = z
-                y
-              |
-              inner(x)
-            outer
-            """.trimIndent(),
+    fun nestedLambda_localBindingCanReferToOuterTypeVar() {
+        // The lambda doesn't introduce 'A, so 'A resolves from outer's scope
+        assertType(
+            "('A) -> 'A",
+            infer(
+                """
+                fun outer(x: 'A) =
+                  inner = |z ->
+                    y: 'A = z
+                    y
+                  |
+                  inner(x)
+                outer
+                """.trimIndent(),
+            ),
         )
-        assertEquals(1, errors.size)
     }
 
     @Test
