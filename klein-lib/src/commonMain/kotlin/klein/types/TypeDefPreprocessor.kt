@@ -110,12 +110,12 @@ class TypeDefPreprocessor(
     private fun resolveNames(env: TypeEnv) {
         for (ctor in env.allConstructors()) {
             for (field in ctor.fields) {
-                resolveTypeExpr(field.type, env)
+                validateTypeExprNames(field.type, env)
             }
         }
     }
 
-    private fun resolveTypeExpr(
+    private fun validateTypeExprNames(
         typeExpr: TypeExpr,
         env: TypeEnv,
     ) {
@@ -138,21 +138,21 @@ class TypeDefPreprocessor(
                     errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
                 }
                 for (arg in typeExpr.args) {
-                    resolveTypeExpr(arg, env)
+                    validateTypeExprNames(arg, env)
                 }
             }
             is FunctionTypeExpr -> {
-                for (param in typeExpr.paramTypes) resolveTypeExpr(param, env)
-                resolveTypeExpr(typeExpr.returnType, env)
+                for (param in typeExpr.paramTypes) validateTypeExprNames(param, env)
+                validateTypeExprNames(typeExpr.returnType, env)
             }
             is TupleTypeExpr -> {
                 for (element in typeExpr.elements) {
-                    resolveTypeExpr(element, env)
+                    validateTypeExprNames(element, env)
                 }
             }
             is RecordTypeExpr -> {
                 for ((_, fieldType) in typeExpr.fields) {
-                    resolveTypeExpr(fieldType, env)
+                    validateTypeExprNames(fieldType, env)
                 }
             }
         }
@@ -317,65 +317,13 @@ class TypeDefPreprocessor(
         }
     }
 
-    private fun resolveTypeExprToSimpleType(
-        typeExpr: TypeExpr,
-        typeVarMap: Map<String, TVar>,
-        env: TypeEnv,
-    ): SimpleType =
-        when (typeExpr) {
-            is TypeVar ->
-                typeVarMap[typeExpr.name] ?: env.freshVar()
-
-            is TypeName ->
-                SimpleType.fromName(typeExpr.name)
-                    ?: if (env.lookupTypeDef(typeExpr.name) != null) {
-                        TRef(typeExpr.name, emptyList(), typeExpr.span)
-                    } else {
-                        env.freshVar()
-                    }
-
-            is AppliedTypeExpr ->
-                if (env.lookupTypeDef(typeExpr.name) != null) {
-                    val args = typeExpr.args.map { resolveTypeExprToSimpleType(it, typeVarMap, env) }
-                    TRef(typeExpr.name, args, typeExpr.span)
-                } else {
-                    env.freshVar()
-                }
-
-            is FunctionTypeExpr ->
-                TFun(
-                    typeExpr.paramTypes.map { resolveTypeExprToSimpleType(it, typeVarMap, env) },
-                    resolveTypeExprToSimpleType(typeExpr.returnType, typeVarMap, env),
-                )
-
-            is TupleTypeExpr -> {
-                if (typeExpr.elements.isEmpty()) {
-                    TUnit
-                } else {
-                    val fields =
-                        typeExpr.elements
-                            .mapIndexed { i, elem ->
-                                "_$i" to resolveTypeExprToSimpleType(elem, typeVarMap, env)
-                            }.toMap()
-                    TRecord(fields)
-                }
-            }
-
-            is RecordTypeExpr ->
-                TRecord(
-                    typeExpr.fields.associate { (name, type) ->
-                        name to resolveTypeExprToSimpleType(type, typeVarMap, env)
-                    },
-                )
-        }
-
     private fun inferCtorIface(
         ctor: ConstructorInfo,
         env: TypeEnv,
     ): TRecord {
         val ctorTypeDef = env.getTypeDef(ctor.name)
-        val typeVarMap: Map<String, TVar> = ctorTypeDef.typeParams.associate { it.name to it.tvar }
-        val fields = ctor.fields.associate { it.name to resolveTypeExprToSimpleType(it.type, typeVarMap, env) }
+        val typeVarMap: MutableMap<String, SimpleType> = ctorTypeDef.typeParams.associate { it.name to it.tvar }.toMutableMap()
+        val fields = ctor.fields.associate { it.name to SimpleType.fromTypeExpr(it.type, typeVarMap, env) }
 
         return TRecord(fields)
     }

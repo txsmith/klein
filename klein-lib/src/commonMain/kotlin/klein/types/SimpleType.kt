@@ -1,6 +1,13 @@
 package klein.types
 
+import klein.AppliedTypeExpr
+import klein.FunctionTypeExpr
+import klein.RecordTypeExpr
 import klein.SourceSpan
+import klein.TupleTypeExpr
+import klein.TypeExpr
+import klein.TypeName
+import klein.TypeVar
 
 sealed class SimpleType {
     enum class Primitive(
@@ -105,6 +112,66 @@ sealed class SimpleType {
         private val primitivesByName: Map<String, SimpleType> = Primitive.entries.associate { it.typeName to it.type }
 
         fun fromName(name: String): SimpleType? = primitivesByName[name]
+
+        /**
+         * Convert a parsed type expression to a SimpleType.
+         *
+         * @param typeExpr The type expression to resolve
+         * @param typeVarMap Map from type variable names to their resolved types (TVars or skolems)
+         * @param env The type environment for looking up named types
+         * @return The resolved SimpleType
+         */
+        fun fromTypeExpr(
+            typeExpr: TypeExpr,
+            typeVarMap: MutableMap<String, SimpleType>,
+            env: TypeEnv,
+        ): SimpleType =
+            when (typeExpr) {
+                is TypeVar ->
+                    typeVarMap.getOrPut(typeExpr.name) { env.freshVar() }
+
+                is TypeName ->
+                    fromName(typeExpr.name)
+                        ?: if (env.lookupTypeDef(typeExpr.name) != null) {
+                            TRef(typeExpr.name, emptyList(), typeExpr.span)
+                        } else {
+                            env.freshVar()
+                        }
+
+                is AppliedTypeExpr ->
+                    if (env.lookupTypeDef(typeExpr.name) != null) {
+                        val args = typeExpr.args.map { fromTypeExpr(it, typeVarMap, env) }
+                        TRef(typeExpr.name, args, typeExpr.span)
+                    } else {
+                        env.freshVar()
+                    }
+
+                is FunctionTypeExpr ->
+                    TFun(
+                        typeExpr.paramTypes.map { fromTypeExpr(it, typeVarMap, env) },
+                        fromTypeExpr(typeExpr.returnType, typeVarMap, env),
+                    )
+
+                is TupleTypeExpr -> {
+                    if (typeExpr.elements.isEmpty()) {
+                        TUnit
+                    } else {
+                        val fields =
+                            typeExpr.elements
+                                .mapIndexed { i, elem ->
+                                    "_$i" to fromTypeExpr(elem, typeVarMap, env)
+                                }.toMap()
+                        TRecord(fields)
+                    }
+                }
+
+                is RecordTypeExpr ->
+                    TRecord(
+                        typeExpr.fields.associate { (name, type) ->
+                            name to fromTypeExpr(type, typeVarMap, env)
+                        },
+                    )
+            }
     }
 
     /**
