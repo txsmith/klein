@@ -46,6 +46,8 @@ class Subtyping(
             lhs is TNull && rhs is TNull -> return
             lhs is TUnit && rhs is TUnit -> return
 
+            lhs is TSkolem && rhs is TSkolem && lhs.uid == rhs.uid -> return
+
             // Top and Bottom: universal super/sub type
             rhs is TTop -> return
             lhs is TBottom -> return

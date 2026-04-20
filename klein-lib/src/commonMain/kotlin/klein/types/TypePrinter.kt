@@ -77,6 +77,11 @@ object TypePrinter {
                 fields.add("${innerPad}vars: [$varsStr]")
             }
 
+            if (ty.skolems.isNotEmpty()) {
+                val skolemsStr = ty.skolems.sortedBy { it.uid }.joinToString(", ") { "'${it.name}" }
+                fields.add("${innerPad}skolems: [$skolemsStr]")
+            }
+
             if (ty.prims.isNotEmpty()) {
                 val primsStr =
                     ty.prims.joinToString(", ") { prim ->
@@ -203,6 +208,7 @@ object TypePrinter {
                 TNum, TString, TBool, TNull, TUnit, TTop, TBottom -> type.toString()
                 is TOptional -> "${printType(type.inner)}?"
                 is TVar -> varName(type)
+                is TSkolem -> "'${type.name}"
                 is TFun -> printFun(type)
                 is TRecord -> printRecord(type)
                 is TRef -> printRef(type)

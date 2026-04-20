@@ -82,6 +82,19 @@ sealed class SimpleType {
         }
     }
 
+    class TSkolem(
+        override val level: Int,
+        val name: String,
+    ) : SimpleType() {
+        val uid: Int = nextUid++
+
+        override fun toString(): String = "'$name"
+
+        companion object {
+            private var nextUid = 0
+        }
+    }
+
     data class TFun(
         val params: List<SimpleType>,
         val result: SimpleType,
@@ -185,11 +198,13 @@ sealed class SimpleType {
             typeExpr: TypeExpr,
             typeVarMap: MutableMap<String, SimpleType>,
             env: TypeEnv,
+            rigid: Boolean = false,
         ): SimpleType =
             when (typeExpr) {
                 is TypeVar ->
                     typeVarMap.getOrPut(typeExpr.name) {
-                        env.freshVar(nameHint = typeExpr.name)
+                        if (rigid) TSkolem(env.level, typeExpr.name)
+                        else env.freshVar(nameHint = typeExpr.name)
                     }
 
                 is TypeName -> {
@@ -208,7 +223,7 @@ sealed class SimpleType {
                 is AppliedTypeExpr -> {
                     val typeDef = env.lookupTypeDef(typeExpr.name)
                     if (typeDef != null && typeDef.typeParams.size == typeExpr.args.size) {
-                        val args = typeExpr.args.map { fromTypeExpr(it, typeVarMap, env) }
+                        val args = typeExpr.args.map { fromTypeExpr(it, typeVarMap, env, rigid) }
                         TRef(typeExpr.name, args, typeExpr.span)
                     } else {
                         // Malformed (unknown or arity mismatch): fall back to freshVar.
@@ -218,8 +233,8 @@ sealed class SimpleType {
 
                 is FunctionTypeExpr ->
                     TFun(
-                        typeExpr.paramTypes.map { fromTypeExpr(it, typeVarMap, env) },
-                        fromTypeExpr(typeExpr.returnType, typeVarMap, env),
+                        typeExpr.paramTypes.map { fromTypeExpr(it, typeVarMap, env, rigid) },
+                        fromTypeExpr(typeExpr.returnType, typeVarMap, env, rigid),
                     )
 
                 is TupleTypeExpr -> {
@@ -229,7 +244,7 @@ sealed class SimpleType {
                         val fields =
                             typeExpr.elements
                                 .mapIndexed { i, elem ->
-                                    "_$i" to fromTypeExpr(elem, typeVarMap, env)
+                                    "_$i" to fromTypeExpr(elem, typeVarMap, env, rigid)
                                 }.toMap()
                         TRecord(fields)
                     }
@@ -238,7 +253,7 @@ sealed class SimpleType {
                 is RecordTypeExpr ->
                     TRecord(
                         typeExpr.fields.associate { (name, type) ->
-                            name to fromTypeExpr(type, typeVarMap, env)
+                            name to fromTypeExpr(type, typeVarMap, env, rigid)
                         },
                     )
             }
@@ -263,6 +278,7 @@ sealed class SimpleType {
         currentLevel: Int,
     ): Pair<SimpleType, Map<TVar, TVar>> {
         val varMap = mutableMapOf<TVar, TVar>()
+        val skolemMap = mutableMapOf<TSkolem, TVar>()
 
         fun freshen(ty: SimpleType): SimpleType =
             when {
@@ -279,6 +295,7 @@ sealed class SimpleType {
                     ty.upperBounds.forEach { fresh.upperBounds.add(freshen(it)) }
                     fresh
                 }
+                ty is TSkolem -> skolemMap.getOrPut(ty) { TVar(currentLevel, nameHint = ty.name) }
                 ty is TFun ->
                     TFun(
                         ty.params.map { freshen(it) },

@@ -1,6 +1,7 @@
 package klein.types
 
 import klein.Type
+import klein.types.SimpleType.TSkolem
 import klein.types.SimpleType.TVar
 import klein.types.TypeComponents.PrimType
 
@@ -171,6 +172,7 @@ object TypeSimplifier {
                         allVars.add(tv)
                         val newOccs = mutableSetOf<Any>()
                         newOccs.addAll(ty.vars)
+                        newOccs.addAll(ty.skolems)
                         newOccs.addAll(ty.prims)
                         ty.rec?.let { newOccs.add(it) }
                         ty.func?.let { newOccs.add(it) }
@@ -278,8 +280,8 @@ object TypeSimplifier {
                                 varSubst[w] = v
                             }
                         }
-                        is PrimType -> {
-                            // Primitives have no internal structure, so direct comparison works
+                        is PrimType, is TSkolem -> {
+                            // Primitives and skolems have no internal structure, so direct comparison works
                             val vOppOccs = analysis.coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
                                 varSubst[v] = null
@@ -321,6 +323,7 @@ object TypeSimplifier {
 
         return TypeComponents(
             vars = newVars,
+            skolems = ty.skolems,
             prims = ty.prims,
             nullable = ty.nullable,
             rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applySubstitutions(v, varSubst) }) },
@@ -417,6 +420,10 @@ object TypeSimplifier {
                         } else {
                             components.add(Type.Var(varName(v)))
                         }
+                    }
+
+                    for (sk in ty.skolems.sortedBy { it.uid }) {
+                        components.add(Type.Var(sk.name))
                     }
 
                     for (prim in ty.prims) {

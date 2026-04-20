@@ -106,25 +106,25 @@ class AnnotationInferTest {
     }
 
 
-    // @Test
-    // fun typeVarAnnotation_bodyMustRespectReturnType() {
-    //     // Body returns Num, but declared return is 'A — Num </: 'A
-    //     val errors = inferErrors("fun f(x: 'A): 'A = 42\nf")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_bodyMustRespectReturnType() {
+        // Body returns Num, but declared return is 'A — Num </: 'A
+        val errors = inferErrors("fun f(x: 'A): 'A = 42\nf")
+        assertEquals(1, errors.size)
+    }
 
-    // @Test
-    // fun typeVarAnnotation_bodyMustRespectReturnType_nested() {
-    //     // Body returns Option<Num>, but declared return is Option<'A>
-    //     val errors = inferErrors(
-    //         """
-    //         type Option<'A> = None | Some { value: 'A }
-    //         fun f(x: 'A): Option<'A> = Some(42)
-    //         f
-    //         """.trimIndent(),
-    //     )
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_bodyMustRespectReturnType_nested() {
+        // Body returns Option<Num>, but declared return is Option<'A>
+        val errors = inferErrors(
+            """
+            type Option<'A> = None | Some { value: 'A }
+            fun f(x: 'A): Option<'A> = Some(42)
+            f
+            """.trimIndent(),
+        )
+        assertEquals(1, errors.size)
+    }
 
     @Test
     fun typeVarAnnotation_mixedWithConcrete() {
@@ -138,47 +138,40 @@ class AnnotationInferTest {
         assertType("('A, 'A) -> 'A", infer("fun f(x: 'A, y: 'A) = x\nf"))
     }
 
-    // @Test
-    // fun typeVarAnnotation_bodyCannotConstrainTypeVar() {
-    //     // x and y are 'A (opaque) — body can't assume 'A supports +
-    //     val errors = inferErrors("fun f(x: 'A, y: 'A) = x + y\nf")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_bodyCannotConstrainTypeVar() {
+        // x and y are 'A (opaque) — body can't assume 'A supports +
+        val errors = inferErrors("fun f(x: 'A, y: 'A) = x + y\nf")
+        assertEquals(2, errors.size)
+    }
 
-    // @Test
-    // fun typeVarAnnotation_distinctSkolemsMismatch() {
-    //     // 'A and 'B are independent skolems — returning 'A where 'B is expected is an error
-    //     val errors = inferErrors("fun f(x: 'A): 'B = x\nf")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_distinctSkolemsMismatch() {
+        // 'A and 'B are independent skolems — returning 'A where 'B is expected is an error
+        val errors = inferErrors("fun f(x: 'A): 'B = x\nf")
+        assertEquals(1, errors.size)
+    }
 
-    // @Test
-    // fun typeVarAnnotation_skolemNotSubtypeOfConcrete() {
-    //     // 'A is opaque — can't use it where Num is expected
-    //     val errors = inferErrors("fun f(x: 'A): Num = x\nf")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_skolemNotSubtypeOfConcrete() {
+        // 'A is opaque — can't use it where Num is expected
+        val errors = inferErrors("fun f(x: 'A): Num = x\nf")
+        assertEquals(1, errors.size)
+    }
 
-    // @Test
-    // fun typeVarAnnotation_topLevelBindingWithSkolem() {
-    //     // x: 'A = 42 — 'A is rigid, Num </: 'A
-    //     val errors = inferErrors("x: 'A = 42")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_skolemFieldAccess() {
+        // 'A is opaque — can't access any fields on it
+        val errors = inferErrors("fun f(x: 'A) = x.name\nf")
+        assertEquals(1, errors.size)
+    }
 
-    // @Test
-    // fun typeVarAnnotation_skolemFieldAccess() {
-    //     // 'A is opaque — can't access any fields on it
-    //     val errors = inferErrors("fun f(x: 'A) = x.name\nf")
-    //     assertEquals(1, errors.size)
-    // }
-
-    // @Test
-    // fun typeVarAnnotation_skolemAsFunction() {
-    //     // 'A is opaque — can't call it
-    //     val errors = inferErrors("fun f(x: 'A) = x(42)\nf")
-    //     assertEquals(1, errors.size)
-    // }
+    @Test
+    fun typeVarAnnotation_skolemAsFunction() {
+        // 'A is opaque — can't call it
+        val errors = inferErrors("fun f(x: 'A) = x(42)\nf")
+        assertEquals(1, errors.size)
+    }
 
     @Test
     fun paramAnnotation_mismatch() {

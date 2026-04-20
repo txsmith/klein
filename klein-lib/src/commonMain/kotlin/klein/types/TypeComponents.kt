@@ -116,6 +116,7 @@ data class RefFamily(
 //   (flattenBounds, applySubstitutions, isPolarityIndependent, etc. all walk the same structure)
 data class TypeComponents(
     val vars: Set<TVar> = emptySet(),
+    val skolems: Set<TSkolem> = emptySet(),
     val prims: Set<PrimType> = emptySet(),
     val nullable: Boolean = false,
     val rec: RecordType? = null,
@@ -131,6 +132,8 @@ data class TypeComponents(
         fun prim(p: PrimType) = TypeComponents(prims = setOf(p))
 
         fun variable(v: TVar) = TypeComponents(vars = setOf(v))
+
+        fun skolem(s: TSkolem) = TypeComponents(skolems = setOf(s))
 
         fun function(
             params: List<TypeComponents>,
@@ -219,6 +222,7 @@ data class TypeComponents(
                     is TTop -> "TTop"
                     is TBottom -> "TBottom"
                     is TVar -> "$t"
+                    is TSkolem -> "$t"
                     is TOptional -> "TOptional(${formatSimpleType(t.inner)})"
                     is TFun -> "TFun([${t.params.joinToString(", ") { formatSimpleType(it) }}], ${formatSimpleType(t.result)})"
                     is TRecord -> "TRecord(${t.fields.map { (k, v) -> "$k: ${formatSimpleType(v)}" }})"
@@ -228,6 +232,7 @@ data class TypeComponents(
             fun formatTypeComponents(t: TypeComponents): String {
                 val parts = mutableListOf<String>()
                 if (t.vars.isNotEmpty()) parts.add("vars=[${t.vars.joinToString(", ") { "$it" }}]")
+                if (t.skolems.isNotEmpty()) parts.add("skolems=[${t.skolems.joinToString(", ") { "$it" }}]")
                 if (t.prims.isNotEmpty()) parts.add("prims=[${t.prims.joinToString(", ")}]")
                 if (t.rec != null) parts.add("rec={${t.rec.fields.entries.joinToString(", ") { (k, v) -> "$k: $v" }}}")
                 if (t.func != null) {
@@ -309,6 +314,7 @@ data class TypeComponents(
                             TypeComponents.ref(ty.name, args, env)
                         }
                         is TVar -> TypeComponents(vars = closeOver(ty, pol))
+                        is TSkolem -> TypeComponents.skolem(ty)
                     }
                 }.also { trace { "  => ${formatTypeComponents(it)}" } }
 
@@ -370,6 +376,7 @@ data class TypeComponents(
                     val result =
                         TypeComponents(
                             vars = bounds.vars,
+                            skolems = bounds.skolems,
                             prims = bounds.prims,
                             nullable = bounds.nullable,
                             rec =
@@ -607,6 +614,7 @@ data class TypeComponents(
         env: TypeEnv,
     ): TypeComponents {
         val mergedVars = this.vars + other.vars
+        val mergedSkolems = this.skolems + other.skolems
         val mergedPrims = this.prims + other.prims
         val mergedNullable = this.nullable || other.nullable
         val mergedRefs = mergeRefFamilies(this.refs, other.refs, pol, env)
@@ -634,6 +642,7 @@ data class TypeComponents(
 
         return TypeComponents(
             vars = mergedVars,
+            skolems = mergedSkolems,
             prims = mergedPrims,
             nullable = mergedNullable,
             rec = mergedRec,
@@ -644,9 +653,10 @@ data class TypeComponents(
     }
 
     fun isEmpty(): Boolean =
-        vars.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
+        vars.isEmpty() && skolems.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
 
-    fun hasConcreteComponents(): Boolean = prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
+    fun hasConcreteComponents(): Boolean =
+        skolems.isNotEmpty() || prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
 
     fun allRefs(): Set<RefType> =
         refs
@@ -670,6 +680,7 @@ data class TypeComponents(
     override fun toString(): String {
         val parts = mutableListOf<String>()
         if (vars.isNotEmpty()) parts.add("vars=$vars")
+        if (skolems.isNotEmpty()) parts.add("skolems=$skolems")
         if (prims.isNotEmpty()) parts.add("prims=$prims")
         if (nullable) parts.add("nullable")
         if (rec != null) parts.add("rec=$rec")

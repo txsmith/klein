@@ -245,7 +245,7 @@ class Typer {
         val typeVarMap: MutableMap<String, SimpleType> = mutableMapOf()
         val paramTypes = params.map { param ->
             if (param.typeAnnotation != null) {
-                resolveTypeExpr(param.typeAnnotation, env, typeVarMap)
+                resolveTypeExpr(param.typeAnnotation, env, typeVarMap, rigid = true)
             } else {
                 env.freshVar()
             }
@@ -255,7 +255,7 @@ class Typer {
         }
         val bodyType = infer(body, env)
         val returnType = if (annotRetTypeExpr != null) {
-            val annotReturnType = resolveTypeExpr(annotRetTypeExpr, env, typeVarMap)
+            val annotReturnType = resolveTypeExpr(annotRetTypeExpr, env, typeVarMap, rigid = true)
             subtyping.constrain(bodyType, annotReturnType, span)
             annotReturnType
         } else {
@@ -464,9 +464,10 @@ class Typer {
         typeExpr: TypeExpr,
         env: TypeEnv,
         typeVarMap: MutableMap<String, SimpleType> = mutableMapOf(),
+        rigid: Boolean = false,
     ): SimpleType {
         SimpleType.validateTypeExprNames(typeExpr, env, errors)
-        return SimpleType.fromTypeExpr(typeExpr, typeVarMap, env)
+        return SimpleType.fromTypeExpr(typeExpr, typeVarMap, env, rigid)
     }
 
     companion object {
