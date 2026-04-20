@@ -164,13 +164,14 @@ class Typer {
     private fun inferBlockStmts(
         stmts: List<Stmt>,
         env: TypeEnv,
+        isTopLevel: Boolean = false,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
         var lastType: SimpleType = TUnit
         val exprTypes = mutableMapOf<SourceSpan, SimpleType>()
         for (stmt in stmts) {
             lastType =
                 when (stmt) {
-                    is Val -> inferVal(stmt, env)
+                    is Val -> inferVal(stmt, env, isTopLevel)
                     is FunDef -> TUnit
                     is Expr -> {
                         val type = infer(stmt, env)
@@ -183,14 +184,16 @@ class Typer {
         return Pair(lastType, exprTypes)
     }
 
-    private fun inferVal(stmt: Val, env: TypeEnv): SimpleType {
+    private fun inferVal(stmt: Val, env: TypeEnv, isTopLevel: Boolean): SimpleType {
         if (env.contains(stmt.name)) {
             errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
         }
         val rhsEnv = env.enterBindingScope()
         val inferredType = infer(stmt.value, rhsEnv)
         if (stmt.typeAnnotation != null) {
-            val annotType = resolveTypeExpr(stmt.typeAnnotation, env)
+            val annotType =
+                if (isTopLevel) resolveTypeExpr(stmt.typeAnnotation, env, rigid = true)
+                else resolveBodyTypeExpr(stmt.typeAnnotation, env)
             subtyping.constrain(inferredType, annotType, stmt.span)
             env.bindPolymorphic(stmt.name, annotType)
         } else {
@@ -201,7 +204,7 @@ class Typer {
 
     private fun inferAscription(expr: Ascription, env: TypeEnv): SimpleType {
         val exprType = infer(expr.expr, env)
-        val annotType = resolveTypeExpr(expr.type, env)
+        val annotType = resolveBodyTypeExpr(expr.type, env)
         subtyping.constrain(exprType, annotType, expr.span)
         return annotType
     }
@@ -241,11 +244,12 @@ class Typer {
             }
             seen.add(name)
         }
-        // Shared type var scope across the function signature (params + return type)
-        val typeVarMap: MutableMap<String, SimpleType> = mutableMapOf()
+        // Shared type var scope across the function signature (params + return type).
+        // Skolems introduced here shadow any outer-scope type vars with the same name.
+        val signatureScope: MutableMap<String, SimpleType> = mutableMapOf()
         val paramTypes = params.map { param ->
             if (param.typeAnnotation != null) {
-                resolveTypeExpr(param.typeAnnotation, env, typeVarMap, rigid = true)
+                resolveTypeExpr(param.typeAnnotation, env, signatureScope, rigid = true)
             } else {
                 env.freshVar()
             }
@@ -253,9 +257,10 @@ class Typer {
         paramNames.zip(paramTypes).forEach { (name, type) ->
             env.bind(name, type)
         }
-        val bodyType = infer(body, env)
+        val bodyEnv = if (signatureScope.isEmpty()) env else env.child(typeVarScope = signatureScope)
+        val bodyType = infer(body, bodyEnv)
         val returnType = if (annotRetTypeExpr != null) {
-            val annotReturnType = resolveTypeExpr(annotRetTypeExpr, env, typeVarMap, rigid = true)
+            val annotReturnType = resolveTypeExpr(annotRetTypeExpr, env, signatureScope, rigid = true)
             subtyping.constrain(bodyType, annotReturnType, span)
             annotReturnType
         } else {
@@ -400,7 +405,7 @@ class Typer {
             }
             val inferredType = infer(field.value, env)
             if (field.typeAnnotation != null) {
-                val annotType = resolveTypeExpr(field.typeAnnotation, env)
+                val annotType = resolveBodyTypeExpr(field.typeAnnotation, env)
                 subtyping.constrain(inferredType, annotType, expr.span)
                 fieldTypes[field.name] = annotType
             } else {
@@ -468,6 +473,20 @@ class Typer {
     ): SimpleType {
         SimpleType.validateTypeExprNames(typeExpr, env, errors)
         return SimpleType.fromTypeExpr(typeExpr, typeVarMap, env, rigid)
+    }
+
+    /**
+     * Resolve a type annotation that cannot introduce new type variables.
+     * Type variables must already be in scope via an enclosing signature; unknown
+     * names produce [TypeError.UnboundTypeVar].
+     */
+    private fun resolveBodyTypeExpr(
+        typeExpr: TypeExpr,
+        env: TypeEnv,
+    ): SimpleType {
+        SimpleType.validateTypeExprNames(typeExpr, env, errors)
+        SimpleType.validateTypeVarsInScope(typeExpr, env, errors)
+        return SimpleType.fromTypeExpr(typeExpr, env.allTypeVarsInScope().toMutableMap(), env, rigid = false)
     }
 
     companion object {

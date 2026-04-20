@@ -142,6 +142,38 @@ sealed class SimpleType {
          * Validate that all type names in a type expression are defined and used with correct arity.
          * Accumulates errors in the provided list; does not return anything.
          */
+        /**
+         * Report UnboundTypeVar errors for any type variable in the expression
+         * that isn't visible via [env].lookupTypeVar. Each unbound name is reported
+         * at most once per call, at the first occurrence.
+         */
+        fun validateTypeVarsInScope(
+            typeExpr: TypeExpr,
+            env: TypeEnv,
+            errors: MutableList<TypeError>,
+        ) {
+            val reported = mutableSetOf<String>()
+            fun walk(t: TypeExpr) {
+                when (t) {
+                    is TypeVar -> {
+                        if (t.name !in reported && env.lookupTypeVar(t.name) == null) {
+                            reported.add(t.name)
+                            errors.add(TypeError.UnboundTypeVar(t.name, t.span))
+                        }
+                    }
+                    is TypeName -> {}
+                    is AppliedTypeExpr -> t.args.forEach { walk(it) }
+                    is FunctionTypeExpr -> {
+                        t.paramTypes.forEach { walk(it) }
+                        walk(t.returnType)
+                    }
+                    is TupleTypeExpr -> t.elements.forEach { walk(it) }
+                    is RecordTypeExpr -> t.fields.forEach { walk(it.second) }
+                }
+            }
+            walk(typeExpr)
+        }
+
         fun validateTypeExprNames(
             typeExpr: TypeExpr,
             env: TypeEnv,

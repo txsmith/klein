@@ -423,7 +423,7 @@ object TypeSimplifier {
                     }
 
                     for (sk in ty.skolems.sortedBy { it.uid }) {
-                        components.add(Type.Var(sk.name))
+                        components.add(Type.Var("'${sk.name}"))
                     }
 
                     for (prim in ty.prims) {

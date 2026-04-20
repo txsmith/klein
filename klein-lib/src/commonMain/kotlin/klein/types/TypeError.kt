@@ -68,6 +68,13 @@ sealed class TypeError {
         override val message = "Unbound variable: $name"
     }
 
+    data class UnboundTypeVar(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Unbound type variable: '$name"
+    }
+
     data class TypeMismatch(
         val subtype: Type,
         val supertype: Type,

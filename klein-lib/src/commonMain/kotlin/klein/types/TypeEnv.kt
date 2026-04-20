@@ -39,7 +39,16 @@ class TypeEnv(
     private val typeDefs: MutableMap<String, TypeDefInfo> = mutableMapOf(),
     private val constructors: MutableMap<String, ConstructorInfo> = mutableMapOf(),
     private val funDefs: MutableMap<String, FunDefInfo> = mutableMapOf(),
+    private val typeVarScope: Map<String, SimpleType> = emptyMap(),
 ) {
+    fun lookupTypeVar(name: String): SimpleType? = typeVarScope[name] ?: parent?.lookupTypeVar(name)
+
+    /** Flatten the type-var scope across the parent chain, with child scopes shadowing parents. */
+    fun allTypeVarsInScope(): Map<String, SimpleType> {
+        val result = parent?.allTypeVarsInScope()?.toMutableMap() ?: mutableMapOf()
+        result.putAll(typeVarScope)
+        return result
+    }
     fun lookupAndInstantiate(
         name: String,
         currentLevel: Int = this.level,
@@ -72,7 +81,10 @@ class TypeEnv(
 
     fun freshVar(nameHint: String? = null): SimpleType.TVar = SimpleType.TVar(level, nameHint = nameHint)
 
-    fun child(implicitParam: ImplicitParamContext = this.implicitParam): TypeEnv =
+    fun child(
+        implicitParam: ImplicitParamContext = this.implicitParam,
+        typeVarScope: Map<String, SimpleType> = emptyMap(),
+    ): TypeEnv =
         TypeEnv(
             parent = this,
             implicitParam = implicitParam,
@@ -80,6 +92,7 @@ class TypeEnv(
             typeDefs = typeDefs,
             constructors = constructors,
             funDefs = funDefs,
+            typeVarScope = typeVarScope,
         )
 
     fun enterBindingScope(): TypeEnv =
