@@ -420,6 +420,7 @@ class AnnotationInferTest {
 
     @Test
     fun recordField_typeVarInsideFunction_rejectsNewTypeVar() {
+        // 'B appears twice — one UnboundTypeVar per occurrence
         val errors = inferErrors(
             """
             fun f(x) =
@@ -428,7 +429,7 @@ class AnnotationInferTest {
             f
             """.trimIndent(),
         )
-        assertEquals(1, errors.size)
+        assertEquals(2, errors.size)
     }
 
 

@@ -139,156 +139,95 @@ sealed class SimpleType {
         fun fromName(name: String): SimpleType? = primitivesByName[name]
 
         /**
-         * Validate that all type names in a type expression are defined and used with correct arity.
-         * Accumulates errors in the provided list; does not return anything.
-         */
-        /**
-         * Report UnboundTypeVar errors for any type variable in the expression
-         * that isn't visible via [env].lookupTypeVar. Each unbound name is reported
-         * at most once per call, at the first occurrence.
-         */
-        fun validateTypeVarsInScope(
-            typeExpr: TypeExpr,
-            env: TypeEnv,
-            errors: MutableList<TypeError>,
-        ) {
-            val reported = mutableSetOf<String>()
-            fun walk(t: TypeExpr) {
-                when (t) {
-                    is TypeVar -> {
-                        if (t.name !in reported && env.lookupTypeVar(t.name) == null) {
-                            reported.add(t.name)
-                            errors.add(TypeError.UnboundTypeVar(t.name, t.span))
-                        }
-                    }
-                    is TypeName -> {}
-                    is AppliedTypeExpr -> t.args.forEach { walk(it) }
-                    is FunctionTypeExpr -> {
-                        t.paramTypes.forEach { walk(it) }
-                        walk(t.returnType)
-                    }
-                    is TupleTypeExpr -> t.elements.forEach { walk(it) }
-                    is RecordTypeExpr -> t.fields.forEach { walk(it.second) }
-                }
-            }
-            walk(typeExpr)
-        }
-
-        fun validateTypeExprNames(
-            typeExpr: TypeExpr,
-            env: TypeEnv,
-            errors: MutableList<TypeError>,
-        ) {
-            when (typeExpr) {
-                is TypeVar -> {}
-                is TypeName -> {
-                    if (typeExpr.name in primitiveNames) return
-                    val typeDef = env.lookupTypeDef(typeExpr.name)
-                    if (typeDef == null) {
-                        errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-                    } else if (typeDef.typeParams.isNotEmpty()) {
-                        errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, 0, typeExpr.span))
-                    }
-                }
-                is AppliedTypeExpr -> {
-                    val typeDef = env.lookupTypeDef(typeExpr.name)
-                    if (typeDef == null) {
-                        errors.add(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-                    } else if (typeExpr.args.size != typeDef.typeParams.size) {
-                        errors.add(TypeError.TypeArityMismatch(typeExpr.name, typeDef.typeParams.size, typeExpr.args.size, typeExpr.span))
-                    }
-                    for (arg in typeExpr.args) {
-                        validateTypeExprNames(arg, env, errors)
-                    }
-                }
-                is FunctionTypeExpr -> {
-                    for (param in typeExpr.paramTypes) validateTypeExprNames(param, env, errors)
-                    validateTypeExprNames(typeExpr.returnType, env, errors)
-                }
-                is TupleTypeExpr -> {
-                    for (element in typeExpr.elements) {
-                        validateTypeExprNames(element, env, errors)
-                    }
-                }
-                is RecordTypeExpr -> {
-                    for ((_, fieldType) in typeExpr.fields) {
-                        validateTypeExprNames(fieldType, env, errors)
-                    }
-                }
-            }
-        }
-
-        /**
-         * Convert a parsed type expression to a SimpleType.
+         * Resolve a type expression, collecting any name-resolution errors along the way.
          *
-         * @param typeExpr The type expression to resolve
-         * @param typeVarMap Map from type variable names to their resolved types (TVars or skolems)
-         * @param env The type environment for looking up named types
-         * @return The resolved SimpleType
+         * Type variables:
+         * - When [isEnvClosed] is true, they must already be in scope via
+         *   [TypeEnv.lookupTypeVar] (walks the parent chain). Unknown names produce
+         *   [TypeError.UnboundTypeVar] and fall back to a fresh TVar.
+         * - When [isEnvClosed] is false, a name not present in the *local* scope is
+         *   introduced into [env] — as a [TSkolem] if [rigid], otherwise a flexible TVar.
+         *   Inner scopes shadow outer ones: lookup is local-only, so same-named outer
+         *   type vars don't leak into the new signature.
+         *
+         * Type names and applied types:
+         * - Unknown names produce [TypeError.UnboundVariable].
+         * - Wrong number of type arguments produces [TypeError.TypeArityMismatch].
+         *
+         * @return the resolved type along with any errors collected during resolution
          */
         fun fromTypeExpr(
             typeExpr: TypeExpr,
-            typeVarMap: MutableMap<String, SimpleType>,
             env: TypeEnv,
             rigid: Boolean = false,
-        ): SimpleType =
-            when (typeExpr) {
-                is TypeVar ->
-                    typeVarMap.getOrPut(typeExpr.name) {
-                        if (rigid) TSkolem(env.level, typeExpr.name)
-                        else env.freshVar(nameHint = typeExpr.name)
-                    }
+            isEnvClosed: Boolean = false,
+        ): Pair<SimpleType, List<TypeError>> {
+            val errors = mutableListOf<TypeError>()
 
-                is TypeName -> {
-                    val prim = fromName(typeExpr.name)
-                    val typeDef = env.lookupTypeDef(typeExpr.name)
-                    when {
-                        prim != null -> prim
-                        typeDef != null && typeDef.typeParams.isEmpty() ->
-                            TRef(typeExpr.name, emptyList(), typeExpr.span)
-                        // Malformed (unknown or arity mismatch): fall back to freshVar.
-                        // Validation is expected to have reported an error separately.
-                        else -> env.freshVar()
-                    }
-                }
-
-                is AppliedTypeExpr -> {
-                    val typeDef = env.lookupTypeDef(typeExpr.name)
-                    if (typeDef != null && typeDef.typeParams.size == typeExpr.args.size) {
-                        val args = typeExpr.args.map { fromTypeExpr(it, typeVarMap, env, rigid) }
-                        TRef(typeExpr.name, args, typeExpr.span)
-                    } else {
-                        // Malformed (unknown or arity mismatch): fall back to freshVar.
-                        env.freshVar()
-                    }
-                }
-
-                is FunctionTypeExpr ->
-                    TFun(
-                        typeExpr.paramTypes.map { fromTypeExpr(it, typeVarMap, env, rigid) },
-                        fromTypeExpr(typeExpr.returnType, typeVarMap, env, rigid),
-                    )
-
-                is TupleTypeExpr -> {
-                    if (typeExpr.elements.isEmpty()) {
-                        TUnit
-                    } else {
-                        val fields =
-                            typeExpr.elements
-                                .mapIndexed { i, elem ->
-                                    "_$i" to fromTypeExpr(elem, typeVarMap, env, rigid)
-                                }.toMap()
-                        TRecord(fields)
-                    }
-                }
-
-                is RecordTypeExpr ->
-                    TRecord(
-                        typeExpr.fields.associate { (name, type) ->
-                            name to fromTypeExpr(type, typeVarMap, env, rigid)
-                        },
-                    )
+            /** Report [error] and return a fresh TVar as a fallback so resolution can continue. */
+            fun fail(error: TypeError): SimpleType {
+                errors.add(error)
+                return env.freshVar()
             }
+
+            fun resolveTypeVar(t: TypeVar): SimpleType {
+                val existing = env.lookupTypeVar(t.name)
+                if (existing != null) return existing
+                if (isEnvClosed) return fail(TypeError.UnboundTypeVar(t.name, t.span))
+                val fresh =
+                    if (rigid) TSkolem(env.level, t.name)
+                    else env.freshVar(nameHint = t.name)
+                env.bindTypeVar(t.name, fresh)
+                return fresh
+            }
+
+            fun go(t: TypeExpr): SimpleType =
+                when (t) {
+                    is TypeVar -> resolveTypeVar(t)
+
+                    is TypeName -> {
+                        val prim = fromName(t.name)
+                        val typeDef = env.lookupTypeDef(t.name)
+                        when {
+                            prim != null -> prim
+                            typeDef == null -> fail(TypeError.UnboundVariable(t.name, t.span))
+                            typeDef.typeParams.isNotEmpty() ->
+                                fail(TypeError.TypeArityMismatch(t.name, typeDef.typeParams.size, 0, t.span))
+                            else -> TRef(t.name, emptyList(), t.span)
+                        }
+                    }
+
+                    is AppliedTypeExpr -> {
+                        val typeDef = env.lookupTypeDef(t.name)
+                        // Recurse into args regardless — we want to collect errors inside them too.
+                        val resolvedArgs = t.args.map(::go)
+                        when {
+                            typeDef == null -> fail(TypeError.UnboundVariable(t.name, t.span))
+                            typeDef.typeParams.size != t.args.size ->
+                                fail(TypeError.TypeArityMismatch(t.name, typeDef.typeParams.size, t.args.size, t.span))
+                            else -> TRef(t.name, resolvedArgs, t.span)
+                        }
+                    }
+
+                    is FunctionTypeExpr ->
+                        TFun(t.paramTypes.map(::go), go(t.returnType))
+
+                    is TupleTypeExpr -> {
+                        if (t.elements.isEmpty()) {
+                            TUnit
+                        } else {
+                            TRecord(
+                                t.elements.mapIndexed { i, elem -> "_$i" to go(elem) }.toMap(),
+                            )
+                        }
+                    }
+
+                    is RecordTypeExpr ->
+                        TRecord(t.fields.associate { (name, type) -> name to go(type) })
+                }
+
+            return go(typeExpr) to errors.toList()
+        }
     }
 
     /**

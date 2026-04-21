@@ -192,7 +192,7 @@ class Typer {
         val inferredType = infer(stmt.value, rhsEnv)
         if (stmt.typeAnnotation != null) {
             val annotType =
-                if (isTopLevel) resolveTypeExpr(stmt.typeAnnotation, env, rigid = true)
+                if (isTopLevel) resolveSignatureTypeExpr(stmt.typeAnnotation, env)
                 else resolveBodyTypeExpr(stmt.typeAnnotation, env)
             subtyping.constrain(inferredType, annotType, stmt.span)
             env.bindPolymorphic(stmt.name, annotType)
@@ -244,12 +244,11 @@ class Typer {
             }
             seen.add(name)
         }
-        // Shared type var scope across the function signature (params + return type).
-        // Skolems introduced here shadow any outer-scope type vars with the same name.
-        val signatureScope: MutableMap<String, SimpleType> = mutableMapOf()
+        // Signature resolution introduces skolems directly into env's local type-var scope.
+        // Inner scopes shadow outer names because signature mode only checks local.
         val paramTypes = params.map { param ->
             if (param.typeAnnotation != null) {
-                resolveTypeExpr(param.typeAnnotation, env, signatureScope, rigid = true)
+                resolveSignatureTypeExpr(param.typeAnnotation, env)
             } else {
                 env.freshVar()
             }
@@ -257,10 +256,9 @@ class Typer {
         paramNames.zip(paramTypes).forEach { (name, type) ->
             env.bind(name, type)
         }
-        val bodyEnv = if (signatureScope.isEmpty()) env else env.child(typeVarScope = signatureScope)
-        val bodyType = infer(body, bodyEnv)
+        val bodyType = infer(body, env)
         val returnType = if (annotRetTypeExpr != null) {
-            val annotReturnType = resolveTypeExpr(annotRetTypeExpr, env, signatureScope, rigid = true)
+            val annotReturnType = resolveSignatureTypeExpr(annotRetTypeExpr, env)
             subtyping.constrain(bodyType, annotReturnType, span)
             annotReturnType
         } else {
@@ -465,28 +463,32 @@ class Typer {
         TypeDefPreprocessor(subtyping, errors).process(typeDefs, env)
     }
 
-    private fun resolveTypeExpr(
+    /**
+     * Resolve a type annotation at a top-level binding site (fun/lambda signature,
+     * top-level val). Type variables not already in local scope are introduced as
+     * skolems and bound into [env]'s local type-var scope.
+     */
+    private fun resolveSignatureTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
-        typeVarMap: MutableMap<String, SimpleType> = mutableMapOf(),
-        rigid: Boolean = false,
     ): SimpleType {
-        SimpleType.validateTypeExprNames(typeExpr, env, errors)
-        return SimpleType.fromTypeExpr(typeExpr, typeVarMap, env, rigid)
+        val (type, resolveErrors) = SimpleType.fromTypeExpr(typeExpr, env, rigid = true, isEnvClosed = false)
+        errors.addAll(resolveErrors)
+        return type
     }
 
     /**
-     * Resolve a type annotation that cannot introduce new type variables.
-     * Type variables must already be in scope via an enclosing signature; unknown
-     * names produce [TypeError.UnboundTypeVar].
+     * Resolve a type annotation nested inside a function body. Type variables must
+     * already be visible via [TypeEnv.lookupTypeVar]; unknown names produce
+     * [TypeError.UnboundTypeVar].
      */
     private fun resolveBodyTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
     ): SimpleType {
-        SimpleType.validateTypeExprNames(typeExpr, env, errors)
-        SimpleType.validateTypeVarsInScope(typeExpr, env, errors)
-        return SimpleType.fromTypeExpr(typeExpr, env.allTypeVarsInScope().toMutableMap(), env, rigid = false)
+        val (type, resolveErrors) = SimpleType.fromTypeExpr(typeExpr, env, isEnvClosed = true)
+        errors.addAll(resolveErrors)
+        return type
     }
 
     companion object {

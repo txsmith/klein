@@ -15,8 +15,6 @@ class TypeDefPreprocessor(
 
         val validTypeDefs = registerPlaceholders(typeDefs, env)
 
-        resolveNames(env)
-
         computeVariance(validTypeDefs, env)
 
         buildIfaces(env)
@@ -107,14 +105,6 @@ class TypeDefPreprocessor(
             }
         }
         return validTypeDefs
-    }
-
-    private fun resolveNames(env: TypeEnv) {
-        for (ctor in env.allConstructors()) {
-            for (field in ctor.fields) {
-                SimpleType.validateTypeExprNames(field.type, env, errors)
-            }
-        }
     }
 
     private fun collectTypeVars(typeExpr: TypeExpr): Set<String> =
@@ -281,9 +271,13 @@ class TypeDefPreprocessor(
         env: TypeEnv,
     ): TRecord {
         val ctorTypeDef = env.getTypeDef(ctor.name)
-        val typeVarMap: MutableMap<String, SimpleType> = ctorTypeDef.typeParams.associate { it.name to it.tvar }.toMutableMap()
-        val fields = ctor.fields.associate { it.name to SimpleType.fromTypeExpr(it.type, typeVarMap, env) }
-
+        val ctorEnv = env.child()
+        ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.name, it.tvar) }
+        val fields = ctor.fields.associate { field ->
+            val (type, fieldErrors) = SimpleType.fromTypeExpr(field.type, ctorEnv)
+            errors.addAll(fieldErrors)
+            field.name to type
+        }
         return TRecord(fields)
     }
 }
