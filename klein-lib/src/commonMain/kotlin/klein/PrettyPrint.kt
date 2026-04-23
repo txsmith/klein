@@ -60,6 +60,8 @@ fun TypeExpr.prettyPrint(): String =
         }} -> ${returnType.prettyPrint()})"
         is TupleTypeExpr -> "(${elements.joinToString(", ") { it.prettyPrint() }})"
         is RecordTypeExpr -> "{ ${fields.joinToString(", ") { (n, t) -> "$n: ${t.prettyPrint()}" }} }"
+        is UnionTypeExpr -> "(${left.prettyPrint()} | ${right.prettyPrint()})"
+        is IntersectionTypeExpr -> "(${left.prettyPrint()} & ${right.prettyPrint()})"
     }
 
 fun Expr.prettyPrint(indent: Int = 0): String {

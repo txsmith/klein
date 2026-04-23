@@ -87,6 +87,18 @@ data class RecordTypeExpr(
     override val span: SourceSpan,
 ) : TypeExpr()
 
+data class UnionTypeExpr(
+    val left: TypeExpr,
+    val right: TypeExpr,
+    override val span: SourceSpan,
+) : TypeExpr()
+
+data class IntersectionTypeExpr(
+    val left: TypeExpr,
+    val right: TypeExpr,
+    override val span: SourceSpan,
+) : TypeExpr()
+
 @Serializable
 sealed class Expr : Stmt() {
     abstract override val span: SourceSpan

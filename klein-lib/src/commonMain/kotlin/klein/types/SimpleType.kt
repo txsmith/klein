@@ -2,12 +2,14 @@ package klein.types
 
 import klein.AppliedTypeExpr
 import klein.FunctionTypeExpr
+import klein.IntersectionTypeExpr
 import klein.RecordTypeExpr
 import klein.SourceSpan
 import klein.TupleTypeExpr
 import klein.TypeExpr
 import klein.TypeName
 import klein.TypeVar
+import klein.UnionTypeExpr
 
 sealed class SimpleType {
     enum class Primitive(
@@ -224,6 +226,10 @@ sealed class SimpleType {
 
                     is RecordTypeExpr ->
                         TRecord(t.fields.associate { (name, type) -> name to go(type) })
+
+                    is UnionTypeExpr -> fail(TypeError.UnsupportedAnnotation("union types", t.span))
+
+                    is IntersectionTypeExpr -> fail(TypeError.UnsupportedAnnotation("intersection types", t.span))
                 }
 
             return go(typeExpr) to errors.toList()

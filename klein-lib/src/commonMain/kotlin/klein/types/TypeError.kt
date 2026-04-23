@@ -211,6 +211,13 @@ sealed class TypeError {
         override val message = "'$name' shadows a builtin type"
     }
 
+    data class UnsupportedAnnotation(
+        val description: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Unsupported annotation: $description"
+    }
+
     open fun render(env: TypeEnv): String {
         val msg = renderMessage(env)
         if (context.isEmpty()) return msg

@@ -93,6 +93,22 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun ascription_multipleOnSameVarAccumulate() {
+        assertType(
+            "(Cat & Dog) -> Dog",
+            infer(
+                """
+                type Animal = Dog { name: String } | Cat { name: String }
+                fun g(x) =
+                  (x: Cat)
+                  (x: Dog)
+                g
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
     fun typeVar_paramNameFollowsIntoReturn() {
         // 'B in the return type is part of the signature — introduces it
         // x is returned as 'B, so x must be 'B too

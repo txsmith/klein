@@ -204,7 +204,7 @@ class Parser(
     }
 
     private fun parseTypeExpr(): TypeExpr {
-        val left = parseTypeAtom()
+        val left = parseTypeUnion()
 
         if (peek().kind == ARROW) {
             advance()
@@ -218,6 +218,26 @@ class Parser(
             return FunctionTypeExpr(paramTypes, right, left.span + right.span)
         }
 
+        return left
+    }
+
+    private fun parseTypeUnion(): TypeExpr {
+        var left = parseTypeIntersection()
+        while (peek().kind == PIPE) {
+            advance()
+            val right = parseTypeIntersection()
+            left = UnionTypeExpr(left, right, left.span + right.span)
+        }
+        return left
+    }
+
+    private fun parseTypeIntersection(): TypeExpr {
+        var left = parseTypeAtom()
+        while (peek().kind == AMP) {
+            advance()
+            val right = parseTypeAtom()
+            left = IntersectionTypeExpr(left, right, left.span + right.span)
+        }
         return left
     }
 

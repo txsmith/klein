@@ -115,6 +115,8 @@ class TypeDefPreprocessor(
             is FunctionTypeExpr -> typeExpr.paramTypes.flatMap { collectTypeVars(it) }.toSet() + collectTypeVars(typeExpr.returnType)
             is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVars(it) }.toSet()
             is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVars(it.second) }.toSet()
+            is UnionTypeExpr -> collectTypeVars(typeExpr.left) + collectTypeVars(typeExpr.right)
+            is IntersectionTypeExpr -> collectTypeVars(typeExpr.left) + collectTypeVars(typeExpr.right)
         }
 
     private fun computeVariance(
@@ -194,6 +196,18 @@ class TypeDefPreprocessor(
                         changed = update(fieldType, ownerName, polarity) || changed
                     }
                     changed
+                }
+
+                is UnionTypeExpr -> {
+                    val l = update(typeExpr.left, ownerName, polarity)
+                    val r = update(typeExpr.right, ownerName, polarity)
+                    l || r
+                }
+
+                is IntersectionTypeExpr -> {
+                    val l = update(typeExpr.left, ownerName, polarity)
+                    val r = update(typeExpr.right, ownerName, polarity)
+                    l || r
                 }
             }
 

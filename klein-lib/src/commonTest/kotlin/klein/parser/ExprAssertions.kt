@@ -17,6 +17,7 @@ import klein.Ident
 import klein.IfThenElse
 import klein.ImplicitParam
 import klein.IntLiteral
+import klein.IntersectionTypeExpr
 import klein.Lambda
 import klein.Lexer
 import klein.NullLiteral
@@ -39,6 +40,7 @@ import klein.TypeName
 import klein.TypeVar
 import klein.UnaryOp
 import klein.UnaryOperator
+import klein.UnionTypeExpr
 import klein.Val
 
 private val noSpan = SourceSpan.zero
@@ -265,6 +267,10 @@ fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSp
 
 fun recordType(vararg fields: Pair<String, TypeExpr>) = RecordTypeExpr(fields.toList(), noSpan)
 
+fun unionType(left: TypeExpr, right: TypeExpr) = UnionTypeExpr(left, right, noSpan)
+
+fun intersectionType(left: TypeExpr, right: TypeExpr) = IntersectionTypeExpr(left, right, noSpan)
+
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
     return Parser(tokens).parseStmt()
@@ -297,6 +303,8 @@ fun TypeExpr.stripSpan(): TypeExpr =
         is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
+        is UnionTypeExpr -> UnionTypeExpr(left.stripSpan(), right.stripSpan(), noSpan)
+        is IntersectionTypeExpr -> IntersectionTypeExpr(left.stripSpan(), right.stripSpan(), noSpan)
     }
 
 fun parseTypeDef(source: String): TypeDef {
