@@ -248,7 +248,7 @@ class Typer {
         // Inner scopes shadow outer names because signature mode only checks local.
         val paramTypes = params.map { param ->
             if (param.typeAnnotation != null) {
-                resolveSignatureTypeExpr(param.typeAnnotation, env)
+                resolveSignatureTypeExpr(param.typeAnnotation, env, Variance.Contravariant)
             } else {
                 env.freshVar()
             }
@@ -471,8 +471,10 @@ class Typer {
     private fun resolveSignatureTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
+        polarity: Variance = Variance.Covariant,
     ): SimpleType {
-        val (type, resolveErrors) = SimpleType.fromTypeExpr(typeExpr, env, rigid = true, isEnvClosed = false)
+        val (type, resolveErrors) =
+            SimpleType.fromTypeExpr(typeExpr, env, rigid = true, isEnvClosed = false, polarity = polarity)
         errors.addAll(resolveErrors)
         return type
     }
@@ -485,8 +487,10 @@ class Typer {
     private fun resolveBodyTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
+        polarity: Variance = Variance.Covariant,
     ): SimpleType {
-        val (type, resolveErrors) = SimpleType.fromTypeExpr(typeExpr, env, isEnvClosed = true)
+        val (type, resolveErrors) =
+            SimpleType.fromTypeExpr(typeExpr, env, isEnvClosed = true, polarity = polarity)
         errors.addAll(resolveErrors)
         return type
     }

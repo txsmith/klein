@@ -72,14 +72,13 @@ object TypePrinter {
                 val varsStr =
                     ty.vars.sortedByDescending { it.uid }.joinToString(", ") { v ->
                         val bound = recVars[v]
-                        if (bound != null) "μ${varName(v)}" else varName(v)
+                        when {
+                            bound != null -> "μ${varName(v)}"
+                            v.rigid && v.nameHint != null -> "'${v.nameHint}"
+                            else -> varName(v)
+                        }
                     }
                 fields.add("${innerPad}vars: [$varsStr]")
-            }
-
-            if (ty.skolems.isNotEmpty()) {
-                val skolemsStr = ty.skolems.sortedBy { it.uid }.joinToString(", ") { "'${it.name}" }
-                fields.add("${innerPad}skolems: [$skolemsStr]")
             }
 
             if (ty.prims.isNotEmpty()) {
@@ -207,8 +206,7 @@ object TypePrinter {
             when (type) {
                 TNum, TString, TBool, TNull, TUnit, TTop, TBottom -> type.toString()
                 is TOptional -> "${printType(type.inner)}?"
-                is TVar -> varName(type)
-                is TSkolem -> "'${type.name}"
+                is TVar -> if (type.rigid && type.nameHint != null) "'${type.nameHint}" else varName(type)
                 is TFun -> printFun(type)
                 is TRecord -> printRecord(type)
                 is TRef -> printRef(type)

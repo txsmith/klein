@@ -211,6 +211,14 @@ sealed class TypeError {
         override val message = "'$name' shadows a builtin type"
     }
 
+    data class InvalidAnnotationPolarity(
+        val operator: String,
+        val position: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "$operator is not allowed in $position position"
+    }
+
     data class UnsupportedAnnotation(
         val description: String,
         override val span: SourceSpan,

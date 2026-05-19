@@ -64,6 +64,7 @@ sealed class SimpleType {
         val lowerBounds: MutableSet<SimpleType> = mutableSetOf(),
         val upperBounds: MutableSet<SimpleType> = mutableSetOf(),
         val nameHint: String? = null,
+        val rigid: Boolean = false,
     ) : SimpleType() {
         val uid: Int = nextUid++
 
@@ -81,19 +82,6 @@ sealed class SimpleType {
             internal fun resetUidCounter() {
                 nextUid = 0
             }
-        }
-    }
-
-    class TSkolem(
-        override val level: Int,
-        val name: String,
-    ) : SimpleType() {
-        val uid: Int = nextUid++
-
-        override fun toString(): String = "'$name"
-
-        companion object {
-            private var nextUid = 0
         }
     }
 
@@ -148,7 +136,7 @@ sealed class SimpleType {
          *   [TypeEnv.lookupTypeVar] (walks the parent chain). Unknown names produce
          *   [TypeError.UnboundTypeVar] and fall back to a fresh TVar.
          * - When [isEnvClosed] is false, a name not present in the *local* scope is
-         *   introduced into [env] — as a [TSkolem] if [rigid], otherwise a flexible TVar.
+         *   introduced into [env] — as a rigid [TVar] if [rigid], otherwise a flexible TVar.
          *   Inner scopes shadow outer ones: lookup is local-only, so same-named outer
          *   type vars don't leak into the new signature.
          *
@@ -163,6 +151,7 @@ sealed class SimpleType {
             env: TypeEnv,
             rigid: Boolean = false,
             isEnvClosed: Boolean = false,
+            polarity: Variance = Variance.Covariant,
         ): Pair<SimpleType, List<TypeError>> {
             val errors = mutableListOf<TypeError>()
 
@@ -176,14 +165,12 @@ sealed class SimpleType {
                 val existing = env.lookupTypeVar(t.name)
                 if (existing != null) return existing
                 if (isEnvClosed) return fail(TypeError.UnboundTypeVar(t.name, t.span))
-                val fresh =
-                    if (rigid) TSkolem(env.level, t.name)
-                    else env.freshVar(nameHint = t.name)
+                val fresh = env.freshVar(nameHint = t.name, rigid = rigid)
                 env.bindTypeVar(t.name, fresh)
                 return fresh
             }
 
-            fun go(t: TypeExpr): SimpleType =
+            fun go(t: TypeExpr, pol: Variance): SimpleType =
                 when (t) {
                     is TypeVar -> resolveTypeVar(t)
 
@@ -201,38 +188,55 @@ sealed class SimpleType {
 
                     is AppliedTypeExpr -> {
                         val typeDef = env.lookupTypeDef(t.name)
-                        // Recurse into args regardless — we want to collect errors inside them too.
-                        val resolvedArgs = t.args.map(::go)
                         when {
                             typeDef == null -> fail(TypeError.UnboundVariable(t.name, t.span))
                             typeDef.typeParams.size != t.args.size ->
                                 fail(TypeError.TypeArityMismatch(t.name, typeDef.typeParams.size, t.args.size, t.span))
-                            else -> TRef(t.name, resolvedArgs, t.span)
+                            else -> {
+                                val resolvedArgs = t.args.mapIndexed { i, arg ->
+                                    go(arg, pol.compose(typeDef.typeParams[i].variance))
+                                }
+                                TRef(t.name, resolvedArgs, t.span)
+                            }
                         }
                     }
 
                     is FunctionTypeExpr ->
-                        TFun(t.paramTypes.map(::go), go(t.returnType))
+                        TFun(t.paramTypes.map { go(it, pol.flip()) }, go(t.returnType, pol))
 
                     is TupleTypeExpr -> {
                         if (t.elements.isEmpty()) {
                             TUnit
                         } else {
                             TRecord(
-                                t.elements.mapIndexed { i, elem -> "_$i" to go(elem) }.toMap(),
+                                t.elements.mapIndexed { i, elem -> "_$i" to go(elem, pol) }.toMap(),
                             )
                         }
                     }
 
                     is RecordTypeExpr ->
-                        TRecord(t.fields.associate { (name, type) -> name to go(type) })
+                        TRecord(t.fields.associate { (name, type) -> name to go(type, pol) })
 
-                    is UnionTypeExpr -> fail(TypeError.UnsupportedAnnotation("union types", t.span))
+                    is UnionTypeExpr -> {
+                        when (pol) {
+                            Variance.Covariant ->
+                                fail(TypeError.UnsupportedAnnotation("union types", t.span))
+                            else ->
+                                fail(TypeError.InvalidAnnotationPolarity("Union", pol.displayLabel, t.span))
+                        }
+                    }
 
-                    is IntersectionTypeExpr -> fail(TypeError.UnsupportedAnnotation("intersection types", t.span))
+                    is IntersectionTypeExpr -> {
+                        when (pol) {
+                            Variance.Contravariant ->
+                                fail(TypeError.UnsupportedAnnotation("intersection types", t.span))
+                            else ->
+                                fail(TypeError.InvalidAnnotationPolarity("Intersection", pol.displayLabel, t.span))
+                        }
+                    }
                 }
 
-            return go(typeExpr) to errors.toList()
+            return go(typeExpr, polarity) to errors.toList()
         }
     }
 
@@ -255,7 +259,6 @@ sealed class SimpleType {
         currentLevel: Int,
     ): Pair<SimpleType, Map<TVar, TVar>> {
         val varMap = mutableMapOf<TVar, TVar>()
-        val skolemMap = mutableMapOf<TSkolem, TVar>()
 
         fun freshen(ty: SimpleType): SimpleType =
             when {
@@ -263,7 +266,8 @@ sealed class SimpleType {
                 ty is TVar -> {
                     // Check if we've already started processing this TVar
                     varMap[ty]?.let { return it }
-                    // Create fresh TVar first (without bounds) to handle cycles
+                    // Create fresh TVar first (without bounds) to handle cycles.
+                    // Rigid TVars become flexible on instantiation.
                     val fresh = TVar(currentLevel, nameHint = ty.nameHint)
                     varMap[ty] = fresh
                     // Process bounds in order to preserve relative UID ordering
@@ -272,7 +276,6 @@ sealed class SimpleType {
                     ty.upperBounds.forEach { fresh.upperBounds.add(freshen(it)) }
                     fresh
                 }
-                ty is TSkolem -> skolemMap.getOrPut(ty) { TVar(currentLevel, nameHint = ty.name) }
                 ty is TFun ->
                     TFun(
                         ty.params.map { freshen(it) },

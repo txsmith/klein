@@ -41,6 +41,12 @@ enum class Variance {
     Invariant,
     ;
 
+    val displayLabel: String get() =
+        when (this) {
+            Covariant -> "output"
+            Contravariant -> "input"
+            Invariant, Bivariant -> "invariant"
+        }
     val isPositive: Boolean get() =
         when (this) {
             Covariant, Invariant, Bivariant -> true

@@ -31,7 +31,9 @@ class Subtyping(
         span: SourceSpan,
         context: List<ConstraintContext> = emptyList(),
     ) {
-        if (lhs is TVar || rhs is TVar) {
+        val lhsFlexible = lhs is TVar && !lhs.rigid
+        val rhsFlexible = rhs is TVar && !rhs.rigid
+        if (lhsFlexible || rhsFlexible) {
             val pair = lhs to rhs
             if (pair in cache) return
             cache.add(pair)
@@ -46,13 +48,15 @@ class Subtyping(
             lhs is TNull && rhs is TNull -> return
             lhs is TUnit && rhs is TUnit -> return
 
-            lhs is TSkolem && rhs is TSkolem && lhs.uid == rhs.uid -> return
+            // Rigid-vs-rigid identity: same user-declared skolem.
+            lhs is TVar && lhs.rigid && rhs is TVar && rhs.rigid && lhs.uid == rhs.uid -> return
 
-            // Top and Bottom: universal super/sub type
+            // Top and Bottom: universal super/sub type (covers rigid vs Top/Bottom too).
             rhs is TTop -> return
             lhs is TBottom -> return
 
-            lhs is TVar -> {
+            // Flexible TVars on one side is and rigid and the other, the flexible side records the rigid as a bound without mutating the rigid.
+            lhs is TVar && !lhs.rigid -> {
                 if (rhs.level <= lhs.level) {
                     lhs.upperBounds.add(rhs)
                     for (lb in lhs.lowerBounds.toList()) {
@@ -64,7 +68,7 @@ class Subtyping(
                 }
             }
 
-            rhs is TVar -> {
+            rhs is TVar && !rhs.rigid -> {
                 if (lhs.level <= rhs.level) {
                     rhs.lowerBounds.add(lhs)
                     for (ub in rhs.upperBounds.toList()) {
@@ -73,6 +77,39 @@ class Subtyping(
                 } else {
                     val extruded = extrude(lhs, positive = true, targetLevel = rhs.level)
                     constrain(extruded, rhs, span, context)
+                }
+            }
+
+            // Rigid vs non-flexible (the flexible cases fell through above). Rigid TVars
+            // never accumulate bounds - the constraint must be discharged via the fixed
+            // upper/lower bounds, or it's a type error.
+            lhs is TVar && lhs.rigid -> {
+                if (lhs.upperBounds.isEmpty()) {
+                    errors.add(
+                        TypeError.TypeMismatch(
+                            simplifyCanonical(lhs, env, pol = true),
+                            simplifyCanonical(rhs, env, pol = false),
+                            span,
+                            context,
+                        ),
+                    )
+                } else {
+                    for (ub in lhs.upperBounds.toList()) constrain(ub, rhs, span, context)
+                }
+            }
+
+            rhs is TVar && rhs.rigid -> {
+                if (rhs.lowerBounds.isEmpty()) {
+                    errors.add(
+                        TypeError.TypeMismatch(
+                            simplifyCanonical(lhs, env, pol = true),
+                            simplifyCanonical(rhs, env, pol = false),
+                            span,
+                            context,
+                        ),
+                    )
+                } else {
+                    for (lb in rhs.lowerBounds.toList()) constrain(lhs, lb, span, context)
                 }
             }
 

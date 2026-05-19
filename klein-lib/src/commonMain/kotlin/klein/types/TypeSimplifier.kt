@@ -1,7 +1,6 @@
 package klein.types
 
 import klein.Type
-import klein.types.SimpleType.TSkolem
 import klein.types.SimpleType.TVar
 import klein.types.TypeComponents.PrimType
 
@@ -172,7 +171,6 @@ object TypeSimplifier {
                         allVars.add(tv)
                         val newOccs = mutableSetOf<Any>()
                         newOccs.addAll(ty.vars)
-                        newOccs.addAll(ty.skolems)
                         newOccs.addAll(ty.prims)
                         ty.rec?.let { newOccs.add(it) }
                         ty.func?.let { newOccs.add(it) }
@@ -240,6 +238,7 @@ object TypeSimplifier {
     ) {
         for (v in analysis.allVars) {
             if (v in analysis.recVars) continue
+            if (v.rigid) continue // rigid vars are user-named skolems, never eliminate
             val posOccs = analysis.coOccurrences[true to v]
             val negOccs = analysis.coOccurrences[false to v]
             if ((posOccs != null && negOccs == null) || (posOccs == null && negOccs != null)) {
@@ -260,6 +259,7 @@ object TypeSimplifier {
         // Process in descending uid order like SimpleSub
         for (v in analysis.allVars.sortedByDescending { it.uid }) {
             if (v in varSubst) continue
+            if (v.rigid) continue // rigid vars are never substituted
 
             for (pol in listOf(true, false)) {
                 val vOccs = analysis.coOccurrences[pol to v] ?: continue
@@ -269,6 +269,7 @@ object TypeSimplifier {
                         is TVar -> {
                             if (w == v) continue
                             if (w in varSubst) continue
+                            if (w.rigid) continue // don't unify rigid vars away
                             // If v is to be eliminated, don't unify other vars into it
                             if (v in varSubst && varSubst[v] == null) continue
                             // Don't merge rec and non-rec vars
@@ -280,8 +281,8 @@ object TypeSimplifier {
                                 varSubst[w] = v
                             }
                         }
-                        is PrimType, is TSkolem -> {
-                            // Primitives and skolems have no internal structure, so direct comparison works
+                        is PrimType -> {
+                            // Primitives have no internal structure, so direct comparison works
                             val vOppOccs = analysis.coOccurrences[!pol to v]
                             if (vOppOccs != null && w in vOppOccs) {
                                 varSubst[v] = null
@@ -323,7 +324,6 @@ object TypeSimplifier {
 
         return TypeComponents(
             vars = newVars,
-            skolems = ty.skolems,
             prims = ty.prims,
             nullable = ty.nullable,
             rec = ty.rec?.let { RecordType(it.fields.mapValues { (_, v) -> applySubstitutions(v, varSubst) }) },
@@ -420,10 +420,6 @@ object TypeSimplifier {
                         } else {
                             components.add(Type.Var(varName(v)))
                         }
-                    }
-
-                    for (sk in ty.skolems.sortedBy { it.uid }) {
-                        components.add(Type.Var("'${sk.name}"))
                     }
 
                     for (prim in ty.prims) {
