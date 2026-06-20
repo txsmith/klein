@@ -23,6 +23,7 @@ class Typer {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramResult {
+        SimpleType.TVar.resetUidCounter()
         subtyping = Subtyping(env)
         val (type, exprTypes) = inferTopLevelStmts(program.stmts, env)
         return ProgramResult(type, env, getErrors(), exprTypes)

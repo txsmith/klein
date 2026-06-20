@@ -55,6 +55,11 @@ sealed class SimpleType {
 
         companion object {
             private var nextUid = 0
+
+            /** Reset the uid counter at the start of a fresh inference so output is independent of prior runs. */
+            internal fun resetUidCounter() {
+                nextUid = 0
+            }
         }
     }
 
