@@ -132,6 +132,13 @@ sealed class TypeError {
         override val message = "'$name' is already defined"
     }
 
+    data class RecursiveVal(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Recursive value '$name' cannot be defined in terms of itself"
+    }
+
     data class CallArityMismatch(
         val expected: Int,
         val actual: Int,
