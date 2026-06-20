@@ -64,9 +64,10 @@ class Typer {
 
                 else ->
                     // A value reachable from itself (directly or through functions) can never be
-                    // initialized.
+                    // initialized; report it with the cycle that proves it.
                     component.filter { it.binding is Val }.forEach { node ->
-                        errors.add(TypeError.RecursiveVal(node.name, (node.binding as Val).span))
+                        val cycle = scopeGraph.graph.findCycle(node.name)
+                        errors.add(TypeError.RecursiveVal(node.name, cycle, (node.binding as Val).span))
                     }
             }
         }

@@ -134,9 +134,10 @@ sealed class TypeError {
 
     data class RecursiveVal(
         val name: String,
+        val cycle: List<String>,
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Recursive value '$name' cannot be defined in terms of itself"
+        override val message = "Recursive value '$name' cannot be defined in terms of itself: ${cycle.joinToString(" -> ")}"
     }
 
     data class CallArityMismatch(

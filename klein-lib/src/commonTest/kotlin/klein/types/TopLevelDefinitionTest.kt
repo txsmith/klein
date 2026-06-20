@@ -1,6 +1,7 @@
 package klein.types
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TopLevelDefinitionTest {
@@ -169,9 +170,8 @@ class TopLevelDefinitionTest {
                 v
                 """.trimIndent(),
             )
-        assertTrue(
-            errors.any { it is TypeError.RecursiveVal },
-            "expected a recursive-val error for the val-in-cycle, got: $errors",
-        )
+        val recursiveVal = errors.filterIsInstance<TypeError.RecursiveVal>()
+        assertTrue(recursiveVal.isNotEmpty(), "expected a recursive-val error for the val-in-cycle, got: $errors")
+        assertEquals(listOf("v", "h", "k", "v"), recursiveVal.first().cycle)
     }
 }

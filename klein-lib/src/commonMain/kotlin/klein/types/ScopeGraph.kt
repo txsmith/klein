@@ -82,6 +82,30 @@ data class ScopeGraph(
         return sccs
     }
 
+    /**
+     * Find a simple cycle through [start] by following edges, returned as a closed path such as
+     * `[start, a, b, start]`. Any cycle through a node lies entirely within its strongly connected
+     * component, so this only needs the full edge set. Intended for nodes already known to be part
+     * of a cycle (a component of more than one node); a node with no cycle yields just `[start]`.
+     */
+    fun findCycle(start: String): List<String> {
+        val adjacency = edges.groupBy({ it.first }, { it.second })
+        val path = mutableListOf<String>()
+
+        fun walk(v: String): Boolean {
+            path.add(v)
+            for (w in adjacency[v].orEmpty()) {
+                if (w == start) return true // closed the cycle back to the start
+                if (w !in path && walk(w)) return true
+            }
+            path.removeAt(path.lastIndex)
+            return false
+        }
+
+        walk(start)
+        return path + start
+    }
+
     companion object {
         /**
          * Build the [GraphResult] for a top-level program (or any scope's statements). Escaped
