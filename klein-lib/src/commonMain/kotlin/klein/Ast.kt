@@ -193,6 +193,21 @@ val Expr.usesImplicitParam: Boolean
                 }
         }
 
+val Expr.children: List<Expr>
+    get() =
+        when (this) {
+            is Block -> emptyList()
+            is ImplicitParam, is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is NullLiteral, is Ident -> emptyList()
+            is BinaryOp -> listOf(left, right)
+            is UnaryOp -> listOf(operand)
+            is Lambda -> listOf(body)
+            is Apply -> listOf(callee) + args
+            is RecordLiteral -> fields.map { it.second }
+            is FieldAccess -> listOf(target)
+            is SafeFieldAccess -> listOf(target)
+            is IfThenElse -> listOfNotNull(condition, thenBranch, elseBranch)
+        }
+
 data class RecordLiteral(
     val fields: List<Pair<String, Expr>>,
     override val span: SourceSpan,
