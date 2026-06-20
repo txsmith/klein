@@ -34,43 +34,106 @@ class Typer {
         env: TypeEnv,
     ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
         processTypeDefs(stmts.filterIsInstance<TypeDef>(), env)
-        processFunDefs(stmts.filterIsInstance<FunDef>(), env)
-        return inferBlockStmts(stmts, env)
+        bindTopLevel(stmts, env)
+        return inferResultTypes(stmts, env)
     }
 
-    private fun processFunDefs(
+    /**
+     * Bind every top-level value and function, processing strongly connected components in
+     * dependency order so each binding is generalized before the bindings that reference it.
+     *
+     * Functions in a component are mutually recursive and bound together (the three-pass scheme).
+     * A standalone value is inferred and bound on its own. A component that pulls a value into a
+     * cycle is a use-before-initialization error.
+     */
+    private fun bindTopLevel(
+        stmts: List<Stmt>,
+        env: TypeEnv,
+    ) {
+        val scopeGraph = ScopeGraph.constructGraph(stmts)
+        scopeGraph.duplicates.forEach { (name, span) -> errors.add(TypeError.DuplicateBinding(name, span)) }
+
+        for (component in scopeGraph.graph.computeSCCs()) {
+            val bindings = component.map { it.binding }
+            when {
+                bindings.all { it is FunDef } ->
+                    processFunComponent(bindings.filterIsInstance<FunDef>(), env)
+
+                bindings.size == 1 && bindings.single() is Val ->
+                    bindVal(bindings.single() as Val, env)
+
+                else ->
+                    // A value reachable from itself (directly or through functions) can never be
+                    // initialized.
+                    component.filter { it.binding is Val }.forEach { node ->
+                        errors.add(TypeError.RecursiveVal(node.name, (node.binding as Val).span))
+                    }
+            }
+        }
+    }
+
+    /** Bind one component of mutually-recursive functions, then generalize them. */
+    private fun processFunComponent(
         funDefs: List<FunDef>,
         env: TypeEnv,
     ) {
-        if (funDefs.isEmpty()) return
-
         val scopeEnv = env.enterBindingScope()
-        val funDefBindings = mutableMapOf<String, Pair<FunDef, SimpleType>>()
+        val bound = mutableListOf<Pair<FunDef, SimpleType>>()
 
-        // Pass 1: Bind all with TVars (enables mutual recursion)
+        // Pass 1: bind every function to a fresh type variable (enables mutual recursion).
         for (funDef in funDefs) {
-            if (env.contains(funDef.name)) {
-                errors.add(TypeError.DuplicateBinding(funDef.name, funDef.span))
-            } else {
-                val typeVar = scopeEnv.freshVar()
-                funDefBindings[funDef.name] = funDef to typeVar
-                env.bind(funDef.name, typeVar)
-                env.registerFunDef(FunDefInfo(funDef.name, funDef.params))
-            }
+            val typeVar = scopeEnv.freshVar()
+            env.bind(funDef.name, typeVar)
+            env.registerFunDef(FunDefInfo(funDef.name, funDef.params))
+            bound.add(funDef to typeVar)
         }
 
-        // Pass 2: Infer types
-        for ((funDef, typeVar) in funDefBindings.values) {
+        // Pass 2: infer each body against the shared placeholders.
+        for ((funDef, typeVar) in bound) {
             val rhsEnv = env.enterBindingScope()
             rhsEnv.bind(funDef.name, typeVar)
             val type = inferFunction(funDef.params, funDef.body, funDef.span, rhsEnv, functionName = funDef.name)
             subtyping.constrain(type, typeVar, funDef.span)
         }
 
-        // Pass 3: Generalize to polymorphic bindings
-        for ((name, pair) in funDefBindings) {
-            env.bindPolymorphic(name, pair.second)
+        // Pass 3: generalize to polymorphic bindings.
+        for ((funDef, typeVar) in bound) {
+            env.bindPolymorphic(funDef.name, typeVar)
         }
+    }
+
+    /** Infer a standalone value's right-hand side and bind it polymorphically. */
+    private fun bindVal(
+        stmt: Val,
+        env: TypeEnv,
+    ) {
+        val rhsEnv = env.enterBindingScope()
+        val type = infer(stmt.value, rhsEnv)
+        env.bindPolymorphic(stmt.name, type)
+    }
+
+    /**
+     * Walk the statements in lexical order for the program's result type (the last expression)
+     * and the span-to-type map. Bindings are already in scope from [bindTopLevel]; only bare
+     * expressions are inferred here.
+     */
+    private fun inferResultTypes(
+        stmts: List<Stmt>,
+        env: TypeEnv,
+    ): Pair<SimpleType, Map<SourceSpan, SimpleType>> {
+        var lastType: SimpleType = TUnit
+        val exprTypes = mutableMapOf<SourceSpan, SimpleType>()
+        for (stmt in stmts) {
+            lastType =
+                if (stmt is Expr) {
+                    val type = infer(stmt, env)
+                    exprTypes[stmt.span] = type
+                    type
+                } else {
+                    TUnit
+                }
+        }
+        return lastType to exprTypes
     }
 
     fun infer(
