@@ -1,15 +1,3 @@
-type Func<'A> = In { f: 'A -> 'A } | Out { o: 'A }
-type Anim = Dog | Cat
-type ForceDog = ForceDog { d: Dog }
-type ForceCat = ForceCat { c: Cat }
-
-# In<'A> where 'A <: Dog
-in = In(|d ->
-  ForceDog(d)
-  d
-|)
-
-# Out<'A> where Dog <: 'A
-out = Out(Dog)
-
-r = if true then in else out
+fun id(x) = x
+fun f(x) = id(3)
+fun g(x) = id("hello")
