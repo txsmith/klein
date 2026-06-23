@@ -1,3 +1,16 @@
-fun id(x) = x
-fun f(x) = id(3)
-fun g(x) = id("hello")
+# type HasName = HasName { name: String }
+# type HasAge = HasAge { age: Num }
+# type Box<'A> = Box { value: 'A }
+#
+# fun readName(b: 'Q & Box<'Z & HasName & HasAge>): String = b.value.name
+
+fun f(x) =
+  x + 1
+  x
+
+# z = f
+
+# q: 'S | Num = 3
+# r = q * 3
+
+

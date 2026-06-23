@@ -103,14 +103,17 @@ class Typer {
         }
     }
 
-    /** Infer a standalone value's right-hand side and bind it polymorphically. */
+    /**
+     * Infer and bind a standalone top-level value. Delegates to [inferVal] in top-level mode so a
+     * declared type annotation is resolved in signature scope. (Duplicate detection is already
+     * handled by [bindTopLevel] via the scope graph, so the redundant check here never fires for
+     * bindings that reach this point.)
+     */
     private fun bindVal(
         stmt: Val,
         env: TypeEnv,
     ) {
-        val rhsEnv = env.enterBindingScope()
-        val type = infer(stmt.value, rhsEnv)
-        env.bindPolymorphic(stmt.name, type)
+        inferVal(stmt, env, isTopLevel = true)
     }
 
     /**
@@ -184,7 +187,11 @@ class Typer {
         return Pair(lastType, exprTypes)
     }
 
-    private fun inferVal(stmt: Val, env: TypeEnv, isTopLevel: Boolean): SimpleType {
+    private fun inferVal(
+        stmt: Val,
+        env: TypeEnv,
+        isTopLevel: Boolean,
+    ): SimpleType {
         if (env.contains(stmt.name)) {
             errors.add(TypeError.DuplicateBinding(stmt.name, stmt.span))
         }
@@ -192,8 +199,14 @@ class Typer {
         val inferredType = infer(stmt.value, rhsEnv)
         if (stmt.typeAnnotation != null) {
             val annotType =
-                if (isTopLevel) resolveSignatureTypeExpr(stmt.typeAnnotation, env)
-                else resolveBodyTypeExpr(stmt.typeAnnotation, env)
+                if (isTopLevel) {
+                    // Resolve in a child scope so the signature's type variables are bound locally
+                    // and don't leak into the shared top-level env (where later definitions would
+                    // reuse them via the parent-chain lookup).
+                    resolveTopLvlTypeExpr(stmt.typeAnnotation, env.child())
+                } else {
+                    resolveLocalTypeExpr(stmt.typeAnnotation, env)
+                }
             subtyping.constrain(inferredType, annotType, stmt.span)
             env.bindPolymorphic(stmt.name, annotType)
         } else {
@@ -202,19 +215,28 @@ class Typer {
         return TUnit
     }
 
-    private fun inferAscription(expr: Ascription, env: TypeEnv): SimpleType {
+    private fun inferAscription(
+        expr: Ascription,
+        env: TypeEnv,
+    ): SimpleType {
         val exprType = infer(expr.expr, env)
-        val annotType = resolveBodyTypeExpr(expr.type, env)
+        val annotType = resolveLocalTypeExpr(expr.type, env)
         subtyping.constrain(exprType, annotType, expr.span)
         return annotType
     }
 
-    private fun inferFunDef(funDef: FunDef, env: TypeEnv): SimpleType {
+    private fun inferFunDef(
+        funDef: FunDef,
+        env: TypeEnv,
+    ): SimpleType {
         val childEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
         return inferFunction(funDef.params, funDef.body, funDef.span, childEnv, funDef.returnType)
     }
 
-    private fun inferLambda(lambda: Lambda, env: TypeEnv): SimpleType =
+    private fun inferLambda(
+        lambda: Lambda,
+        env: TypeEnv,
+    ): SimpleType =
         if (lambda.params.isEmpty()) {
             val implicitType = env.freshVar()
             val childEnv = env.child(ImplicitParamContext.Available(implicitType))
@@ -246,24 +268,26 @@ class Typer {
         }
         // Signature resolution introduces skolems directly into env's local type-var scope.
         // Inner scopes shadow outer names because signature mode only checks local.
-        val paramTypes = params.map { param ->
-            if (param.typeAnnotation != null) {
-                resolveSignatureTypeExpr(param.typeAnnotation, env, Variance.Contravariant)
-            } else {
-                env.freshVar()
+        val paramTypes =
+            params.map { param ->
+                if (param.typeAnnotation != null) {
+                    resolveTopLvlTypeExpr(param.typeAnnotation, env, Variance.Contravariant)
+                } else {
+                    env.freshVar()
+                }
             }
-        }
         paramNames.zip(paramTypes).forEach { (name, type) ->
             env.bind(name, type)
         }
         val bodyType = infer(body, env)
-        val returnType = if (annotRetTypeExpr != null) {
-            val annotReturnType = resolveSignatureTypeExpr(annotRetTypeExpr, env)
-            subtyping.constrain(bodyType, annotReturnType, span)
-            annotReturnType
-        } else {
-            bodyType
-        }
+        val returnType =
+            if (annotRetTypeExpr != null) {
+                val annotReturnType = resolveTopLvlTypeExpr(annotRetTypeExpr, env)
+                subtyping.constrain(bodyType, annotReturnType, span)
+                annotReturnType
+            } else {
+                bodyType
+            }
         return TFun(paramTypes, returnType, paramNames)
     }
 
@@ -403,7 +427,7 @@ class Typer {
             }
             val inferredType = infer(field.value, env)
             if (field.typeAnnotation != null) {
-                val annotType = resolveBodyTypeExpr(field.typeAnnotation, env)
+                val annotType = resolveLocalTypeExpr(field.typeAnnotation, env)
                 subtyping.constrain(inferredType, annotType, expr.span)
                 fieldTypes[field.name] = annotType
             } else {
@@ -468,13 +492,13 @@ class Typer {
      * top-level val). Type variables not already in local scope are introduced as
      * skolems and bound into [env]'s local type-var scope.
      */
-    private fun resolveSignatureTypeExpr(
+    private fun resolveTopLvlTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
         polarity: Variance = Variance.Covariant,
     ): SimpleType {
         val (type, resolveErrors) =
-            SimpleType.fromTypeExpr(typeExpr, env, rigid = true, isEnvClosed = false, polarity = polarity)
+            SimpleType.fromTypeExpr(typeExpr, env, isRigid = true, isEnvClosed = false, polarity = polarity)
         errors.addAll(resolveErrors)
         return type
     }
@@ -484,7 +508,7 @@ class Typer {
      * already be visible via [TypeEnv.lookupTypeVar]; unknown names produce
      * [TypeError.UnboundTypeVar].
      */
-    private fun resolveBodyTypeExpr(
+    private fun resolveLocalTypeExpr(
         typeExpr: TypeExpr,
         env: TypeEnv,
         polarity: Variance = Variance.Covariant,

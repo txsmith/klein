@@ -80,8 +80,8 @@ class TypeEnv(
 
     fun freshVar(
         nameHint: String? = null,
-        rigid: Boolean = false,
-    ): SimpleType.TVar = SimpleType.TVar(level, nameHint = nameHint, rigid = rigid)
+        isRigid: Boolean = false,
+    ): SimpleType.TVar = SimpleType.TVar(level, nameHint = nameHint, isRigid = isRigid)
 
     fun child(
         implicitParam: ImplicitParamContext = this.implicitParam,

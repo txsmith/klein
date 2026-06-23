@@ -39,8 +39,7 @@ object TypePrinter {
     private class CompactPrinter(
         private val recVars: Map<TVar, TypeComponents>,
     ) {
-        private val varNames = mutableMapOf<TVar, String>()
-        private var nextVarId = 0
+        private val namer = VarNamer()
 
         fun print(
             term: TypeComponents,
@@ -50,13 +49,7 @@ object TypePrinter {
             return "$prefix${printType(term, indent = 0)}"
         }
 
-        private fun varName(tv: TVar): String =
-            varNames.getOrPut(tv) {
-                val id = nextVarId++
-                val letter = 'A' + (id % 26)
-                val suffix = if (id >= 26) "${id / 26}" else ""
-                "'$letter$suffix"
-            }
+        private fun varName(tv: TVar): String = namer.varName(tv)
 
         private fun printType(
             ty: TypeComponents,
@@ -72,11 +65,7 @@ object TypePrinter {
                 val varsStr =
                     ty.vars.sortedByDescending { it.uid }.joinToString(", ") { v ->
                         val bound = recVars[v]
-                        when {
-                            bound != null -> "μ${varName(v)}"
-                            v.rigid && v.nameHint != null -> "'${v.nameHint}"
-                            else -> varName(v)
-                        }
+                        if (bound != null) "μ${varName(v)}" else varName(v)
                     }
                 fields.add("${innerPad}vars: [$varsStr]")
             }
@@ -154,8 +143,7 @@ object TypePrinter {
      * Raw printer that shows type structure with bounds in a where clause.
      */
     private class RawPrinter {
-        private val varNames = mutableMapOf<TVar, String>()
-        private var nextVarId = 0
+        private val namer = VarNamer()
         private val seenVars = mutableSetOf<TVar>()
         private val visiting = mutableSetOf<TVar>()
 
@@ -206,7 +194,7 @@ object TypePrinter {
             when (type) {
                 TNum, TString, TBool, TNull, TUnit, TTop, TBottom -> type.toString()
                 is TOptional -> "${printType(type.inner)}?"
-                is TVar -> if (type.rigid && type.nameHint != null) "'${type.nameHint}" else varName(type)
+                is TVar -> varName(type)
                 is TFun -> printFun(type)
                 is TRecord -> printRecord(type)
                 is TRef -> printRef(type)
@@ -217,13 +205,7 @@ object TypePrinter {
             return "${ref.name}$args"
         }
 
-        private fun varName(tv: TVar): String = varNames.getOrPut(tv) { generateVarName(nextVarId++) }
-
-        private fun generateVarName(id: Int): String {
-            val letter = 'A' + (id % 26)
-            val suffix = if (id >= 26) "${id / 26}" else ""
-            return "'$letter$suffix"
-        }
+        private fun varName(tv: TVar): String = namer.varName(tv)
 
         private fun printFun(fn: TFun): String {
             val params = "(${fn.params.joinToString(", ") { printType(it) }})"
@@ -241,9 +223,10 @@ object TypePrinter {
 
         private fun buildConstraints(): String {
             val lines = mutableListOf<String>()
-            val sortedVars = varNames.entries.sortedBy { it.value }
+            val sortedVars = seenVars.sortedBy { namer.varName(it) }
 
-            for ((tv, name) in sortedVars) {
+            for (tv in sortedVars) {
+                val name = namer.varName(tv)
                 val lower =
                     tv.lowerBounds
                         .map { printBound(it) }

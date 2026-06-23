@@ -35,10 +35,10 @@ data class FunDefInfo(
 )
 
 enum class Variance {
-    Bivariant,
     Covariant,
     Contravariant,
     Invariant,
+    Bivariant, // N.B bivariance only occurs with phantom types, which always should be treated as invariant.
     ;
 
     val displayLabel: String get() =

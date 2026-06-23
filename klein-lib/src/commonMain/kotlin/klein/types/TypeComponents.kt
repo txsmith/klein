@@ -647,7 +647,7 @@ data class TypeComponents(
         vars.isEmpty() && prims.isEmpty() && !nullable && rec == null && func == null && optional == null && refs.isEmpty()
 
     fun hasConcreteComponents(): Boolean =
-        vars.any { it.rigid } || prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
+        vars.any { it.isRigid } || prims.isNotEmpty() || rec != null || func != null || optional != null || refs.isNotEmpty()
 
     fun allRefs(): Set<RefType> =
         refs

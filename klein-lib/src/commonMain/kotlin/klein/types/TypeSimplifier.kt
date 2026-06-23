@@ -12,14 +12,19 @@ import klein.types.TypeComponents.PrimType
  *
  * Reference: https://lptk.github.io/programming/2020/03/26/demystifying-mlsub.html
  */
-private class VarNamer {
+/**
+ * Assigns display names to type variables: a user-given [TVar.nameHint] (uniquified across
+ * distinct vars), else a generated name — lowercase for rigid skolems, uppercase for flexible.
+ * The single naming policy shared by every printer.
+ */
+internal class VarNamer {
     private val varNames = mutableMapOf<TVar, String>()
     private val usedNames = mutableSetOf<String>()
     private var nextIdx = 0
 
     fun varName(v: TVar): String =
         varNames.getOrPut(v) {
-            val name = v.nameHint?.let { hint -> uniquify("'$hint") } ?: nextGenericName()
+            val name = v.nameHint?.let { hint -> uniquify("'$hint") } ?: nextGenericName(v.isRigid)
             usedNames.add(name)
             name
         }
@@ -31,19 +36,16 @@ private class VarNamer {
         return "$candidate$n"
     }
 
-    private fun nextGenericName(): String {
+    private fun nextGenericName(rigid: Boolean): String {
         while (true) {
-            val letter = 'A' + (nextIdx % 26)
-            val suffix = if (nextIdx >= 26) "${nextIdx / 26}" else ""
-            val name = "'$letter$suffix"
-            nextIdx++
+            val name = TVar.genericName(rigid, nextIdx++)
             if (name !in usedNames) return name
         }
     }
 }
 
 object TypeSimplifier {
-    private const val DEBUG = false
+    private const val DEBUG = true
 
     private inline fun debug(msg: () -> String) {
         if (DEBUG) println(msg())
@@ -238,7 +240,10 @@ object TypeSimplifier {
     ) {
         for (v in analysis.allVars) {
             if (v in analysis.recVars) continue
-            if (v.rigid) continue // rigid vars are user-named skolems, never eliminate
+            // Preserve only NAMED rigid skolems (user type variables like 'A). Anonymous rigid
+            // vars merely encode a union/intersection annotation and should collapse to their
+            // bounds, just like a flexible var.
+            // if (v.isRigid && v.nameHint != null) continue
             val posOccs = analysis.coOccurrences[true to v]
             val negOccs = analysis.coOccurrences[false to v]
             if ((posOccs != null && negOccs == null) || (posOccs == null && negOccs != null)) {
@@ -259,7 +264,7 @@ object TypeSimplifier {
         // Process in descending uid order like SimpleSub
         for (v in analysis.allVars.sortedByDescending { it.uid }) {
             if (v in varSubst) continue
-            if (v.rigid) continue // rigid vars are never substituted
+            // if (v.isRigid) continue // rigid vars are never substituted
 
             for (pol in listOf(true, false)) {
                 val vOccs = analysis.coOccurrences[pol to v] ?: continue
@@ -269,7 +274,7 @@ object TypeSimplifier {
                         is TVar -> {
                             if (w == v) continue
                             if (w in varSubst) continue
-                            if (w.rigid) continue // don't unify rigid vars away
+                            // if (w.isRigid) continue // don't unify rigid vars away
                             // If v is to be eliminated, don't unify other vars into it
                             if (v in varSubst && varSubst[v] == null) continue
                             // Don't merge rec and non-rec vars

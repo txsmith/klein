@@ -131,7 +131,7 @@ data class ScopeGraph(
                 is Ident -> emptyList<ScopeGraph>() to mutableSetOf(expr.name)
                 is Lambda ->
                     findReferences(expr.body).let { (graphs, refs) ->
-                        refs.removeAll(expr.params.toSet())
+                        refs.removeAll(expr.params.map { it.name }.toSet())
                         graphs to refs
                     }
                 else ->
@@ -198,7 +198,7 @@ data class ScopeGraph(
                             return@forEach
                         }
                         val (graphs, refs) = findReferences(stmt.body)
-                        refs.removeAll(stmt.params.toSet())
+                        refs.removeAll(stmt.params.map { it.name }.toSet())
                         classify(stmt.name, refs)
                         nodes.add(Node(stmt.name, stmt, graphs))
                     }

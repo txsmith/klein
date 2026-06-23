@@ -649,6 +649,44 @@ class AnnotationInferTest {
     }
 
     @Test
+    fun topLevelValTypeVarDoesNotLeakIntoLaterDefinition() {
+        // A top-level val's signature type variable must be scoped to that val. A following
+        // definition reusing the name 'Z must be unaffected — its inferred type must be identical
+        // whether or not the val precedes it. (Regression: the val used to bind 'Z into the shared
+        // top-level scope, so later definitions reused its skolem via the parent-chain lookup.)
+        val defs =
+            """
+            type HasName = HasName { name: String }
+            type Box<'A> = Box { value: 'A }
+            fun readName(b: Box<'Z & HasName>): String = b.value.name
+            readName
+            """.trimIndent()
+        val withoutVal = infer(defs)
+        val withVal = infer("x: 'Z | Num | String = 24\n$defs")
+        assertEquals(withoutVal.type, withVal.type)
+    }
+
+    @Test
+    fun typeVarAnnotation_sameNameInTwoSignaturesAreDistinctSkolems() {
+        // 'Z in f and 'Z in g are independent skolems despite the shared name — each signature
+        // has its own type-variable scope. In a mutually-recursive group both functions are
+        // mono-bound, so f's body passes its own 'Z to g, which demands g's distinct 'Z: a
+        // skolem mismatch. If the two 'Z were shared, this would (wrongly) typecheck.
+        val errors =
+            inferErrors(
+                """
+                fun f(x: 'Z): 'Z = g(x)
+                fun g(x: 'Z): 'Z = f(x)
+                f
+                """.trimIndent(),
+            )
+        assertTrue(
+            errors.any { it is TypeError.TypeMismatch },
+            "expected a skolem mismatch from the two distinct 'Z, got: $errors",
+        )
+    }
+
+    @Test
     fun typeVarAnnotation_skolemNotSubtypeOfConcrete() {
         // 'A is opaque — can't use it where Num is expected
         val errors = inferErrors("fun f(x: 'A): Num = x\nf")
@@ -1045,5 +1083,93 @@ class AnnotationInferTest {
                 """.trimIndent(),
             ),
         )
+    }
+
+    // --- Multi-field record annotations ---
+
+    @Test
+    fun multiFieldRecord_inputAnnotation_fieldAccess() {
+        // Body touches both fields: name (returned) and age (arithmetic).
+        assertType(
+            "({ age: Num, name: String }) -> String",
+            infer(
+                """
+                fun f(x: { name: String, age: Num }) =
+                  ignored = x.age + 1
+                  x.name
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun multiFieldRecord_inputAnnotation_accessSecondField() {
+        assertType(
+            "({ age: Num, name: String }) -> Num",
+            infer("fun f(x: { name: String, age: Num }) = x.age\nf"),
+        )
+    }
+
+    @Test
+    fun multiFieldRecord_inputAnnotation_rejectsMissingField() {
+        // The annotation is authoritative — accessing a field it doesn't declare is an error.
+        val errors = inferErrors("fun f(x: { name: String, age: Num }) = x.bone\nf")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun multiFieldRecord_outputAnnotation_returnsRecord() {
+        assertType(
+            "({ age: Num, name: String }) -> { age: Num, name: String }",
+            infer("fun f(x): { name: String, age: Num } = x\nf"),
+        )
+    }
+
+    // A multi-field record demanded of an intersection: each field is checked against the
+    // members independently, so the demand is met as long as some member supplies each field.
+    @Test
+    fun intersectionReturnedAsMultiFieldRecord_fieldsSplitAcrossMembers() {
+        assertType(
+            "(Dog & Hero) -> { movie: String, name: String }",
+            infer(
+                """
+                type Dog = Dog { name: String }
+                type Hero = Hero { movie: String }
+                fun f(x: Dog & Hero): { name: String, movie: String } = x
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun intersectionReturnedAsMultiFieldRecord_singleMemberSuffices() {
+        assertType(
+            "(Dog & Hero) -> { name: String }",
+            infer(
+                """
+                type Dog = Dog { name: String }
+                type Hero = Hero { movie: String }
+                fun f(x: Dog & Hero): { name: String } = x
+                f
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun intersectionReturnedAsMultiFieldRecord_rejectsFieldNoMemberSupplies() {
+        // Neither Dog nor Hero has `fins`, so the record demand can't be satisfied.
+        val errors =
+            inferErrors(
+                """
+                type Dog = Dog { name: String }
+                type Hero = Hero { movie: String }
+                fun f(x: Dog & Hero): { name: String, fins: String } = x
+                f
+                """.trimIndent(),
+            )
+        assertEquals(1, errors.size)
     }
 }

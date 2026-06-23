@@ -64,19 +64,28 @@ sealed class SimpleType {
         val lowerBounds: MutableSet<SimpleType> = mutableSetOf(),
         val upperBounds: MutableSet<SimpleType> = mutableSetOf(),
         val nameHint: String? = null,
-        val rigid: Boolean = false,
+        val isRigid: Boolean = false,
     ) : SimpleType() {
         val uid: Int = nextUid++
 
-        override fun toString(): String {
-            if (nameHint != null) return "'$nameHint"
-            val letter = 'A' + (uid % 26)
-            val suffix = if (uid >= 26) "${uid / 26}" else ""
-            return "'$letter$suffix"
-        }
+        override fun toString(): String = nameHint?.let { "'$it" } ?: genericName(isRigid, uid)
 
         companion object {
             private var nextUid = 0
+
+            /**
+             * Display name for an anonymous type variable. Rigid skolems print lowercase to
+             * distinguish them from flexible (inference) variables, which print uppercase. The
+             * single source of truth for variable naming, shared by every printer.
+             */
+            fun genericName(
+                rigid: Boolean,
+                id: Int,
+            ): String {
+                val letter = (if (rigid) 'a' else 'A') + (id % 26)
+                val suffix = if (id >= 26) "${id / 26}" else ""
+                return "'$letter$suffix"
+            }
 
             /** Reset the uid counter at the start of a fresh inference so output is independent of prior runs. */
             internal fun resetUidCounter() {
@@ -149,7 +158,7 @@ sealed class SimpleType {
         fun fromTypeExpr(
             typeExpr: TypeExpr,
             env: TypeEnv,
-            rigid: Boolean = false,
+            isRigid: Boolean = false,
             isEnvClosed: Boolean = false,
             polarity: Variance = Variance.Covariant,
         ): Pair<SimpleType, List<TypeError>> {
@@ -165,10 +174,18 @@ sealed class SimpleType {
                 val existing = env.lookupTypeVar(t.name)
                 if (existing != null) return existing
                 if (isEnvClosed) return fail(TypeError.UnboundTypeVar(t.name, t.span))
-                val fresh = env.freshVar(nameHint = t.name, rigid = rigid)
+                val fresh = env.freshVar(nameHint = t.name, isRigid = isRigid)
                 env.bindTypeVar(t.name, fresh)
                 return fresh
             }
+
+            /** Flatten a left-/right-nested union spine into its member type expressions. */
+            fun unionMembers(t: TypeExpr): List<TypeExpr> =
+                if (t is UnionTypeExpr) unionMembers(t.left) + unionMembers(t.right) else listOf(t)
+
+            /** Flatten a left-/right-nested intersection spine into its member type expressions. */
+            fun intersectionMembers(t: TypeExpr): List<TypeExpr> =
+                if (t is IntersectionTypeExpr) intersectionMembers(t.left) + intersectionMembers(t.right) else listOf(t)
 
             fun go(t: TypeExpr, pol: Variance): SimpleType =
                 when (t) {
@@ -214,22 +231,43 @@ sealed class SimpleType {
                         }
                     }
 
+                    // Records stay structural. A record is *semantically* the intersection of its
+                    // single-field records, but that's a fact the solver exploits when decomposing
+                    // a record demand against an intersection — not a representation choice. Encoding
+                    // records as rigid skolems here would make them opaque to the simplifier (their
+                    // structure would vanish from inferred/printed types) and would wrongly fire on
+                    // constructor field types and positive positions. Only `&`/`|` introduce skolems.
                     is RecordTypeExpr ->
                         TRecord(t.fields.associate { (name, type) -> name to go(type, pol) })
 
+                    // A union `A | B | C` becomes a rigid TVar with the members as lower bounds:
+                    // each member is a subtype of the union. Rigid means the solver checks against
+                    // these bounds but never adds more, so the union stays exactly as annotated.
+                    // Only valid at positive (output) polarity. The spine is flattened so the bounds
+                    // are a flat set rather than nested rigid TVars.
                     is UnionTypeExpr -> {
                         when (pol) {
+                            // TODO: what about invarant?
                             Variance.Covariant ->
-                                fail(TypeError.UnsupportedAnnotation("union types", t.span))
+                                env.freshVar(isRigid = true).apply {
+                                    unionMembers(t).forEach { lowerBounds.add(go(it, pol)) }
+                                }
                             else ->
                                 fail(TypeError.InvalidAnnotationPolarity("Union", pol.displayLabel, t.span))
                         }
                     }
 
+                    // An intersection `A & B & C` becomes a rigid TVar with the members as upper
+                    // bounds: the intersection is a subtype of each member. Rigid means the solver
+                    // checks against these bounds but never adds more, so the intersection stays
+                    // exactly as annotated. Only valid at negative (input) polarity.
                     is IntersectionTypeExpr -> {
                         when (pol) {
+                            // TODO: what about invarant?
                             Variance.Contravariant ->
-                                fail(TypeError.UnsupportedAnnotation("intersection types", t.span))
+                                env.freshVar(isRigid = true).apply {
+                                    intersectionMembers(t).forEach { upperBounds.add(go(it, pol)) }
+                                }
                             else ->
                                 fail(TypeError.InvalidAnnotationPolarity("Intersection", pol.displayLabel, t.span))
                         }
