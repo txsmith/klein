@@ -118,6 +118,29 @@ sealed class TypeError {
         override fun hashCode() = 31 * field.hashCode() + span.hashCode()
     }
 
+    data class NotARecord(
+        val actual: Type,
+        val field: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type error: '${Type.print(actual)}' is not a record, so it has no field '$field'"
+    }
+
+    data class NotAFunction(
+        val actual: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type error: '${Type.print(actual)}' is not a function"
+    }
+
+    data class MissingParamAnnotation(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Cannot infer the type of parameter '$name'; add a type annotation, " +
+            "or use the lambda where a function type is expected"
+    }
+
     data class DuplicateField(
         val field: String,
         override val span: SourceSpan,
@@ -225,6 +248,11 @@ sealed class TypeError {
     ) : TypeError() {
         override val message = "Unsupported annotation: $description"
     }
+
+    data class Misc(
+        override val message: String,
+        override val span: SourceSpan,
+    ) : TypeError()
 
     open fun render(env: TypeEnv): String {
         val msg = renderMessage(env)
