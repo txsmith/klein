@@ -144,10 +144,21 @@ teardown list accordingly.
   mode. Used in synth mode with nothing to fix it, it is the §1 stuck case → error
   there, not a signature error. This is the same principle as inferred lambda
   params, in return position.
-- **Scope:** type variables are introduced only at **top-level signatures for
-  now**, designed to extend later (e.g. companion-object scopes that introduce
-  their own `'T`). The core rule isn't "top-level"; it's a set of *introduction
-  sites*, currently one.
+- **Scope — nearest enclosing binder.** When resolving an annotation, a `'T`
+  *not already in scope* is introduced (∀-quantified) at the **nearest enclosing
+  annotated binder** — a `fun`/lambda (params + return + body) or a type-annotated
+  `val` (its type + initializer), **not** a plain block. A `'T` *already in scope*
+  is a reference; nothing new is introduced. Each binder's annotation resolves as
+  one unit (repeats within it share one skolem); each *use* of the binder
+  instantiates its variables fresh. There is **no top-level special case** — top
+  level is just "the nearest enclosing binder is the top-level binding," so
+  `xs: List<'B> = Nil` and a `'T` inside a function body follow the identical rule.
+  - Consequences: sibling `val`s get **independent** `'T`; an in-scope type-var
+    name **cannot be locally shadowed** to mean a fresh one (use another letter —
+    Haskell `ScopedTypeVariables` behavior); a binder-quantified `'T` never escapes
+    its scope, so the old escape / generalization / name-sharing hazards do not
+    arise. **Rank-1 only** — passing a polymorphic value *as an argument* (`id(id)`)
+    is out of scope.
 
 ---
 

@@ -3,7 +3,7 @@ package klein.types
 import klein.Type
 import kotlin.test.Test
 
-class LiteralInferTest {
+class LiteralTypeCheckTest {
     @Test
     fun intLiteral_zero() {
         assertType(Type.Num, infer("0"))

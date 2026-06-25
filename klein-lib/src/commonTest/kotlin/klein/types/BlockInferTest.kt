@@ -66,6 +66,8 @@ class BlockInferTest {
         assertType(Type.Fun(emptyList(), Type.Unit), infer(program))
     }
 
+    // TODO: adapt to typechecker world
+    // lambda needs a type signature
     @Test
     fun block_lambdaBinding() {
         val program =
@@ -78,6 +80,8 @@ class BlockInferTest {
         assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
+    // TODO: adapt to typechecker world
+    // lambda needs a type signature
     @Test
     fun block_lambdaBindingOnlyReturnsUnit() {
         val program =
@@ -165,6 +169,8 @@ class BlockInferTest {
         assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
+    // TODO: adapt to typechecker world
+    // lambda needs a type signature
     @Test
     fun block_lambdaInBlock() {
         val program =
@@ -201,6 +207,8 @@ class BlockInferTest {
         assertType(Type.Fun(emptyList(), Type.Num), infer(program))
     }
 
+    // TODO: this one needs polymorphism. Actually this may be hard since we decided type variables quantify at top-level binding sites
+    // How fix?
     @Test
     fun block_letPolymorphism_idUsedTwice() {
         val program =
@@ -216,6 +224,7 @@ class BlockInferTest {
         assertEquals(0, errors.size)
     }
 
+    // TODO: same as above
     @Test
     fun block_letPolymorphism_escapingFunction() {
         val program =
@@ -233,6 +242,7 @@ class BlockInferTest {
         assertEquals(0, errors.size)
     }
 
+    // TODO: same as above
     @Test
     fun block_letPolymorphism_nestedCapture() {
         val program =
@@ -249,6 +259,7 @@ class BlockInferTest {
         assertEquals(0, errors.size)
     }
 
+    // TODO:lambda needs signatures, doesn't really test let poly anymore?
     @Test
     fun block_letPolymorphism_escapingCapture_rejectsBoolPlusNum() {
         val program =
@@ -264,6 +275,7 @@ class BlockInferTest {
         )
     }
 
+    // TODO: same as above
     @Test
     fun block_letPolymorphism_capturedVar_preservesConnection() {
         val program =
@@ -282,6 +294,7 @@ class BlockInferTest {
         )
     }
 
+    // TODO: same as above
     @Test
     fun block_letPolymorphism_recordWithMixedLevels() {
         val program =

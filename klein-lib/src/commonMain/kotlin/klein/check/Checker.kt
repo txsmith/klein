@@ -396,6 +396,7 @@ class Checker {
         funDef: FunDef,
         env: TypeEnv,
     ) {
+        val bodyEnv = env.child()
         val paramTypes =
             funDef.params.map { param ->
                 if (param.typeAnnotation != null) {
@@ -404,7 +405,6 @@ class Checker {
                     recordError(TypeError.MissingParamAnnotation(param.name, param.span))
                 }
             }
-        val bodyEnv = env.child()
         funDef.params.zip(paramTypes).forEach { (param, type) -> bodyEnv.bind(param.name, type) }
         val paramNames = funDef.params.map { it.name }
 

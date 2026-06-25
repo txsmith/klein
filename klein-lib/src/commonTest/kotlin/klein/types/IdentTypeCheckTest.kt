@@ -1,0 +1,71 @@
+package klein.types
+
+import klein.Type
+import klein.types.SimpleType.*
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+class IdentTypeCheckTest {
+    @Test
+    fun ident_intBinding() {
+        val env = TypeEnv.empty()
+        env.bind("x", TNum)
+        assertType(Type.Num, infer("x", env))
+    }
+
+    @Test
+    fun ident_stringBinding() {
+        val env = TypeEnv.empty()
+        env.bind("name", TString)
+        assertType(Type.Str, infer("name", env))
+    }
+
+    @Test
+    fun ident_boolBinding() {
+        val env = TypeEnv.empty()
+        env.bind("flag", TBool)
+        assertType(Type.Bool, infer("flag", env))
+    }
+
+    @Test
+    fun ident_functionBinding() {
+        val env = TypeEnv.empty()
+        env.bind("f", TFun(listOf(TNum), TString))
+        assertType(Type.Fun(listOf(Type.Num), Type.Str), infer("f", env))
+    }
+
+    @Test
+    fun ident_recordBinding() {
+        val env = TypeEnv.empty()
+        env.bind("r", TRecord(mapOf("a" to TNum)))
+        assertType(Type.Record(mapOf("a" to Type.Num)), infer("r", env))
+    }
+
+    @Test
+    fun ident_unbound_simple() {
+        val errors = inferErrors("x")
+
+        assertEquals(1, errors.size)
+
+        val error = errors[0]
+        assertIs<TypeError.UnboundVariable>(error)
+        assertEquals("x", error.name)
+        assertEquals("Unbound variable: x", error.message)
+    }
+
+    @Test
+    fun ident_unbound_similar() {
+        val env = TypeEnv.empty()
+        env.bind("name", TString)
+
+        val errors = inferErrors("naem", env)
+
+        assertEquals(1, errors.size)
+
+        val error = errors[0]
+        assertIs<TypeError.UnboundVariable>(error)
+        assertEquals("naem", error.name)
+        assertEquals("Unbound variable: naem", error.message)
+    }
+}

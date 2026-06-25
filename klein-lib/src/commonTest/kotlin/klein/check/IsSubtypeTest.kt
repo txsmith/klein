@@ -78,6 +78,32 @@ class IsSubtypeTest {
         assertTrue(TFun(listOf(TNum), TNum, listOf("a")) subOf TFun(listOf(TNum), TNum, listOf("b")))
     }
 
+    @Test
+    fun functionMultiParamPointwiseContravariant() {
+        // params compared pointwise; accepting a narrower record in a param is more general
+        assertTrue(TFun(listOf(rec("a" to TNum), TNum), TNum) subOf TFun(listOf(rec("a" to TNum, "b" to TNum), TNum), TNum))
+        assertFalse(TFun(listOf(rec("a" to TNum, "b" to TNum), TNum), TNum) subOf TFun(listOf(rec("a" to TNum), TNum), TNum))
+    }
+
+    @Test
+    fun higherOrderFunctionParamContravariant() {
+        // function in param position: the *inner* function flips variance again.
+        // accepting an inner fn that returns less ({a}) is more general than one returning more ({a,b}).
+        val takesNarrowReturner = TFun(listOf(TFun(listOf(TNum), rec("a" to TNum))), TNum)
+        val takesWideReturner = TFun(listOf(TFun(listOf(TNum), rec("a" to TNum, "b" to TNum))), TNum)
+        assertTrue(takesNarrowReturner subOf takesWideReturner)
+        assertFalse(takesWideReturner subOf takesNarrowReturner)
+    }
+
+    @Test
+    fun higherOrderFunctionUnrelatedResultsFail() {
+        // ((Num) -> Num) -> Num  vs  ((Num) -> Str) -> Num — neither direction holds.
+        val takesNumReturner = TFun(listOf(TFun(listOf(TNum), TNum)), TNum)
+        val takesStrReturner = TFun(listOf(TFun(listOf(TNum), TStr)), TNum)
+        assertFalse(takesNumReturner subOf takesStrReturner)
+        assertFalse(takesStrReturner subOf takesNumReturner)
+    }
+
     // --- records ---
 
     @Test
