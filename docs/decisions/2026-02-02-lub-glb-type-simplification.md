@@ -1,7 +1,7 @@
 # LUB/GLB Type Simplification
 
 **Date:** 2026-02-02
-**Status:** Implemented (revised 2026-04-11)
+**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md) (was: Implemented, revised 2026-04-11)
 
 ## Context
 

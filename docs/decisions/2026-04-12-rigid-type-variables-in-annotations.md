@@ -2,6 +2,8 @@
 
 **Date:** 2026-04-12
 
+**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md) — the OR-trial encoding is retired; the `'T` skolem idea survives.
+
 ## Context
 
 Type annotations in Klein can contain type variables: `fun f(x: 'A): 'A = x`. The question is what `'A` means — is it a **flexible** inference variable that the body can constrain, or a **rigid** (skolem) variable that the body must work with abstractly?

@@ -54,7 +54,7 @@ This enables:
 
 ## Features
 
-- **Type inference** — no annotations required, but full type safety
+- **Type safety** — types are checked, not bolted on; the host's inputs come pre-typed, so rules rarely need annotations
 - **Readable syntax** — `and`/`or`/`not` instead of `&&`/`||`/`!`
 - **Indentation-based** — clean, Python-like block structure
 - **Cross-platform** — compiles to JVM, JavaScript, and native

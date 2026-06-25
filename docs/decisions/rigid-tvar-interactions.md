@@ -1,5 +1,7 @@
 # Rigid TVar interactions for union/intersection annotations
 
+**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md)
+
 ## Context
 
 Klein's type system uses SimpleSub-style constraint-based inference where TVars carry mutable lower bounds (LBs) and upper bounds (UBs). Annotations for unions and intersections are encoded as rigid TVars (TVars that don't accumulate bounds during inference) carrying the structural components as bounds:

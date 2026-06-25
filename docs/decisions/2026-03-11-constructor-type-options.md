@@ -1,6 +1,8 @@
 # Constructor Type Design: Three Options
 
-**Status:** Implemented option 2. Option 3 rejected because eager sibling merging destroys structural precision (adding a sibling to a union can break field access). Structural expansion for unrelated refs deferred (see `docs/ideas/type-simplification-future.md`).
+**Status:** Partially revisited by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md) — the LUB/union-display machinery (and the simplifier) is removed, but **Option 2's core is retained: constructors keep their own type** (`Dog : Dog`, no auto-upcast). Because Path G has no anonymous unions, what a *heterogeneous join* yields is reopened (see spec §7). (An earlier draft of the Path G ADR wrongly said it adopts Option 1 — it does not.)
+
+**Historical status:** Implemented option 2. Option 3 rejected because eager sibling merging destroys structural precision (adding a sibling to a union can break field access). Structural expansion for unrelated refs deferred (see `docs/ideas/type-simplification-future.md`).
 
 ## Context
 

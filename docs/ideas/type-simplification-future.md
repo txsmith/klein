@@ -1,5 +1,7 @@
 # Future Type Simplification
 
+> **Status (2026-06-24): moot.** Path G deletes the type simplifier entirely — there are no inferred types left to simplify. Kept for historical context. See [decisions/2026-06-24-adopt-path-g.md](../decisions/2026-06-24-adopt-path-g.md).
+
 Type simplification avenues that are not yet implemented. These are lower priority and some depend on pattern matching design decisions.
 
 See `docs/decisions/2026-02-02-lub-glb-type-simplification.md` for what's already done (exhaustive collapse, same-name ref merging, invariant where clauses).

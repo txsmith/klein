@@ -10,29 +10,37 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 
 - **[grammar.md](./docs/grammar.md)** - Complete formal grammar for Klein expressions and types, including indentation rules, operator precedence, and parser method mappings
 - **[reference.md](./docs/reference.md)** - Complete language reference with syntax, examples, and usage patterns for all Klein features
-- **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, row polymorphism, Hindley-Milner inference, and the tilde operator
+- **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, subtyping, records, and the tilde operator (inference sections being rewritten for Path G)
+- **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (Path G M0 surface spec)
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
 
 ### Implementation Guides
 
 - **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and interpreter
-- **[roadmap.md](./docs/roadmap.md)** - Development roadmap with work units organized by phase (expressions, types, advanced features, type system, execution)
+- **[plans/path-g-roadmap.md](./docs/plans/path-g-roadmap.md)** - **Current roadmap** for the type-checker rewrite (Path G build + teardown, test strategy, doc updates)
+- **[roadmap.md](./docs/roadmap.md)** - Older phase-based roadmap (predates Path G; being superseded)
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
 ### Design Decisions
 
-See [docs/decisions/](./docs/decisions/) for architecture decision records:
+See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immutable history; superseded ones carry a forward pointer to what replaced them.
 
-- **[positional-function-syntax.md](./docs/decisions/2026-01-09-positional-function-syntax.md)** - Why Klein uses positional function arguments instead of record-based calling
-- **[records-as-interfaces.md](./docs/decisions/2026-01-09-records-as-interfaces.md)** - How records with function fields serve as structural interfaces
+**Current type-system direction:**
+
+- **[2026-06-24-adopt-path-g.md](./docs/decisions/2026-06-24-adopt-path-g.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
+- **[2026-06-23-polarity-wall-and-type-system-direction.md](./docs/decisions/2026-06-23-polarity-wall-and-type-system-direction.md)** - Why SimpleSub was abandoned: the polarity wall and the three ways out.
+
+**Foundational language decisions (still current):**
+
+- **[records-as-interfaces.md](./docs/decisions/2026-01-09-records-as-interfaces.md)** - Records with function fields as structural interfaces
+- **[no-anonymous-unions.md](./docs/decisions/2026-01-09-no-anonymous-unions.md)** - Why unions are nominal sums, not anonymous `A | B`
+- **[optional-types-null-safety.md](./docs/decisions/2026-01-14-optional-types-null-safety.md)** - `T?` and null safety
+- **[type-definition-syntax.md](./docs/decisions/2026-01-14-type-definition-syntax.md)** - The `type` keyword, constructors, sum types
+- **[positional-function-syntax.md](./docs/decisions/2026-01-09-positional-function-syntax.md)** - Positional arguments instead of record-based calling
 - **[fail-fast-error-handling.md](./docs/decisions/2026-01-09-fail-fast-error-handling.md)** - Fail-fast by default with opt-in recovery via `.recover`
-- **[modules-vs-records.md](./docs/decisions/2026-01-09-modules-vs-records.md)** - Design decisions around module system
-- **[no-anonymous-unions.md](./docs/decisions/2026-01-09-no-anonymous-unions.md)** - Why Klein doesn't support anonymous union types
-- **[simplesub-type-inference.md](./docs/decisions/2026-01-14-simplesub-type-inference.md)** - Direct port of SimpleSub reference implementation for type inference
+- **[modules-vs-records.md](./docs/decisions/2026-01-09-modules-vs-records.md)** - Module system design
 
-### Experimental Features
-
-- **[kleene-types-experimental.md](./docs/kleene-types-experimental.md)** - Research feature: cardinality-aware types (T, T?, T+, T\*) with Hindley-Milner inference
+**Superseded by Path G (kept as history):** `simplesub-type-inference`, `lub-glb-type-simplification`, `rigid-type-variables-in-annotations`, `constructor-type-options`.
 
 ### Other Resources
 
@@ -89,26 +97,34 @@ echo "f = |x -> x + 1|" | ./klein parse --stdin
 ./klein parse --raw example.klein
 ```
 
+### Check Types
+
+The primary command under Path G: run the bidirectional checker and report type errors.
+
+```bash
+# From a file
+./klein check example.klein
+
+# From stdin
+echo "x = 1 + 2" | ./klein check --stdin
+```
+
 ### Infer Types
+
+Print the synthesized type of top-level definitions and expressions.
 
 ```bash
 # From a file
 ./klein infer example.klein
 
-# From stdin
-echo "x = 1 + 2" | ./klein infer --stdin
-
 # Short form
 ./klein i example.klein
 
-# Raw output (for tooling)
+# Raw output (machine-readable, for tooling)
 ./klein infer --raw example.klein
 
-# Type format options (for debugging)
-./klein infer --canonical example.klein      # default: canonicalized types
-./klein infer --pre-canonical example.klein  # non-canonicalized types
-./klein infer --ir-compact example.klein     # CompactTypeScheme representation
-./klein infer --ir-bounds example.klein      # SimpleType with bounds
+# Internal type IR (for debugging the checker)
+./klein infer --ir example.klein
 ```
 
 ## Project Structure
@@ -118,19 +134,36 @@ klein-lang/
 ├── klein-lib/
 │   ├── src/
 │   │   ├── commonMain/kotlin/klein/
-│   │   │   ├── Lexer.kt        # Tokenization
-│   │   │   ├── Parser.kt       # Parsing
-│   │   │   ├── Ast.kt          # AST definitions
-│   │   │   ├── Token.kt        # Token types
-│   │   │   └── SourceSpan.kt   # Source location tracking
+│   │   │   ├── Lexer.kt          # Tokenization
+│   │   │   ├── Parser.kt         # Parsing
+│   │   │   ├── Ast.kt            # AST definitions
+│   │   │   ├── Token.kt          # Token types
+│   │   │   ├── SourceSpan.kt     # Source location tracking
+│   │   │   ├── Type.kt           # Surface / printed types
+│   │   │   ├── PrettyPrint.kt    # AST pretty-printing
+│   │   │   ├── Klein.kt          # Library entry (lex → parse → check)
+│   │   │   └── types/            # The type system (being reworked for Path G)
+│   │   │       ├── Typer.kt                # Type-checking driver
+│   │   │       ├── SimpleType.kt           # Internal type representation
+│   │   │       ├── Subtyping.kt            # Constraint solver
+│   │   │       ├── TypeComponents.kt       # Simplifier internals
+│   │   │       ├── TypeSimplifier.kt       # Type simplification
+│   │   │       ├── TypeEnv.kt              # Environment / scopes
+│   │   │       ├── ScopeGraph.kt           # Top-level dependency SCCs
+│   │   │       ├── TypeDef.kt              # Type defs + variance lattice
+│   │   │       ├── TypeDefPreprocessor.kt  # Variance inference, nominal setup
+│   │   │       ├── TypeError.kt            # Type errors
+│   │   │       └── TypePrinter.kt          # Type rendering
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
-│   │   │   └── parser/
+│   │   │   ├── parser/
+│   │   │   └── types/
 │   │   └── nativeMain/kotlin/klein/
-│   │       └── Main.kt         # CLI entry point
+│   │       └── Main.kt           # CLI entry point
 │   └── build.gradle.kts
-├── docs/                       # Design docs
-├── README.md                   # Project overview
+├── docs/                         # Design docs, ADRs, spec, roadmap
+├── examples/                     # Sample .klein programs
+└── README.md                     # Project overview
 ```
 
 ## Running Tests
@@ -151,41 +184,6 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
-
-## Offline Builds
-
-For environments without network access, Klein supports offline builds using a local Maven repository.
-
-### Setting up offline builds
-
-1. **With network access**, run the cache script to populate the local repository:
-   ```bash
-   ./scripts/cache-offline-dependencies.sh
-   ```
-
-2. **Verify offline mode works**:
-   ```bash
-   ./gradlew :klein-lib:jvmTest --offline
-   ```
-
-3. **Commit the cached dependencies** (optional, for team-wide offline support):
-   ```bash
-   git add gradle/local-repo.zip
-   git commit -m "Cache offline dependencies"
-   ```
-
-### How it works
-
-- `gradle/local-repo.zip` contains all dependencies in Maven repository format
-- On first build, `settings.gradle.kts` auto-extracts the zip to `gradle/local-repo/`
-- Gradle checks `gradle/local-repo/` first, then falls back to Maven Central
-- The extracted directory is gitignored; only the zip is tracked
-
-### Notes
-
-- The zip is ~78MB (under GitHub's 100MB limit)
-- Re-run the cache script when dependencies change
-- GitHub Actions caching handles CI builds automatically via `gradle/actions/setup-gradle@v3`
 
 ## Implementation Status
 

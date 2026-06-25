@@ -1,8 +1,27 @@
 # Klein Type System Reading List
 
-A curated reading list for implementing Klein's type system, focusing on algebraic subtyping with structural records and nominal types.
+A curated reading list for Klein's type system.
 
-## Tier 1: Essential Reading
+> **Note (2026-06-24):** Klein moved to **local bidirectional checking** (Path G). The SimpleSub / MLstruct material below is now **background and history** — it informed the decision and explains what was tried — not the current implementation path. The primary reference for the current approach is bidirectional typing.
+
+## Tier 0: The Current Approach
+
+### Bidirectional Typing
+**Jana Dunfield & Neel Krishnaswami, ACM Computing Surveys 2021**
+
+The survey for the model Klein now uses. Covers:
+
+- The two judgments — synthesize vs. check — and how they compose (subsumption)
+- Why introduction forms check and elimination forms synthesize
+- Where annotations are required, and the tradeoffs of annotation placement
+
+| Resource | Link |
+|----------|------|
+| Paper | https://arxiv.org/abs/1908.05839 |
+
+---
+
+## Tier 1: Background — Algebraic Subtyping (the prior approach)
 
 ### The Simple Essence of Algebraic Subtyping
 **Lionel Parreaux, ICFP 2020 (Functional Pearl)**

@@ -2,6 +2,8 @@
 
 **Date:** 2026-01-14
 
+**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md)
+
 ## Context
 
 Klein needed a type inference system that:
