@@ -4,13 +4,16 @@
 #
 # fun readName(b: 'Q & Box<'Z & HasName & HasAge>): String = b.value.name
 
-fun f(x) =
-  x + 1
-  x
+fun f(cb: (Dog | Fish) -> Unit) =
+  cb(Dog)
+  cb(Fish)
+
+f: ((Dog & Fish) -> Unit) -> Unit
 
 # z = f
 
 # q: 'S | Num = 3
 # r = q * 3
+
 
 

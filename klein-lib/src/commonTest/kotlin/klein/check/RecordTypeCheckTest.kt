@@ -73,6 +73,21 @@ class RecordTypeCheckTest {
     @Test
     fun record_deeplyNested() = assertEquals(TNum, infer("{ outer = { inner = 42 } }.outer.inner").type)
 
+    // --- record literal in check position (checkRecordLiteral) ---
+
+    @Test
+    fun recordCheckedAgainstAny_passes() =
+        // A record literal is a value, so it satisfies `Any` — must not error "found a record".
+        assertTrue(infer("r: Any = { x = 1 }\nr").errors.isEmpty())
+
+    @Test
+    fun recordCheckedAgainstNonRecord_reportsTypeMismatchNotMisc() {
+        // Non-record expected → subsumption fallback → a real TypeMismatch, never a Misc.
+        val errors = infer("r: Num = { x = 1 }\nr").errors
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.none { it is TypeError.Misc })
+    }
+
     // --- Deferred until generics (M4) ---
     // Each of these infers the type of an *unannotated* lambda, which Path G doesn't do: bare
     // params are an error, and polymorphism comes from declared type variables. The 'A-typed ones

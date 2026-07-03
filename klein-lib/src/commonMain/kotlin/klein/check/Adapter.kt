@@ -17,4 +17,6 @@ internal fun Type.toLegacy(): klein.Type =
         is Type.TFun -> klein.Type.Fun(params.map { it.toLegacy() }, result.toLegacy())
         is Type.TRecord -> klein.Type.Record(fields.mapValues { it.value.toLegacy() })
         is Type.TOptional -> klein.Type.Optional(type.toLegacy())
+        is Type.TSkolem -> klein.Type.Var(name)
+        is Type.TForall -> body.toLegacy()
     }

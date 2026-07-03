@@ -146,8 +146,8 @@ teardown list accordingly.
   params, in return position.
 - **Scope — nearest enclosing binder.** When resolving an annotation, a `'T`
   *not already in scope* is introduced (∀-quantified) at the **nearest enclosing
-  annotated binder** — a `fun`/lambda (params + return + body) or a type-annotated
-  `val` (its type + initializer), **not** a plain block. A `'T` *already in scope*
+  annotated binder** — a `fun` (params + return + body) or a type-annotated
+  `val` (its type + initializer), **not** a plain block and **not a lambda**. A `'T` *already in scope*
   is a reference; nothing new is introduced. Each binder's annotation resolves as
   one unit (repeats within it share one skolem); each *use* of the binder
   instantiates its variables fresh. There is **no top-level special case** — top
@@ -159,6 +159,24 @@ teardown list accordingly.
     its scope, so the old escape / generalization / name-sharing hazards do not
     arise. **Rank-1 only** — passing a polymorphic value *as an argument* (`id(id)`)
     is out of scope.
+- **Lambdas and record fields are not binders.** A `'T` introduces *only* at a
+  `fun` or a type-annotated `val`. A fresh `'T` inside a lambda that is not already
+  in scope is an **error** (`UnboundVariable`), not a fresh quantifier. Implicit
+  quantification at a *nested* site is the ambiguous case: a `'T` spanning a record-
+  field boundary (`fun f(r: { g: ('X)->'X }): 'X`) would bind in two places at once.
+  A quantifier at a nested site — a **polymorphic record field** or a **rank-2
+  parameter** — requires explicit `forall`, which is **deferred**; records stay
+  monomorphic for now. (Model: Haskell GHC2021 — implicit prenex, explicit `forall`
+  only to reach a quantifier under a constructor or left of an arrow.)
+- **`TForall` quantifies any body, not just functions.** A generic nullary
+  constructor is a polymorphic *non-function* (`Nil : ∀A. List<A>`, `None : ∀A.
+  Option<A>`), so the quantifier wraps arbitrary types. Instantiation is
+  shape-agnostic — it fires at a check/apply demand whatever the body's shape.
+- **No `∀` reaches the subtyper or solver.** Instantiation happens *only* at demand
+  points; `isSubtype`/`lub`/`glb`/constraint-generation assert against a `∀` input.
+  A still-polymorphic argument meeting a parameter that still mentions a type
+  variable (`use(id)` where `use : ∀X. ((X)->X, X) -> X`) is two unknowns at once —
+  unification, not the one-sided matching above — and is rejected, not floated.
 
 ---
 
@@ -176,7 +194,11 @@ synth-joins discipline over its arms.)
 join is the declared parent (`Ok` ⊔ `Err` = `Result`); for records the natural
 candidate is the common-field (width) record; incompatible branches (e.g.
 `Num` vs `String`) error. Whether record branches width-join silently or must
-match is the one real sub-decision, left to M6.
+match is the one real sub-decision, left to M6. **Polymorphic branches** (both
+`∀`-typed) are a further open sub-case — α-equal → that scheme, otherwise reject.
+*Status:* `synthIfThenElse` does not yet compute a join at all (it only accepts a
+branch that is a subtype of the other) and crashes on a `∀`-typed branch; red
+targets in `IfThenElseLubTest`.
 
 ---
 
@@ -248,6 +270,8 @@ later feature once bounds exist and most of its value is already covered.
 2. **First-class structural intersection** — deferred candidate (§8). Revisit after
    bounds: target-shape-dispatch subtyping + tag-preserving record extension. Carries
    a value-semantics bill (equality / serialization / `match` over extended records).
+3. **Polymorphic `if` branches** — how to join two `∀`-typed branches (α-equal → that
+   scheme, else reject). (§7; `IfThenElseLubTest`)
 
 *Resolved:* anonymous `A | B` rejected (nominal sums); `A & B` deferred in favour of
 bounded polymorphism (§8).

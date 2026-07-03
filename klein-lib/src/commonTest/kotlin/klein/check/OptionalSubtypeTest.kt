@@ -13,10 +13,10 @@ import kotlin.test.assertTrue
  * `constrainEqual` cases test the deleted constraint solver and are not ported.
  */
 class OptionalSubtypeTest {
-    private val checker = Checker()
+    private val subtyping = Subtyping()
     private val env = TypeEnv.empty()
 
-    private infix fun Type.subOf(other: Type) = checker.isSubtype(this, other, env)
+    private infix fun Type.subOf(other: Type) = subtyping.isSubtype(this, other, env)
 
     private fun rec(vararg fields: Pair<String, Type>) = TRecord(fields.toMap())
 

@@ -1,8 +1,10 @@
 package klein.check
 
 import klein.check.Type.*
+import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** Top-level `fun` definitions: signature binding, body checking, calls, recursion. */
@@ -40,4 +42,29 @@ class FunctionTest {
     @Test
     fun recursionWithoutDeclaredReturnErrors() =
         assertTrue(infer("fun loop(n: Num) = loop(n)").errors.isNotEmpty())
+
+    // --- lambda in check position (checkLambda) ---
+
+    @Test
+    fun lambdaCheckedAgainstAny_passes() =
+        // A lambda is a value, so it satisfies `Any` — must not error "found a function".
+        assertTrue(infer("f: Any = |n: Num -> n|\nf").errors.isEmpty())
+
+    @Test
+    fun lambdaCheckedAgainstNonFunction_reportsTypeMismatchNotMisc() {
+        // Non-function expected → subsumption fallback → a real TypeMismatch, never a Misc.
+        val errors = infer("f: Num = |n: Num -> n|\nf").errors
+        assertTrue(errors.any { it is TypeError.TypeMismatch })
+        assertTrue(errors.none { it is TypeError.Misc })
+    }
+
+    @Test
+    fun lambdaArityMismatch_reportsCallArityMismatchNotMisc() {
+        val errors = infer("f: (Num) -> Num = |a, b -> a|\nf").errors
+        assertEquals(1, errors.size)
+        val e = errors[0]
+        assertIs<TypeError.CallArityMismatch>(e)
+        assertEquals(1, e.expected)
+        assertEquals(2, e.actual)
+    }
 }

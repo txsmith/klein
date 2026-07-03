@@ -5,7 +5,7 @@ package klein.check
  *
  * Unlike the SimpleSub-era [klein.types.SimpleType], there are **no inference variables,
  * mutable bounds, or levels** — a type is fully determined by its structure. Polymorphism
- * is expressed by rigid skolems (added later) introduced at signatures, not by inference.
+ * is expressed by rigid skolems ([TSkolem]) introduced at signatures, not by inference.
  *
  * This hierarchy grows as the checker does; it currently covers what the synth skeleton
  * needs (primitives, functions, records).
@@ -21,10 +21,7 @@ sealed class Type {
 
     data object TNull : Type()
 
-    /** Top — supertype of everything (`Any`). */
     data object TTop : Type()
-
-    /** Bottom — subtype of everything (`Nothing`). */
     data object TBottom : Type()
 
     data class TFun(
@@ -39,5 +36,21 @@ sealed class Type {
 
     data class TOptional(
         val type: Type
+    ) : Type()
+
+    data class TSkolem(
+        val name: String,
+        val id: Int,
+    ) : Type()
+
+    /**
+     * A polymorphic type — `∀quantified. body`. Following Pierce–Turner, schemes *are* types, so a
+     * polymorphic binding's type is a value of this hierarchy. Kept **shallow** (never nested inside
+     * another type) by discipline: annotations can't express a nested `∀`, and every demand point
+     * instantiates it away before it could nest — that's what keeps the system rank-1.
+     */
+    data class TForall(
+        val params: Set<TSkolem>,
+        val body: Type,
     ) : Type()
 }

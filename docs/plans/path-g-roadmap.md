@@ -108,6 +108,12 @@ constraint propagation — this is what `check` calls.
 by **structural matching** against arguments, not unification. Unmarked-unknown
 names are errors (no typo footgun).
 
+**Scoping decided:** `'T` introduces only at a `fun`/`val`, never a lambda or record
+field (a fresh `'T` at a nested site errors). Explicit `forall` — for a polymorphic
+field or a rank-2 parameter — is deferred; records stay monomorphic. `TForall`
+quantifies arbitrary bodies, so generic nullary constructors (`Nil : ∀A. List<A>`)
+type; no `∀` reaches the solver. See spec §6.
+
 *Depends on: M2, M3.*
 
 ### M5 · Joins & sums 🔀
@@ -117,6 +123,11 @@ negation). Note: **constructors keep their own type** — this is a *join-time*
 policy, not eager upcasting; the exact policy (resolve to parent vs.
 require-annotation) is open. **Prioritized ahead of bounds** — this is what makes `if`/`else` usable,
 the bread-and-butter need, and it depends on neither generics nor bounds.
+
+Known gap: `synthIfThenElse` does not yet compute a join — it only accepts a branch
+that is a subtype of the other, and crashes on a `∀`-typed branch. The join must be
+`subtyping.lub` extended to polymorphic values (α-equal → that scheme, else reject).
+Red targets in `IfThenElseLubTest`.
 
 *Depends on: M3; touches both the new checker and existing nominal machinery.*
 
@@ -221,6 +232,10 @@ Tracked here so they don't get silently defaulted:
    the old, prove it, then delete) vs. in-place rewrite. Decide at M7.
 2. **How much of `TSkolem` / rigid-`TVar` survives into M4** — reuse as-is, or does
    dropping the solver let us replace bounded `TVar` with something simpler?
+3. **Two-unknowns application boundary** — a still-polymorphic argument at a
+   parameter that still mentions a type variable is unification, not one-sided
+   matching, so it is rejected (no floating). Pinned by `PolyArgToUnknownParamTest`;
+   revisit only if floating is ever added.
 
 *Resolved:* M0's required-vs-inferred line — settled in
 [`../spec/bidirectional-checking.md`](../spec/bidirectional-checking.md).

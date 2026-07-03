@@ -26,6 +26,15 @@ class GenericsTypeCheckTest {
     fun twoTypeParams_returnsFirst() =
         assertEquals(TNum, infer("fun first(a: 'A, b: 'B): 'A = a\nfirst(1, true)").type)
 
+    @Test
+    fun polymorphicArgInstantiatedAtMonomorphicParam() =
+        // `id : ∀A. (A) -> A` passed where `(Num) -> Num` is demanded — instantiated at the
+        // argument's check (subsume), not left polymorphic.
+        assertEquals(
+            TNum,
+            infer("fun id(x: 'A) = x\nfun modify(f: (Num) -> Num) = f(3)\nmodify(id)").type,
+        )
+
     // --- Local polymorphism (tvar-scoping revisit) ---
     // The old let-poly cluster, rewritten to Path G form: polymorphism comes from a written `'T`,
     // never inference. Bare-lambda inferred forms (`id = |x -> x|`) stay dead; these annotate the
@@ -86,7 +95,7 @@ class GenericsTypeCheckTest {
     fun localPoly_withCapture() {
         val program =
             """
-            |y: 'A ->
+            |y: Num ->
               f: ('T) -> 'T = |x -> x|
               { a = f(y), b = f(true) }
             |
