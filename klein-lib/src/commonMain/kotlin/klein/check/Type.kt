@@ -1,5 +1,9 @@
 package klein.check
 
+import klein.FieldDecl
+import klein.SourceSpan
+import klein.types.Variance
+
 /**
  * Path G types: concrete structural / nominal trees.
  *
@@ -38,6 +42,11 @@ sealed class Type {
         val type: Type
     ) : Type()
 
+    data class TRef(
+        val name: String,
+        val typeArgs: List<Type> = emptyList(),
+    ) : Type()
+
     data class TSkolem(
         val name: String,
         val id: Int,
@@ -54,3 +63,24 @@ sealed class Type {
         val body: Type,
     ) : Type()
 }
+
+data class TypeParamInfo(
+    val name: String,
+    val variance: Variance,
+    val skolem: Type.TSkolem,
+)
+
+data class TypeDefInfo(
+    val name: String,
+    val typeParams: List<TypeParamInfo>,
+    val iface: Type.TRecord,
+    val span: SourceSpan,
+)
+
+data class ConstructorInfo(
+    val name: String,
+    val typeParams: List<String>,
+    val fields: List<FieldDecl>,
+    val parentType: String,
+    val span: SourceSpan,
+)

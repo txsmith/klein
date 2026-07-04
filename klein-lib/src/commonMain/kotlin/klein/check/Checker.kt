@@ -49,6 +49,7 @@ class Checker {
     private var skolemCounter = 0
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)
+    private val preprocessor = TypeDefPreprocessor(errors, ::freshSkolem, ::resolveType)
 
     fun getErrors(): List<TypeError> = errors
 
@@ -110,13 +111,14 @@ class Checker {
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Type {
+        preprocessor.process(stmts.filterIsInstance<TypeDef>(), env)
         var last: Type = TUnit
         for (stmt in stmts) {
             when (stmt) {
                 is Val -> synthVal(stmt, env)
                 is Expr -> last = synth(stmt, env)
                 is FunDef -> synthFunDef(stmt, env)
-                is TypeDef -> {} // no value-level effect
+                is TypeDef -> {}
             }
         }
         return last
@@ -543,7 +545,12 @@ class Checker {
                     "Unit" -> TUnit
                     "Any" -> TTop
                     "Nothing" -> TBottom
-                    else -> recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                    else ->
+                        if (env.lookupTypeDef(typeExpr.name) != null) {
+                            TRef(typeExpr.name, emptyList())
+                        } else {
+                            recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                        }
                 }
             is FunctionTypeExpr ->
                 TFun(typeExpr.paramTypes.map { resolveType(it, env) }, resolveType(typeExpr.returnType, env))
@@ -558,8 +565,18 @@ class Checker {
             is TypeVar ->
                 env.lookupTypeVar(typeExpr.name)
                     ?: recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-            is AppliedTypeExpr ->
-                recordError(TypeError.Misc("Generic type application isn't supported yet", typeExpr.span))
+            is AppliedTypeExpr -> {
+                val info = env.lookupTypeDef(typeExpr.name)
+                val args = typeExpr.args.map { resolveType(it, env) }
+                when {
+                    info == null -> recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                    info.typeParams.size != args.size -> {
+                        recordError(TypeError.TypeArityMismatch(typeExpr.name, info.typeParams.size, args.size, typeExpr.span))
+                        TRef(typeExpr.name, args)
+                    }
+                    else -> TRef(typeExpr.name, args)
+                }
+            }
             is UnionTypeExpr ->
                 recordError(
                     TypeError.Misc("Anonymous union types ('A | B') aren't supported — define a nominal type", typeExpr.span),
@@ -581,18 +598,6 @@ class Checker {
         }
     }
 
-    private fun collectTypeVarNames(typeExpr: TypeExpr): List<String> =
-        when (typeExpr) {
-            is TypeVar -> listOf(typeExpr.name)
-            is FunctionTypeExpr -> typeExpr.paramTypes.flatMap { collectTypeVarNames(it) } + collectTypeVarNames(typeExpr.returnType)
-            is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVarNames(it.second) }
-            is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVarNames(it) }
-            is AppliedTypeExpr -> typeExpr.args.flatMap { collectTypeVarNames(it) }
-            is UnionTypeExpr -> collectTypeVarNames(typeExpr.left) + collectTypeVarNames(typeExpr.right)
-            is IntersectionTypeExpr -> collectTypeVarNames(typeExpr.left) + collectTypeVarNames(typeExpr.right)
-            is TypeName -> emptyList()
-        }
-
     /** `∀params. body`, or just `body` when there's nothing to quantify. */
     private fun quantify(
         params: Set<TSkolem>,
@@ -609,6 +614,7 @@ class Checker {
             is TFun -> type.params.all { isGround(it, unknowns) } && isGround(type.result, unknowns)
             is TRecord -> type.fields.values.all { isGround(it, unknowns) }
             is TOptional -> isGround(type.type, unknowns)
+            is TRef -> type.typeArgs.all { isGround(it, unknowns) }
             is TForall -> isGround(type.body, unknowns - type.params)
             TNum, TStr, TBool, TUnit, TNull, TTop, TBottom -> true
         }

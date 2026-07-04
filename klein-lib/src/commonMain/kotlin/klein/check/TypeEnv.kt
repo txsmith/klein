@@ -19,6 +19,8 @@ class TypeEnv private constructor(
     private val parent: TypeEnv?,
     private val bindings: MutableMap<String, Type> = mutableMapOf(),
     private val typeVars: MutableMap<String, Type.TSkolem> = mutableMapOf(),
+    private val typeDefs: MutableMap<String, TypeDefInfo> = mutableMapOf(),
+    private val constructors: MutableMap<String, ConstructorInfo> = mutableMapOf(),
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
 ) {
     fun bind(
@@ -41,8 +43,29 @@ class TypeEnv private constructor(
 
     fun localTypeVars(): Set<Type.TSkolem> = typeVars.values.toSet()
 
-    /** Open a nested scope whose bindings don't leak back into this one. */
-    fun child(): TypeEnv = TypeEnv(parent = this)
+    fun registerTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
+    fun updateTypeDef(info: TypeDefInfo) {
+        typeDefs[info.name] = info
+    }
+
+    fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
+
+    fun getTypeDef(name: String): TypeDefInfo = typeDefs.getValue(name)
+
+    fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
+
+    fun registerConstructor(info: ConstructorInfo) {
+        constructors[info.name] = info
+    }
+
+    fun lookupConstructor(name: String): ConstructorInfo? = constructors[name]
+
+    fun allConstructors(): Collection<ConstructorInfo> = constructors.values
+
+    fun child(): TypeEnv = TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors)
 
     companion object {
         fun empty(): TypeEnv = TypeEnv(parent = null)

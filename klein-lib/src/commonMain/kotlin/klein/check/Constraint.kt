@@ -199,6 +199,7 @@ class ConstraintGenerator(
             is TFun -> TFun(type.params.map { applySubst(it, subst) }, applySubst(type.result, subst), type.paramNames)
             is TRecord -> TRecord(type.fields.mapValues { applySubst(it.value, subst) })
             is TOptional -> TOptional(applySubst(type.type, subst))
+            is TRef -> TRef(type.name, type.typeArgs.map { applySubst(it, subst) })
             is TForall -> TForall(type.params, applySubst(type.body, subst - type.params))
             TNum, TStr, TBool, TUnit, TNull, TTop, TBottom -> type
         }
