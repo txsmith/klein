@@ -8,6 +8,7 @@ class TypeDefPreprocessor(
     private val errors: MutableList<TypeError>,
     private val freshSkolem: (String) -> Type.TSkolem,
     private val resolveType: (TypeExpr, TypeEnv) -> Type,
+    private val subtyping: Subtyping,
 ) {
     fun process(
         typeDefs: List<TypeDef>,
@@ -17,6 +18,7 @@ class TypeDefPreprocessor(
         val valid = registerPlaceholders(typeDefs, env)
         computeVariance(valid, env)
         buildIfaces(env)
+        buildParentIfaces(env)
         bindConstructors(env)
     }
 
@@ -36,7 +38,7 @@ class TypeDefPreprocessor(
             }
 
             valid.add(typeDef)
-            val typeParams = typeDef.typeParams.map { TypeParamInfo(it, Variance.Bivariant, freshSkolem(it)) }
+            val typeParams = typeDef.typeParams.map { TypeParamInfo(Variance.Bivariant, freshSkolem(it)) }
             env.registerTypeDef(TypeDefInfo(typeDef.name, typeParams, Type.TRecord(emptyMap()), typeDef.span))
 
             for (ctor in typeDef.constructors) {
@@ -58,10 +60,10 @@ class TypeDefPreprocessor(
                 for (tv in usedTypeVars) {
                     if (tv !in declared) errors.add(TypeError.UndeclaredTypeParam(tv, typeDef.name, ctor.span))
                 }
-                val ctorTypeParams = typeParams.filter { it.name in usedTypeVars }
+                val ctorTypeParams = typeParams.filter { it.skolem.name in usedTypeVars }
 
                 env.registerConstructor(
-                    ConstructorInfo(ctor.name, ctorTypeParams.map { it.name }, ctor.fields, typeDef.name, ctor.span),
+                    ConstructorInfo(ctor.name, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeDef.name, ctor.span),
                 )
                 if (ctor.name != typeDef.name) {
                     env.registerTypeDef(TypeDefInfo(ctor.name, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
@@ -82,7 +84,7 @@ class TypeDefPreprocessor(
         val variances = mutableMapOf<Pair<String, String>, Variance>()
 
         for (info in allTypeDefs) {
-            for (param in info.typeParams) variances[info.name to param.name] = Variance.Bivariant
+            for (param in info.typeParams) variances[info.name to param.skolem.name] = Variance.Bivariant
         }
 
         fun update(
@@ -108,7 +110,7 @@ class TypeDefPreprocessor(
                     val refInfo = env.lookupTypeDef(typeExpr.name) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
-                        val paramName = refInfo.typeParams.getOrNull(i)?.name ?: break
+                        val paramName = refInfo.typeParams.getOrNull(i)?.skolem?.name ?: break
                         val paramVariance = variances[typeExpr.name to paramName] ?: break
                         val argPolarity =
                             when (paramVariance) {
@@ -167,7 +169,7 @@ class TypeDefPreprocessor(
         for (info in allTypeDefs) {
             val updated =
                 info.typeParams.map { param ->
-                    param.copy(variance = variances[info.name to param.name] ?: Variance.Invariant)
+                    param.copy(variance = variances[info.name to param.skolem.name] ?: Variance.Invariant)
                 }
             env.updateTypeDef(info.copy(typeParams = updated))
         }
@@ -177,11 +179,26 @@ class TypeDefPreprocessor(
         for (ctor in env.allConstructors()) {
             val ctorTypeDef = env.getTypeDef(ctor.name)
             val ctorEnv = env.child()
-            ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.name, it.skolem) }
+            ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.skolem.name, it.skolem) }
             val fields = ctor.fields.associate { it.name to resolveType(it.type, ctorEnv) }
             env.updateTypeDef(ctorTypeDef.copy(iface = Type.TRecord(fields)))
         }
     }
+
+    private fun buildParentIfaces(env: TypeEnv) {
+        for ((parentName, ctors) in env.allConstructors().groupBy { it.parentType }) {
+            if (ctors.size == 1 && ctors[0].name == parentName) continue
+            val parentDef = env.lookupTypeDef(parentName) ?: continue
+            val ctorIfaces = ctors.map { env.getTypeDef(it.name).iface }
+            val commonNames = ctorIfaces.map { it.fields.keys }.reduce { a, b -> a intersect b }
+            val fields =
+                commonNames.associateWith { name ->
+                    ctorIfaces.map { it.fields.getValue(name) }.reduce { a, b -> subtyping.lub(a, b, env).first }
+                }
+            env.updateTypeDef(parentDef.copy(iface = Type.TRecord(fields)))
+        }
+    }
+
 
     private fun bindConstructors(env: TypeEnv) {
         for (ctor in env.allConstructors()) {

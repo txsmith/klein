@@ -131,7 +131,7 @@ class TypeDefErrorTypeCheckTest {
                 """
                 type T = T { x: T }
 
-                fun mkT() = T(mkT())
+                fun mkT(): T = T(mkT())
                 mkT()
                 """.trimIndent(),
             ).errors

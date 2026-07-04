@@ -6,36 +6,27 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Variance / subtyping — ported from the SimpleSub `VarianceSubtypingTest`. **All red targets:** the
- * new bidirectional checker treats `type` declarations as a no-op (no constructors, no nominal
- * subtyping, no declared/inferred variance), so every test here fails until nominal support lands.
+ * Variance / subtyping — ported from the SimpleSub `VarianceSubtypingTest`.
  *
- * Ported with Path G adjustments:
- *  - functions that inferred an unannotated parameter's type from usage
- *    (`fun runConsumer(c) = ...`, `fun readRef(r) = ...`, `fun mkRef(v) = ...`, `fun wrap(t) = ...`)
- *    were given explicit annotations — Path G requires them; the concrete type is visible from usage.
+ * Types are forced by **ascription**, not by "holder" constructors:
+ *  - a demand is an ascribed binding — `consumerDog: Consumer<Dog> = Consumer(…)`;
+ *  - a deliberate mismatch is a second ascription to a conflicting type — `bad: Consumer<Cat> = consumerDog`;
+ *  - a lambda parameter's type comes from the demand, so inner forcing-holders (`AnimalHolder(a).a`) are dropped.
  *
- * Verdict mapping:
- *  - `assertType(<nominal>, ...)` → `assertTrue(infer(src).errors.isEmpty(), ...)` (nominal names are
- *    not expressible in the new [Type] hierarchy, so we only assert a clean check).
- *  - `assertType(<structural>, ...)` → `assertChecks(<TypeExpr>, src)`.
- *  - `inferErrors` + `assertMismatch` → assert some `TypeError.TypeMismatch` is present. Exact rendered
- *    type strings (nominal) are not pinned; error *counts* are not pinned either.
+ * The remaining reds are the bare-lambda cases: a lambda argument at a parameter that mentions a type
+ * variable (`Consumer(|a -> a.name|)` demanded as `Consumer<Dog>`). They need result-demand-first
+ * grounding (floating); until then the un-annotated parameter can't be synthesized.
  *
- * Dropped (1 test, all verdict-non-portable):
- *  - inferred-polymorphism / simplifier `where`-clause output: `invariant_inferredRefShowsWhereClause`.
+ * Dropped — SimpleSub inference/simplification with no Path G equivalent (Path G neither infers nor
+ * simplifies; the generic-function cases need declared bounds, i.e. M6):
+ *  - `invariant_inferredRefShowsWhereClause` — inferred-polymorphism `where`-clause output.
+ *  - `simplification_contravariantParamShowsBound_notNothing` — the simplifier showing a *used*
+ *    contravariant param as its bound (`Dog`, not `Nothing`).
+ *  - `contravariant_genericFunctionReceivesConsumerAnimal…` / `invariant_genericFunctionInfersRefNumFromUsage`
+ *    — a *generic* function whose param is constrained from body usage. Revisit at M6 as e.g.
+ *    `fun runConsumer(c: Consumer<'A>): String where Dog <: 'A`.
  */
 class VarianceSubtypingTypeCheckTest {
-    /** Assert a program checks with no errors and yields [expected]. */
-    private fun assertChecks(
-        expected: Type,
-        src: String,
-    ) {
-        val result = infer(src)
-        assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
-        kotlin.test.assertEquals(expected, result.type)
-    }
-
     private fun checksClean(
         src: String,
         why: String,
@@ -52,6 +43,15 @@ class VarianceSubtypingTypeCheckTest {
         assertTrue(errors.any { it is TypeError.TypeMismatch }, "$why — but got: $errors")
     }
 
+    private fun assertChecks(
+        expected: Type,
+        src: String,
+    ) {
+        val result = infer(src)
+        assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
+        kotlin.test.assertEquals(expected, result.type)
+    }
+
     // ============================================================
     // Covariance: Box<Dog> <: Box<Animal>
     // ============================================================
@@ -62,9 +62,8 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Box<'A> = Box { value: 'A }
-            type BoxAnimal = BoxAnimal { b: Box<Animal> }
 
-            BoxAnimal(Box(Dog("Fido", "Labrador"))).b
+            boxAnimal: Box<Animal> = Box(Dog("Fido", "Labrador"))
             """.trimIndent(),
             "Box<Dog> should subtype Box<Animal>",
         )
@@ -75,9 +74,8 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Box<'A> = Box { value: 'A }
-            type BoxBoxAnimal = BoxBoxAnimal { b: Box<Box<Animal>> }
 
-            BoxBoxAnimal(Box(Box(Dog("Fido", "Labrador")))).b
+            bb: Box<Box<Animal>> = Box(Box(Dog("Fido", "Labrador")))
             """.trimIndent(),
             "Box<Box<Dog>> should subtype Box<Box<Animal>>",
         )
@@ -88,23 +86,25 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Box<'A> = Box { value: 'A }
-            type BoxDog = BoxDog { b: Box<Dog> }
 
-            BoxDog(Box(Cat("Whiskers"))).b
+            boxDog: Box<Dog> = Box(Cat("Whiskers"))
             """.trimIndent(),
             "Box<Cat> should not subtype Box<Dog>",
         )
+
+    // ============================================================
+    // Contravariance: Consumer<Animal> <: Consumer<Dog>
+    // ============================================================
 
     @Test
     fun contravariant_consumerAnimalSubtypesConsumerDog() =
         checksClean(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type AnimalHolder = AnimalHolder { a: Animal }
             type Consumer<'A> = Consumer { consume: 'A -> String }
-            type ConsumerDog = ConsumerDog { c: Consumer<Dog> }
 
-            ConsumerDog(Consumer(|a -> AnimalHolder(a).a.name|)).c
+            consumerAnimal: Consumer<Animal> = Consumer(|a -> a.name|)
+            consumerDog: Consumer<Dog> = consumerAnimal
             """.trimIndent(),
             "Consumer<Animal> should subtype Consumer<Dog>",
         )
@@ -114,11 +114,10 @@ class VarianceSubtypingTypeCheckTest {
         hasMismatch(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type DogHolder = DogHolder { d: Dog }
             type Consumer<'A> = Consumer { consume: 'A -> String }
-            type ConsumerCat = ConsumerCat { c: Consumer<Cat> }
 
-            ConsumerCat(Consumer(|d -> DogHolder(d).d.breed|)).c
+            consumerDog: Consumer<Dog> = Consumer(|d -> d.name|)
+            bad: Consumer<Cat> = consumerDog
             """.trimIndent(),
             "Consumer<Dog> should not subtype Consumer<Cat>",
         )
@@ -132,11 +131,10 @@ class VarianceSubtypingTypeCheckTest {
         hasMismatch(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type DogHolder = DogHolder { d: Dog }
             type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-            type RefAnimal = RefAnimal { r: Ref<Animal> }
 
-            RefAnimal(Ref(|Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.name|)).r
+            refDog: Ref<Dog> = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
+            refAnimal: Ref<Animal> = refDog
             """.trimIndent(),
             "Ref<Dog> should not subtype Ref<Animal>",
         )
@@ -147,10 +145,8 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-            type RefAnimal = RefAnimal { r: Ref<Animal> }
 
-            refDog = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
-            RefAnimal(refDog)
+            refAnimal: Ref<Animal> = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
             """.trimIndent(),
             "an unforced Ref should unify with Ref<Animal>",
         )
@@ -160,12 +156,10 @@ class VarianceSubtypingTypeCheckTest {
         hasMismatch(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type CatHolder = CatHolder { c: Cat }
-            type DogHolder = DogHolder { d: Dog }
             type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-            type RefDog = RefDog { r: Ref<Dog> }
 
-            RefDog(Ref(|Cat("Whiskers")|, |c -> CatHolder(c).c.name|)).r
+            refCat: Ref<Cat> = Ref(|Cat("Whiskers")|, |c -> c.name|)
+            refDog: Ref<Dog> = refCat
             """.trimIndent(),
             "Ref<Cat> should not subtype Ref<Dog>",
         )
@@ -175,11 +169,9 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type DogHolder = DogHolder { d: Dog }
             type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-            type RefDog = RefDog { r: Ref<Dog> }
 
-            RefDog(Ref(|Dog("Fido", "Labrador")|, |d -> DogHolder(d).d.breed|)).r
+            refDog: Ref<Dog> = Ref(|Dog("Fido", "Labrador")|, |d -> d.breed|)
             """.trimIndent(),
             "Ref<Dog> should check against Ref<Dog>",
         )
@@ -189,10 +181,9 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type ForceDog = ForceDog { d: Dog }
             type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
 
-            Ref(|Dog("Fido", "Labrador")|, |d -> ForceDog(d).d.name|)
+            ref: Ref<Dog> = Ref(|Dog("Fido", "Labrador")|, |d -> d.name|)
             """.trimIndent(),
             "equal bounds should collapse to Ref<Dog>",
         )
@@ -205,9 +196,8 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Phantom<'A> = Phantom { value: Num }
-            type PhantomBool = PhantomBool { p: Phantom<Bool> }
 
-            PhantomBool(Phantom(42))
+            phantomBool: Phantom<Bool> = Phantom(42)
             """.trimIndent(),
             "a phantom type param should be referenceable",
         )
@@ -218,12 +208,12 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Phantom<'A> = Phantom { value: Num }
-            type PhantomAnimal = PhantomAnimal { p: Phantom<Animal> }
-            type PhantomCat = PhantomCat { p: Phantom<Cat> }
-            type PhantomDog = PhantomDog { p: Phantom<Dog> }
 
-            PhantomAnimal(PhantomDog(Phantom(42)).p).p
-            PhantomDog(PhantomCat(Phantom(42)).p).p
+            phantomDog: Phantom<Dog> = Phantom(42)
+            badAnimal: Phantom<Animal> = phantomDog
+
+            phantomCat: Phantom<Cat> = Phantom(42)
+            badDog: Phantom<Dog> = phantomCat
             """.trimIndent(),
             "an unused (phantom) param should be invariant",
         )
@@ -232,25 +222,27 @@ class VarianceSubtypingTypeCheckTest {
     fun phantom_sameTypeWorks() =
         checksClean(
             """
-            type Animal = Dog { name: String, breed: String } | Cat { name: String }
+            type Animal = Dog { name: String } | Cat { name: String }
             type Phantom<'A> = Phantom { value: Num }
-            type PhantomDog = PhantomDog { p: Phantom<Dog> }
-            type PhantomDog2 = PhantomDog2 { p: Phantom<Dog> }
 
-            PhantomDog2(PhantomDog(Phantom(42)).p).p
+            phantomDog: Phantom<Dog> = Phantom(42)
+            phantomDog2: Phantom<Dog> = phantomDog
             """.trimIndent(),
             "Phantom<Dog> should check against Phantom<Dog>",
         )
+
+    // ============================================================
+    // Function subtyping (contravariant param, covariant result)
+    // ============================================================
 
     @Test
     fun function_animalToDogSubtypesDogToAnimal() =
         checksClean(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type AnimalHolder = AnimalHolder { a: Animal }
-            type FuncHolder = FuncHolder { f: Dog -> Animal }
 
-            FuncHolder(|a -> AnimalHolder(a).a|).f
+            animalToDog: Animal -> Dog = |a -> Dog("Rex", "Poodle")|
+            f: Dog -> Animal = animalToDog
             """.trimIndent(),
             "(Animal -> Dog) should subtype (Dog -> Animal)",
         )
@@ -260,10 +252,9 @@ class VarianceSubtypingTypeCheckTest {
         hasMismatch(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type DogHolder = DogHolder { d: Dog }
-            type FuncHolder = FuncHolder { f: Cat -> Cat }
 
-            FuncHolder(|d -> DogHolder(d).d|).f
+            dogFn: Dog -> Dog = |d -> d|
+            bad: Cat -> Cat = dogFn
             """.trimIndent(),
             "(Dog -> Dog) should not subtype (Cat -> Cat)",
         )
@@ -273,11 +264,10 @@ class VarianceSubtypingTypeCheckTest {
         hasMismatch(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type AnimalHolder = AnimalHolder { a: Animal }
             type Producer<'A> = Producer { produce: () -> 'A }
-            type ProducerDog = ProducerDog { p: Producer<Dog> }
 
-            ProducerDog(Producer(|AnimalHolder(Cat("Whiskers")).a|)).p
+            producerAnimal: Producer<Animal> = Producer(|Cat("Whiskers")|)
+            bad: Producer<Dog> = producerAnimal
             """.trimIndent(),
             "Producer<Animal> should not subtype Producer<Dog>",
         )
@@ -288,9 +278,9 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Handler<'A> = Handler { handle: ('A -> ()) -> () }
-            type HandlerAnimal = HandlerAnimal { h: Handler<Animal> }
 
-            HandlerAnimal(Handler(|f -> f(Dog("Fido", "Labrador"))|)).h
+            handlerDog: Handler<Dog> = Handler(|f -> f(Dog("Fido", "Labrador"))|)
+            handlerAnimal: Handler<Animal> = handlerDog
             """.trimIndent(),
             "Handler double-negation should be covariant",
         )
@@ -300,11 +290,10 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type DogHolder = DogHolder { d: Dog }
             type Consumer<'A> = Consumer { consume: 'A -> () }
-            type CCAnimal = CCAnimal { c: Consumer<Consumer<Animal>> }
 
-            CCAnimal(Consumer(|innerC -> innerC.consume(Dog("Fido", "Labrador"))|)).c
+            ccDog: Consumer<Consumer<Dog>> = Consumer(|innerC -> innerC.consume(Dog("Fido", "Labrador"))|)
+            ccAnimal: Consumer<Consumer<Animal>> = ccDog
             """.trimIndent(),
             "Consumer<Consumer<Dog>> should subtype Consumer<Consumer<Animal>>",
         )
@@ -316,8 +305,7 @@ class VarianceSubtypingTypeCheckTest {
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Weird<'A, 'B> = Weird { fn: 'A -> 'B, next: Weird<'B, 'A> }
 
-            type Cast = Cast { f: Weird<Dog, Num> -> Weird<Animal, Num> }
-            Cast(|w -> w|)
+            f: Weird<Dog, Num> -> Weird<Animal, Num> = |w -> w|
             """.trimIndent(),
             "Weird<Dog, Num> should not subtype Weird<Animal, Num> - 'A is invariant",
         )
@@ -329,8 +317,7 @@ class VarianceSubtypingTypeCheckTest {
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Weird<'A, 'B> = Weird { fn: 'A -> 'B, next: Weird<'B, 'A> }
 
-            type Cast = Cast { f: Weird<Num, Dog> -> Weird<Num, Animal> }
-            Cast(|w -> w|)
+            f: Weird<Num, Dog> -> Weird<Num, Animal> = |w -> w|
             """.trimIndent(),
             "Weird<Num, Dog> should not subtype Weird<Num, Animal> - 'B is invariant",
         )
@@ -342,8 +329,7 @@ class VarianceSubtypingTypeCheckTest {
             type Animal = Dog { name: String, breed: String } | Cat { name: String }
             type Weird<'A, 'B> = Weird { fn: 'A -> 'B, next: Weird<'B, 'A> }
 
-            type Cast = Cast { f: Weird<Num, Animal> -> Weird<Num, Dog> }
-            Cast(|w -> w|)
+            f: Weird<Num, Animal> -> Weird<Num, Dog> = |w -> w|
             """.trimIndent(),
             "Weird<Num, Animal> should not subtype Weird<Num, Dog> - 'B is invariant",
         )
@@ -358,9 +344,8 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type VDog = VDog { v: V<Dog> }
 
-            VDog(Cov(|Dog("Rex")|)).v
+            v: V<Dog> = Cov(|Dog("Rex")|)
             """.trimIndent(),
             "Cov<Dog> should subtype V<Dog>",
         )
@@ -371,10 +356,8 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type VDog = VDog { v: V<Dog> }
-            type DogHolder = DogHolder { d: Dog }
 
-            VDog(Cont(|d -> DogHolder(d).d.name|)).v
+            v: V<Dog> = Cont(|d -> d.name|)
             """.trimIndent(),
             "Cont<Dog> should subtype V<Dog>",
         )
@@ -385,12 +368,9 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type VAnimal = VAnimal { v: V<Animal> }
 
-            type Force = F { c: Cov<Dog> }
-
-            cov = F(Cov(|Dog("Rex")|)).c
-            VAnimal(cov)
+            cov: Cov<Dog> = Cov(|Dog("Rex")|)
+            bad: V<Animal> = cov
             """.trimIndent(),
             "Cov<Dog> should not subtype V<Animal> - V is invariant",
         )
@@ -401,10 +381,9 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type AnimalHolder = AnimalHolder { a: Animal }
-            type VDog = VDog { v: V<Dog> }
 
-            VDog(Cov(|AnimalHolder(Dog("Rex")).a|)).v
+            cov: Cov<Animal> = Cov(|Dog("Rex")|)
+            bad: V<Dog> = cov
             """.trimIndent(),
             "Cov<Animal> should not subtype V<Dog> - V is invariant",
         )
@@ -415,10 +394,9 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type DogHolder = DogHolder { d: Dog }
-            type VAnimal = VAnimal { v: V<Animal> }
 
-            VAnimal(Cont(|d -> DogHolder(d).d.name|)).v
+            cont: Cont<Dog> = Cont(|d -> d.name|)
+            bad: V<Animal> = cont
             """.trimIndent(),
             "Cont<Dog> should not subtype V<Animal> - V is invariant",
         )
@@ -429,62 +407,16 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type V<'A> = Cov { f: () -> 'A } | Cont { f: 'A -> String }
-            type VDog = VDog { v: V<Dog> }
 
-            type Force = F { c: Cont<Animal> }
-            contAnimal = F(Cont(|a -> a.name|)).c
-
-            VDog(contAnimal)
+            cont: Cont<Animal> = Cont(|a -> a.name|)
+            bad: V<Dog> = cont
             """.trimIndent(),
             "Cont<Animal> should not subtype V<Dog> - V is invariant",
         )
 
     // ============================================================
-    // Type simplification respects variance
+    // Generic values flowing through functions
     // ============================================================
-
-    @Test
-    fun simplification_contravariantParamShowsBound_notNothing() =
-        checksClean(
-            """
-            type Animal = Dog | Cat
-            type Consumer<'A> = Consumer { f: 'A -> Num }
-            type ForceDog = ForceDog { dog: Dog }
-
-            Consumer(|dog ->
-                ForceDog(dog)
-                1
-            |)
-            """.trimIndent(),
-            "a contravariant param should show its bound (Consumer<Dog>)",
-        )
-
-    @Test
-    fun contravariant_genericFunctionReceivesConsumerAnimal_constrainedToConsumerDog() =
-        assertChecks(
-            TStr,
-            """
-            type Animal = Dog { name: String, breed: String } | Cat { name: String }
-            type Consumer<'A> = Consumer { consume: 'A -> String }
-            type ConsumerDog = ConsumerDog { c: Consumer<Dog> }
-
-            fun runConsumer(c: Consumer<Dog>): String = ConsumerDog(c).c.consume(Dog("Rex", "Poodle"))
-            runConsumer(Consumer(|a -> a.name|))
-            """.trimIndent(),
-        )
-
-    @Test
-    fun invariant_genericFunctionInfersRefNumFromUsage() =
-        assertChecks(
-            TNum,
-            """
-            type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
-            type RefNum = RefNum { r: Ref<Num> }
-
-            fun readRef(r: Ref<Num>): Num = RefNum(r).r.get()
-            readRef(Ref(|42|, |n -> "ok"|))
-            """.trimIndent(),
-        )
 
     @Test
     fun mixedVariance_twoParamTypePassedThroughFunction() =
@@ -492,12 +424,10 @@ class VarianceSubtypingTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type Transform<'A, 'B> = Transform { value: 'A, handler: 'B -> String }
-            type TransformAnimalDog = TransformAnimalDog { t: Transform<Animal, Dog> }
 
-            fun wrap(t: Transform<Animal, Dog>): Transform<Animal, Dog> = TransformAnimalDog(t).t
-            wrap(Transform(Dog("Fido"), |a -> a.name|))
+            t: Transform<Animal, Dog> = Transform(Dog("Fido"), |a -> a.name|)
             """.trimIndent(),
-            "a two-param type should pass through a function unchanged",
+            "a two-param type should pass through unchanged",
         )
 
     @Test
@@ -513,13 +443,16 @@ class VarianceSubtypingTypeCheckTest {
             """.trimIndent(),
         )
 
+    // ============================================================
+    // Bare (nullary) constructors of generic sums
+    // ============================================================
+
     @Test
     fun bareConstructor_subtypesCovariantParent() =
         checksClean(
             """
             type Box<'A> = Full { value: 'A } | Empty
-            type BoxNum = BoxNum { b: Box<Num> }
-            BoxNum(Empty).b
+            b: Box<Num> = Empty
             """.trimIndent(),
             "a bare constructor should subtype a covariant parent (Box<Num>)",
         )
@@ -529,8 +462,7 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Cell<'A> = Live { get: () -> 'A, set: 'A -> String } | Dead
-            type CellNum = CellNum { c: Cell<Num> }
-            CellNum(Dead).c
+            c: Cell<Num> = Dead
             """.trimIndent(),
             "a bare constructor should subtype an invariant parent (Cell<Num>)",
         )
@@ -540,9 +472,9 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Option<'A> = Some { value: 'A } | None
-            type OptNum = OptNum { o: Option<Num> }
-            type OptStr = OptStr { o: Option<String> }
-            { a = OptNum(None).o, b = OptStr(None).o }
+            optNum: Option<Num> = None
+            optStr: Option<String> = None
+            { a = optNum, b = optStr }
             """.trimIndent(),
             "a bare constructor should be usable at two instantiations",
         )
@@ -552,8 +484,7 @@ class VarianceSubtypingTypeCheckTest {
         checksClean(
             """
             type Result<'A, 'B> = Ok { value: 'A } | Err { error: 'B } | Unknown
-            type ResultStringNum = ResultStringNum { r: Result<String, Num> }
-            ResultStringNum(Unknown).r
+            r: Result<String, Num> = Unknown
             """.trimIndent(),
             "a bare constructor of a multi-param sum should check (Result<String, Num>)",
         )

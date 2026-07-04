@@ -35,6 +35,18 @@ class GenericsTypeCheckTest {
             infer("fun id(x: 'A) = x\nfun modify(f: (Num) -> Num) = f(3)\nmodify(id)").type,
         )
 
+    @Test
+    fun synthContravariantConstructor_keepsArgType() =
+        assertEquals(
+            TRef("Consumer", listOf(TNum)),
+            infer(
+                """
+                type Consumer<'A> = Consumer { consume: 'A -> String }
+                Consumer(|d: Num -> "x"|)
+                """.trimIndent(),
+            ).type,
+        )
+
     // --- Local polymorphism (tvar-scoping revisit) ---
     // The old let-poly cluster, rewritten to Path G form: polymorphism comes from a written `'T`,
     // never inference. Bare-lambda inferred forms (`id = |x -> x|`) stay dead; these annotate the

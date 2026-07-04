@@ -2,6 +2,7 @@ package klein.check
 
 import klein.FieldDecl
 import klein.SourceSpan
+import klein.check.Type.*
 import klein.types.Variance
 
 /**
@@ -65,7 +66,6 @@ sealed class Type {
 }
 
 data class TypeParamInfo(
-    val name: String,
     val variance: Variance,
     val skolem: Type.TSkolem,
 )
@@ -84,3 +84,17 @@ data class ConstructorInfo(
     val parentType: String,
     val span: SourceSpan,
 )
+
+internal fun substitute(
+    type: Type,
+    subst: Map<TSkolem, Type>,
+): Type =
+    when (type) {
+        is TSkolem -> subst[type] ?: type
+        is TFun -> TFun(type.params.map { substitute(it, subst) }, substitute(type.result, subst), type.paramNames)
+        is TRecord -> TRecord(type.fields.mapValues { substitute(it.value, subst) })
+        is TOptional -> TOptional(substitute(type.type, subst))
+        is TRef -> TRef(type.name, type.typeArgs.map { substitute(it, subst) })
+        is TForall -> TForall(type.params, substitute(type.body, subst - type.params))
+        TNum, TStr, TBool, TUnit, TNull, TTop, TBottom -> type
+    }

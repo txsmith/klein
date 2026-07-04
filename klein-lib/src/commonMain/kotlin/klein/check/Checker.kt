@@ -49,7 +49,7 @@ class Checker {
     private var skolemCounter = 0
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)
-    private val preprocessor = TypeDefPreprocessor(errors, ::freshSkolem, ::resolveType)
+    private val preprocessor = TypeDefPreprocessor(errors, ::freshSkolem, ::resolveType, subtyping)
 
     fun getErrors(): List<TypeError> = errors
 
@@ -275,7 +275,15 @@ class Checker {
             body.params.size != expr.args.size ->
                 recordError(TypeError.CallArityMismatch(body.params.size, expr.args.size, expr.span))
             else -> {
-                val unknowns = scheme.params
+                val (demandSubst, demandFailures) =
+                    if (expected != null) {
+                        constraints.solveFromResult(scheme.params, body.result, expected, env)
+                    } else {
+                        emptyMap<TSkolem, Type>() to emptyList()
+                    }
+                demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
+                val fn = if (demandSubst.isEmpty()) body else substitute(body, demandSubst) as TFun
+                val unknowns = scheme.params - demandSubst.keys
                 val calleeName =
                     when (val callSite = expr.callee) {
                         is Ident -> callSite.name
@@ -283,7 +291,7 @@ class Checker {
                         else -> null
                     }
                 val argTypes =
-                    body.params.mapIndexed { i, param ->
+                    fn.params.mapIndexed { i, param ->
                         if (isGround(param, unknowns)) {
                             check(
                                 expr.args[i],
@@ -292,7 +300,7 @@ class Checker {
                                 listOf(
                                     ExpectedType(
                                         param,
-                                        ExpectedTypeSource.Param(calleeName, body.paramNames.getOrNull(i), expr.args[i].span),
+                                        ExpectedTypeSource.Param(calleeName, fn.paramNames.getOrNull(i), expr.args[i].span),
                                     ),
                                 ),
                             )
@@ -301,11 +309,11 @@ class Checker {
                             synth(expr.args[i], env)
                         }
                     }
-                // The type to minimize while solving constraints. This will always be the return type of the function.
-                val target = if (expected == null) body.result else TTop
-                val (instantiated, errors) = constraints.solveQuantified(scheme, TFun(argTypes, expected ?: TTop), target, env)
+                val target = if (expected == null) fn.result else TTop
+                val (instantiated, errors) =
+                    constraints.solveQuantified(TForall(unknowns, fn), TFun(argTypes, TTop), target, env)
                 errors.forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
-                if (errors.isEmpty()) (instantiated as TFun).result else TBottom
+                if (demandFailures.isEmpty() && errors.isEmpty()) (instantiated as TFun).result else TBottom
             }
         }
     }
@@ -319,21 +327,16 @@ class Checker {
 
         if (expr.elseBranch == null) {
             return TOptional(thenBranchType)
+        }
+        val elseBranchType = synth(expr.elseBranch, env)
+        if (thenBranchType is TForall || elseBranchType is TForall) {
+            return recordError(TypeError.Misc("Cannot join polymorphic if-branches", expr.span))
+        }
+        val (joined, failures) = subtyping.lub(thenBranchType, elseBranchType, env)
+        return if (failures.isEmpty()) {
+            joined
         } else {
-            val elseBranchType = synth(expr.elseBranch, env)
-            // TODO: this should be the least upper bound of the branches (subtyping.lub), not just
-            //  "accept one when it's a subtype of the other". As written, branches with a real common
-            //  supertype but no direct subtype relation (e.g. { x, y } and { x, z }, LUB { x }) are
-            //  rejected. The LUB must also handle polymorphic branch values: a ∀-typed branch trips
-            //  the isSubtype/lub `!is TForall` guard today (crash). How to LUB two ∀s is open — α-equal
-            //  → that scheme, otherwise reject? See IfThenElseLubTest for the red targets.
-            if (subtyping.isSubtype(thenBranchType, elseBranchType, env)) {
-                return elseBranchType
-            } else if (subtyping.isSubtype(elseBranchType, thenBranchType, env)) {
-                return thenBranchType
-            } else {
-                return recordError(TypeError.Misc("Branches of if-else need to be of the same type", expr.span))
-            }
+            recordError(TypeError.Misc("Branches of if-else need to be of the same type", expr.span))
         }
     }
 
@@ -420,8 +423,7 @@ class Checker {
         env: TypeEnv,
     ): Type {
         val target = synth(expr.target, env)
-        // TODO: nominal types exposing fields (records-as-interfaces)
-        return projectFieldType(target, expr.field, expr.span)
+        return projectFieldType(target, expr.field, expr.span, env)
     }
 
     private fun synthSafeFieldAccess(
@@ -430,19 +432,27 @@ class Checker {
     ): Type {
         val target = synth(expr.target, env)
         val innerType = if (target is TOptional) target.type else target
-        return projectFieldType(innerType, expr.field, expr.span)
+        return projectFieldType(innerType, expr.field, expr.span, env)
     }
 
     private fun projectFieldType(
         rec: Type,
         field: String,
         span: SourceSpan,
+        env: TypeEnv,
     ): Type =
         when (rec) {
             is TRecord ->
-                rec.fields[field] ?: run {
+                rec.fields[field] ?: recordError(TypeError.MissingField(field, rec.toLegacy(), span))
+            is TRef -> {
+                val def = env.lookupTypeDef(rec.name)
+                val fieldType = def?.iface?.fields?.get(field)
+                if (def == null || fieldType == null) {
                     recordError(TypeError.MissingField(field, rec.toLegacy(), span))
+                } else {
+                    substitute(fieldType, def.typeParams.map { it.skolem }.zip(rec.typeArgs).toMap())
                 }
+            }
             else -> {
                 recordError(TypeError.NotARecord(rec.toLegacy(), field, span))
             }
@@ -545,12 +555,17 @@ class Checker {
                     "Unit" -> TUnit
                     "Any" -> TTop
                     "Nothing" -> TBottom
-                    else ->
-                        if (env.lookupTypeDef(typeExpr.name) != null) {
-                            TRef(typeExpr.name, emptyList())
-                        } else {
-                            recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                    else -> {
+                        val def = env.lookupTypeDef(typeExpr.name)
+                        when {
+                            def == null -> recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
+                            def.typeParams.isNotEmpty() -> {
+                                recordError(TypeError.TypeArityMismatch(typeExpr.name, def.typeParams.size, 0, typeExpr.span))
+                                TRef(typeExpr.name, emptyList())
+                            }
+                            else -> TRef(typeExpr.name, emptyList())
                         }
+                    }
                 }
             is FunctionTypeExpr ->
                 TFun(typeExpr.paramTypes.map { resolveType(it, env) }, resolveType(typeExpr.returnType, env))

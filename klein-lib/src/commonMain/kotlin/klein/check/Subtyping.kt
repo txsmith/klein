@@ -1,6 +1,7 @@
 package klein.check
 
 import klein.check.Type.*
+import klein.types.Variance
 
 class Subtyping {
 
@@ -33,6 +34,31 @@ class Subtyping {
                     (lower is TOptional && isSubtype(lower.type, upper.type, env)) || // S? <: T?
                     isSubtype(lower, upper.type, env) // S <: T?  (when S <: T)
 
+            lower is TRef && upper is TRecord -> {
+                val def = env.lookupTypeDef(lower.name) ?: return false
+                val subst = def.typeParams.map { it.skolem }.zip(lower.typeArgs).toMap()
+                isSubtype(substitute(def.iface, subst), upper, env)
+            }
+
+            lower is TRef && upper is TRef -> {
+                val lowerDef = env.lookupTypeDef(lower.name) ?: return false
+                val upperDef = env.lookupTypeDef(upper.name) ?: return false
+                val related = lower.name == upper.name ||
+                    env.lookupConstructor(lower.name)?.parentType == upper.name
+                if (!related) return false
+                val lowerApplied = lowerDef.typeParams.map { it.skolem.name }.zip(lower.typeArgs).toMap()
+                val upperApplied = upperDef.typeParams.zip(upper.typeArgs).associate { (p, arg) -> p.skolem.name to (p.variance to arg) }
+                lowerApplied.all { (name, lowerArg) ->
+                    val (variance, upperArg) = upperApplied[name] ?: return@all true
+                    when (variance) {
+                        Variance.Covariant -> isSubtype(lowerArg, upperArg, env)
+                        Variance.Contravariant -> isSubtype(upperArg, lowerArg, env)
+                        Variance.Invariant, Variance.Bivariant ->
+                            isSubtype(lowerArg, upperArg, env) && isSubtype(upperArg, lowerArg, env)
+                    }
+                }
+            }
+
             else -> false
         }
     }
@@ -41,23 +67,26 @@ class Subtyping {
         a: Type,
         b: Type,
         env: TypeEnv,
-        failures: MutableList<Failure>,
-    ): Type {
+    ): Pair<Type, List<Failure>> {
         require(a !is TForall && b !is TForall) { "lub received a polymorphic type: $a, $b" }
         return when {
-            a == b -> a
-            a is TFun && b is TFun && a.params.size == b.params.size ->
-                TFun(a.params.zip(b.params) { pa, pb -> glb(pa, pb, env, failures) }, lub(a.result, b.result, env, failures))
-            a is TRecord && b is TRecord ->
-                TRecord((a.fields.keys intersect b.fields.keys).associateWith { lub(a.fields.getValue(it), b.fields.getValue(it), env, failures) })
-            a is TOptional || b is TOptional || a is TNull || b is TNull ->
-                optionalOf(lub(nonNullCore(a), nonNullCore(b), env, failures))
-            isSubtype(a, b, env) -> b
-            isSubtype(b, a, env) -> a
-            else -> {
-                failures.add(Failure(a, b)) // no common supertype without unions; widen to Top to recover
-                TTop
+            a == b -> a to emptyList()
+            a is TFun && b is TFun && a.params.size == b.params.size -> {
+                val params = a.params.zip(b.params) { pa, pb -> glb(pa, pb, env) }
+                val (result, resultFailures) = lub(a.result, b.result, env)
+                TFun(params.map { it.first }, result) to (params.flatMap { it.second } + resultFailures)
             }
+            a is TRecord && b is TRecord -> {
+                val fields = (a.fields.keys intersect b.fields.keys).associateWith { lub(a.fields.getValue(it), b.fields.getValue(it), env) }
+                TRecord(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
+            }
+            a is TOptional || b is TOptional || a is TNull || b is TNull -> {
+                val (core, coreFailures) = lub(nonNullCore(a), nonNullCore(b), env)
+                optionalOf(core) to coreFailures
+            }
+            isSubtype(a, b, env) -> b to emptyList()
+            isSubtype(b, a, env) -> a to emptyList()
+            else -> TTop to listOf(Failure(a, b))
         }
     }
 
@@ -65,26 +94,31 @@ class Subtyping {
         a: Type,
         b: Type,
         env: TypeEnv,
-        failures: MutableList<Failure>,
-    ): Type {
+    ): Pair<Type, List<Failure>> {
         require(a !is TForall && b !is TForall) { "glb received a polymorphic type: $a, $b" }
         return when {
-            a == b -> a
-            a is TFun && b is TFun && a.params.size == b.params.size ->
-                TFun(a.params.zip(b.params) { pa, pb -> lub(pa, pb, env, failures) }, glb(a.result, b.result, env, failures))
-            a is TRecord && b is TRecord ->
-                TRecord((a.fields.keys + b.fields.keys).associateWith { k ->
-                    val fa = a.fields[k]
-                    val fb = b.fields[k]
-                    if (fa != null && fb != null) glb(fa, fb, env, failures) else (fa ?: fb!!)
-                })
-            a is TOptional && b is TOptional -> optionalOf(glb(a.type, b.type, env, failures))
-            isSubtype(a, b, env) -> a
-            isSubtype(b, a, env) -> b
-            else -> {
-                failures.add(Failure(a, b)) // no common subtype without intersections; narrow to Bottom to recover
-                TBottom
+            a == b -> a to emptyList()
+            a is TFun && b is TFun && a.params.size == b.params.size -> {
+                val params = a.params.zip(b.params) { pa, pb -> lub(pa, pb, env) }
+                val (result, resultFailures) = glb(a.result, b.result, env)
+                TFun(params.map { it.first }, result) to (params.flatMap { it.second } + resultFailures)
             }
+            a is TRecord && b is TRecord -> {
+                val fields =
+                    (a.fields.keys + b.fields.keys).associateWith { k ->
+                        val fa = a.fields[k]
+                        val fb = b.fields[k]
+                        if (fa != null && fb != null) glb(fa, fb, env) else (fa ?: fb!!) to emptyList()
+                    }
+                TRecord(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
+            }
+            a is TOptional && b is TOptional -> {
+                val (core, coreFailures) = glb(a.type, b.type, env)
+                optionalOf(core) to coreFailures
+            }
+            isSubtype(a, b, env) -> a to emptyList()
+            isSubtype(b, a, env) -> b to emptyList()
+            else -> TBottom to listOf(Failure(a, b))
         }
     }
 
