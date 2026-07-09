@@ -12,7 +12,10 @@ import kotlin.test.assertTrue
  * SimpleSub represented merged type args as unions/intersections and unresolved invariant args as
  * `where`-clauses. Path G has none of those, so those cases are adjusted to args that have a real
  * nominal join/meet (covariant → parent, contravariant → subtype), or become an error when no
- * Path-G type can express the result (invariant with different args). Meet (`glb`) is exercised
+ * Path-G type can express the result (invariant with different args). A join with no common
+ * supertype — no nominal ancestor and no shared field — is the top, which is an error, never an
+ * inferred `Any` or `{}` (the same top); likewise a meet with no common subtype is `Nothing`, an
+ * error. Meet (`glb`) is exercised
  * through contravariant args and glb-of-record function joins rather than inference-from-usage.
  * Dropped as un-portable: `where`-clause bounds (need M6 declared bounds), inference-from-usage
  * (`fun f(x) = …`), and free phantom-param cases.
@@ -163,6 +166,18 @@ class LubGlbTypeCheckTest {
         )
 
     @Test
+    fun contravariantParam_siblingArgs_isError() =
+        cannotJoin(
+            """
+            type Animal = Dog { name: String } | Cat { name: String }
+            type Sink<'A> = Sink { consume: 'A -> String }
+            x: Sink<Dog> = Sink(|d -> d.name|)
+            y: Sink<Cat> = Sink(|c -> c.name|)
+            if true then x else y
+            """.trimIndent(),
+        )
+
+    @Test
     fun invariantParam_differentArgs_cannotJoin() =
         cannotJoin(
             """
@@ -181,9 +196,7 @@ class LubGlbTypeCheckTest {
             """
             type Animal = Dog { name: String } | Cat { name: String }
             type Transform<'A, 'B> = Xform { run: ('A) -> 'B }
-            x: Transform<Animal, Dog> = Xform(|a -> Dog("d")|)
-            y: Transform<Dog, Cat> = Xform(|d -> Cat("c")|)
-            if true then x else y
+            if true then Xform(|a: Animal -> Dog("d")|) else Xform(|d: Dog -> Cat("c")|)
             """.trimIndent(),
         )
 
@@ -226,6 +239,18 @@ class LubGlbTypeCheckTest {
         )
 
     @Test
+    fun differentParentNominals_joinSharedFieldByType() =
+        assertLub(
+            "{ pet: Animal }",
+            """
+            type Animal = Dog { name: String } | Cat { name: String }
+            type Kennel = Kennel { pet: Dog }
+            type Cattery = Cattery { pet: Cat }
+            if true then Kennel(Dog("Fido")) else Cattery(Cat("Whiskers"))
+            """.trimIndent(),
+        )
+
+    @Test
     fun nominalAndRecord_joinOnCommonFields() =
         assertLub(
             "{ name: String }",
@@ -236,13 +261,32 @@ class LubGlbTypeCheckTest {
         )
 
     @Test
-    fun unrelatedNominals_noCommonFields_joinToEmpty() =
+    fun nominalAndRecord_keepsConstructorSpecificField() =
         assertLub(
-            "{}",
+            "{ breed: String }",
+            """
+            type Animal = Dog { name: String, breed: String } | Cat { name: String }
+            if true then Dog("Fido", "Labrador") else { breed = "x", weight = 5 }
+            """.trimIndent(),
+        )
+
+    @Test
+    fun unrelatedNominals_noCommonFields_isError() =
+        cannotJoin(
+            """
+            type Animal = Dog { name: String } | Cat { name: String }
+            type Gadget = Widget { id: Num } | Gizmo { id: Num }
+            if true then Dog("Fido") else Widget(1)
+            """.trimIndent(),
+        )
+
+    @Test
+    fun emptyIfaceNominals_differentFamilies_isError() =
+        cannotJoin(
             """
             type Light = Red | Green
-            type Option<'A> = None | Some { value: 'A }
-            if true then Red else Some(1)
+            type Switch = On | Off
+            if true then Red else On
             """.trimIndent(),
         )
 
@@ -258,8 +302,8 @@ class LubGlbTypeCheckTest {
         )
 
     @Test
-    fun records_disjoint_joinToEmpty() =
-        assertLub("{}", "if true then { x = 1 } else { y = 2 }")
+    fun records_disjoint_isError() =
+        cannotJoin("if true then { x = 1 } else { y = 2 }")
 
     @Test
     fun functions_lub_glbsParamsLubsResult() =
@@ -332,6 +376,17 @@ class LubGlbTypeCheckTest {
             fun maybe(b: Bool) = if b then Some(42) else None
             maybe
             """.trimIndent(),
+        )
+
+    @Test
+    fun synthOnePolyBranch_isError() =
+        cannotJoin("fun id(x: 'T): 'T = x\nfun g(n: Num): Num = n\nif true then id else g")
+
+    @Test
+    fun checkOnePolyBranch_instantiatesToDemand() =
+        assertLub(
+            "(Num) -> Num",
+            "fun id(x: 'T): 'T = x\nfun g(n: Num): Num = n\nfoo: (Num) -> Num = if true then id else g\nfoo",
         )
 
     @Ignore
