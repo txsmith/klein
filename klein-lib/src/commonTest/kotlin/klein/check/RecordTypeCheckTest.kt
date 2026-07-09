@@ -9,7 +9,10 @@ import kotlin.test.assertTrue
 
 class RecordTypeCheckTest {
     @Test
-    fun emptyRecord() = assertEquals(TRecord(emptyMap()), infer("{}").type)
+    fun emptyRecord_isTop() = assertEquals(TTop, infer("{}").type)
+
+    @Test
+    fun emptyRecordAnnotation_acceptsAnyValue() = assertTrue(infer("x: {} = 42\nx").errors.isEmpty())
 
     @Test
     fun singleField() = assertEquals(TRecord(mapOf("x" to TNum)), infer("{ x = 1 }").type)

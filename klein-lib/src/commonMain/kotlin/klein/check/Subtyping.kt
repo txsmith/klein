@@ -78,7 +78,7 @@ class Subtyping {
             }
             a is TRecord && b is TRecord -> {
                 val fields = (a.fields.keys intersect b.fields.keys).associateWith { lub(a.fields.getValue(it), b.fields.getValue(it), env) }
-                TRecord(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
+                recordOf(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
             }
             a is TOptional || b is TOptional  -> {
                 val (core, coreFailures) = lub(nonNullCore(a), nonNullCore(b), env)
@@ -89,7 +89,7 @@ class Subtyping {
             a is TRef || b is TRef -> lubNominal(a, b, env)
             else -> TTop to listOf(Failure(a, b))
         }
-        return if (failures.isEmpty() && result is TRecord && result.fields.isEmpty()) {
+        return if (failures.isEmpty() && result is TTop) {
             TTop to listOf(Failure(a, b))
         } else {
             result to failures
@@ -116,7 +116,7 @@ class Subtyping {
                         val fb = b.fields[k]
                         if (fa != null && fb != null) glb(fa, fb, env) else (fa ?: fb!!) to emptyList()
                     }
-                TRecord(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
+                recordOf(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
             }
             a is TOptional && b is TOptional -> {
                 val (core, coreFailures) = glb(a.type, b.type, env)
@@ -186,10 +186,10 @@ class Subtyping {
     private fun ifaceOf(
         ref: TRef,
         env: TypeEnv,
-    ): TRecord {
+    ): Type {
         val def = env.getTypeDef(ref.name)
         val subst = def.typeParams.map { it.skolem }.zip(ref.typeArgs).toMap()
-        return substitute(def.iface, subst) as TRecord
+        return recordOf((substitute(def.iface, subst) as TRecord).fields)
     }
 
     private fun nonNullCore(t: Type): Type =

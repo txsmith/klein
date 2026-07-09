@@ -384,7 +384,7 @@ class Checker {
                 fields[field.name] = synth(field.value, env)
             }
         }
-        return TRecord(fields)
+        return recordOf(fields)
     }
 
     private fun checkRecordLiteral(
@@ -570,7 +570,7 @@ class Checker {
             is FunctionTypeExpr ->
                 TFun(typeExpr.paramTypes.map { resolveType(it, env) }, resolveType(typeExpr.returnType, env))
             is RecordTypeExpr ->
-                TRecord(typeExpr.fields.associate { (name, t) -> name to resolveType(t, env) })
+                recordOf(typeExpr.fields.associate { (name, t) -> name to resolveType(t, env) })
             is TupleTypeExpr ->
                 if (typeExpr.elements.isEmpty()) {
                     TUnit

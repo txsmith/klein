@@ -85,6 +85,9 @@ data class ConstructorInfo(
     val span: SourceSpan,
 )
 
+/** A record type with no fields demands nothing, so it is the top; never observe an empty record as a type. */
+internal fun recordOf(fields: Map<String, Type>): Type = if (fields.isEmpty()) Type.TTop else Type.TRecord(fields)
+
 internal fun substitute(
     type: Type,
     subst: Map<TSkolem, Type>,
