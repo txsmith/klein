@@ -99,19 +99,31 @@ echo "f = |x -> x + 1|" | ./klein parse --stdin
 
 ### Check Types
 
-The primary command under Path G: run the bidirectional checker and report type errors.
+The primary command under Path G: run the `klein.check` bidirectional checker. Prints the type of
+each top-level binding (and the trailing expression), then a pass/fail verdict. Exits non-zero on any
+type error, so it works as a gate in scripts.
 
 ```bash
 # From a file
 ./klein check example.klein
 
+# Short form
+./klein c example.klein
+
 # From stdin
 echo "x = 1 + 2" | ./klein check --stdin
+
+# Machine-readable errors (Error: <msg> at <span>)
+./klein check --raw example.klein
 ```
 
-### Infer Types
+`check` has no IR/format flags — the Path G type is a plain structural tree with nothing to dump.
 
-Print the synthesized type of top-level definitions and expressions.
+### Infer Types (legacy engine)
+
+Runs the old SimpleSub inference engine (`klein.types.Typer`), not the Path G checker. Kept for
+comparison during the M7 cutover / differential harness; the checker's user-facing command is
+`check`. Prints the synthesized type of top-level definitions and expressions.
 
 ```bash
 # From a file
@@ -123,8 +135,8 @@ Print the synthesized type of top-level definitions and expressions.
 # Raw output (machine-readable, for tooling)
 ./klein infer --raw example.klein
 
-# Internal type IR (for debugging the checker)
-./klein infer --ir example.klein
+# Internal type IR (--ir-compact / --ir-bounds; infer only)
+./klein infer --ir-compact example.klein
 ```
 
 ## Project Structure

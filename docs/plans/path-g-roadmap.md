@@ -234,10 +234,11 @@ supersession forward (in the new ADR) plus a one-line `Status` pointer.
 
 ## Tooling / DX
 
-- **CLI: make it easy to check a program.** The `check`/`infer` commands should give a
-  fast, ergonomic way to run the Path G checker on a snippet or file (clear pass/fail,
-  readable type output, stdin support) so we can sanity-check programs without writing a
-  test. Currently awkward; fix it.
+- **CLI: make it easy to check a program.** ✅ Done — the `check` command runs the Path G
+  checker on a file or `--stdin`, prints each top-level binding's type plus a pass/fail verdict,
+  and exits non-zero on error (usable as a script gate). `infer` is left on the legacy engine for
+  differential comparison. `check` deliberately exposes no type IR — the Path G type is a plain
+  structural tree. (`klein.Main`, `check`/`c`.)
 
 ## Open questions
 
