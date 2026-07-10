@@ -361,4 +361,42 @@ class ApplyTest {
             call(id("foo"), lambda("x", body = block(valStmt("y", add(id("x"), int(1))), id("y")))),
         )
     }
+
+    // A parenthesized expression that *starts a new statement line* (at or before the block indent)
+    // must not be attached to the previous line as a call. Regression: the postfix loop used to
+    // anchor to the stale enclosing indent, swallowing `(bar)` as `foo(bar)`.
+    @Test
+    fun parenExprOnNextLineIsSeparateStatement() {
+        val program =
+            """
+            |
+              foo
+              (bar)
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(body = block(id("foo"), id("bar"))),
+        )
+    }
+
+    // The concrete case that had this parser bug filed against it: two ascriptions of the same
+    // variable on adjacent lines are two statements, not `(x: Cat)(x: Dog)`.
+    @Test
+    fun consecutiveAscriptionsOnAdjacentLinesAreSeparate() {
+        val program =
+            """
+            |x ->
+              (x: Cat)
+              (x: Dog)
+            |
+            """.trimIndent()
+        assertExprEquals(
+            parse(program),
+            lambda(
+                "x",
+                body = block(ascription(id("x"), typeName("Cat")), ascription(id("x"), typeName("Dog"))),
+            ),
+        )
+    }
 }
