@@ -19,7 +19,7 @@ class ScopeGraphSccTest {
             .constructGraph(parseProgram(source).stmts)
             .graph
             .computeSCCs()
-            .map { component -> component.nodes.map { it.name }.toSet() to component.recursive }
+            .map { component -> component.nodes.map { it.name }.toSet() to component.isRecursive }
 
     @Test
     fun isolatedNodeBecomesItsOwnComponent() {

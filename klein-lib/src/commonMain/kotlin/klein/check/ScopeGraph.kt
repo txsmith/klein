@@ -41,7 +41,7 @@ data class ScopeGraph(
      * that references it (callees before callers). That is the order in which components should
      * be typed — a referenced binding is fully resolved before the binding that uses it. Each
      * component is the set of mutually-recursive nodes; a node not part of any cycle is its own
-     * singleton (a self-recursive node is also a singleton, but flagged [Component.recursive]).
+     * singleton (a self-recursive node is also a singleton, but flagged [Component.isRecursive]).
      * Edges to names outside this scope are ignored.
      */
     fun computeSCCs(): List<Component> {
