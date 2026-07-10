@@ -18,6 +18,15 @@ class FunctionTest {
         assertEquals(TNum, infer("fun add(x: Num, y: Num): Num = x + y\nadd(1, 2)").type)
 
     @Test
+    fun declaredReturnWiderThanBody_bindsDeclaredNotInferred() =
+        // Body infers Num, but the signature declares the wider Any. The declared return must be
+        // honored (bound as the function's result), not silently replaced by the inferred body type.
+        assertEquals(
+            TFun(listOf(TNum), TTop, listOf("x")),
+            infer("fun f(x: Num): Any = x\nf").type,
+        )
+
+    @Test
     fun functionAsValue() =
         assertEquals(
             TFun(listOf(TNum), TNum, listOf("x")),

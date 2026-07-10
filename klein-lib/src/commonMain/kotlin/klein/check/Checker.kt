@@ -112,19 +112,83 @@ class Checker {
         env: TypeEnv,
     ): Type {
         preprocessor.process(stmts.filterIsInstance<TypeDef>(), env)
+
+        val scope = ScopeGraph.constructGraph(stmts)
+        scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
+
+        for (component in scope.graph.computeSCCs()) {
+            val bindings = component.nodes.map { it.binding }
+            when {
+                bindings.all { it is FunDef } -> bindFunGroup(bindings.filterIsInstance<FunDef>(), component.isRecursive, env)
+                bindings.size == 1 && bindings.single() is Val -> synthAndBindVal(bindings.single() as Val, env)
+                else ->
+                    component.nodes.filter { it.binding is Val }.forEach { node ->
+                        recordError(TypeError.RecursiveVal(node.name, scope.graph.findCycle(node.name), (node.binding as Val).span))
+                    }
+            }
+        }
+
         var last: Type = TUnit
         for (stmt in stmts) {
-            when (stmt) {
-                is Val -> synthVal(stmt, env)
-                is Expr -> last = synth(stmt, env)
-                is FunDef -> synthFunDef(stmt, env)
-                is TypeDef -> {}
-            }
+            if (stmt is Expr) last = synth(stmt, env)
         }
         return last
     }
 
-    private fun synthVal(
+    /**
+     * Bind and check a group of mutually-defined functions.
+     *
+     * When [recursive], every function's signature is bound before any body is checked, so calls
+     * between them resolve — which requires each to declare its return type. A non-recursive
+     * function needs no such up-front binding, so it may omit its return type and have it inferred
+     * from the body.
+     */
+    private fun bindFunGroup(
+        funDefs: List<FunDef>,
+        isRecursive: Boolean,
+        env: TypeEnv,
+    ) {
+        // Pass 1: bind every function signature.
+        // Yields a list of all functions that have a declared signature for checking in pass 2.
+        // If no signature is declared, and the function is not recursive, synth & bind the type immediately.
+        val pendingChecks: List<Triple<FunDef, TypeEnv, Type>> =
+            funDefs.mapNotNull { funDef ->
+                val fnEnv = env.child()
+                introduceTypeVars(funDef.params.mapNotNull { it.typeAnnotation } + listOfNotNull(funDef.returnType), fnEnv)
+                val paramTypes =
+                    funDef.params.map { param ->
+                        if (param.typeAnnotation != null) {
+                            resolveType(param.typeAnnotation, fnEnv)
+                        } else {
+                            recordError(TypeError.MissingParamAnnotation(param.name, param.span))
+                        }
+                    }
+                funDef.params.zip(paramTypes).forEach { (param, type) -> fnEnv.bind(param.name, type) }
+                val returnType =
+                    when {
+                        funDef.returnType != null -> resolveType(funDef.returnType, fnEnv)
+                        isRecursive ->
+                            recordError(
+                                TypeError.Misc("Recursive function '${funDef.name}' needs a declared return type", funDef.span),
+                            )
+                        else -> synth(funDef.body, fnEnv) // non-recursive: infer straight from the body
+                    }
+                env.bind(funDef.name, quantify(fnEnv.localTypeVars(), TFun(paramTypes, returnType, funDef.params.map { it.name })))
+                if (funDef.returnType != null) Triple(funDef, fnEnv, returnType) else null
+            }
+
+        // Pass 2: with all signatures bound, check each remaining body against its declared return.
+        pendingChecks.forEach { (funDef, fnEnv, returnType) ->
+            check(
+                funDef.body,
+                returnType,
+                fnEnv,
+                listOf(ExpectedType(returnType, ExpectedTypeSource.Return(funDef.name, funDef.span))),
+            )
+        }
+    }
+
+    private fun synthAndBindVal(
         stmt: Val,
         env: TypeEnv,
     ) {
@@ -190,40 +254,6 @@ class Checker {
             bodyEnv.bind(param.name, paramType)
         }
         check(expr.body, expected.result, bodyEnv)
-    }
-
-    private fun synthFunDef(
-        funDef: FunDef,
-        env: TypeEnv,
-    ) {
-        val sigEnv = env.child()
-        introduceTypeVars(funDef.params.mapNotNull { it.typeAnnotation } + listOfNotNull(funDef.returnType), sigEnv)
-        val paramTypes =
-            funDef.params.map { param ->
-                if (param.typeAnnotation != null) {
-                    resolveType(param.typeAnnotation, sigEnv)
-                } else {
-                    recordError(TypeError.MissingParamAnnotation(param.name, param.span))
-                }
-            }
-        val paramNames = funDef.params.map { it.name }
-
-        val bodyEnv = sigEnv.child()
-        funDef.params.zip(paramTypes).forEach { (param, type) -> bodyEnv.bind(param.name, type) }
-
-        if (funDef.returnType != null) {
-            val declared = resolveType(funDef.returnType, sigEnv)
-            env.bind(funDef.name, quantify(sigEnv.localTypeVars(), TFun(paramTypes, declared, paramNames)))
-            check(
-                funDef.body,
-                declared,
-                bodyEnv,
-                listOf(ExpectedType(declared, ExpectedTypeSource.Return(funDef.name, funDef.span))),
-            )
-        } else {
-            val inferred = synth(funDef.body, bodyEnv)
-            env.bind(funDef.name, quantify(sigEnv.localTypeVars(), TFun(paramTypes, inferred, paramNames)))
-        }
     }
 
     private fun synthApply(
@@ -450,7 +480,13 @@ class Checker {
                 if (def == null || fieldType == null) {
                     recordError(TypeError.MissingField(field, rec.toLegacy(), span))
                 } else {
-                    substitute(fieldType, def.typeParams.map { it.skolem }.zip(rec.typeArgs).toMap())
+                    substitute(
+                        fieldType,
+                        def.typeParams
+                            .map { it.skolem }
+                            .zip(rec.typeArgs)
+                            .toMap(),
+                    )
                 }
             }
             else -> {

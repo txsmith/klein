@@ -82,8 +82,10 @@ Triage every existing test against the M0 spec into three buckets:
   infer this, or does it now require an annotation? This is the migration ledger,
   led by `AnnotationInferTest` and the `*InferTest` files.
 - **DELETE-AT-TEARDOWN** — machinery-internal suites that test the solver/simplifier
-  directly: `TypeSimplifierTest`, `LubGlbSimplificationTest`, `LevelConstraintTest`,
-  `ScopeGraphSccTest`. These die in M8; deleting them is correct, not lost coverage.
+  directly: `TypeSimplifierTest`, `LevelConstraintTest`. These die in M8; deleting them
+  is correct, not lost coverage. (`LubGlbSimplificationTest` and `ScopeGraphSccTest` were
+  originally listed here but are **KEEP** — the join lattice and SCC ordering / recursion
+  detection are Path G features, not SimpleSub machinery; see [test-porting.md](./test-porting.md).)
 
 *Depends on: M0 (can't classify required-vs-inferred without the spec).*
 *Output: per-file worklist + the precise definition of the M7 green bar →
@@ -179,7 +181,13 @@ inference behavior we are deliberately removing. The four strata and their fates
 | Grammar tests | `UnionIntersectionTypeTest`, `AnnotationTest`, `ImplicitParamTest`, `TypeDefTest` | change *with* the M0 surface decisions |
 | Verdict / error tests | `TypeDefErrorTest`, `OptionalTypeErrorTest`, `NominalStructuralTest`, much of `SubtypingTest` | ✅ portable — the M7 acceptance contract |
 | Inferred-string tests | `SimpleSubTest`, `InferredInterfaceTest`, `AnnotationInferTest`, `*InferTest` | ⚠️ the migration ledger (M1 REWRITE) |
-| Machinery-internal | `TypeSimplifierTest`, `LubGlbSimplificationTest`, `LevelConstraintTest`, `ScopeGraphSccTest` | 🧹 die with M8 teardown |
+| Machinery-internal | `TypeSimplifierTest`, `LevelConstraintTest` | 🧹 die with M8 teardown |
+
+`LubGlbSimplificationTest` and `ScopeGraphSccTest` (+ `ScopeGraphTest`) are **KEEP**, not
+machinery: the join lattice (ported to `LubGlbTypeCheckTest`) and SCC-based dependency
+ordering / recursion detection (ported to `klein.check`, wiring `synthBlockStmts`) are Path G
+features. Forward references and mutual recursion depend on the scope graph and were broken
+without it.
 
 Consequences, baked into the milestones above:
 1. **Triage is M1, not M7** — deciding which tests stay *is* part of the spec.
@@ -223,6 +231,13 @@ supersession forward (in the new ADR) plus a one-line `Status` pointer.
   alternative; `ideas/pattern-match-synthetic-type.md` still live — no change.)
 
 ---
+
+## Tooling / DX
+
+- **CLI: make it easy to check a program.** The `check`/`infer` commands should give a
+  fast, ergonomic way to run the Path G checker on a snippet or file (clear pass/fail,
+  readable type output, stdin support) so we can sanity-check programs without writing a
+  test. Currently awkward; fix it.
 
 ## Open questions
 
