@@ -80,7 +80,7 @@ class Subtyping {
                 val fields = (a.fields.keys intersect b.fields.keys).associateWith { lub(a.fields.getValue(it), b.fields.getValue(it), env) }
                 recordOf(fields.mapValues { it.value.first }) to fields.values.flatMap { it.second }
             }
-            a is TOptional || b is TOptional  -> {
+            a is TOptional || b is TOptional || a is TNull || b is TNull -> {
                 val (core, coreFailures) = lub(nonNullCore(a), nonNullCore(b), env)
                 optionalOf(core) to coreFailures
             }
