@@ -115,6 +115,7 @@ class TypeDefPreprocessor(
             is FunctionTypeExpr -> typeExpr.paramTypes.flatMap { collectTypeVars(it) }.toSet() + collectTypeVars(typeExpr.returnType)
             is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVars(it) }.toSet()
             is RecordTypeExpr -> typeExpr.fields.flatMap { collectTypeVars(it.second) }.toSet()
+            is OptionalTypeExpr -> collectTypeVars(typeExpr.inner)
             is UnionTypeExpr -> collectTypeVars(typeExpr.left) + collectTypeVars(typeExpr.right)
             is IntersectionTypeExpr -> collectTypeVars(typeExpr.left) + collectTypeVars(typeExpr.right)
         }
@@ -197,6 +198,8 @@ class TypeDefPreprocessor(
                     }
                     changed
                 }
+
+                is OptionalTypeExpr -> update(typeExpr.inner, ownerName, polarity)
 
                 is UnionTypeExpr -> {
                     val l = update(typeExpr.left, ownerName, polarity)

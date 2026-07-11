@@ -3,6 +3,7 @@ package klein.types
 import klein.AppliedTypeExpr
 import klein.FunctionTypeExpr
 import klein.IntersectionTypeExpr
+import klein.OptionalTypeExpr
 import klein.RecordTypeExpr
 import klein.SourceSpan
 import klein.TupleTypeExpr
@@ -220,6 +221,14 @@ sealed class SimpleType {
 
                     is FunctionTypeExpr ->
                         TFun(t.paramTypes.map { go(it, pol.flip()) }, go(t.returnType, pol))
+
+                    // `T?` is the first-class optional constructor, covariant in its inner type.
+                    // Nested optionals collapse (`T?? = T?`, monadic join) — see the null-safety ADR.
+                    is OptionalTypeExpr ->
+                        when (val inner = go(t.inner, pol)) {
+                            is TOptional -> inner
+                            else -> TOptional(inner)
+                        }
 
                     is TupleTypeExpr -> {
                         if (t.elements.isEmpty()) {

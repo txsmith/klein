@@ -25,6 +25,7 @@ import klein.Operator
 import klein.Param
 import klein.ParseError
 import klein.Parser
+import klein.OptionalTypeExpr
 import klein.Program
 import klein.RecordField
 import klein.RecordLiteral
@@ -267,6 +268,8 @@ fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSp
 
 fun recordType(vararg fields: Pair<String, TypeExpr>) = RecordTypeExpr(fields.toList(), noSpan)
 
+fun optionalType(inner: TypeExpr) = OptionalTypeExpr(inner, noSpan)
+
 fun unionType(left: TypeExpr, right: TypeExpr) = UnionTypeExpr(left, right, noSpan)
 
 fun intersectionType(left: TypeExpr, right: TypeExpr) = IntersectionTypeExpr(left, right, noSpan)
@@ -303,6 +306,7 @@ fun TypeExpr.stripSpan(): TypeExpr =
         is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
+        is OptionalTypeExpr -> OptionalTypeExpr(inner.stripSpan(), noSpan)
         is UnionTypeExpr -> UnionTypeExpr(left.stripSpan(), right.stripSpan(), noSpan)
         is IntersectionTypeExpr -> IntersectionTypeExpr(left.stripSpan(), right.stripSpan(), noSpan)
     }

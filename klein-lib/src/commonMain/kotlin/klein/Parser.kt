@@ -239,13 +239,25 @@ class Parser(
     }
 
     private fun parseTypeIntersection(): TypeExpr {
-        var left = parseTypeAtom()
+        var left = parseTypePostfix()
         while (peek().kind == AMP) {
             advance()
-            val right = parseTypeAtom()
+            val right = parseTypePostfix()
             left = IntersectionTypeExpr(left, right, left.span + right.span)
         }
         return left
+    }
+
+    /** Postfix `?` (nullable) binds tighter than `&`, `|`, and `->`: `Num -> Num?` is a function
+     *  returning `Num?`, while `(Num -> Num)?` is an optional function. Repeated `?` parse and are
+     *  collapsed to a single optional during type resolution (`T?? = T?`). */
+    private fun parseTypePostfix(): TypeExpr {
+        var type = parseTypeAtom()
+        while (peek().kind == QUESTION) {
+            val question = advance()
+            type = OptionalTypeExpr(type, type.span + question.span)
+        }
+        return type
     }
 
     private fun parseTypeArgs(): List<TypeExpr> {
@@ -583,8 +595,9 @@ class Parser(
         val params = mutableListOf<Param>()
         while (peek().kind == IDENT) {
             val ident = advance()
-            // Use typeAtom to avoid consuming '->' as function type arrow
-            val typeAnnotation = parseOptionalTypeAnnotation(::parseTypeAtom)
+            // Parse an atom plus any postfix `?`, but not a `->` function type — the arrow belongs to
+            // the lambda (`|x: Num? -> x|`), so a nullable param annotation must still work here.
+            val typeAnnotation = parseOptionalTypeAnnotation(::parseTypePostfix)
             val span = ident.span + (typeAnnotation?.span ?: ident.span)
             params.add(Param(ident.text!!, typeAnnotation, span))
 

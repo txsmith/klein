@@ -4,26 +4,10 @@ package klein.types
 
 import klein.Type
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
-/**
- * Comprehensive test suite for optional types (T?) and null safety.
- *
- * This file serves as the specification for how optional types should behave
- * in Klein's SimpleSub-based type system.
- *
- * Key semantics:
- * - `null` is a value with type `Null`
- * - `T?` is TOptional(T) - a first-class type constructor
- * - `T <: T?` (any T can be used where T? is expected)
- * - `Null <: T?` (null can be used where T? is expected)
- * - `T? <: U?` if `T <: U` (covariant)
- * - `T?` is NOT a subtype of `T` (must be explicitly unwrapped)
- */
 class OptionalTypeInferTest {
-
-    // =========================================================================
-    // SECTION 1: Null Literal Inference
-    // =========================================================================
 
     @Test
     fun nullLiteral_hasTypeNull() {
@@ -44,19 +28,42 @@ class OptionalTypeInferTest {
         """.trimIndent()))
     }
 
-    // =========================================================================
-    // SECTION 2: If-Then-Else with Null Branches
-    // =========================================================================
+    @Test
+    fun annotation_bindingResolvesToOptional() {
+        assertType(Type.Optional(Type.Num), infer("x: Num? = null\nx"))
+    }
+
+    @Test
+    fun annotation_acceptsNonNullValue() {
+        assertType(Type.Optional(Type.Num), infer("x: Num? = 42\nx"))
+    }
+
+    @Test
+    fun annotation_nonOptionalRejectsNull() {
+        val errors = inferErrors("x: Num = null")
+        assertEquals(1, errors.size)
+        val error = errors[0]
+        assertIs<TypeError.NullNotAllowed>(error)
+        assertEquals(Type.Num, error.expected)
+    }
+
+    @Test
+    fun annotation_doubleOptionalCollapses() {
+        assertType(Type.Optional(Type.Num), infer("x: Num?? = null\nx"))
+    }
+
+    @Test
+    fun annotation_paramAcceptsNullArgument() {
+        assertType(Type.Optional(Type.Num), infer("fun f(x: Num?): Num? = x\nf(null)"))
+    }
 
     @Test
     fun ifElse_nullInElseBranch_infersOptional() {
-        // if true then 42 else null => Num?
         assertType("Num?", infer("if true then 42 else null"))
     }
 
     @Test
     fun ifElse_nullInThenBranch_infersOptional() {
-        // if true then null else 42 => Num?
         assertType("Num?", infer("if true then null else 42"))
     }
 
@@ -72,13 +79,11 @@ class OptionalTypeInferTest {
 
     @Test
     fun ifElse_bothBranchesNull_infersNull() {
-        // if true then null else null => Null (not Null?)
         assertType(Type.Null, infer("if true then null else null"))
     }
 
     @Test
     fun ifElse_optionalInOneBranch_nullInOther() {
-        // If then-branch is already T? and else is null, result is T?
         val code = """
             maybeNum = if true then 42 else null
             if false then maybeNum else null
@@ -88,14 +93,12 @@ class OptionalTypeInferTest {
 
     @Test
     fun ifElse_nestedWithNull() {
-        // Nested if-else where inner returns optional
         val code = """
             if true then
                 if false then 42 else null
             else
                 99
         """.trimIndent()
-        // Both branches are Num? and Num, result should be Num?
         assertType("Num?", infer(code))
     }
 
@@ -117,24 +120,17 @@ class OptionalTypeInferTest {
 
     @Test
     fun ifElse_nullWithFunction() {
-        // Lambda or null => function type is optional
         assertType("((Num) -> Num)?", infer("if true then |x -> x + 1| else null"))
     }
 
     @Test
     fun ifElse_nullWithUnit() {
-        // Unit or null => Unit?
         val code = """
             fun doNothing() = {}
             if true then doNothing() else null
         """.trimIndent()
-        // Note: {} is empty record, not unit. Adjust if needed.
         assertType("{}?", infer(code))
     }
-
-    // =========================================================================
-    // SECTION 3: Functions Returning Optionals
-    // =========================================================================
 
     @Test
     fun function_returnsOptional_fromIfElse() {
@@ -182,10 +178,6 @@ class OptionalTypeInferTest {
         assertType("(Any) -> Null", infer("|x -> null|"))
     }
 
-    // =========================================================================
-    // SECTION 4: Type Variables and Null
-    // =========================================================================
-
     @Test
     fun identity_appliedToNull() {
         val code = """
@@ -197,7 +189,6 @@ class OptionalTypeInferTest {
 
     @Test
     fun identity_polymorphicWithNull() {
-        // identity can be applied to both null and non-null
         val code = """
             fun identity(x) = x
             a = identity(42)
@@ -236,18 +227,12 @@ class OptionalTypeInferTest {
 
     @Test
     fun typeVariable_boundedByNullAndNum() {
-        // When a type variable gets both Null and Num as lower bounds,
-        // the result type should be Num? (or Num | Null in union form)
         val code = """
             fun returnArg(x) = x
             f = |b -> if b then returnArg(42) else returnArg(null)|
         """.trimIndent()
         assertType("(Bool) -> Num?", infer(code + "\nf"))
     }
-
-    // =========================================================================
-    // SECTION 5: Records with Optional Fields
-    // =========================================================================
 
     @Test
     fun record_withOptionalField_fromIfElse() {
@@ -292,13 +277,8 @@ class OptionalTypeInferTest {
         assertType("{ age: Num, name: String, spouse: String? }", infer(code))
     }
 
-    // =========================================================================
-    // SECTION 6: Passing Null to Functions
-    // =========================================================================
-
     @Test
     fun function_acceptsNullArgument() {
-        // A polymorphic function can accept null
         val code = """
             fun first(x, y) = x
             first(null, 42)
@@ -325,10 +305,6 @@ class OptionalTypeInferTest {
         assertType(Type.Null, infer(code))
     }
 
-    // =========================================================================
-    // SECTION 7: Chained Operations with Optionals
-    // =========================================================================
-
     @Test
     fun chained_optionalThroughMultipleFunctions() {
         val code = """
@@ -349,10 +325,6 @@ class OptionalTypeInferTest {
         assertType("Num?", infer(code))
     }
 
-    // =========================================================================
-    // SECTION 8: Union Types with Null
-    // =========================================================================
-
     @Test
     fun union_numOrStringOrNull() {
         val code = """
@@ -361,7 +333,6 @@ class OptionalTypeInferTest {
                 else if b then "hello"
                 else null
         """.trimIndent()
-        // Result should be (Num | String)?
         assertType("(Bool, Bool) -> (Num | String)?", infer(code + "\ntriChoice"), expectedLub = "(Bool, Bool) -> (Num | String)??")
     }
 
@@ -373,14 +344,8 @@ class OptionalTypeInferTest {
             else
                 { x = 3 }
         """.trimIndent()
-        // Common field is x: Num, y only exists in one branch
-        // Result depends on how record unions work
         assertType("{ x: Num }", infer(code))
     }
-
-    // =========================================================================
-    // SECTION 9: Implicit Parameter with Null
-    // =========================================================================
 
     @Test
     fun implicitParam_canBeNull() {
@@ -395,10 +360,6 @@ class OptionalTypeInferTest {
         assertType("() -> Null", infer("|null|"))
     }
 
-    // =========================================================================
-    // SECTION 10: Complex Scenarios
-    // =========================================================================
-
     @Test
     fun complex_nestedOptionalInFunction() {
         val code = """
@@ -406,7 +367,6 @@ class OptionalTypeInferTest {
                 result = if data.valid then data.value else null
                 { output = result }
         """.trimIndent()
-        // Inferred type should show optional in the output field
         assertType("({ valid: Bool, value: 'A }) -> { output: 'A? }", infer(code + "\nprocess"))
     }
 
@@ -419,8 +379,6 @@ class OptionalTypeInferTest {
                 r1 = step1(input)
                 if true then r1 else null
         """.trimIndent()
-        // Each step returns optional, pipeline result is optional
-        // Type variable 'A is bounded by Num but appears at both polarities so isn't simplified away
         assertType("('A & Num) -> 'A?", infer(code + "\npipeline"))
     }
 
@@ -440,7 +398,6 @@ class OptionalTypeInferTest {
             fun maybeApply(f, x, doIt) =
                 if doIt then f(x) else null
         """.trimIndent()
-        // f: 'A -> 'B, x: 'A, doIt: Bool => 'B?
         assertType("(('A) -> 'B, 'A, Bool) -> 'B?", infer(code + "\nmaybeApply"))
     }
 }
