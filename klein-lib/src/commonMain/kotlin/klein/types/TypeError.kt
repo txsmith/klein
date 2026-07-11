@@ -200,6 +200,12 @@ sealed class TypeError {
         override val message = "Implicit dot parameter '.' cannot be used in named functions"
     }
 
+    data class ImplicitParamWithoutExpectedType(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Implicit dot parameter '.' can only be used where the lambda's type is expected"
+    }
+
     data class ImplicitParamWithExplicitParams(
         val params: List<String>,
         override val span: SourceSpan,

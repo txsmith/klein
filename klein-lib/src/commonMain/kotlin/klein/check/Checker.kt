@@ -153,7 +153,7 @@ class Checker {
         // If no signature is declared, and the function is not recursive, synth & bind the type immediately.
         val pendingChecks: List<Triple<FunDef, TypeEnv, Type>> =
             funDefs.mapNotNull { funDef ->
-                val fnEnv = env.child()
+                val fnEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
                 introduceTypeVars(funDef.params.mapNotNull { it.typeAnnotation } + listOfNotNull(funDef.returnType), fnEnv)
                 val paramTypes =
                     funDef.params.map { param ->
@@ -203,11 +203,23 @@ class Checker {
         }
     }
 
+    private fun usesImplicitParam(expr: Expr): Boolean =
+        when (expr) {
+            is ImplicitParam -> true
+            is Lambda -> false // a nested lambda opens its own implicit-param scope
+            else -> expr.children.any { usesImplicitParam(it) }
+        }
+
     private fun synthLambda(
         expr: Lambda,
         env: TypeEnv,
     ): Type {
-        val bodyEnv = env.child()
+        val bodyEnv =
+            if (expr.params.isEmpty()) {
+                env.child(ImplicitParamContext.NoExpectedType)
+            } else {
+                env.child(ImplicitParamContext.BlockedByExplicitParams(expr.params.map { it.name }))
+            }
         val paramTypes =
             expr.params.map { param ->
                 val type =
@@ -233,11 +245,18 @@ class Checker {
             synthAndCheckSubtype(expr, expected, env)
             return
         }
-        if (expr.params.size != expected.params.size) {
-            recordError(TypeError.CallArityMismatch(expected.params.size, expr.params.size, expr.span))
+        val implicit = expr.params.isEmpty() && usesImplicitParam(expr.body)
+        val arity = if (implicit) 1 else expr.params.size
+        if (arity != expected.params.size) {
+            recordError(TypeError.CallArityMismatch(expected.params.size, arity, expr.span))
             return
         }
-        val bodyEnv = env.child()
+        val bodyEnv =
+            if (implicit) {
+                env.child(ImplicitParamContext.Available(expected.params.single()))
+            } else {
+                env.child(ImplicitParamContext.BlockedByExplicitParams(expr.params.map { it.name }))
+            }
         expr.params.zip(expected.params).forEach { (param, expectedParamType) ->
             val paramType =
                 if (param.typeAnnotation != null) {
@@ -481,6 +500,8 @@ class Checker {
         env: TypeEnv,
     ): Type =
         when (rec) {
+            // The receiver already errored (⊥); don't cascade a second error, just stay ⊥.
+            TBottom -> TBottom
             is TRecord ->
                 rec.fields[field] ?: recordError(TypeError.MissingField(field, rec.toLegacy(), span))
             is TRef -> {
@@ -507,13 +528,16 @@ class Checker {
         expr: ImplicitParam,
         env: TypeEnv,
     ): Type =
-        when (val ctx = env.implicitParam) {
+        when (val ctx = env.implicitParamContext()) {
             is ImplicitParamContext.Available -> ctx.type
             is ImplicitParamContext.BlockedByNamedFunction -> {
                 recordError(TypeError.ImplicitParamInNamedFunction(expr.span))
             }
             is ImplicitParamContext.BlockedByExplicitParams -> {
                 recordError(TypeError.ImplicitParamWithExplicitParams(ctx.params, expr.span))
+            }
+            is ImplicitParamContext.NoExpectedType -> {
+                recordError(TypeError.ImplicitParamWithoutExpectedType(expr.span))
             }
             is ImplicitParamContext.None -> {
                 recordError(TypeError.ImplicitParamOutsideLambda(expr.span))

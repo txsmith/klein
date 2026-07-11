@@ -4,6 +4,8 @@ package klein.check
 sealed class ImplicitParamContext {
     data object None : ImplicitParamContext()
 
+    data object NoExpectedType : ImplicitParamContext()
+
     data object BlockedByNamedFunction : ImplicitParamContext()
 
     data class BlockedByExplicitParams(
@@ -65,7 +67,13 @@ class TypeEnv private constructor(
 
     fun allConstructors(): Collection<ConstructorInfo> = constructors.values
 
-    fun child(): TypeEnv = TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors)
+    fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv =
+        TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors, implicitParam = implicitParam)
+
+    /** The nearest enclosing binder's implicit-param context: a bare lambda makes `.` available, an
+     *  explicit-param lambda or named function blocks it, and nothing at all leaves it unbound. */
+    fun implicitParamContext(): ImplicitParamContext =
+        if (implicitParam != ImplicitParamContext.None) implicitParam else parent?.implicitParamContext() ?: ImplicitParamContext.None
 
     companion object {
         fun empty(): TypeEnv = TypeEnv(parent = null)

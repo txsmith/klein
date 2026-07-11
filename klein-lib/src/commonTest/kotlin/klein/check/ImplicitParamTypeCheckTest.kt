@@ -1,0 +1,102 @@
+package klein.check
+
+import klein.types.TypeError
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * The implicit dot parameter `.` of a bare (parameterless) lambda. Its type comes from the demand,
+ * exactly like an unannotated explicit parameter, so it's only usable in check mode — a bare
+ * `|.x|` in synth mode has no type to draw from. Printed type variables render without the tick.
+ *
+ * `.` is unusable outside a lambda, alongside explicit parameters, or in a named function; each is
+ * its own error.
+ */
+class ImplicitParamTypeCheckTest {
+    private fun assertType(
+        expected: String,
+        src: String,
+    ) {
+        val r = infer(src)
+        assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
+        assertEquals(expected, klein.Type.print(r.type.toLegacy()))
+    }
+
+    private inline fun <reified T : TypeError> assertError(src: String) {
+        val errors = infer(src).errors
+        assertEquals(1, errors.size, "expected one error, got: $errors")
+        assertTrue(errors[0] is T, "expected ${T::class.simpleName}, got: $errors")
+    }
+
+    // --- the implicit parameter takes its type from the demand ---
+
+    @Test
+    fun bareIdentity() = assertType("(A) -> A", "f: ('A) -> 'A = |.|\nf")
+
+    @Test
+    fun fieldAccess() = assertType("({ x: A }) -> A", "f: ({ x: 'A }) -> 'A = |.x|\nf")
+
+    @Test
+    fun multipleFieldAccess() =
+        assertType("({ x: Num, y: Num }) -> Num", "f: ({ x: Num, y: Num }) -> Num = |.x + .y|\nf")
+
+    @Test
+    fun comparison() = assertType("(Num) -> Bool", "f: (Num) -> Bool = |. > 100|\nf")
+
+    @Test
+    fun inCondition() =
+        assertType("({ active: Bool }) -> Num", "f: ({ active: Bool }) -> Num = |if .active then 1 else 0|\nf")
+
+    @Test
+    fun passthrough() =
+        assertType(
+            "(Num) -> Num",
+            """
+            fun inc(n: Num) = n + 1
+            f: (Num) -> Num = |inc(.)|
+            f
+            """.trimIndent(),
+        )
+
+    // --- nested lambdas get separate implicit-param scopes ---
+
+    @Test
+    fun nestedLambda_separateScopes() =
+        assertType("() -> () -> ({ x: A }) -> A", "f: () -> () -> ({ x: 'A }) -> 'A = || |.x| ||\nf")
+
+    @Test
+    fun nestedLambda_innerUsesImplicit() =
+        assertType("(Num) -> (Num) -> Num", "f: (Num) -> (Num) -> Num = |x: Num -> |. * 2||\nf")
+
+    // --- a constant (`.`-free) lambda is nullary, inferable in synth mode ---
+
+    @Test
+    fun constantLambda_noParam() = assertType("() -> Num", "|42|")
+
+    // --- error cases ---
+
+    @Test
+    fun synthMode_bareIdentity_isError() = assertError<TypeError.ImplicitParamWithoutExpectedType>("|.|")
+
+    @Test
+    fun synthMode_fieldAccess_isError() = assertError<TypeError.ImplicitParamWithoutExpectedType>("|.x|")
+
+    @Test
+    fun outsideLambda() = assertError<TypeError.ImplicitParamOutsideLambda>(".")
+
+    @Test
+    fun outsideLambda_fieldAccess() = assertError<TypeError.ImplicitParamOutsideLambda>(".x")
+
+    @Test
+    fun mixedWithExplicitParams() = assertError<TypeError.ImplicitParamWithExplicitParams>("|x: Num -> . + x|")
+
+    @Test
+    fun mixedWithExplicitParams_fieldAccess() = assertError<TypeError.ImplicitParamWithExplicitParams>("|x: Num -> .y + x|")
+
+    @Test
+    fun inNamedFunction() = assertError<TypeError.ImplicitParamInNamedFunction>("fun g() = .")
+
+    @Test
+    fun inNamedFunctionWithParams() = assertError<TypeError.ImplicitParamInNamedFunction>("fun f(x: Num) = .")
+}
