@@ -4,6 +4,7 @@ package klein.types
 
 import klein.Type
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * Comprehensive test suite for optional types (T?) and null safety.
@@ -42,6 +43,38 @@ class OptionalTypeInferTest {
             y = null
             y
         """.trimIndent()))
+    }
+
+    // =========================================================================
+    // SECTION 1b: Optional Type Annotations (`T?` surface syntax)
+    // =========================================================================
+
+    @Test
+    fun annotation_bindingResolvesToOptional() {
+        assertType(Type.Optional(Type.Num), infer("x: Num? = null\nx"))
+    }
+
+    @Test
+    fun annotation_acceptsNonNullValue() {
+        // Num <: Num?, so a plain 42 satisfies a Num? annotation with no error.
+        assertType(Type.Optional(Type.Num), infer("x: Num? = 42\nx"))
+    }
+
+    @Test
+    fun annotation_nonOptionalRejectsNull() {
+        // Num? </: Num — a non-optional binding cannot hold null.
+        assertEquals(1, inferErrors("x: Num = null").size)
+    }
+
+    @Test
+    fun annotation_doubleOptionalCollapses() {
+        // T?? = T? (monadic join) — the resolver flattens nested optionals.
+        assertType(Type.Optional(Type.Num), infer("x: Num?? = null\nx"))
+    }
+
+    @Test
+    fun annotation_paramAcceptsNullArgument() {
+        assertEquals(0, inferErrors("fun f(x: Num?): Num? = x\nf(null)").size)
     }
 
     // =========================================================================

@@ -87,6 +87,11 @@ data class RecordTypeExpr(
     override val span: SourceSpan,
 ) : TypeExpr()
 
+data class OptionalTypeExpr(
+    val inner: TypeExpr,
+    override val span: SourceSpan,
+) : TypeExpr()
+
 data class UnionTypeExpr(
     val left: TypeExpr,
     val right: TypeExpr,
