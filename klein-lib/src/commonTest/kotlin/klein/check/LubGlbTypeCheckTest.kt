@@ -6,19 +6,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Least-upper-bound / greatest-lower-bound of branch types, ported from the SimpleSub
- * `LubGlbSimplificationTest`. Every case is an `if`/`else` whose branch types must join.
+ * Least-upper-bound / greatest-lower-bound of `if`/`else` branch types.
  *
- * SimpleSub represented merged type args as unions/intersections and unresolved invariant args as
- * `where`-clauses. Path G has none of those, so those cases are adjusted to args that have a real
- * nominal join/meet (covariant → parent, contravariant → subtype), or become an error when no
- * Path-G type can express the result (invariant with different args). A join with no common
- * supertype — no nominal ancestor and no shared field — is the top, which is an error, never an
- * inferred `Any` or `{}` (the same top); likewise a meet with no common subtype is `Nothing`, an
- * error. Meet (`glb`) is exercised
- * through contravariant args and glb-of-record function joins rather than inference-from-usage.
- * Dropped as un-portable: `where`-clause bounds (need M6 declared bounds), inference-from-usage
- * (`fun f(x) = …`), and free phantom-param cases.
+ * Merged type args follow declared variance (covariant → parent, contravariant → subtype); an
+ * invariant param with different args has no expressible result and is an error. A join with no
+ * common supertype — no nominal ancestor and no shared field — is the top, which is an error, never
+ * an inferred `Any` or `{}` (the same top); likewise a meet with no common subtype is `Nothing`, an
+ * error. `glb` is exercised through contravariant args and glb-of-record function joins.
  */
 class LubGlbTypeCheckTest {
     private fun assertLub(

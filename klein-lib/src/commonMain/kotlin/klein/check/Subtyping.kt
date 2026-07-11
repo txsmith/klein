@@ -192,18 +192,4 @@ class Subtyping {
         return recordOf((substitute(def.iface, subst) as TRecord).fields)
     }
 
-    private fun nonNullCore(t: Type): Type =
-        when (t) {
-            is TOptional -> t.type
-            TNull -> TBottom
-            else -> t
-        }
-
-    private fun optionalOf(t: Type): Type =
-        when (t) {
-            TTop -> TTop
-            TBottom -> TNull
-            is TOptional -> t
-            else -> TOptional(t)
-        }
 }

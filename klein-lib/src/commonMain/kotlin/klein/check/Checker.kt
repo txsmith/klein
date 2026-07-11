@@ -292,10 +292,16 @@ class Checker {
         expected: Type?,
         env: TypeEnv,
     ): Type {
-        val callee = synth(expr.callee, env)
+        // A safe method call `r?.m(args)` on an optional receiver short-circuits: apply the unwrapped
+        // method and lift the result back to optional. Its demand, likewise, is against the optional
+        // result. On a non-optional receiver `?.` is redundant, so it behaves as a plain call.
+        val rawCallee = synth(expr.callee, env)
+        val isNullableApply = expr.callee is SafeFieldAccess && rawCallee is TOptional
+        val callee = if (isNullableApply) (rawCallee as TOptional).type else rawCallee
+        val demand = if (isNullableApply) expected?.let { if (it is TOptional) it.type else it } else expected
         val scheme = callee as? TForall ?: TForall(emptySet(), callee)
         val body = scheme.body
-        return when {
+        val result = when {
             body is TBottom -> { // S-App-Bot and C-App-Bot
                 expr.args.forEach { synth(it, env) }
                 TBottom
@@ -306,8 +312,8 @@ class Checker {
                 recordError(TypeError.CallArityMismatch(body.params.size, expr.args.size, expr.span))
             else -> {
                 val (demandSubst, demandFailures) =
-                    if (expected != null) {
-                        constraints.solveFromResult(scheme.params, body.result, expected, env)
+                    if (demand != null) {
+                        constraints.solveFromResult(scheme.params, body.result, demand, env)
                     } else {
                         emptyMap<TSkolem, Type>() to emptyList()
                     }
@@ -318,6 +324,7 @@ class Checker {
                     when (val callSite = expr.callee) {
                         is Ident -> callSite.name
                         is FieldAccess -> callSite.field
+                        is SafeFieldAccess -> callSite.field
                         else -> null
                     }
                 val argTypes =
@@ -339,13 +346,14 @@ class Checker {
                             synth(expr.args[i], env)
                         }
                     }
-                val target = if (expected == null) fn.result else TTop
+                val target = if (demand == null) fn.result else TTop
                 val (instantiated, errors) =
                     constraints.solveQuantified(TForall(unknowns, fn), TFun(argTypes, TTop), target, env)
                 errors.forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
                 if (demandFailures.isEmpty() && errors.isEmpty()) (instantiated as TFun).result else TBottom
             }
         }
+        return if (isNullableApply) optionalOf(result) else result
     }
 
     private fun synthIfThenElse(
@@ -356,7 +364,7 @@ class Checker {
         val thenBranchType = synth(expr.thenBranch, env)
 
         if (expr.elseBranch == null) {
-            return TOptional(thenBranchType)
+            return optionalOf(thenBranchType)
         }
         val elseBranchType = synth(expr.elseBranch, env)
         if (thenBranchType is TForall || elseBranchType is TForall) {
@@ -461,8 +469,9 @@ class Checker {
         env: TypeEnv,
     ): Type {
         val target = synth(expr.target, env)
-        val innerType = if (target is TOptional) target.type else target
-        return projectFieldType(innerType, expr.field, expr.span, env)
+        // A non-optional receiver can never be null, so `?.` is redundant and yields the bare field.
+        if (target !is TOptional) return projectFieldType(target, expr.field, expr.span, env)
+        return optionalOf(projectFieldType(target.type, expr.field, expr.span, env))
     }
 
     private fun projectFieldType(
@@ -574,7 +583,11 @@ class Checker {
                 .errors
                 .forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
         } else if (!subtyping.isSubtype(synthesized, expected, env)) {
-            recordError(TypeError.TypeMismatch(synthesized.toLegacy(), expected.toLegacy(), expr.span))
+            if ((synthesized is TNull || synthesized is TOptional) && expected !is TOptional) {
+                recordError(TypeError.NullNotAllowed(expected.toLegacy(), expr.span))
+            } else {
+                recordError(TypeError.TypeMismatch(synthesized.toLegacy(), expected.toLegacy(), expr.span))
+            }
         }
     }
 
@@ -607,6 +620,8 @@ class Checker {
                 TFun(typeExpr.paramTypes.map { resolveType(it, env) }, resolveType(typeExpr.returnType, env))
             is RecordTypeExpr ->
                 recordOf(typeExpr.fields.associate { (name, t) -> name to resolveType(t, env) })
+            is OptionalTypeExpr ->
+                optionalOf(resolveType(typeExpr.inner, env))
             is TupleTypeExpr ->
                 if (typeExpr.elements.isEmpty()) {
                     TUnit

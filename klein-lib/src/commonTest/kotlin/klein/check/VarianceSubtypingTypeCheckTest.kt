@@ -6,25 +6,16 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Variance / subtyping — ported from the SimpleSub `VarianceSubtypingTest`.
+ * Variance / subtyping.
  *
  * Types are forced by **ascription**, not by "holder" constructors:
  *  - a demand is an ascribed binding — `consumerDog: Consumer<Dog> = Consumer(…)`;
  *  - a deliberate mismatch is a second ascription to a conflicting type — `bad: Consumer<Cat> = consumerDog`;
- *  - a lambda parameter's type comes from the demand, so inner forcing-holders (`AnimalHolder(a).a`) are dropped.
+ *  - a lambda parameter's type comes from the demand.
  *
- * The remaining reds are the bare-lambda cases: a lambda argument at a parameter that mentions a type
- * variable (`Consumer(|a -> a.name|)` demanded as `Consumer<Dog>`). They need result-demand-first
- * grounding (floating); until then the un-annotated parameter can't be synthesized.
- *
- * Dropped — SimpleSub inference/simplification with no Path G equivalent (Path G neither infers nor
- * simplifies; the generic-function cases need declared bounds, i.e. M6):
- *  - `invariant_inferredRefShowsWhereClause` — inferred-polymorphism `where`-clause output.
- *  - `simplification_contravariantParamShowsBound_notNothing` — the simplifier showing a *used*
- *    contravariant param as its bound (`Dog`, not `Nothing`).
- *  - `contravariant_genericFunctionReceivesConsumerAnimal…` / `invariant_genericFunctionInfersRefNumFromUsage`
- *    — a *generic* function whose param is constrained from body usage. Revisit at M6 as e.g.
- *    `fun runConsumer(c: Consumer<'A>): String where Dog <: 'A`.
+ * The remaining reds are bare-lambda cases: a lambda argument at a parameter that mentions a type
+ * variable (`Consumer(|a -> a.name|)` demanded as `Consumer<Dog>`) needs result-demand-first
+ * grounding; until then the un-annotated parameter can't be synthesized.
  */
 class VarianceSubtypingTypeCheckTest {
     private fun checksClean(

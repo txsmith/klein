@@ -6,10 +6,9 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Type-definition errors — ported from the SimpleSub `TypeDefErrorTest`. **All red targets:** the new
- * bidirectional checker treats `type` declarations as a no-op (no constructors, no nominal fields,
- * no arity/variance checking, no builtin-shadowing check), so every test here fails until nominal
- * support lands.
+ * Type-definition errors. **All red targets:** the checker treats `type` declarations as a no-op
+ * (no constructors, no nominal fields, no arity/variance checking, no builtin-shadowing check), so
+ * every test here fails until nominal support lands.
  *
  * Verdict mapping (exact rendered type strings are never pinned — nominal rendering is TBD):
  *  - `assertMismatch` → some `TypeError.TypeMismatch` present
@@ -19,8 +18,6 @@ import kotlin.test.assertTrue
  *  - `assertTypeArityMismatch` → some `TypeError.TypeArityMismatch` (with typeName) present
  *  - `TypeError.ShadowsBuiltinType` / `.UndeclaredTypeParam` map straight across.
  *  - `assertType(<nominal>, ...)` → clean-check assertion (nominal names aren't expressible here).
- *
- * Dropped: none — every test is an error/verdict test and stays verdict-portable.
  */
 class TypeDefErrorTypeCheckTest {
     @Test

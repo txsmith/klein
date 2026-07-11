@@ -7,15 +7,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Nominal types — ported from the SimpleSub `NominalStructuralTest`. **All red targets:** the new
- * checker treats `type` declarations as a no-op (no constructors, no `TRef`, no nominal subtyping),
- * so every test here fails until nominal support lands.
- *
- * Ported with two Path G adjustments:
- *  - functions that inferred an unannotated parameter's type from usage (`fun getValue(r) = r.value`)
- *    were given explicit annotations — Path G requires them;
- *  - the SimpleSub test that inferred an anonymous union (`Cons(1, Cons("two", Nil)) : Cons<Num | String>`)
- *    was dropped — Path G has no anonymous unions.
+ * Nominal types. **All red targets:** the checker treats `type` declarations as a no-op (no
+ * constructors, no `TRef`, no nominal subtyping), so every test here fails until nominal support
+ * lands. Parameters whose type would otherwise be inferred from usage are explicitly annotated.
  */
 class NominalTypeCheckTest {
     /** Assert a program checks with no errors and yields [expected] — errors matter here because a

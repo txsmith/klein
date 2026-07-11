@@ -6,11 +6,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Subtyping relation over `T?` (Optional) and `Null`, ported from the old `OptionalSubtypingTest`.
+ * Subtyping relation over `T?` (Optional) and `Null`.
  *
  * Rules: Null <: Null; Null <: T?; T <: T?; T? <: U? iff T <: U; T? is NOT <: T (no implicit
- * unwrap); Null is NOT <: a non-optional type (null safety). The old suite's TVar-bound and
- * `constrainEqual` cases test the deleted constraint solver and are not ported.
+ * unwrap); Null is NOT <: a non-optional type (null safety).
  */
 class OptionalSubtypeTest {
     private val subtyping = Subtyping()

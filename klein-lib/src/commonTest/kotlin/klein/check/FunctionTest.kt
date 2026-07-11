@@ -40,6 +40,35 @@ class FunctionTest {
             infer("fun fib(n: Num): Num = if n < 2 then n else fib(n - 1) + fib(n - 2)\nfib(10)").type,
         )
 
+    @Test
+    fun mutualRecursion_twoWay() =
+        // isEven and isOdd form one recursive component: both signatures bind before either body
+        // is checked, so the forward call to isOdd resolves. Each must declare its return type.
+        assertEquals(
+            TFun(listOf(TNum), TBool, listOf("n")),
+            infer(
+                """
+                fun isEven(n: Num): Bool = if n == 0 then true else isOdd(n - 1)
+                fun isOdd(n: Num): Bool = if n == 0 then false else isEven(n - 1)
+                isEven
+                """.trimIndent(),
+            ).type,
+        )
+
+    @Test
+    fun mutualRecursion_threeWay() =
+        assertEquals(
+            TFun(listOf(TNum), TNum, listOf("x")),
+            infer(
+                """
+                fun a(x: Num): Num = if x == 0 then 0 else b(x - 1)
+                fun b(x: Num): Num = if x == 0 then 1 else c(x - 1)
+                fun c(x: Num): Num = if x == 0 then 2 else a(x - 1)
+                a
+                """.trimIndent(),
+            ).type,
+        )
+
     // --- error cases ---
 
     @Test
@@ -51,6 +80,17 @@ class FunctionTest {
     @Test
     fun recursionWithoutDeclaredReturnErrors() =
         assertTrue(infer("fun loop(n: Num) = loop(n)").errors.isNotEmpty())
+
+    @Test
+    fun lambdaBoundWithEqualsCannotSelfRefer() {
+        // Unlike `fun f(x) = ... f ...`, a `=`-bound lambda is not in scope in its own body, so a
+        // reference to its own name is unbound.
+        val errors = infer("f = |x: Num -> f(x)|\nf").errors
+        assertEquals(1, errors.size)
+        val e = errors[0]
+        assertIs<TypeError.UnboundVariable>(e)
+        assertEquals("f", e.name)
+    }
 
     // --- lambda in check position (checkLambda) ---
 

@@ -141,5 +141,5 @@ class GenericsTypeCheckTest {
     // would silently commit us to higher-rank, so they stay parked:
     //   escapingFunction, nestedCapture, escapingCapture, capturedVar,
     //   idAppliedToItself, twiceCombinator_onIdentity
-    //   withUnionInput — needs union *inference* on the captured param (SimpleSub-only)
+    //   withUnionInput — needs union *inference* on the captured param (unsupported)
 }

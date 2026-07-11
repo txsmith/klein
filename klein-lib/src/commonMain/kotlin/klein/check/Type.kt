@@ -88,6 +88,23 @@ data class ConstructorInfo(
 /** A record type with no fields demands nothing, so it is the top; never observe an empty record as a type. */
 internal fun recordOf(fields: Map<String, Type>): Type = if (fields.isEmpty()) Type.TTop else Type.TRecord(fields)
 
+/** Wrap [t] in one optional layer, idempotently (`T?` stays `T?`); `Top` absorbs null, `Bottom` becomes `Null`. */
+internal fun optionalOf(t: Type): Type =
+    when (t) {
+        Type.TTop -> Type.TTop
+        Type.TBottom -> Type.TNull
+        is Type.TOptional -> t
+        else -> Type.TOptional(t)
+    }
+
+/** Strip one optional layer: `T?` → `T`, `Null` → `Bottom`, anything else unchanged. */
+internal fun nonNullCore(t: Type): Type =
+    when (t) {
+        is Type.TOptional -> t.type
+        Type.TNull -> Type.TBottom
+        else -> t
+    }
+
 internal fun substitute(
     type: Type,
     subst: Map<TSkolem, Type>,
