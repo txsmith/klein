@@ -7,9 +7,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Nominal types. **All red targets:** the checker treats `type` declarations as a no-op (no
- * constructors, no `TRef`, no nominal subtyping), so every test here fails until nominal support
- * lands. Parameters whose type would otherwise be inferred from usage are explicitly annotated.
+ * Nominal types: constructors, `TRef`, and nominal → structural subtyping. Parameters whose type
+ * would otherwise be inferred from usage are explicitly annotated.
  */
 class NominalTypeCheckTest {
     /** Assert a program checks with no errors and yields [expected] — errors matter here because a

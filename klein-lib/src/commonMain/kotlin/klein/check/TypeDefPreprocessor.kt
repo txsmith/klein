@@ -193,10 +193,20 @@ class TypeDefPreprocessor(
             val parentDef = env.lookupTypeDef(parentName) ?: continue
             val ctorIfaces = ctors.map { env.getTypeDef(it.name).iface }
             val commonNames = ctorIfaces.map { it.fields.keys }.reduce { a, b -> a intersect b }
+            // A field shared by every constructor is readable through the sum only if its types
+            // cleanly join. One whose join is degenerate (no common supertype) is erased from the
+            // interface — accessing it is then a missing-field error, like a non-shared field.
             val fields =
-                commonNames.associateWith { name ->
-                    ctorIfaces.map { it.fields.getValue(name) }.reduce { a, b -> subtyping.lub(a, b, env).first }
-                }
+                commonNames.mapNotNull { name ->
+                    val (joined, failures) =
+                        ctorIfaces
+                            .map { it.fields.getValue(name) to emptyList<Failure>() }
+                            .reduce { (accType, accFailures), (fieldType, _) ->
+                                val (merged, mergeFailures) = subtyping.lub(accType, fieldType, env)
+                                merged to (accFailures + mergeFailures)
+                            }
+                    if (failures.isEmpty()) name to joined else null
+                }.toMap()
             env.updateTypeDef(parentDef.copy(iface = Type.TRecord(fields)))
         }
     }

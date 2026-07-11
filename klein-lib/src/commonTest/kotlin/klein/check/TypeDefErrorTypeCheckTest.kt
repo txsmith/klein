@@ -6,9 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Type-definition errors. **All red targets:** the checker treats `type` declarations as a no-op
- * (no constructors, no nominal fields, no arity/variance checking, no builtin-shadowing check), so
- * every test here fails until nominal support lands.
+ * Type-definition errors: constructor/field checks, arity/variance, and builtin-shadowing.
  *
  * Verdict mapping (exact rendered type strings are never pinned — nominal rendering is TBD):
  *  - `assertMismatch` → some `TypeError.TypeMismatch` present
