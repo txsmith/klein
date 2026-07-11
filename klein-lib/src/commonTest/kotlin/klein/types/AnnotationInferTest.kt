@@ -94,7 +94,6 @@ class AnnotationInferTest {
     }
 
     @Test
-    @Ignore // Parser bug: consecutive `(x: T)` on adjacent lines parses as function application
     fun ascription_multipleOnSameVarAccumulate() {
         assertType(
             "(Cat & Dog) -> Dog",

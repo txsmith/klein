@@ -11,7 +11,14 @@ class Parser(
     private val tokens: List<Token>,
 ) {
     private var pos: Int = 0
-    private var currentLineIndent: Int = 0
+
+    /**
+     * Indent of the line of the last consumed token; updates on consumption, so it lags [peek] at a
+     * line boundary. For the line a specific token is on, use [lineIndentOf(peek())] / [lineIndentOf].
+     */
+    private var lastTokenIndent: Int = 0
+
+    private fun lineIndentOf(token: Token): Int = token.indent ?: lastTokenIndent
 
     fun parseProgram(): Program {
         val start = peek().span
@@ -69,7 +76,7 @@ class Parser(
 
     private fun parseTypeDef(): TypeDef {
         val typeToken = advance()
-        val typeDefIndent = typeToken.indent ?: currentLineIndent
+        val typeDefIndent = lineIndentOf(typeToken)
 
         val nameToken = expectUpperIdent("Expected type name")
         validateNotReserved(nameToken)
@@ -384,15 +391,17 @@ class Parser(
     private fun parseBlock(): Block {
         val stmts = mutableListOf<Stmt>()
 
-        val blockIndent = peek().indent ?: currentLineIndent
         val blockStartSpan = peek().span
         var blockEndSpan = blockStartSpan
 
-        while (!isBlockEnd()) {
+        val blockIndent = lineIndentOf(peek())
+        var boundaryIndent = lastTokenIndent
+
+        while (!isBlockEnd(boundaryIndent)) {
             val stmt = parseStmt(allowTypeDef = false)
             blockEndSpan = stmt.span
             stmts.add(stmt)
-            currentLineIndent = blockIndent
+            boundaryIndent = blockIndent
         }
 
         return Block(stmts, blockStartSpan + blockEndSpan)
@@ -416,10 +425,12 @@ class Parser(
     }
 
     private fun parseApply(): Expr {
-        val exprIndent = currentLineIndent
+        val exprIndent = lineIndentOf(peek())
         var expr = parseAtom()
 
         while (true) {
+            // A postfix `(`/`.`/`?.` only continues this expression while it stays more indented than
+            // the line the expression began on; at or below that indent it belongs to a new statement.
             if (peek().startsLineAtOrBefore(exprIndent)) break
 
             when (peek().kind) {
@@ -528,7 +539,7 @@ class Parser(
     }
 
     private fun parseIfThenElse(ifToken: Token): IfThenElse {
-        val ifIndent = ifToken.indent ?: currentLineIndent
+        val ifIndent = lineIndentOf(ifToken)
         advance()
         val condition = parseExpr()
         expectAndAdvance(THEN, message = "Expected 'then'")
@@ -693,20 +704,21 @@ class Parser(
 
     private fun peekBinaryOp(): Operator? {
         val token = peek()
-        if (token.kind == MINUS_TIGHT && token.startsLineAtOrBefore(currentLineIndent)) {
+        if (token.kind == MINUS_TIGHT && token.startsLineAtOrBefore(lastTokenIndent)) {
             return null
         }
         return Operator.fromTokenKind(token.kind)
     }
 
-    private fun isBlockStart() = peek().startsLineAfter(currentLineIndent)
+    private fun isBlockStart() = peek().startsLineAfter(lastTokenIndent)
 
-    private fun isBlockEnd(): Boolean {
+    // Can the next token end a block?
+    private fun isBlockEnd(boundaryIndent: Int): Boolean {
         val next = peek()
         if (next.kind in setOf(RPAREN, RBRACE, RBRACKET, ELSE, EOF)) return true
         // PIPE ends block unless it's indented further than the block (starting a nested lambda)
-        if (next.kind == PIPE && !next.startsLineAfter(currentLineIndent)) return true
-        return next.startsLineBefore(currentLineIndent)
+        if (next.kind == PIPE && !next.startsLineAfter(boundaryIndent)) return true
+        return next.startsLineBefore(boundaryIndent)
     }
 
     private fun peek(): Token = tokens[pos]
@@ -718,7 +730,7 @@ class Parser(
 
     private fun advance(): Token {
         val token = tokens[pos++]
-        token.indent?.let { currentLineIndent = it }
+        token.indent?.let { lastTokenIndent = it }
         return token
     }
 
