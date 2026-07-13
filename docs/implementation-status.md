@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** Parser and type inference complete for core expressions and type declarations. Type definitions with sum types, generics, variance inference, and LUB/GLB simplification. No interpreter.
+**Current state:** The type system is mid-migration to **Path G** — local bidirectional checking (see [plans/path-g-roadmap.md](plans/path-g-roadmap.md)). The new checker (`klein.check`, reachable via the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine (`klein.types`, reachable via `infer`) still backs the default pipeline and is slated for retirement at cutover (M7) and teardown (M8). No interpreter.
 
 ## Parser
 
@@ -28,6 +28,11 @@
 | Val bindings | `x = expr` |
 | Blocks | Indentation-based |
 | Comments | `# comment` |
+| Parameter types | `fun f(x: Num)` |
+| Return types | `fun f(x): Num` |
+| Val types | `x: Num = 1` |
+| Type variables | `'T` in signatures |
+| Nullable types | `T?` |
 
 ### Partial (lexer only)
 
@@ -35,7 +40,6 @@
 |---------|-------|-------|
 | Arrays | `LBRACKET`, `RBRACKET` | `[1, 2, 3]` - parser TODO |
 | Ranges | `DOTDOT` | `1..10` - parser TODO |
-| Colon | `COLON` | For type annotations - parser TODO |
 
 ### Not Started
 
@@ -52,14 +56,6 @@
 | For comprehensions | `for x in xs yield expr` |
 | Tilde operator | `f~(record)` |
 | Operators as values | `nums.fold(0, (+))` |
-
-**Type annotations:**
-
-| Feature | Notes |
-|---------|-------|
-| Parameter types | `fun f(x: Num)` |
-| Return types | `fun f(x): Num` |
-| Val types | `x: Num = 1` |
 
 **Definitions:**
 
@@ -79,36 +75,53 @@
 
 ## Type System
 
-See [type-system.md](type-system.md) for design and [simplesub-type-inference.md](decisions/2026-01-14-simplesub-type-inference.md) for implementation decisions.
+The type system is mid-migration to **Path G** (local bidirectional checking). See
+[type-system.md](type-system.md) for design and
+[plans/path-g-roadmap.md](plans/path-g-roadmap.md) for the milestone plan. Two engines
+currently coexist: the new Path G checker (`klein.check`, `check` command) is the target;
+the legacy SimpleSub engine (`klein.types`, `infer` command) still backs the default
+pipeline and is retired at cutover/teardown (M7/M8).
 
-### Complete
+### Path G checker — complete (roadmap M2–M5)
 
 | Feature | Notes |
 |---------|-------|
-| Type inference | SimpleSub algorithm with subtyping |
+| Bidirectional checking | `synth` / `check` over fully-annotated functions |
 | Primitive types | `Num`, `String`, `Bool`, `Unit` |
 | Function types | `(a) -> b`, `(a, b) -> c` |
-| Record types | `{ name: String, age: Num }` |
-| Width subtyping | `{ a, b } <: { a }` |
-| Recursive types | `{ head: Num, tail: a } as a` |
-| Union/intersection | `a \| b`, `a & b` |
-| Type simplification | Canonicalization of recursive types |
+| Record types | `{ name: String, age: Num }`, width/depth subtyping |
+| Type annotations | Params, return types, `x: T = e`, ascription `(e : T)` |
+| Rank-1 generics | `'T` in signatures → rigid skolem, instantiated at demand points |
 | Type definitions | `type Option<'A> = Some { value: 'A } \| None` |
 | Sum types | `type Color = Red \| Green \| Blue` |
-| Generics | `List<'A>`, `Option<'A>` with variance inference |
-| Nominal types | `type Person = Person { ... }` creates nominal type |
+| Nominal types | `type Person = Person { ... }` → `TRef`, variance inferred |
 | Nominal → structural subtyping | `Dog <: { name: String }` |
 | Constructor binding | First-class constructor functions |
-| Inferred interfaces | Common fields across constructors |
-| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
+| Inferred interfaces | Common fields across constructors (incompatible fields erased) |
+| Optional types | `T?`, null safety, safe navigation `?.`, `NullNotAllowed` |
+| Branch joins | `if`/`else` results join to a common supertype (`lub`), nominal join/meet by variance |
 
-### Not Started
+### Path G checker — ahead
 
 | Feature | Notes |
 |---------|-------|
+| Declared bounds | `where 'T <: B` (roadmap M6) |
+| Cutover | Route the default pipeline through `klein.check` (M7) |
+| Teardown | Delete SimpleSub machinery (M8) |
 | Pattern matching | `match x with \| Some v -> v \| None -> 0` |
-| Type annotations | `fun f(x: Num)`, `x: Num = 1` |
-| Kleene types | `T?`, `T*`, `T+` (experimental) |
+| Kleene types | `T*`, `T+` (experimental; `T?` done) |
+
+### Legacy SimpleSub engine — being retired (M8)
+
+Still present under `klein.types`; features specific to it (not carried into Path G):
+
+| Feature | Notes |
+|---------|-------|
+| Global type inference | SimpleSub algorithm — replaced by bidirectional checking |
+| Union/intersection | `a \| b`, `a & b` — anonymous connectives dropped in core |
+| Recursive types | `{ head: Num, tail: a } as a` |
+| Type simplification | Canonicalization of recursive types |
+| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
 
 ## Interpreter
 

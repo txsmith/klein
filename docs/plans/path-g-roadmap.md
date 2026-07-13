@@ -1,6 +1,8 @@
 # Path G Roadmap — Local Bidirectional Type Checking
 
-**Status:** Planning · **Started:** 2026-06-24 · **Branch:** `rewrite/type-checker`
+**Status:** In progress · **Started:** 2026-06-24 · **Branch:** `rewrite/type-checker`
+
+**Progress:** M2 (bidirectional core), M3 (concrete subtyping), and M4 (generics) are built and green in `klein.check`; M5 (joins & sums) is substantially done. M6 (declared bounds), M7 (cutover), and M8 (teardown) are ahead — the default pipeline still runs the legacy engine, with Path G reachable via the `check` command.
 
 This roadmap sequences Klein's move off SimpleSub-style global inference and onto
 **Path G**: drop inferred polymorphism, keep structural + nominal subtyping, and

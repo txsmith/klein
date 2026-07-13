@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.check.Type.*
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -96,42 +95,39 @@ class NominalTypeCheckTest {
     // --- nominal is NOT structural: a structural record can't stand in for a nominal type ---
 
     @Test
-    fun structuralRecordCannotReplaceNominalField() {
-        val errors =
-            infer(
-                """
-                type Money = Money { value: Num }
-                type Account = Account { balance: Money, owner: String }
-                Account({ value = 100 }, "Bob")
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a Money/record mismatch, got: $errors")
-    }
+    fun structuralRecordCannotReplaceNominalField() =
+        assertMismatch(
+            "{ value: Num }",
+            "Money",
+            """
+            type Money = Money { value: Num }
+            type Account = Account { balance: Money, owner: String }
+            Account({ value = 100 }, "Bob")
+            """.trimIndent(),
+        )
 
     @Test
-    fun structuralRecordCannotReplaceGenericNominalField() {
-        val errors =
-            infer(
-                """
-                type Box<'A> = Box { content: 'A }
-                type ForceBox = ForceBox { b: Box<Num> }
-                ForceBox({ content = 42 })
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a Box<Num>/record mismatch, got: $errors")
-    }
+    fun structuralRecordCannotReplaceGenericNominalField() =
+        assertMismatch(
+            "{ content: Num }",
+            "Box<Num>",
+            """
+            type Box<'A> = Box { content: 'A }
+            type ForceBox = ForceBox { b: Box<Num> }
+            ForceBox({ content = 42 })
+            """.trimIndent(),
+        )
 
     @Test
-    fun distinctNominalTypesWithSameStructureAreNotInterchangeable() {
-        val errors =
-            infer(
-                """
-                type Dollars = Dollars { amount: Num }
-                type Euros = Euros { amount: Num }
-                type ForceDollars = ForceDollars { d: Dollars }
-                ForceDollars(Euros(50))
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a Euros/Dollars mismatch, got: $errors")
-    }
+    fun distinctNominalTypesWithSameStructureAreNotInterchangeable() =
+        assertMismatch(
+            "Euros",
+            "Dollars",
+            """
+            type Dollars = Dollars { amount: Num }
+            type Euros = Euros { amount: Num }
+            type ForceDollars = ForceDollars { d: Dollars }
+            ForceDollars(Euros(50))
+            """.trimIndent(),
+        )
 }

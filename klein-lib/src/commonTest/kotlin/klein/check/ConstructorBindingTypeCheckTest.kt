@@ -82,6 +82,30 @@ class ConstructorBindingTypeCheckTest {
             """.trimIndent(),
         )
 
+    // --- type params constrained through a constructor field ---
+
+    @Test
+    fun typeParamConstrained_byHolder_bareConstructor() =
+        assertType(
+            "List<Num>",
+            """
+            type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
+            type NumListHolder = NumListHolder { list: List<Num> }
+            NumListHolder(Nil).list
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeParamConstrained_byHolder_constructorWithParams() =
+        assertType(
+            "List<Num>",
+            """
+            type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
+            type NumListHolder = NumListHolder { list: List<Num> }
+            NumListHolder(Cons(1, Nil)).list
+            """.trimIndent(),
+        )
+
     // --- bare-constructor polymorphism (each use instantiates independently) ---
 
     @Test

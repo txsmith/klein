@@ -3,6 +3,7 @@ package klein.check
 import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -24,29 +25,60 @@ class ImplicitParamTypeCheckTest {
     }
 
     private inline fun <reified T : TypeError> assertError(src: String) {
-        val errors = infer(src).errors
-        assertEquals(1, errors.size, "expected one error, got: $errors")
-        assertTrue(errors[0] is T, "expected ${T::class.simpleName}, got: $errors")
+        assertIs<T>(infer(src).errors.single())
     }
 
     // --- the implicit parameter takes its type from the demand ---
 
     @Test
-    fun bareIdentity() = assertType("(A) -> A", "f: ('A) -> 'A = |.|\nf")
+    fun bareIdentity() =
+        assertType(
+            "(A) -> A",
+            """
+            f: ('A) -> 'A = |.|
+            f
+            """.trimIndent(),
+        )
 
     @Test
-    fun fieldAccess() = assertType("({ x: A }) -> A", "f: ({ x: 'A }) -> 'A = |.x|\nf")
+    fun fieldAccess() =
+        assertType(
+            "({ x: A }) -> A",
+            """
+            f: ({ x: 'A }) -> 'A = |.x|
+            f
+            """.trimIndent(),
+        )
 
     @Test
     fun multipleFieldAccess() =
-        assertType("({ x: Num, y: Num }) -> Num", "f: ({ x: Num, y: Num }) -> Num = |.x + .y|\nf")
+        assertType(
+            "({ x: Num, y: Num }) -> Num",
+            """
+            f: ({ x: Num, y: Num }) -> Num = |.x + .y|
+            f
+            """.trimIndent(),
+        )
 
     @Test
-    fun comparison() = assertType("(Num) -> Bool", "f: (Num) -> Bool = |. > 100|\nf")
+    fun comparison() =
+        assertType(
+            "(Num) -> Bool",
+            """
+            f: (Num) -> Bool = |. > 100|
+            f
+            """.trimIndent(),
+        )
 
     @Test
     fun inCondition() =
-        assertType("({ active: Bool }) -> Num", "f: ({ active: Bool }) -> Num = |if .active then 1 else 0|\nf")
+        assertType(
+            "({ active: Bool }) -> Num",
+            """
+            f: ({ active: Bool }) -> Num = |if .active then 1 else 0|
+            f
+            """.trimIndent(),
+        )
 
     @Test
     fun passthrough() =
@@ -63,11 +95,23 @@ class ImplicitParamTypeCheckTest {
 
     @Test
     fun nestedLambda_separateScopes() =
-        assertType("() -> () -> ({ x: A }) -> A", "f: () -> () -> ({ x: 'A }) -> 'A = || |.x| ||\nf")
+        assertType(
+            "() -> () -> ({ x: A }) -> A",
+            """
+            f: () -> () -> ({ x: 'A }) -> 'A = || |.x| ||
+            f
+            """.trimIndent(),
+        )
 
     @Test
     fun nestedLambda_innerUsesImplicit() =
-        assertType("(Num) -> (Num) -> Num", "f: (Num) -> (Num) -> Num = |x: Num -> |. * 2||\nf")
+        assertType(
+            "(Num) -> (Num) -> Num",
+            """
+            f: (Num) -> (Num) -> Num = |x: Num -> |. * 2||
+            f
+            """.trimIndent(),
+        )
 
     // --- a constant (`.`-free) lambda is nullary, inferable in synth mode ---
 
@@ -89,10 +133,18 @@ class ImplicitParamTypeCheckTest {
     fun outsideLambda_fieldAccess() = assertError<TypeError.ImplicitParamOutsideLambda>(".x")
 
     @Test
-    fun mixedWithExplicitParams() = assertError<TypeError.ImplicitParamWithExplicitParams>("|x: Num -> . + x|")
+    fun mixedWithExplicitParams() {
+        val e = infer("|x: Num -> . + x|").errors.single()
+        assertIs<TypeError.ImplicitParamWithExplicitParams>(e)
+        assertEquals(listOf("x"), e.params)
+    }
 
     @Test
-    fun mixedWithExplicitParams_fieldAccess() = assertError<TypeError.ImplicitParamWithExplicitParams>("|x: Num -> .y + x|")
+    fun mixedWithExplicitParams_fieldAccess() {
+        val e = infer("|x: Num -> .y + x|").errors.single()
+        assertIs<TypeError.ImplicitParamWithExplicitParams>(e)
+        assertEquals(listOf("x"), e.params)
+    }
 
     @Test
     fun inNamedFunction() = assertError<TypeError.ImplicitParamInNamedFunction>("fun g() = .")

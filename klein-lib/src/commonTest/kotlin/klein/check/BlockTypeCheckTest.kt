@@ -67,7 +67,6 @@ class BlockTypeCheckTest {
         assertEquals(TFun(emptyList(), TUnit), infer(program).type)
     }
 
-    // Lambda annotated (Path G: bare params are an error) — assertion unchanged.
     @Test
     fun block_lambdaBinding() {
         val program =
@@ -189,9 +188,21 @@ class BlockTypeCheckTest {
         assertEquals(TFun(emptyList(), TNum), infer(program).type)
     }
 
-    // Local-polymorphism targets (the old let-poly cluster, rewritten to Path G form) live in
-    // GenericsTypeCheckTest — they're tvar-scoping/generics red targets, not block-structure tests.
-    //
-    // --- Deferred (unrelated to polymorphism) ---
-    //   block_duplicateBinding — needs same-scope duplicate-binding detection (small TypeEnv feature)
+    @Test
+    fun block_duplicateBinding() {
+        val program =
+            """
+            |
+              x = 1
+              x = 2
+              x
+            |
+            """.trimIndent()
+        val error = infer(program).errors.single()
+        assertIs<TypeError.DuplicateBinding>(error)
+        assertEquals("x", error.name)
+    }
+
+    // Local-polymorphism cases from the legacy block suite live in GenericsTypeCheckTest — they
+    // exercise tvar scoping and generics rather than block structure.
 }

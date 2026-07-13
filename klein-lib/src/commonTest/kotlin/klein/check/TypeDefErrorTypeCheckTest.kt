@@ -3,79 +3,64 @@ package klein.check
 import klein.check.Type.*
 import klein.types.TypeError
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * Type-definition errors: constructor/field checks, arity/variance, and builtin-shadowing.
  *
- * Verdict mapping (exact rendered type strings are never pinned — nominal rendering is TBD):
- *  - `assertMismatch` → some `TypeError.TypeMismatch` present
- *  - `assertUnbound` → some `TypeError.UnboundVariable` (with the named variable) present
- *  - `assertDuplicateBinding` → some `TypeError.DuplicateBinding` (with the named binding) present
- *  - `assertMissingField` → some `TypeError.MissingField` (with the named field) present
- *  - `assertTypeArityMismatch` → some `TypeError.TypeArityMismatch` (with typeName) present
- *  - `TypeError.ShadowsBuiltinType` / `.UndeclaredTypeParam` map straight across.
- *  - `assertType(<nominal>, ...)` → clean-check assertion (nominal names aren't expressible here).
+ * Each case checks a program and asserts the expected [TypeError] appears in `.errors`. Rendered
+ * type strings aren't pinned because nominal rendering is still open.
  */
 class TypeDefErrorTypeCheckTest {
     @Test
     fun shadowsBuiltinType_Num() {
-        val errors = infer("type Num = Zero | Succ { n: Num }").errors
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType }, "expected a builtin-shadow error, got: $errors")
+        infer("type Num = Zero | Succ { n: Num }").errors.filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun shadowsBuiltinType_Bool() {
-        val errors = infer("type Bool = True | False").errors
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType }, "expected a builtin-shadow error, got: $errors")
+        infer("type Bool = True | False").errors.filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun shadowsBuiltinType_String() {
-        val errors = infer("type String = String { value: Num }").errors
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType }, "expected a builtin-shadow error, got: $errors")
+        infer("type String = String { value: Num }").errors.filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun shadowsBuiltinType_Unit() {
-        val errors = infer("type Unit = Unit").errors
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType }, "expected a builtin-shadow error, got: $errors")
+        infer("type Unit = Unit").errors.filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun shadowsBuiltinType_constructorNamedNum() {
-        val errors = infer("type Wrapper = Num { value: Num }").errors
-        assertTrue(errors.any { it is TypeError.ShadowsBuiltinType }, "expected a builtin-shadow error, got: $errors")
+        infer("type Wrapper = Num { value: Num }").errors.filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun undeclaredTypeParamInConstructor_error() {
-        val errors =
-            infer(
-                """
-                type Foo = Bar { value: 'A }
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.UndeclaredTypeParam }, "expected an undeclared-type-param error, got: $errors")
+        infer(
+            """
+            type Foo = Bar { value: 'A }
+            """.trimIndent(),
+        ).errors.filterIsInstance<TypeError.UndeclaredTypeParam>().single()
     }
 
     @Test
     fun unknownTypeInField_error() {
-        val errors =
+        val e =
             infer(
                 """
                 type Foo = Foo { x: Bar }
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.UnboundVariable && it.name == "Bar" },
-            "expected an unbound 'Bar', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.UnboundVariable>().single()
+        assertEquals("Bar", e.name)
     }
 
     @Test
     fun duplicateConstructorName_acrossTypes_error() {
-        val errors =
+        val e =
             infer(
                 """
                 type Option<'A> = None | Some { value: 'A }
@@ -83,40 +68,31 @@ class TypeDefErrorTypeCheckTest {
 
                 None
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.DuplicateBinding && it.name == "None" },
-            "expected a duplicate 'None', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.DuplicateBinding>().single()
+        assertEquals("None", e.name)
     }
 
     @Test
     fun duplicateTypeName_error() {
-        val errors =
+        val e =
             infer(
                 """
                 type Foo = Foo { x: Num }
                 type Foo = Bar { y: String }
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.DuplicateBinding && it.name == "Foo" },
-            "expected a duplicate 'Foo', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.DuplicateBinding>().single()
+        assertEquals("Foo", e.name)
     }
 
     @Test
     fun sameNamedConstructor_sumType_error() {
-        val errors =
+        val e =
             infer(
                 """
                 type Foo = Foo { x: Num } | Bar
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.DuplicateBinding && it.name == "Foo" },
-            "expected a duplicate 'Foo', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.DuplicateBinding>().single()
+        assertEquals("Foo", e.name)
     }
 
     @Test
@@ -135,18 +111,15 @@ class TypeDefErrorTypeCheckTest {
 
     @Test
     fun fieldAccessOnBareConstructor() {
-        val errors =
+        val e =
             infer(
                 """
                 type Option<'A> = None | Some { value: 'A }
 
                 None.value
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.MissingField && it.field == "value" },
-            "expected a missing-field 'value', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.MissingField>().single()
+        assertEquals("value", e.field)
     }
 
     @Test
@@ -157,40 +130,30 @@ class TypeDefErrorTypeCheckTest {
                 Cons(1, Nil)
                 """.trimIndent(),
             ).errors
-        assertTrue(
-            errors.any { it is TypeError.UnboundVariable && it.name == "Cons" },
-            "expected an unbound 'Cons', got: $errors",
-        )
-        assertTrue(
-            errors.any { it is TypeError.UnboundVariable && it.name == "Nil" },
-            "expected an unbound 'Nil', got: $errors",
-        )
+        assertEquals(setOf("Cons", "Nil"), errors.filterIsInstance<TypeError.UnboundVariable>().map { it.name }.toSet())
+        assertTrue(errors.all { it is TypeError.UnboundVariable }, "unexpected non-unbound errors: $errors")
     }
 
     @Test
     fun constructorAsValue_wrongContext() {
-        val errors =
-            infer(
-                """
-                type Option<'A> = None | Some { value: 'A }
+        infer(
+            """
+            type Option<'A> = None | Some { value: 'A }
 
-                Some + 1
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a type mismatch, got: $errors")
+            Some + 1
+            """.trimIndent(),
+        ).errors.filterIsInstance<TypeError.TypeMismatch>().single()
     }
 
     @Test
     fun constructorFieldTypeMismatch_nested() {
-        val errors =
-            infer(
-                """
-                type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+        infer(
+            """
+            type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
 
-                Cons(1, Cons(2, "not a list"))
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a type mismatch, got: $errors")
+            Cons(1, Cons(2, "not a list"))
+            """.trimIndent(),
+        ).errors.filterIsInstance<TypeError.TypeMismatch>().single()
     }
 
     @Test
@@ -203,7 +166,8 @@ class TypeDefErrorTypeCheckTest {
                 Person(25, "Alice")
                 """.trimIndent(),
             ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a type mismatch, got: $errors")
+        assertEquals(2, errors.size, "expected two field mismatches, got: $errors")
+        assertTrue(errors.all { it is TypeError.TypeMismatch }, "expected type mismatches, got: $errors")
     }
 
     @Test
@@ -217,32 +181,23 @@ class TypeDefErrorTypeCheckTest {
                 Foo(Bar(Nil))
                 """.trimIndent(),
             ).errors
-        assertTrue(
-            errors.any { it is TypeError.UnboundVariable && it.name == "Baz" },
-            "expected an unbound 'Baz', got: $errors",
-        )
-        assertTrue(
-            errors.any { it is TypeError.UnboundVariable && it.name == "Nil" },
-            "expected an unbound 'Nil', got: $errors",
-        )
+        assertEquals(setOf("Baz", "Nil"), errors.filterIsInstance<TypeError.UnboundVariable>().map { it.name }.toSet())
     }
 
     @Test
     fun infiniteExpansion_doubleNesting() {
-        val errors =
-            infer(
-                """
-                type Bad<'A> = Bad { x: Bad<Bad<'A>> }
+        infer(
+            """
+            type Bad<'A> = Bad { x: Bad<Bad<'A>> }
 
-                Bad(Bad(42))
-                """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch }, "expected a type mismatch, got: $errors")
+            Bad(Bad(42))
+            """.trimIndent(),
+        ).errors.filterIsInstance<TypeError.TypeMismatch>().single()
     }
 
     @Test
     fun typeArity_tooManyArgs_inFieldType() {
-        val errors =
+        val e =
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
@@ -250,16 +205,13 @@ class TypeDefErrorTypeCheckTest {
 
                 Bad(Nil)
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.TypeArityMismatch && it.typeName == "List" },
-            "expected a type-arity mismatch on 'List', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("List", e.typeName)
     }
 
     @Test
     fun typeArity_tooFewArgs_inFieldType() {
-        val errors =
+        val e =
             infer(
                 """
                 type Map<'K, 'V> = Empty | Entry { key: 'K, value: 'V, rest: Map<'K, 'V> }
@@ -267,16 +219,13 @@ class TypeDefErrorTypeCheckTest {
 
                 Bad(Empty)
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.TypeArityMismatch && it.typeName == "Map" },
-            "expected a type-arity mismatch on 'Map', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("Map", e.typeName)
     }
 
     @Test
     fun typeArity_noArgsForGeneric_inFieldType() {
-        val errors =
+        val e =
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
@@ -284,16 +233,13 @@ class TypeDefErrorTypeCheckTest {
 
                 Bad(Nil)
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.TypeArityMismatch && it.typeName == "List" },
-            "expected a type-arity mismatch on 'List', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("List", e.typeName)
     }
 
     @Test
     fun typeArity_argsOnNonGenericType_inFieldType() {
-        val errors =
+        val e =
             infer(
                 """
                 type MyBool = True | False
@@ -301,16 +247,13 @@ class TypeDefErrorTypeCheckTest {
 
                 Bad(True)
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.TypeArityMismatch && it.typeName == "MyBool" },
-            "expected a type-arity mismatch on 'MyBool', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("MyBool", e.typeName)
     }
 
     @Test
     fun typeArity_nestedError_innerTypeWrongArity_inFieldType() {
-        val errors =
+        val e =
             infer(
                 """
                 type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
@@ -319,10 +262,32 @@ class TypeDefErrorTypeCheckTest {
 
                 Bad(Nil)
                 """.trimIndent(),
-            ).errors
-        assertTrue(
-            errors.any { it is TypeError.TypeArityMismatch && it.typeName == "Option" },
-            "expected a type-arity mismatch on 'Option', got: $errors",
-        )
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("Option", e.typeName)
+    }
+
+    @Test
+    fun annotation_unknownTypeName() {
+        val e =
+            infer(
+                """
+                fun f(x: UnknownType) = x
+                f
+                """.trimIndent(),
+            ).errors.filterIsInstance<TypeError.UnboundVariable>().single()
+        assertEquals("UnknownType", e.name)
+    }
+
+    @Test
+    fun annotation_typeArityMismatch() {
+        val e =
+            infer(
+                """
+                type Option<'A> = None | Some { value: 'A }
+                fun f(x: Option) = x
+                f
+                """.trimIndent(),
+            ).errors.filterIsInstance<TypeError.TypeArityMismatch>().single()
+        assertEquals("Option", e.typeName)
     }
 }

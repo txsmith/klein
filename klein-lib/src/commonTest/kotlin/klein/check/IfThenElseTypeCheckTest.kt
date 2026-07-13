@@ -1,9 +1,7 @@
 package klein.check
 
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -25,18 +23,10 @@ class IfThenElseTypeCheckTest {
     // --- the condition must be Bool ---
 
     @Test
-    fun condition_mustBeBool() {
-        val errors = infer("if 1 then 2 else 3").errors
-        assertEquals(1, errors.size, "errors: $errors")
-        assertIs<TypeError.TypeMismatch>(errors[0])
-    }
+    fun condition_mustBeBool() = assertMismatch("Num", "Bool", "if 1 then 2 else 3")
 
     @Test
-    fun condition_mustBeBool_noElse() {
-        val errors = infer("if 1 then 2").errors
-        assertEquals(1, errors.size, "errors: $errors")
-        assertIs<TypeError.TypeMismatch>(errors[0])
-    }
+    fun condition_mustBeBool_noElse() = assertMismatch("Num", "Bool", "if 1 then 2")
 
     // --- matching branches pass their type through ---
 

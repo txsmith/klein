@@ -1,31 +1,73 @@
 package klein.check
 
 import klein.check.Type.*
+import klein.types.TypeError
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class GenericsTypeCheckTest {
     @Test
     fun identity_instantiatedToNum() =
-        assertEquals(TNum, infer("fun id(x: 'T): 'T = x\nid(42)").type)
+        assertEquals(
+            TNum,
+            infer(
+                """
+                fun id(x: 'T): 'T = x
+                id(42)
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun identity_instantiatedToBool() =
-        assertEquals(TBool, infer("fun id(x: 'T): 'T = x\nid(true)").type)
+        assertEquals(
+            TBool,
+            infer(
+                """
+                fun id(x: 'T): 'T = x
+                id(true)
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun genericFieldProjection() =
-        assertEquals(TNum, infer("fun getX(r: { x: 'T }): 'T = r.x\ngetX({ x = 42 })").type)
+        assertEquals(
+            TNum,
+            infer(
+                """
+                fun getX(r: { x: 'T }): 'T = r.x
+                getX({ x = 42 })
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun genericFunctionResult() =
-        assertEquals(TBool, infer("fun useF(f: (Num) -> 'A): 'A = f(42)\nuseF(|n: Num -> n > 0|)").type)
+        assertEquals(
+            TBool,
+            infer(
+                """
+                fun useF(f: (Num) -> 'A): 'A = f(42)
+                useF(|n: Num -> n > 0|)
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun twoTypeParams_returnsFirst() =
-        assertEquals(TNum, infer("fun first(a: 'A, b: 'B): 'A = a\nfirst(1, true)").type)
+        assertEquals(
+            TNum,
+            infer(
+                """
+                fun first(a: 'A, b: 'B): 'A = a
+                first(1, true)
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun polymorphicArgInstantiatedAtMonomorphicParam() =
@@ -33,7 +75,13 @@ class GenericsTypeCheckTest {
         // argument's check (subsume), not left polymorphic.
         assertEquals(
             TNum,
-            infer("fun id(x: 'A) = x\nfun modify(f: (Num) -> Num) = f(3)\nmodify(id)").type,
+            infer(
+                """
+                fun id(x: 'A) = x
+                fun modify(f: (Num) -> Num) = f(3)
+                modify(id)
+                """.trimIndent(),
+            ).type,
         )
 
     @Test
@@ -48,11 +96,10 @@ class GenericsTypeCheckTest {
             ).type,
         )
 
-    // --- Local polymorphism (tvar-scoping revisit) ---
-    // The old let-poly cluster, rewritten to Path G form: polymorphism comes from a written `'T`,
-    // never inference. Bare-lambda inferred forms (`id = |x -> x|`) stay dead; these annotate the
-    // binding so the `'T` is the source. All rank-1 — a local poly binding used *directly* at several
-    // types. Red until a local `'T` may be introduced at its binding.
+    // --- Local polymorphism ---
+    // Polymorphism comes from a written `'T`, never inference: a local `val` annotated with a type
+    // variable is generalized and can be used directly at several types (rank-1). An unannotated bare
+    // lambda (`id = |x -> x|`) does not infer a polymorphic type.
 
     // A parameterless lambda whose block body starts with a type-annotated binding is mis-parsed:
     // `id: (...)` reads as the lambda's parameter list because `->` is both the lambda arrow and the
@@ -138,6 +185,134 @@ class GenericsTypeCheckTest {
             twice(|n: Num -> n + 1|)(0)
             """.trimIndent()
         assertEquals(TNum, infer(program).type)
+    }
+
+    // --- rigid type variables from signature annotations ---
+
+    @Test
+    fun typeVarAnnotation_paramAndReturn() =
+        assertInfersType(
+            TFun(listOf(tv("B")), tv("B")),
+            """
+            fun f(x: 'B): 'B = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_mixedWithConcrete() =
+        assertInfersType(
+            TFun(listOf(tv("A"), TNum), tv("A")),
+            """
+            fun f(x: 'A, y: Num) = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_sharedAcrossParams() =
+        assertInfersType(
+            TFun(listOf(tv("A"), tv("A")), tv("A")),
+            """
+            fun f(x: 'A, y: 'A) = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_sharedBetweenParamAndLocalBinding() =
+        assertInfersType(
+            TFun(listOf(tv("A")), TRef("List", listOf(tv("A")))),
+            """
+            type List<'A> = Nil | Cons { head: 'A, tail: List<'A> }
+            fun f(x: 'A) =
+              xs: List<'A> = Cons(x, Nil)
+              xs
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_bodyMustRespectReturnType() =
+        assertMismatch(
+            "Num",
+            "A",
+            """
+            fun f(x: 'A): 'A = 42
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_bodyMustRespectReturnType_nested() {
+        val e =
+            infer(
+                """
+                type Option<'A> = None | Some { value: 'A }
+                fun f(x: 'A): Option<'A> = Some(42)
+                f
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.TypeMismatch>(e)
+    }
+
+    @Test
+    fun typeVarAnnotation_bodyCannotConstrainTypeVar() {
+        val errors =
+            infer(
+                """
+                fun f(x: 'A, y: 'A) = x + y
+                f
+                """.trimIndent(),
+            ).errors
+        assertEquals(2, errors.size)
+        assertTrue(errors.all { it is TypeError.TypeMismatch }, "errors: $errors")
+    }
+
+    @Test
+    fun typeVarAnnotation_distinctSkolemsMismatch() =
+        assertMismatch(
+            "A",
+            "B",
+            """
+            fun f(x: 'A): 'B = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_skolemNotSubtypeOfConcrete() =
+        assertMismatch(
+            "A",
+            "Num",
+            """
+            fun f(x: 'A): Num = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun typeVarAnnotation_skolemFieldAccess() {
+        assertIs<TypeError.NotARecord>(
+            infer(
+                """
+                fun f(x: 'A) = x.name
+                f
+                """.trimIndent(),
+            ).errors.single(),
+        )
+    }
+
+    @Test
+    fun typeVarAnnotation_skolemAsFunction() {
+        assertIs<TypeError.NotAFunction>(
+            infer(
+                """
+                fun f(x: 'A) = x(42)
+                f
+                """.trimIndent(),
+            ).errors.single(),
+        )
     }
 
     // --- Parked: rank-2 / inference-only (NOT rank-1 targets) ---

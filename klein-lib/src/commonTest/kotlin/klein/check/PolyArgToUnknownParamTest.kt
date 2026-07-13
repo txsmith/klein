@@ -1,6 +1,7 @@
 package klein.check
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
 
 /**
@@ -27,7 +28,7 @@ import kotlin.test.assertFailsWith
 class PolyArgToUnknownParamTest {
     @Test
     fun polymorphicArgWhereParamStillMentionsUnknown_hitsTheTwoUnknownsLimit() {
-        assertFailsWith<IllegalArgumentException> {
+        val ex = assertFailsWith<IllegalArgumentException> {
             infer(
                 """
                 fun id(a: 'T): 'T = a
@@ -36,5 +37,6 @@ class PolyArgToUnknownParamTest {
                 """.trimIndent(),
             )
         }
+        assertContains(ex.message ?: "", "received a polymorphic type")
     }
 }

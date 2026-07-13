@@ -138,6 +138,17 @@ class InferredInterfaceTypeCheckTest {
         )
 
     @Test
+    fun nestedRecordDifferentFieldSets_intersectsToShared() =
+        assertType(
+            "{ common: Num }",
+            """
+            type Nested = A { data: { common: Num, only_a: String } } | B { data: { common: Num, only_b: Bool } }
+            v: Nested = A({ common = 1, only_a = "hi" })
+            v.data
+            """.trimIndent(),
+        )
+
+    @Test
     fun functionTypeCommonField_sameType() =
         assertType(
             "(Num) -> Num",
@@ -263,6 +274,17 @@ class InferredInterfaceTypeCheckTest {
             type MyBool = True | False
             b: MyBool = True
             b.value
+            """.trimIndent(),
+        )
+
+    @Test
+    fun mixedBareAndFieldConstructors_noCommonField() =
+        assertMissingField(
+            "value",
+            """
+            type Option = None | Some { value: Num }
+            v: Option = Some(42)
+            v.value
             """.trimIndent(),
         )
 

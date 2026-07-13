@@ -2,6 +2,7 @@ package klein.check
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -72,6 +73,33 @@ class OptionalTypeInferTest {
             """.trimIndent(),
         )
 
+    @Test
+    fun doubleOptionalAnnotation_collapses() =
+        assertType(
+            "Num?",
+            """
+            x: Num?? = null
+            x
+            """.trimIndent(),
+        )
+
+    @Test
+    fun optionalParam_acceptsNullArgument() =
+        assertType(
+            "Num?",
+            """
+            fun f(x: Num?): Num? = x
+            f(null)
+            """.trimIndent(),
+        )
+
+    @Test
+    fun nonOptionalAnnotation_rejectsNull() {
+        val e = infer("x: Num = null").errors.single()
+        assertIs<klein.types.TypeError.NullNotAllowed>(e)
+        assertEquals(klein.Type.Num, e.expected)
+    }
+
     // --- if-else with a null branch joins to optional ---
 
     @Test
@@ -79,6 +107,12 @@ class OptionalTypeInferTest {
 
     @Test
     fun ifElse_nullInThenBranch_infersOptional() = assertType("Num?", "if true then null else 42")
+
+    @Test
+    fun ifElse_nullInElseBranch_withString() = assertType("String?", "if true then \"hello\" else null")
+
+    @Test
+    fun ifElse_nullInElseBranch_withBool() = assertType("Bool?", "if true then false else null")
 
     @Test
     fun ifElse_bothBranchesNull_infersNull() = assertType("Null", "if true then null else null")
@@ -185,6 +219,16 @@ class OptionalTypeInferTest {
             """
             fun nothing(x: Any) = null
             nothing
+            """.trimIndent(),
+        )
+
+    @Test
+    fun function_alwaysReturnsNull_applied() =
+        assertType(
+            "Null",
+            """
+            fun nothing(x: Any) = null
+            nothing(42)
             """.trimIndent(),
         )
 
@@ -344,6 +388,30 @@ class OptionalTypeInferTest {
     @Test
     fun ifElse_recordsCommonField() =
         assertType("{ x: Num? }", "if true then { x = 1, } else { x = null }")
+
+    @Test
+    fun ifElse_recordsJoinToCommonField() =
+        assertType(
+            "{ x: Num }",
+            """
+            if true then
+                { x = 1, y = if true then 2 else null }
+            else
+                { x = 3 }
+            """.trimIndent(),
+        )
+
+    @Test
+    fun mutuallyRecursive_returnsOptional() =
+        assertType(
+            "(Num, Bool) -> Bool?",
+            """
+            fun isEven(n: Num): Bool = if n == 0 then true else isOdd(n - 1)
+            fun isOdd(n: Num): Bool = if n == 0 then false else isEven(n - 1)
+            fun maybeCheck(x: Num, check: Bool) = if check then isEven(x) else null
+            maybeCheck
+            """.trimIndent(),
+        )
 
     @Test
     fun const_returningNull() = assertType("() -> Null", "|null|")

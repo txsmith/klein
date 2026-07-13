@@ -158,4 +158,29 @@ class IsSubtypeTest {
         assertFalse(TOptional(TNum) subOf TNum) // could be null
         assertFalse(TNull subOf TNum)
     }
+
+    // --- skolems (rigid type variables) ---
+
+    @Test
+    fun skolemReflexive() {
+        assertTrue(tv("A") subOf tv("A"))
+    }
+
+    @Test
+    fun distinctSkolemsUnrelated() {
+        assertFalse(tv("A") subOf tv("B"))
+        assertFalse(tv("B") subOf tv("A"))
+    }
+
+    @Test
+    fun skolemAndConcreteUnrelated() {
+        assertFalse(tv("A") subOf TNum)
+        assertFalse(TNum subOf tv("A"))
+    }
+
+    @Test
+    fun skolemBoundedByTopAndBottom() {
+        assertTrue(tv("A") subOf TTop)
+        assertTrue(TBottom subOf tv("A"))
+    }
 }

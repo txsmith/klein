@@ -44,11 +44,7 @@ class IdentTypeCheckTest {
 
     @Test
     fun ident_unbound_simple() {
-        val errors = infer("x").errors
-
-        assertEquals(1, errors.size)
-
-        val error = errors[0]
+        val error = infer("x").errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("x", error.name)
         assertEquals("Unbound variable: x", error.message)
@@ -59,11 +55,7 @@ class IdentTypeCheckTest {
         val env = TypeEnv.empty()
         env.bind("name", TStr)
 
-        val errors = infer("naem", env).errors
-
-        assertEquals(1, errors.size)
-
-        val error = errors[0]
+        val error = infer("naem", env).errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("naem", error.name)
         assertEquals("Unbound variable: naem", error.message)

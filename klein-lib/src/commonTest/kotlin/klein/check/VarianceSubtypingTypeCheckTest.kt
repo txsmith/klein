@@ -11,11 +11,8 @@ import kotlin.test.assertTrue
  * Types are forced by **ascription**, not by "holder" constructors:
  *  - a demand is an ascribed binding — `consumerDog: Consumer<Dog> = Consumer(…)`;
  *  - a deliberate mismatch is a second ascription to a conflicting type — `bad: Consumer<Cat> = consumerDog`;
- *  - a lambda parameter's type comes from the demand.
- *
- * The remaining reds are bare-lambda cases: a lambda argument at a parameter that mentions a type
- * variable (`Consumer(|a -> a.name|)` demanded as `Consumer<Dog>`) needs result-demand-first
- * grounding; until then the un-annotated parameter can't be synthesized.
+ *  - a lambda parameter's type comes from the demand, including when the demanded parameter
+ *    mentions a type variable (`Consumer(|a -> a.name|)` demanded as `Consumer<Dog>`).
  */
 class VarianceSubtypingTypeCheckTest {
     private fun checksClean(
@@ -408,6 +405,31 @@ class VarianceSubtypingTypeCheckTest {
     // ============================================================
     // Generic values flowing through functions
     // ============================================================
+
+    @Test
+    fun contravariant_consumerFlowsThroughFunctionDemandedAtConsumerDog() =
+        assertChecks(
+            TStr,
+            """
+            type Animal = Dog { name: String, breed: String } | Cat { name: String }
+            type Consumer<'A> = Consumer { consume: 'A -> String }
+
+            fun runConsumer(c: Consumer<Dog>): String = c.consume(Dog("Rex", "Poodle"))
+            runConsumer(Consumer(|a -> a.name|))
+            """.trimIndent(),
+        )
+
+    @Test
+    fun invariant_refFlowsThroughFunctionDemandedAtRefNum() =
+        assertChecks(
+            TNum,
+            """
+            type Ref<'A> = Ref { get: () -> 'A, set: 'A -> String }
+
+            fun readRef(r: Ref<Num>): Num = r.get()
+            readRef(Ref(|42|, |n -> "ok"|))
+            """.trimIndent(),
+        )
 
     @Test
     fun mixedVariance_twoParamTypePassedThroughFunction() =

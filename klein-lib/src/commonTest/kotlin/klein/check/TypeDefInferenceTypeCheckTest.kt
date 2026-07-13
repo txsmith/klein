@@ -33,15 +33,34 @@ class TypeDefInferenceTypeCheckTest {
     // --- enums and single constructors ---
 
     @Test
-    fun basicEnum_constructorUsable() = assertType("True", "type MyBool = True | False\nTrue")
+    fun basicEnum_constructorUsable() =
+        assertType(
+            "True",
+            """
+            type MyBool = True | False
+            True
+            """.trimIndent(),
+        )
 
     @Test
     fun basicEnum_bothConstructorsJoinToParent() =
-        assertType("MyBool", "type MyBool = True | False\nif true then True else False")
+        assertType(
+            "MyBool",
+            """
+            type MyBool = True | False
+            if true then True else False
+            """.trimIndent(),
+        )
 
     @Test
     fun singleConstructor_usable() =
-        assertType("Money", "type Money = Money { value: Num }\nMoney(100)")
+        assertType(
+            "Money",
+            """
+            type Money = Money { value: Num }
+            Money(100)
+            """.trimIndent(),
+        )
 
     @Test
     fun singleConstructor_fieldAccess() =
@@ -57,7 +76,14 @@ class TypeDefInferenceTypeCheckTest {
     // --- generic types ---
 
     @Test
-    fun genericType_constructorInference() = assertType("Some<Num>", "$option\nSome(42)")
+    fun genericType_constructorInference() =
+        assertType(
+            "Some<Num>",
+            """
+            $option
+            Some(42)
+            """.trimIndent(),
+        )
 
     @Test
     fun genericType_fieldAccess() =
@@ -73,10 +99,24 @@ class TypeDefInferenceTypeCheckTest {
     // --- recursive types ---
 
     @Test
-    fun recursiveType_listNil() = assertType("Nil", "$list\nNil")
+    fun recursiveType_listNil() =
+        assertType(
+            "Nil",
+            """
+            $list
+            Nil
+            """.trimIndent(),
+        )
 
     @Test
-    fun recursiveType_listCons() = assertType("Cons<Num>", "$list\nCons(1, Nil)")
+    fun recursiveType_listCons() =
+        assertType(
+            "Cons<Num>",
+            """
+            $list
+            Cons(1, Nil)
+            """.trimIndent(),
+        )
 
     @Test
     fun recursiveType_listTailAccess() =
@@ -91,7 +131,13 @@ class TypeDefInferenceTypeCheckTest {
 
     @Test
     fun bareConstructor_joinWithTypedConstructor() =
-        assertType("List<Num>", "$list\nif true then Nil else Cons(1, Nil)")
+        assertType(
+            "List<Num>",
+            """
+            $list
+            if true then Nil else Cons(1, Nil)
+            """.trimIndent(),
+        )
 
     // --- mutually recursive types ---
 
@@ -104,6 +150,19 @@ class TypeDefInferenceTypeCheckTest {
             type Bar<'A> = Bar { value: 'A, foo: Foo<'A> }
             fun mkFoo(x: Num): Foo<Num> = Foo(Bar(x, mkFoo(x)))
             mkFoo(42)
+            """.trimIndent(),
+        )
+
+    @Test
+    fun mutualRecursion_fieldAccess() =
+        assertType(
+            "Bar<Num>",
+            """
+            type Foo<'A> = Foo { bar: Bar<'A> }
+            type Bar<'A> = Bar { value: 'A, foo: Foo<'A> }
+            fun mkFoo(x: Num): Foo<Num> = Foo(Bar(x, mkFoo(x)))
+            f = mkFoo(42)
+            f.bar
             """.trimIndent(),
         )
 
@@ -124,11 +183,21 @@ class TypeDefInferenceTypeCheckTest {
 
     @Test
     fun siblingConstructors_differentArgs_cannotJoin() =
-        cannotJoin("$list\nif true then Cons(1, Nil) else Cons(\"hi\", Nil)")
+        cannotJoin(
+            """
+            $list
+            if true then Cons(1, Nil) else Cons("hi", Nil)
+            """.trimIndent(),
+        )
 
     @Test
     fun mixedTypesInGenericContainer_cannotJoin() =
-        cannotJoin("$list\nCons(1, Cons(\"hello\", Nil))")
+        cannotJoin(
+            """
+            $list
+            Cons(1, Cons("hello", Nil))
+            """.trimIndent(),
+        )
 
     @Test
     fun recursiveTypeConstructionWithMixedTypes_cannotJoin() =
@@ -225,6 +294,16 @@ class TypeDefInferenceTypeCheckTest {
         )
 
     @Test
+    fun eitherType_rightConstructor() =
+        assertType(
+            "Right<Num>",
+            """
+            type Either<'A, 'B> = Left { value: 'A } | Right { value: 'B }
+            Right(42)
+            """.trimIndent(),
+        )
+
+    @Test
     fun eitherType_bothSubtypeParent() =
         assertType(
             "Either<String, Num>",
@@ -273,7 +352,13 @@ class TypeDefInferenceTypeCheckTest {
 
     @Test
     fun constructorResultUsedInIncompatibleContext() {
-        val errors = infer("$option\nSome(42) + 1").errors
+        val errors =
+            infer(
+                """
+                $option
+                Some(42) + 1
+                """.trimIndent(),
+            ).errors
         assertEquals(1, errors.size, "errors: $errors")
         val e = errors[0]
         assertIs<TypeError.TypeMismatch>(e)
@@ -371,8 +456,22 @@ class TypeDefInferenceTypeCheckTest {
     // --- Any and Nothing field types ---
 
     @Test
-    fun typeDef_anyFieldType() = assertType("Box", "type Box = Box { item: Any }\nBox(42)")
+    fun typeDef_anyFieldType() =
+        assertType(
+            "Box",
+            """
+            type Box = Box { item: Any }
+            Box(42)
+            """.trimIndent(),
+        )
 
     @Test
-    fun typeDef_nothingFieldType() = assertType("(Nothing) -> Never", "type Never = Never { absurd: Nothing }\nNever")
+    fun typeDef_nothingFieldType() =
+        assertType(
+            "(Nothing) -> Never",
+            """
+            type Never = Never { absurd: Nothing }
+            Never
+            """.trimIndent(),
+        )
 }

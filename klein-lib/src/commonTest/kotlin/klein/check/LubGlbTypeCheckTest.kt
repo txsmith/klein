@@ -1,8 +1,10 @@
 package klein.check
 
+import klein.types.TypeError
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -24,17 +26,36 @@ class LubGlbTypeCheckTest {
         assertEquals(expected, klein.Type.print(r.type.toLegacy()))
     }
 
-    private fun cannotJoin(src: String) = assertTrue(infer(src).errors.isNotEmpty(), "expected a join failure")
+    private fun cannotJoin(
+        src: String,
+        message: String = "Branches of if-else need to be of the same type",
+    ) {
+        val e = infer(src).errors.single()
+        assertIs<TypeError.Misc>(e)
+        assertEquals(message, e.message)
+    }
 
     // --- Sibling constructors join to their parent ---
 
     @Test
     fun siblings_bareEnums_joinToParent() =
-        assertLub("MyBool", "type MyBool = True | False\nif true then True else False")
+        assertLub(
+            "MyBool",
+            """
+            type MyBool = True | False
+            if true then True else False
+            """.trimIndent(),
+        )
 
     @Test
     fun siblings_nonExhaustive_stillJoinToParent() =
-        assertLub("Light", "type Light = Red | Yellow | Green\nif true then Red else Yellow")
+        assertLub(
+            "Light",
+            """
+            type Light = Red | Yellow | Green
+            if true then Red else Yellow
+            """.trimIndent(),
+        )
 
     @Test
     fun siblings_withFields_joinToParent() =
@@ -374,19 +395,39 @@ class LubGlbTypeCheckTest {
 
     @Test
     fun synthOnePolyBranch_isError() =
-        cannotJoin("fun id(x: 'T): 'T = x\nfun g(n: Num): Num = n\nif true then id else g")
+        cannotJoin(
+            """
+            fun id(x: 'T): 'T = x
+            fun g(n: Num): Num = n
+            if true then id else g
+            """.trimIndent(),
+            message = "Cannot join polymorphic if-branches",
+        )
 
     @Test
     fun checkOnePolyBranch_instantiatesToDemand() =
         assertLub(
             "(Num) -> Num",
-            "fun id(x: 'T): 'T = x\nfun g(n: Num): Num = n\nfoo: (Num) -> Num = if true then id else g\nfoo",
+            """
+            fun id(x: 'T): 'T = x
+            fun g(n: Num): Num = n
+            foo: (Num) -> Num = if true then id else g
+            foo
+            """.trimIndent(),
         )
 
+    // Joining two polymorphic branches would need to synthesize a polymorphic (TForall) result,
+    // which the branch join does not yet produce.
     @Ignore
     @Test
     fun polymorphicBranches_join() {
-        val r = infer("fun id(a: 'T): 'T = a\nif true then id else id")
+        val r =
+            infer(
+                """
+                fun id(a: 'T): 'T = a
+                if true then id else id
+                """.trimIndent(),
+            )
         assertTrue(r.errors.isEmpty())
         assertTrue(r.type is Type.TForall)
     }

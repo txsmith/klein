@@ -52,6 +52,9 @@ class OptionalSubtypeTest {
     fun nullSubtypeOfOptionalFunction() = assertTrue(TNull subOf opt(fn(TNum, TStr)))
 
     @Test
+    fun nullSubtypeOfOptionalSkolem() = assertTrue(TNull subOf opt(tv("A")))
+
+    @Test
     fun nullSubtypeOfNestedOptional() = assertTrue(TNull subOf opt(opt(TNum)))
 
     // --- Embedding: T <: T? ---
@@ -73,6 +76,9 @@ class OptionalSubtypeTest {
 
     @Test
     fun functionSubtypeOfOptionalFunction() = assertTrue(fn(TNum, TStr) subOf opt(fn(TNum, TStr)))
+
+    @Test
+    fun skolemSubtypeOfOptionalSkolem() = assertTrue(tv("A") subOf opt(tv("A")))
 
     // --- Covariance: T? <: U? iff T <: U ---
 

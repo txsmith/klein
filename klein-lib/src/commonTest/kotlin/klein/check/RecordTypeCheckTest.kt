@@ -12,7 +12,15 @@ class RecordTypeCheckTest {
     fun emptyRecord_isTop() = assertEquals(TTop, infer("{}").type)
 
     @Test
-    fun emptyRecordAnnotation_acceptsAnyValue() = assertTrue(infer("x: {} = 42\nx").errors.isEmpty())
+    fun emptyRecordAnnotation_acceptsAnyValue() =
+        assertTrue(
+            infer(
+                """
+                x: {} = 42
+                x
+                """.trimIndent(),
+            ).errors.isEmpty(),
+        )
 
     @Test
     fun singleField() = assertEquals(TRecord(mapOf("x" to TNum)), infer("{ x = 1 }").type)
@@ -55,7 +63,16 @@ class RecordTypeCheckTest {
     fun fieldAccess_nested() = assertEquals(TNum, infer("{ inner = { x = 1 } }.inner.x").type)
 
     @Test
-    fun fieldAccess_fromVariable() = assertEquals(TStr, infer("r = { name = \"alice\" }\nr.name").type)
+    fun fieldAccess_fromVariable() =
+        assertEquals(
+            TStr,
+            infer(
+                """
+                r = { name = "alice" }
+                r.name
+                """.trimIndent(),
+            ).type,
+        )
 
     @Test
     fun fieldAccess_missingField() {
@@ -81,21 +98,133 @@ class RecordTypeCheckTest {
     @Test
     fun recordCheckedAgainstAny_passes() =
         // A record literal is a value, so it satisfies `Any` — must not error "found a record".
-        assertTrue(infer("r: Any = { x = 1 }\nr").errors.isEmpty())
+        assertTrue(
+            infer(
+                """
+                r: Any = { x = 1 }
+                r
+                """.trimIndent(),
+            ).errors.isEmpty(),
+        )
 
     @Test
     fun recordCheckedAgainstNonRecord_reportsTypeMismatchNotMisc() {
         // Non-record expected → subsumption fallback → a real TypeMismatch, never a Misc.
-        val errors = infer("r: Num = { x = 1 }\nr").errors
+        val errors =
+            infer(
+                """
+                r: Num = { x = 1 }
+                r
+                """.trimIndent(),
+            ).errors
         assertTrue(errors.any { it is TypeError.TypeMismatch })
         assertTrue(errors.none { it is TypeError.Misc })
     }
 
-    // --- Deferred until generics (M4) ---
-    // Each of these infers the type of an *unannotated* lambda, which Path G doesn't do: bare
-    // params are an error, and polymorphism comes from declared type variables. The 'A-typed ones
-    // also need a type-variable node in Type. Reinstate (likely as annotated/generic forms) once
-    // generics land:
+    // --- record annotations ---
+
+    private val nameAge = TRecord(mapOf("name" to TStr, "age" to TNum))
+
+    @Test
+    fun annotation_hidesExtraFields() {
+        val e =
+            infer(
+                """
+                r: { x: Num } = { x = 1, y = 2 }
+                r.y
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.MissingField>(e)
+        assertEquals("y", e.field)
+    }
+
+    @Test
+    fun fieldConcreteAnnotation_mismatch() = assertMismatch("String", "Num", "{ x: Num = \"hello\" }")
+
+    @Test
+    fun fieldLambdaIsMonomorphic() =
+        assertInfersType(TRecord(mapOf("id" to TFun(listOf(TNum), TNum))), "{ id = |x: Num -> x| }")
+
+    @Test
+    fun fieldLambdaMismatchAtCallSite() =
+        assertMismatch(
+            "String",
+            "Num",
+            """
+            r = { f = |x: Num -> x| }
+            r.f("hello")
+            """.trimIndent(),
+        )
+
+    @Test
+    fun fieldLambdaCannotIntroduceTypeVar() {
+        val e = infer("{ f = |x: 'A -> x + 1| }").errors.single()
+        assertIs<TypeError.UnboundVariable>(e)
+        assertEquals("A", e.name)
+    }
+
+    @Test
+    fun multiFieldParam_fieldAccess() =
+        assertInfersType(
+            TFun(listOf(nameAge), TStr),
+            """
+            fun f(x: { name: String, age: Num }) =
+              ignored = x.age + 1
+              x.name
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun multiFieldParam_accessSecondField() =
+        assertInfersType(
+            TFun(listOf(nameAge), TNum),
+            """
+            fun f(x: { name: String, age: Num }) = x.age
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun multiFieldParam_rejectsMissingField() {
+        val e =
+            infer(
+                """
+                fun f(x: { name: String, age: Num }) = x.bone
+                f
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.MissingField>(e)
+        assertEquals("bone", e.field)
+    }
+
+    @Test
+    fun multiFieldParam_outputAnnotation() =
+        assertInfersType(
+            TFun(listOf(nameAge), nameAge),
+            """
+            fun f(x: { name: String, age: Num }): { name: String, age: Num } = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    @kotlin.test.Ignore // fun defs in records aren't implemented yet
+    fun fieldFunDefWithAnnotatedParams() =
+        assertInfersType(
+            TRecord(mapOf("double" to TFun(listOf(TNum), TNum))),
+            """
+            {
+              fun double(x: Num): Num = x * 2
+            }
+            """.trimIndent(),
+        )
+
+    // --- Not portable: unannotated-lambda inference + polymorphic record fields ---
+    // Each infers the type of an *unannotated* lambda from usage, which Path G doesn't do (bare
+    // params are an error). The polymorphic results would also need polymorphic record fields —
+    // explicit `forall`, still deferred; records stay monomorphic. Not a milestone away, so they
+    // stay out unless rewritten into annotated/monomorphic forms:
     //   fieldWithFunction                      { f = |x -> x| }                -> { f: ('A) -> 'A }
     //   fieldAccess_polymorphic                |r -> r.x|                      -> ({ x: 'A }) -> 'A
     //   record_functionResultInField           |f -> { x = f(42) }.x|          -> ((Num) -> 'A) -> 'A

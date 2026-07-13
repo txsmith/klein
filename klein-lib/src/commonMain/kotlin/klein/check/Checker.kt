@@ -154,6 +154,7 @@ class Checker {
         val pendingChecks: List<Triple<FunDef, TypeEnv, Type>> =
             funDefs.mapNotNull { funDef ->
                 val fnEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
+                reportDuplicateParams(funDef.params)
                 introduceTypeVars(funDef.params.mapNotNull { it.typeAnnotation } + listOfNotNull(funDef.returnType), fnEnv)
                 val paramTypes =
                     funDef.params.map { param ->
@@ -203,6 +204,13 @@ class Checker {
         }
     }
 
+    private fun reportDuplicateParams(params: List<Param>) {
+        val seen = mutableSetOf<String>()
+        params.forEach { param ->
+            if (!seen.add(param.name)) recordError(TypeError.DuplicateParameter(param.name, param.span))
+        }
+    }
+
     private fun usesImplicitParam(expr: Expr): Boolean =
         when (expr) {
             is ImplicitParam -> true
@@ -214,6 +222,7 @@ class Checker {
         expr: Lambda,
         env: TypeEnv,
     ): Type {
+        reportDuplicateParams(expr.params)
         val bodyEnv =
             if (expr.params.isEmpty()) {
                 env.child(ImplicitParamContext.NoExpectedType)
@@ -245,6 +254,7 @@ class Checker {
             synthAndCheckSubtype(expr, expected, env)
             return
         }
+        reportDuplicateParams(expr.params)
         val implicit = expr.params.isEmpty() && usesImplicitParam(expr.body)
         val arity = if (implicit) 1 else expr.params.size
         if (arity != expected.params.size) {
