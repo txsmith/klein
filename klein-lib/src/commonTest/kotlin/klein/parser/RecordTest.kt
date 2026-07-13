@@ -14,6 +14,11 @@ class RecordTest {
     }
 
     @Test
+    fun emptyRecordTypeRejected() {
+        assertFailsWith<ParseError> { parseProgram("fun f(x: {}) = x") }
+    }
+
+    @Test
     fun singleField() {
         assertExprEquals(
             parse("{ name = \"Alice\" }"),

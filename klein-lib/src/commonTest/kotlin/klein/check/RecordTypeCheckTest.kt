@@ -12,17 +12,6 @@ class RecordTypeCheckTest {
     fun emptyRecord_isTop() = assertEquals(TTop, infer("{}").type)
 
     @Test
-    fun emptyRecordAnnotation_acceptsAnyValue() =
-        assertTrue(
-            infer(
-                """
-                x: {} = 42
-                x
-                """.trimIndent(),
-            ).errors.isEmpty(),
-        )
-
-    @Test
     fun singleField() = assertEquals(TRecord(mapOf("x" to TNum)), infer("{ x = 1 }").type)
 
     @Test

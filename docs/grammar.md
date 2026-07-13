@@ -244,7 +244,7 @@ TypeAtom
 
 ```
 RecordType
-  = '{' RecordFields? '}'
+  = '{' RecordFields '}'   # at least one field; the empty record type `{}` is rejected — use `Any`
 
 RecordFields
   = FieldDecl % ','
