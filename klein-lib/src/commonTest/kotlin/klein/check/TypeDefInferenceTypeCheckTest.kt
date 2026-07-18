@@ -223,15 +223,15 @@ class TypeDefInferenceTypeCheckTest {
 
     @Test
     fun inferredInterface_nonCommonFieldError() {
-        val errors =
+        val e =
             infer(
                 """
                 type Light = Red { duration: Num, intensity: Num } | Yellow { duration: Num } | Green { duration: Num, direction: String }
                 fun getIntensity(light: Light) = light.intensity
                 getIntensity(Red(100, 50))
                 """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.MissingField && it.field == "intensity" }, "errors: $errors")
+            ).errors.filterIsInstance<TypeError.MissingField>().single()
+        assertEquals("intensity", e.field)
     }
 
     // --- forward reference to a constructor ---

@@ -177,15 +177,14 @@ class FunctionTest {
     @Test
     fun lambdaCheckedAgainstNonFunction_reportsTypeMismatchNotMisc() {
         // Non-function expected → subsumption fallback → a real TypeMismatch, never a Misc.
-        val errors =
+        assertIs<TypeError.TypeMismatch>(
             infer(
                 """
                 f: Num = |n: Num -> n|
                 f
                 """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
-        assertTrue(errors.none { it is TypeError.Misc })
+            ).errors.single(),
+        )
     }
 
     @Test

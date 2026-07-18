@@ -99,15 +99,14 @@ class RecordTypeCheckTest {
     @Test
     fun recordCheckedAgainstNonRecord_reportsTypeMismatchNotMisc() {
         // Non-record expected → subsumption fallback → a real TypeMismatch, never a Misc.
-        val errors =
+        assertIs<TypeError.TypeMismatch>(
             infer(
                 """
                 r: Num = { x = 1 }
                 r
                 """.trimIndent(),
-            ).errors
-        assertTrue(errors.any { it is TypeError.TypeMismatch })
-        assertTrue(errors.none { it is TypeError.Misc })
+            ).errors.single(),
+        )
     }
 
     // --- record annotations ---
