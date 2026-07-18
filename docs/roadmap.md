@@ -1,90 +1,65 @@
 # Klein Roadmap
 
-Units of work to evolve Klein from current state to full language spec.
+A look ahead — how Klein evolves from here toward the full language. The detailed
+build/teardown plan for the type checker lives in
+[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
 
-## Current State
+## Done so far
 
-Lexer and parser handle expressions, lambdas, record literals, if/then/else, and function definitions. SimpleSub type inference complete with recursive types and canonicalization.
+- **Lexer & parser** — expressions, lambdas, records, if/then/else, function
+  definitions, type annotations.
+- **Type definitions** — constructors, sum types, type parameters, variance
+  inference, nominal subtyping (`Money <: { value: Num }`).
+- **Type checking** — a SimpleSub-style inferencer exists but is **being replaced**
+  (see Phase 1 and [adopt-path-g](./decisions/2026-06-24-adopt-path-g.md)).
 
-## Work Units
+## Phase 1 — Type-checker rewrite (Operation Bidi) ← next
 
-### Phase 1: Type System ✓
+Replace global SimpleSub inference with **local bidirectional checking**: annotate
+signatures, infer interiors; keep structural + nominal subtyping; delete the
+constraint solver and simplifier. Generics by implicit quantification; joins
+resolve to a nominal supertype or error; bounded polymorphism for "both"-ness.
 
-SimpleSub-style type inference with subtyping.
+Full milestones, test strategy, and doc updates:
+[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Type representation | Done | `SimpleType`, `CompactType`, `Type` |
-| Subtyping | Done | Width subtyping for records |
-| Type inference | Done | SimpleSub with bisubstitution |
-| Primitive types | Done | `Num`, `String`, `Bool`, `Unit` |
-| Function types | Done | `(a) -> b`, `(a, b) -> c` |
-| Record types | Done | `{ name: String, age: Num }` |
-| Recursive types | Done | `{ head: Num, tail: a } as a` |
-| Union/intersection | Done | `a \| b`, `a & b` |
-| Type annotations | TODO | `fun f(x: Int): Int`, `x: T = ...` |
+## Phase 2 — Pattern Matching
 
-### Phase 2: Type Definitions
+| Item | Notes |
+|------|-------|
+| Match keyword | `match expr` with arms |
+| Literal patterns | `42`, `"hello"`, `true` |
+| Variable patterns | `x` binds the value |
+| Record patterns | `{ name, age }` destructuring |
+| Constructor patterns | `Some(x)`, `None` |
+| Wildcard | `_` matches anything |
+| Guards | `pattern if cond -> expr` |
+| Exhaustiveness | over a sum's constructors (closed, no negation) |
 
-Constructors are first-class functions with named parameters, called positionally.
+## Phase 3 — Additional Syntax
 
-```klein
-type Money = Money { value: Num }
-type Color = Red { intensity: Num } | Green { intensity: Num } | Blue { intensity: Num }
-type Option<'A> = Some { value: 'A } | None
-type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
-```
+Lower priority; add as needed.
 
-Nominal types subsume their structural equivalents: `Money <: { value: Num }`.
+| Item | Notes |
+|------|-------|
+| Arrays `[1, 2, 3]` | lexer done, parser TODO |
+| Ranges `..` / `..<` | lexer done (`DOTDOT`), parser TODO |
+| Tuple accessors `._1` | new field-access pattern |
+| For comprehensions | `for x in xs yield expr` |
+| Tilde operator `~` | `f~` transforms to record-accepting |
+| Record spread `...` | `{ ...r, x = 1 }` — also the basis for tag-preserving extension |
 
+## Phase 4 — Advanced Features
 
+| Item | Notes |
+|------|-------|
+| Extension methods | `on` keyword for method receiver |
+| Modules | `module Name` + imports |
+| First-class intersection | `A & B` everywhere — deferred Operation Bidi candidate (see spec §8) |
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Constructor definitions | TODO | `type T = C { field: Type }` |
-| Sum types | TODO | `type T = A { ... } \| B { ... }` |
-| Bare constructors | TODO | `None`, `Nil` (no params) |
-| Type parameters | TODO | `type Option<'A> = ...` |
-| First-class constructors | TODO | `nums.map(Some)` |
-| Nominal subtyping | TODO | `Money <: { value: Num }` |
+## Phase 5 — Execution
 
-### Phase 3: Pattern Matching
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Match keyword | TODO | `match expr` with arms |
-| Literal patterns | TODO | `42`, `"hello"`, `true` |
-| Variable patterns | TODO | `x` binds the value |
-| Record patterns | TODO | `{ name, age }` destructuring |
-| Constructor patterns | TODO | `Some(x)`, `None` |
-| Wildcard | TODO | `_` matches anything |
-| Guards | TODO | `pattern if cond -> expr` |
-| Exhaustiveness | TODO | Warn on non-exhaustive matches |
-
-### Phase 4: Additional Syntax (deferred)
-
-Lower priority. Add as needed.
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Arrays `[1, 2, 3]` | TODO | Lexer done, parser TODO |
-| Ranges `..` and `..<` | TODO | Lexer done (`DOTDOT`), parser TODO |
-| Tuple accessors `._1` | TODO | New field access pattern |
-| For comprehensions | TODO | `for x in xs yield expr` |
-| Tilde operator `~` | TODO | `f~` transforms to record-accepting |
-| Record spread `...` | TODO | `{ ...r, x = 1 }` |
-
-### Phase 5: Advanced Features
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Extension methods | TODO | `on` keyword for method receiver |
-| Modules | TODO | `module Name` + imports |
-| Kleene types | TODO | `T?`, `T*`, `T+` (experimental) |
-
-### Phase 6: Execution
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Interpreter | TODO | |
-| Effect system | TODO | Suspendable effects |
+| Item | Notes |
+|------|-------|
+| Interpreter | |
+| Effect system | suspendable effects |

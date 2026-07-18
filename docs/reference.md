@@ -284,6 +284,8 @@ The `then` keyword makes it unambiguous where the condition ends, avoiding C-sty
 
 ## Pattern Matching
 
+> **Status:** planned, not yet implemented (see [roadmap](./roadmap.md) Phase 2).
+
 `match` serves two purposes: matching on values (like ML/Rust) and matching on conditions (like Kotlin's `when`).
 
 ### Value Matching

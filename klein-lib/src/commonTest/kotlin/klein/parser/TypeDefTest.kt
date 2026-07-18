@@ -1860,17 +1860,8 @@ class TypeDefTest {
     }
 
     @Test
-    fun recordTypeWithEmptyRecord() {
-        assertTypeDefEquals(
-            parseTypeDef("type Empty = Empty { config: {} }"),
-            typeDef(
-                "Empty",
-                constructors =
-                    arrayOf(
-                        constructor("Empty", field("config", recordType())),
-                    ),
-            ),
-        )
+    fun emptyRecordFieldTypeRejected() {
+        assertFailsWith<ParseError> { parseTypeDef("type Empty = Empty { config: {} }") }
     }
 
     @Test

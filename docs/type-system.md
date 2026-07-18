@@ -1,14 +1,16 @@
 # Klein Type System
 
-Klein uses **SimpleSub-style type inference** with subtyping. Records have width subtyping meaning a record with more fields is a subtype of one with fewer fields.
+Klein uses **local bidirectional type checking** with subtyping: you annotate signatures and the checker infers the interiors. Records have width subtyping, meaning a record with more fields is a subtype of one with fewer fields.
 
 ## Design Principles
 
-- Subtyping integrated into type inference (à la SimpleSub/MLSub)
+- Subtyping checked locally and bidirectionally (synthesize / check) — no global inference
 - Records are structurally typed with width subtyping
 - All `type` definitions create nominal types with constructors
 - Nominal types are subtypes of their structural equivalents
-- Principal types exist despite subtyping
+- Annotate signatures, infer interiors — the surface and the checker's output are one language
+
+See [spec/bidirectional-checking.md](./spec/bidirectional-checking.md) for the full checking model.
 
 ## Primitive Types
 
@@ -315,111 +317,64 @@ pair._2                   # 30
 
 Tuples are structurally typed. The tuple type `(String, Num)` is equivalent to `{ _1: String, _2: Num }`.
 
-## Type Inference
+## Type Checking
 
-Klein uses SimpleSub-style type inference—subtyping is integrated into unification rather than being a separate check. This gives us:
+Klein checks types **locally and bidirectionally**: every expression is either *synthesized* (its type produced bottom-up) or *checked* against an expected type pushed in from context. There is no global inference and no constraint solver.
 
-- **Principal types** — every expression has a most general type
-- **No explicit subtype coercions** — subtyping happens automatically
-- **Predictable inference** — similar to Hindley-Milner but with subtyping
-
-Type annotations are optional in most cases:
+The rule of thumb: **annotate signatures, infer interiors.** Function parameters carry types; the body, local bindings, and branch results are inferred from there.
 
 ```klein
-fun double(x) = x * 2                  # inferred: Num -> Num
-fun identity(x) = x                    # inferred: 'A -> 'A
-fun compose(f, g, x) = f(g(x))         # inferred polymorphic
+fun double(x: Num) = x * 2             # return inferred: Num
+fun identity(x: 'A) = x                # return inferred: 'A
+fun greet(p: { name: String }) = "Hi, ${p.name}"
 ```
 
-Type variables are implicitly universally quantified at the function level.
+A parameter's annotation may be omitted only when the expected type comes from context — e.g. a lambda passed where the function type is already known, or a rule checked against a host-provided signature. See the spec for exactly where annotations are required.
 
-### How SimpleSub Works
+### Generics
 
-SimpleSub tracks subtyping constraints during inference using polar types—distinguishing between types in positive positions (outputs) and negative positions (inputs). This lets it compute principal types that capture "at least" and "at most" constraints:
+A type variable in a signature is **implicitly universally quantified** over that definition — no `<T>` declaration on functions:
 
 ```klein
-fun getX(r) = r.x
-# r is in negative position (input): must have at least { x }
-# result is in positive position (output): exactly the type of x
-
-# Inferred type: { x: 'A } -> 'A
-# But { x: 'A } here means "any record with at least an x field"
+fun identity(x: 'A): 'A = x            # ∀A. A -> A
+fun map(f: 'A -> 'B, xs: List<'A>): List<'B> = ...
 ```
 
-The subtyping is implicit in how types are used, not in explicit syntax.
+Inside the body a type variable is **rigid** (opaque — passable, not inspectable). At a call site it is instantiated by matching the arguments against the declared parameters. A variable appearing only in the return type is resolved from the expected type at the call (return-type polymorphism).
 
-### Union and Intersection Types
+### Recursion
 
-SimpleSub infers union (`|`) and intersection (`&`) types as a way of representing constraints on type variables. These types are **restricted by polarity**—they can only appear in certain positions.
-
-**Polarity restriction.** Union and intersection types can only appear in specific positions:
-
-| Type | Allowed position | Meaning |
-|------|------------------|---------|
-| `A \| B` | Positive (return types, record fields) | "Produces either A or B" |
-| `A & B` | Negative (function arguments) | "Must satisfy both A and B" |
-
-**Union types** (`A | B`) appear in output positions:
+A recursive function (self- or mutually-recursive) must **declare its return type** — there is no fixpoint to infer it from:
 
 ```klein
-fun pick(b) = if b then 42 else "hello"
-# Inferred: (Bool) -> Num | String
-
-object1 = { x = 42, y = |x -> x| }
-object2 = { x = 17, y = false }
-fun choose(b) = if b then object1 else object2
-# Inferred: (Bool) -> { x: Num, y: Bool | (('A) -> 'A) }
+fun fib(n: Num): Num = if n < 2 then n else fib(n - 1) + fib(n - 2)
 ```
 
-**Intersection types** (`A & B`) appear in input positions:
+### No anonymous unions or intersections
 
-```klein
-fun selfApply(x) = x(x)
-# Inferred: ('A & (('A) -> 'B)) -> 'B
-# x must be both a value ('A) and a function that accepts it (('A) -> 'B)
-```
+Klein has **no `&` / `|` type connectives.** The two needs they would serve are met differently:
 
-**What you cannot do.** Because of the polarity restriction, you cannot write a function that accepts `Num | String` as input—unions are illegal in negative position. This means Klein (like MLsub) cannot express "a function that takes either a number or a string." If you need that, use a nominal sum type:
+- **"either A or B"** → a nominal sum (`type`), which carries a tag for pattern matching.
+- **"both A and B"** → bounded polymorphism (planned): a type variable with declared bounds.
 
 ```klein
 type NumOrString = N { value: Num } | S { value: String }
 
-fun process(x: NumOrString) = match x
+fun process(x: NumOrString): Result = match x
   N(value) -> ...
   S(value) -> ...
 ```
 
-**Why this matters.** When you see an inferred union like `(Bool) -> Num | String`, you can produce such values but you cannot consume them in a type-safe way without knowing which variant you have. The type system tracks what flows where, but unions in outputs are essentially "information lost"—useful for record field polymorphism, less useful as return types.
+`Optional` (`T?`) is the one built-in tagged union. See [spec §8](./spec/bidirectional-checking.md) for why this split is principled — and why a first-class `A & B` is a *deferred candidate*, not a flat no.
 
-**Simplification.** The type inferencer simplifies where possible:
-- `Num | Num` becomes `Num`
-- `'A & 'A` becomes `'A`
-- `Num & String` in an input usually indicates a type error (no value satisfies both)
+### Recursive data
 
-### Recursive Types
-
-SimpleSub can infer recursive types—types that refer to themselves. These arise naturally from certain programming patterns:
-
-```klein
-fun produce(n) = { head = n, tail = produce(n + 1) }
-# Inferred: (Num) -> { head: Num, tail: 'A } as 'A
-
-fun consume(stream) = stream.head + consume(stream.tail)
-# Inferred: ({ head: Num, tail: 'A } as 'A) -> Num
-```
-
-The `as 'A` syntax indicates that the type variable `'A` refers back to the enclosing type, creating an infinite structure.
-
-**These types exist for completeness of type inference, not for direct use.** They ensure the type system can assign principal types to all valid programs, including self-referential patterns like Y combinators or infinite stream processors.
-
-For practical recursive data structures, use nominal types instead:
+There are no inferred recursive types (no `as 'A` notation). Recursive data structures use nominal types:
 
 ```klein
 type List<'A> = Cons { head: 'A, tail: List<'A> } | Nil
 type Tree<'A> = Node { value: 'A, left: Tree<'A>, right: Tree<'A> } | Leaf
 ```
-
-Nominal types are clearer, provide better error messages, and support pattern matching. If you see inferred recursive types in your code (the `as` notation), consider whether a nominal type would better express your intent.
 
 ## Summary Table
 
@@ -440,11 +395,9 @@ Nominal types are clearer, provide better error messages, and support pattern ma
 | Positional construction | `Name(args)` | `Person("Alice", 30)` |
 | Tuple type | `(A, B)` | `(String, Num)` |
 | Tilde transform | `f~` | `process~ : { name: String } -> R` |
-| Union type (inferred) | `A \| B` | `Num \| String` |
-| Intersection type (inferred) | `A & B` | `Bool & Num` |
-| Recursive type (inferred) | `T as 'A` | `{ head: Num, tail: 'A } as 'A` |
 
 ## References
 
-- Parreaux, L. (2020). "The Simple Essence of Algebraic Subtyping"
+- Dunfield, J. & Krishnaswami, N. (2021). "Bidirectional Typing" — the checking model Klein now uses
+- Parreaux, L. (2020). "The Simple Essence of Algebraic Subtyping" — the prior (SimpleSub) approach, since retired
 - Dolan, S. & Mycroft, A. (2017). "Polymorphism, Subtyping, and Type Inference in MLsub"

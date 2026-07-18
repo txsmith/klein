@@ -1,54 +1,50 @@
-package klein.types
+package klein.check
 
-import klein.Type
-import klein.types.SimpleType.*
+import klein.check.Type.*
+import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class IdentInferTest {
+class IdentTypeCheckTest {
     @Test
     fun ident_intBinding() {
         val env = TypeEnv.empty()
         env.bind("x", TNum)
-        assertType(Type.Num, infer("x", env))
+        assertEquals(TNum, infer("x", env).type)
     }
 
     @Test
     fun ident_stringBinding() {
         val env = TypeEnv.empty()
-        env.bind("name", TString)
-        assertType(Type.Str, infer("name", env))
+        env.bind("name", TStr)
+        assertEquals(TStr, infer("name", env).type)
     }
 
     @Test
     fun ident_boolBinding() {
         val env = TypeEnv.empty()
         env.bind("flag", TBool)
-        assertType(Type.Bool, infer("flag", env))
+        assertEquals(TBool, infer("flag", env).type)
     }
 
     @Test
     fun ident_functionBinding() {
         val env = TypeEnv.empty()
-        env.bind("f", TFun(listOf(TNum), TString))
-        assertType(Type.Fun(listOf(Type.Num), Type.Str), infer("f", env))
+        env.bind("f", TFun(listOf(TNum), TStr))
+        assertEquals(TFun(listOf(TNum), TStr), infer("f", env).type)
     }
 
     @Test
     fun ident_recordBinding() {
         val env = TypeEnv.empty()
         env.bind("r", TRecord(mapOf("a" to TNum)))
-        assertType(Type.Record(mapOf("a" to Type.Num)), infer("r", env))
+        assertEquals(TRecord(mapOf("a" to TNum)), infer("r", env).type)
     }
 
     @Test
     fun ident_unbound_simple() {
-        val errors = inferErrors("x")
-
-        assertEquals(1, errors.size)
-
-        val error = errors[0]
+        val error = infer("x").errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("x", error.name)
         assertEquals("Unbound variable: x", error.message)
@@ -57,13 +53,9 @@ class IdentInferTest {
     @Test
     fun ident_unbound_similar() {
         val env = TypeEnv.empty()
-        env.bind("name", TString)
+        env.bind("name", TStr)
 
-        val errors = inferErrors("naem", env)
-
-        assertEquals(1, errors.size)
-
-        val error = errors[0]
+        val error = infer("naem", env).errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("naem", error.name)
         assertEquals("Unbound variable: naem", error.message)

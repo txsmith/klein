@@ -1,5 +1,7 @@
 # Constraint Context Tracing Design
 
+> **Status (2026-06-24): stale.** Tied to the SimpleSub constraint solver, which Operation Bidi removes. Kept for historical context. See [decisions/2026-06-24-adopt-path-g.md](../decisions/2026-06-24-adopt-path-g.md).
+
 ## Goal
 
 Improve type error messages by adding a "stack trace" of context explaining how the constraint solver reached each error.

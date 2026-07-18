@@ -1,16 +1,7 @@
-# type HasName = HasName { name: String }
-# type HasAge = HasAge { age: Num }
-# type Box<'A> = Box { value: 'A }
-#
-# fun readName(b: 'Q & Box<'Z & HasName & HasAge>): String = b.value.name
+
 
 fun f(x) =
-  x + 1
-  x
-
-# z = f
-
-# q: 'S | Num = 3
-# r = q * 3
-
+  g: Num -> Num = x
+  h: Bool -> Bool = x
+  "hi"
 

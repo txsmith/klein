@@ -105,6 +105,15 @@ sealed class TypeError {
         }
     }
 
+    data class CannotJoinBranches(
+        val thenType: Type,
+        val elseType: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Branches of if-else have no common type: '${Type.print(thenType)}' vs '${Type.print(elseType)}'"
+    }
+
     data class MissingField(
         val field: String,
         val recordType: Type,
@@ -116,6 +125,29 @@ sealed class TypeError {
         override fun equals(other: Any?) = other is MissingField && field == other.field && span == other.span
 
         override fun hashCode() = 31 * field.hashCode() + span.hashCode()
+    }
+
+    data class NotARecord(
+        val actual: Type,
+        val field: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type error: '${Type.print(actual)}' is not a record, so it has no field '$field'"
+    }
+
+    data class NotAFunction(
+        val actual: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Type error: '${Type.print(actual)}' is not a function"
+    }
+
+    data class MissingParamAnnotation(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Cannot infer the type of parameter '$name'; add a type annotation, " +
+            "or use the lambda where a function type is expected"
     }
 
     data class DuplicateField(
@@ -147,6 +179,13 @@ sealed class TypeError {
         override val message = "Recursive value '$name' cannot be defined in terms of itself: ${cycle.joinToString(" -> ")}"
     }
 
+    data class RecursiveFunctionNeedsReturnType(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Recursive function '$name' needs a declared return type"
+    }
+
     data class CallArityMismatch(
         val expected: Int,
         val actual: Int,
@@ -175,6 +214,12 @@ sealed class TypeError {
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Implicit dot parameter '.' cannot be used in named functions"
+    }
+
+    data class ImplicitParamWithoutExpectedType(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Implicit dot parameter '.' can only be used where the lambda's type is expected"
     }
 
     data class ImplicitParamWithExplicitParams(
@@ -219,11 +264,16 @@ sealed class TypeError {
         override val message = "$operator is not allowed in $position position"
     }
 
-    data class UnsupportedAnnotation(
-        val description: String,
+    data class AnonymousUnionType(
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Unsupported annotation: $description"
+        override val message = "Anonymous union types ('A | B') aren't supported — define a nominal type"
+    }
+
+    data class AnonymousIntersectionType(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Anonymous intersection types ('A & B') aren't supported yet"
     }
 
     open fun render(env: TypeEnv): String {

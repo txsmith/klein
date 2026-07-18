@@ -72,11 +72,15 @@ class RecordInferTest {
         assertMissingField(errors[0], "y")
     }
 
+    // TODO: adapt to typechecker world
+    // bound to a val with type annotation this should work (needs generics)
     @Test
     fun fieldAccess_polymorphic() {
         assertType("({ x: 'A }) -> 'A", infer("|r -> r.x|"))
     }
 
+    // TODO: adapt to typechecker world
+    // bound to a val with type annotation this should work (needs generics)
     @Test
     fun record_functionResultInField() {
         assertType("((Num) -> 'A) -> 'A", infer("|f -> { x = f(42) }.x|"))

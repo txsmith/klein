@@ -327,6 +327,9 @@ class Parser(
                     }
                 }
                 val close = expectAndAdvance(RBRACE, message = "Expected '}'")
+                if (fields.isEmpty()) {
+                    throw ParseError("Empty record type '{}' is not allowed; use 'Any' instead", token.span + close.span)
+                }
                 RecordTypeExpr(fields, token.span + close.span)
             }
 

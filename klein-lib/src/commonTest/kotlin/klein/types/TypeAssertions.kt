@@ -8,6 +8,17 @@ data class InferResult(
     val type: Type,
 )
 
+// These helpers drive the legacy SimpleSub engine directly (the library entry now routes through
+// the bidirectional checker); they die with the engine at teardown.
+private fun legacyInfer(
+    source: String,
+    env: TypeEnv,
+): Pair<Type, List<TypeError>> {
+    val result = Typer.infer(Klein.parse(source), env)
+    val scheme = TypeSimplifier.simplify(result.type, result.env)
+    return TypeSimplifier.coalesceType(scheme, result.env) to result.errors
+}
+
 /**
  * Infer the type of a Klein expression, asserting no errors.
  */
@@ -15,9 +26,9 @@ fun infer(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
 ): InferResult {
-    val result = Klein.infer(source, env)
-    check(result.errors.isEmpty()) { "Expected no type errors but got: ${result.errors}" }
-    return InferResult(result.type)
+    val (type, errors) = legacyInfer(source, env)
+    check(errors.isEmpty()) { "Expected no type errors but got: $errors" }
+    return InferResult(type)
 }
 
 /**
@@ -33,7 +44,7 @@ fun inferLUB(
 fun inferErrors(
     source: String,
     env: TypeEnv = TypeEnv.empty(),
-): List<TypeError> = Klein.infer(source, env).errors
+): List<TypeError> = legacyInfer(source, env).second
 
 /**
  * Assert that the type matches the expected value.

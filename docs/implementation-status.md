@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** Parser and type inference complete for core expressions and type declarations. Type definitions with sum types, generics, variance inference, and LUB/GLB simplification. No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5, with M7 cutover done). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine (`klein.types`, reachable only via the `infer` CLI command) awaits deletion in the teardown PR (M8). No interpreter.
 
 ## Parser
 
@@ -28,6 +28,11 @@
 | Val bindings | `x = expr` |
 | Blocks | Indentation-based |
 | Comments | `# comment` |
+| Parameter types | `fun f(x: Num)` |
+| Return types | `fun f(x): Num` |
+| Val types | `x: Num = 1` |
+| Type variables | `'T` in signatures |
+| Nullable types | `T?` |
 
 ### Partial (lexer only)
 
@@ -35,7 +40,6 @@
 |---------|-------|-------|
 | Arrays | `LBRACKET`, `RBRACKET` | `[1, 2, 3]` - parser TODO |
 | Ranges | `DOTDOT` | `1..10` - parser TODO |
-| Colon | `COLON` | For type annotations - parser TODO |
 
 ### Not Started
 
@@ -52,14 +56,6 @@
 | For comprehensions | `for x in xs yield expr` |
 | Tilde operator | `f~(record)` |
 | Operators as values | `nums.fold(0, (+))` |
-
-**Type annotations:**
-
-| Feature | Notes |
-|---------|-------|
-| Parameter types | `fun f(x: Num)` |
-| Return types | `fun f(x): Num` |
-| Val types | `x: Num = 1` |
 
 **Definitions:**
 
@@ -79,36 +75,52 @@
 
 ## Type System
 
-See [type-system.md](type-system.md) for design and [simplesub-type-inference.md](decisions/2026-01-14-simplesub-type-inference.md) for implementation decisions.
+The type system runs on **Operation Bidi** (local bidirectional checking). See
+[type-system.md](type-system.md) for design and
+[plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md) for the milestone plan. The cutover
+(M7) is done: the library entry (`Klein.check`) and the `check` CLI command run the
+`klein.check` checker. The legacy SimpleSub engine (`klein.types`) survives only behind
+the `infer` CLI command and its own test suites, awaiting deletion in the teardown PR (M8).
 
-### Complete
+### Operation Bidi checker — complete (roadmap M2–M5)
 
 | Feature | Notes |
 |---------|-------|
-| Type inference | SimpleSub algorithm with subtyping |
+| Bidirectional checking | `synth` / `check` over fully-annotated functions |
 | Primitive types | `Num`, `String`, `Bool`, `Unit` |
 | Function types | `(a) -> b`, `(a, b) -> c` |
-| Record types | `{ name: String, age: Num }` |
-| Width subtyping | `{ a, b } <: { a }` |
-| Recursive types | `{ head: Num, tail: a } as a` |
-| Union/intersection | `a \| b`, `a & b` |
-| Type simplification | Canonicalization of recursive types |
+| Record types | `{ name: String, age: Num }`, width/depth subtyping |
+| Type annotations | Params, return types, `x: T = e`, ascription `(e : T)` |
+| Rank-1 generics | `'T` in signatures → rigid skolem, instantiated at demand points |
 | Type definitions | `type Option<'A> = Some { value: 'A } \| None` |
 | Sum types | `type Color = Red \| Green \| Blue` |
-| Generics | `List<'A>`, `Option<'A>` with variance inference |
-| Nominal types | `type Person = Person { ... }` creates nominal type |
+| Nominal types | `type Person = Person { ... }` → `TRef`, variance inferred |
 | Nominal → structural subtyping | `Dog <: { name: String }` |
 | Constructor binding | First-class constructor functions |
-| Inferred interfaces | Common fields across constructors |
-| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
+| Inferred interfaces | Common fields across constructors (incompatible fields erased) |
+| Optional types | `T?`, null safety, safe navigation `?.`, `NullNotAllowed` |
+| Branch joins | `if`/`else` results join to a common supertype (`lub`), nominal join/meet by variance |
 
-### Not Started
+### Operation Bidi checker — ahead
 
 | Feature | Notes |
 |---------|-------|
+| Teardown | Delete SimpleSub machinery (M8, its own PR) |
+| Declared bounds | `where 'T <: B` (roadmap M6 — deferred) |
 | Pattern matching | `match x with \| Some v -> v \| None -> 0` |
-| Type annotations | `fun f(x: Num)`, `x: Num = 1` |
-| Kleene types | `T?`, `T*`, `T+` (experimental) |
+| Kleene types | `T*`, `T+` (experimental; `T?` done) |
+
+### Legacy SimpleSub engine — being retired (M8)
+
+Still present under `klein.types`; features specific to it (not carried into Operation Bidi):
+
+| Feature | Notes |
+|---------|-------|
+| Global type inference | SimpleSub algorithm — replaced by bidirectional checking |
+| Union/intersection | `a \| b`, `a & b` — anonymous connectives dropped in core |
+| Recursive types | `{ head: Num, tail: a } as a` |
+| Type simplification | Canonicalization of recursive types |
+| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
 
 ## Interpreter
 
