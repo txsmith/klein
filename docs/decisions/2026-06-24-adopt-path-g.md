@@ -2,7 +2,11 @@
 
 **Date:** 2026-06-24
 
-**Status:** Accepted
+**Status:** Accepted · Implemented 2026-07-18 (declared bounds deferred)
+
+> **Naming:** this direction was called "Path G" while it was one of the polarity-wall
+> ADR's candidate ways out (option G, "Go"); on completion it was renamed **Operation
+> Bidi**. This ADR and its neighbors keep the old name as history.
 
 **Follows from:** [2026-06-23-polarity-wall-and-type-system-direction.md](./2026-06-23-polarity-wall-and-type-system-direction.md) — which ruled out the middle and left the choice open; this records the choice.
 
@@ -31,9 +35,10 @@ Adopt **Path G**: keep structural + nominal subtyping, drop global/inferred poly
 
 ## Consequences
 
-- **Delete:** the constraint solver (`Subtyping`), the simplifier (`TypeComponents`, `TypeSimplifier`), and `TVar` bounds / levels / `freshenAbove`.
-- **Build:** a `synth` / `check` walk + a concrete `isSubtype`; substitution-based generic instantiation.
-- **Repurpose:** `ScopeGraph`'s SCC pass for synthesis ordering + recursion-annotation enforcement.
+- **Delete:** the constraint solver (`Subtyping`), the simplifier (`TypeComponents`, `TypeSimplifier`), and `TVar` bounds / levels / `freshenAbove`. *(Done — the whole `klein/types` engine, its test suites, and the `infer` CLI command are deleted.)*
+- **Build:** a `synth` / `check` walk + a concrete `isSubtype`; substitution-based generic instantiation. *(Done — lives in `klein.check`.)*
+- **Repurpose:** `ScopeGraph`'s SCC pass for synthesis ordering + recursion-annotation enforcement. *(Done.)*
+- **One type hierarchy, one error hierarchy.** With the engine gone there is a single type tree (`klein.check.Type`, printed directly — a `∀` prints as its body, skolems by name) and a single typed error hierarchy (`klein.check.TypeError`, no untyped catch-all: branch-join failures, recursive-return, and anonymous `A | B` / `A & B` annotations each have their own error). The old printable surface tree (`klein.Type`) and its `Union`/`Inter` variants are deleted; the parser still parses `A | B` / `A & B` so the checker can reject them with a typed error rather than a parse error.
 - **Incomplete-by-design corners** are accepted as deliberate "no"s, not bugs.
 - **No empty record *type* `{}`** — the empty structural interface *is* the top type, so writing `{}` as a **type** is redundant with `Any` and is removed; annotate with `Any` instead. The empty record **value** `{}` stays — it doubles as the unit-like "no meaningful value" and has type `Any`. This keeps the "never infer Top" rule pointed the right way (Top has one spelling, `Any`; a no-common-structure join is an error, never a written `{}` type) without stranding the `{}` value idiom.
 - **Branch joins (`lub`) are commutative but not associative** — `lub(a, b) == lub(b, a)`, but `lub(lub(a, b), c)` may differ from `lub(a, lub(b, c))`. Subtyping is only a *partial* order, not a lattice: two types needn't have a single least upper bound, so the join has to *choose* a representative, and which one it gets depends on how the branches are grouped. Concretely, two nominal siblings promote to their shared parent, but a nominal type joined with an unrelated structural record falls back to a structural field-intersection. Example: `if p then cat else if q then dog else someRecord` — grouping `cat`/`dog` first yields their nominal parent `Animal`, then meets `someRecord`; but the source's right-nesting meets `dog` with `someRecord` first (dropping `dog` to a structural record), then joins `cat` — a different type. This is invisible for a single binary `if`/`else`; it only bites when three or more branches fold (nested `if`, a future `match`), where **the source structure determines the association**. The checker must therefore fold in a defined, documented order (source order) and must not assume associativity when simplifying or reordering joins.
@@ -43,4 +48,4 @@ Adopt **Path G**: keep structural + nominal subtyping, drop global/inferred poly
 ## References
 
 - Spec: [../spec/bidirectional-checking.md](../spec/bidirectional-checking.md)
-- Roadmap: [../plans/operation-bidi-roadmap.md](../plans/operation-bidi-roadmap.md)
+- The build/teardown roadmap was a working document, deleted on completion (git history: `docs/plans/operation-bidi-roadmap.md`).

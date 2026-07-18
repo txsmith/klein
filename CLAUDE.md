@@ -17,8 +17,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 ### Implementation Guides
 
 - **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and interpreter
-- **[plans/operation-bidi-roadmap.md](./docs/plans/operation-bidi-roadmap.md)** - **Current roadmap** for the type-checker rewrite (Operation Bidi build + teardown, test strategy, doc updates)
-- **[roadmap.md](./docs/roadmap.md)** - Older phase-based roadmap (predates Operation Bidi; being superseded)
+- **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
 ### Design Decisions

@@ -1,8 +1,6 @@
 # Klein Roadmap
 
-A look ahead — how Klein evolves from here toward the full language. The detailed
-build/teardown plan for the type checker lives in
-[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
+A look ahead — how Klein evolves from here toward the full language.
 
 ## Done so far
 
@@ -10,18 +8,13 @@ build/teardown plan for the type checker lives in
   definitions, type annotations.
 - **Type definitions** — constructors, sum types, type parameters, variance
   inference, nominal subtyping (`Money <: { value: Num }`).
-- **Type checking** — a SimpleSub-style inferencer exists but is **being replaced**
-  (see Phase 1 and [adopt-path-g](./decisions/2026-06-24-adopt-path-g.md)).
-
-## Phase 1 — Type-checker rewrite (Operation Bidi) ← next
-
-Replace global SimpleSub inference with **local bidirectional checking**: annotate
-signatures, infer interiors; keep structural + nominal subtyping; delete the
-constraint solver and simplifier. Generics by implicit quantification; joins
-resolve to a nominal supertype or error; bounded polymorphism for "both"-ness.
-
-Full milestones, test strategy, and doc updates:
-[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
+- **Type checking** — **Operation Bidi**, local bidirectional checking: annotate
+  signatures, infer interiors; structural + nominal subtyping; generics by
+  implicit quantification; joins resolve to a nominal supertype or error. The
+  SimpleSub inference engine is deleted. Deferred: declared bounds
+  (`where 'T <: B`) for "both"-ness. See
+  [adopt-path-g](./decisions/2026-06-24-adopt-path-g.md) and
+  [implementation-status](./implementation-status.md).
 
 ## Phase 2 — Pattern Matching
 

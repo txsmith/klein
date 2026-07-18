@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5, M7 cutover and M8 teardown done). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-path-g.md](decisions/2026-06-24-adopt-path-g.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
 
 ## Parser
 
@@ -76,13 +76,14 @@
 ## Type System
 
 The type system runs on **Operation Bidi** (local bidirectional checking). See
-[type-system.md](type-system.md) for design and
-[plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md) for the milestone plan.
-The `klein.check` checker is the only engine: cutover (M7) and teardown (M8) are done, and
-the SimpleSub machinery is deleted. There is a single type hierarchy (`klein.check.Type`,
-printed directly) and a single typed error hierarchy (`klein.check.TypeError`).
+[type-system.md](type-system.md) for design,
+[spec/bidirectional-checking.md](spec/bidirectional-checking.md) for the checking contract, and
+[decisions/2026-06-24-adopt-path-g.md](decisions/2026-06-24-adopt-path-g.md) for the decision record.
+The `klein.check` checker is the only engine — the SimpleSub machinery is deleted. There is a
+single type hierarchy (`klein.check.Type`, printed directly) and a single typed error
+hierarchy (`klein.check.TypeError`).
 
-### Operation Bidi checker — complete (roadmap M2–M5)
+### Operation Bidi checker — complete
 
 | Feature | Notes |
 |---------|-------|
@@ -105,9 +106,17 @@ printed directly) and a single typed error hierarchy (`klein.check.TypeError`).
 
 | Feature | Notes |
 |---------|-------|
-| Declared bounds | `where 'T <: B` (roadmap M6 — deferred) |
+| Declared bounds | `where 'T <: B` — deferred |
 | Pattern matching | `match x with \| Some v -> v \| None -> 0` |
 | Kleene types | `T*`, `T+` (experimental; `T?` done) |
+
+### Known gaps (deferred checker bugs)
+
+To fix under a dedicated "polymorphism bugs" pass:
+
+1. **Branch join over-rejects when neither branch subsumes the other.** `if c then q else { tag = 1, extra = true }`, with `q : Phantom<'A>` (interface `{ tag: Num }`), rejects — yet the join `{ tag: Num }` plainly exists (the all-monomorphic version gives it). `synthIfThenElse` grounds a polymorphic branch by instantiating it to a *subtype of the whole* other branch (`groundPolyBranch` → `solveQuantified`), so it only produces joins where one branch subsumes the other, never a genuine third common supertype. Fix: match the poly branch against the *field intersection* — a lenient `generate` that skips fields the poly lacks, kept separate from the strict call-site `generate` where a missing field is a real error — solve the variables (defaulting untouched ones), then `lub`. The supertype comes from `lub`, not the solver.
+
+2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Operation Bidi declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
 
 ## Interpreter
 
