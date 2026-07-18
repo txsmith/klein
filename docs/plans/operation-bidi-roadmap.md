@@ -1,8 +1,8 @@
 # Operation Bidi Roadmap — Local Bidirectional Type Checking
 
-**Status:** In progress · **Started:** 2026-06-24 · **Branch:** `rewrite/type-checker`
+**Status:** Done (M6 deferred) · **Started:** 2026-06-24 · **Finished:** 2026-07-18
 
-**Progress:** M2 (bidirectional core), M3 (concrete subtyping), M4 (generics), and M5 (joins & sums) are built and green in `klein.check`. M7 (cutover) is done: the library entry (`Klein.check`) and the `check` CLI command both run the new checker; the legacy engine survives only behind the `infer` CLI command and its own test suites. M6 (declared bounds) is **deferred** — it gates nothing else and lands whenever bounded polymorphism becomes a priority. M8 (teardown) happens as its own PR so the deletion stays separately revertable.
+**Progress:** M2 (bidirectional core), M3 (concrete subtyping), M4 (generics), and M5 (joins & sums) are built and green in `klein.check`. M7 (cutover) and M8 (teardown) are done: `klein.check` is the only engine, the SimpleSub machinery and its test suites are deleted, and there is a single type hierarchy (`klein.check.Type`) with a single typed error hierarchy (`klein.check.TypeError`). M6 (declared bounds) is **deferred** — it gates nothing else and lands whenever bounded polymorphism becomes a priority.
 
 This roadmap sequences Klein's move off SimpleSub-style global inference and onto
 **Operation Bidi**: drop inferred polymorphism, keep structural + nominal subtyping, and
@@ -168,28 +168,26 @@ acceptance contract, and `infer` vs `check` on the CLI covered spot comparisons.
 
 *Depended on: M2–M5 (M6 deferred out of the critical path).*
 
-### M8 · Teardown 🧹
-**Its own PR**, so the deletion stays revertable independently of the rewrite.
-Delete the `klein/types` engine (`Typer.kt`, `SimpleType.kt`, `Subtyping.kt`,
-`TypeComponents.kt`, `TypeSimplifier.kt`, `TypePrinter.kt`, plus the now-shadowed
+### M8 · Teardown 🧹 ✅
+Done, as its own PR so the deletion stays revertable independently of the rewrite.
+Deleted: the `klein/types` engine (`Typer.kt`, `SimpleType.kt`, `Subtyping.kt`,
+`TypeComponents.kt`, `TypeSimplifier.kt`, `TypePrinter.kt`, and the shadowed
 `TypeEnv`/`ScopeGraph`/`TypeDef`/`TypeDefPreprocessor`), the `infer` CLI command
 and its `--ir-*` flags, and the legacy test suites.
 
-**Collapse to one type hierarchy.** `klein.Type` exists only to be printed: nothing
-in `klein.check` produces its `Union`/`Inter` variants (only the legacy simplifier
-does), and `toSurface` is a lossy copy made solely for error payloads and CLI
-output. So: move `TypeError` into `klein.check` embedding checker types, print
-checker types directly (folding `toSurface`'s flatten-`∀`/name-skolems into the
-printer), and delete `klein.Type` wholesale — `Union`/`Inter` die with it. The
-parser's `UnionTypeExpr`/`IntersectionTypeExpr` stay: they exist so `A | B` in an
-annotation gets the typed `AnonymousUnionType` rejection rather than a parse error,
-and first-class unions are committed-but-deferred, so the syntax returns.
+**Collapsed to one type hierarchy.** `klein.Type` existed only to be printed:
+nothing in `klein.check` produced its `Union`/`Inter` variants, and `toSurface` was
+a lossy copy made solely for error payloads and CLI output. `TypeError` moved into
+`klein.check` embedding checker types, checker types print directly (`Type.print`
+flattens `∀` and names skolems), and `klein.Type` is deleted wholesale —
+`Union`/`Inter` died with it. The parser's `UnionTypeExpr`/`IntersectionTypeExpr`
+stay: they exist so `A | B` in an annotation gets the typed `AnonymousUnionType`
+rejection rather than a parse error, and first-class unions are
+committed-but-deferred, so the syntax returns. The error hierarchy kept only
+variants the checker emits (`UnboundTypeVar`, `InvalidAnnotationPolarity`, and the
+`ConstraintContext` machinery went with the engine).
 
-Remaining `TypeError` pruning (the `Misc` catch-all is already gone — branch joins,
-recursive-return, and anonymous union/intersection annotations have typed errors):
-drop variants and `ConstraintContext` machinery only the legacy engine emitted.
-
-*Depends on: M7 green.*
+*Depended on: M7 green.*
 
 ---
 

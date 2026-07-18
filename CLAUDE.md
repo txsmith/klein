@@ -119,27 +119,6 @@ echo "x = 1 + 2" | ./klein check --stdin
 
 `check` has no IR/format flags — the Operation Bidi type is a plain structural tree with nothing to dump.
 
-### Infer Types (legacy engine)
-
-Runs the old SimpleSub inference engine (`klein.types.Typer`), not the Operation Bidi checker. The
-cutover (M7) is done — the library entry and `check` both run the checker — so `infer` is the
-legacy engine's last surface, deleted with it in the teardown PR (M8). Prints the synthesized
-type of top-level definitions and expressions.
-
-```bash
-# From a file
-./klein infer example.klein
-
-# Short form
-./klein i example.klein
-
-# Raw output (machine-readable, for tooling)
-./klein infer --raw example.klein
-
-# Internal type IR (--ir-compact / --ir-bounds; infer only)
-./klein infer --ir-compact example.klein
-```
-
 ## Project Structure
 
 ```
@@ -152,34 +131,22 @@ klein-lang/
 │   │   │   ├── Ast.kt            # AST definitions
 │   │   │   ├── Token.kt          # Token types
 │   │   │   ├── SourceSpan.kt     # Source location tracking
-│   │   │   ├── Type.kt           # Surface / printed types
 │   │   │   ├── PrettyPrint.kt    # AST pretty-printing
 │   │   │   ├── Klein.kt          # Library entry (lex → parse → check)
-│   │   │   ├── check/            # The Operation Bidi bidirectional checker
-│   │   │   │   ├── Checker.kt              # synth / check driver
-│   │   │   │   ├── Type.kt                 # Checker types (skolems, foralls)
-│   │   │   │   ├── Subtyping.kt            # Ground subtyping, lub/glb
-│   │   │   │   ├── Constraint.kt           # Instantiation constraint solving
-│   │   │   │   ├── TypeEnv.kt              # Environment / scopes
-│   │   │   │   ├── ScopeGraph.kt           # Top-level dependency SCCs
-│   │   │   │   ├── TypeDefPreprocessor.kt  # Variance inference, nominal setup
-│   │   │   │   └── Adapter.kt              # Checker type → surface klein.Type
-│   │   │   └── types/            # Legacy SimpleSub engine (deleted at M8 teardown)
-│   │   │       ├── Typer.kt                # Type-checking driver
-│   │   │       ├── SimpleType.kt           # Internal type representation
-│   │   │       ├── Subtyping.kt            # Constraint solver
-│   │   │       ├── TypeComponents.kt       # Simplifier internals
-│   │   │       ├── TypeSimplifier.kt       # Type simplification
+│   │   │   └── check/            # The Operation Bidi bidirectional checker
+│   │   │       ├── Checker.kt              # synth / check driver
+│   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer
+│   │   │       ├── TypeError.kt            # Typed error hierarchy
+│   │   │       ├── Subtyping.kt            # Ground subtyping, lub/glb
+│   │   │       ├── Constraint.kt           # Instantiation constraint solving
 │   │   │       ├── TypeEnv.kt              # Environment / scopes
 │   │   │       ├── ScopeGraph.kt           # Top-level dependency SCCs
-│   │   │       ├── TypeDef.kt              # Type defs + variance lattice
 │   │   │       ├── TypeDefPreprocessor.kt  # Variance inference, nominal setup
-│   │   │       ├── TypeError.kt            # Type errors (shared with the checker)
-│   │   │       └── TypePrinter.kt          # Type rendering
+│   │   │       └── Variance.kt             # Variance lattice
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
-│   │   │   └── types/
+│   │   │   └── check/
 │   │   └── nativeMain/kotlin/klein/
 │   │       └── Main.kt           # CLI entry point
 │   └── build.gradle.kts
