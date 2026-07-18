@@ -1,8 +1,6 @@
 package klein.check
 
 import klein.*
-import klein.types.TypeError
-import klein.types.Variance
 
 class TypeDefPreprocessor(
     private val errors: MutableList<TypeError>,

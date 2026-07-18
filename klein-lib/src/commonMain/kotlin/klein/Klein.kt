@@ -1,9 +1,9 @@
 package klein
 
 import klein.check.Checker
+import klein.check.Type
 import klein.check.TypeEnv
-import klein.check.toSurface
-import klein.types.TypeError
+import klein.check.TypeError
 
 /**
  * Library entry point: lex → parse → type-check with the bidirectional checker.
@@ -32,7 +32,7 @@ object Klein {
         val type = checker.synthProgram(program, env)
         return CheckResult(
             program = program,
-            type = type.toSurface(),
+            type = type,
             errors = checker.getErrors(),
         )
     }

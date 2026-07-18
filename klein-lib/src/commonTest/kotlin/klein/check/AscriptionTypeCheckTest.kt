@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.check.Type.*
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

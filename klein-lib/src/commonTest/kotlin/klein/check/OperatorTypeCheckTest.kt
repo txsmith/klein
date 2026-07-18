@@ -1,8 +1,6 @@
 package klein.check
 
-import klein.Type as L
 import klein.check.Type.*
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -77,37 +75,37 @@ class OperatorTypeCheckTest {
     fun add_stringPlusString_fails() {
         val errors = infer("\"a\" + \"b\"").errors
         assertEquals(2, errors.size)
-        assertMismatch(errors[0], L.Str, L.Num)
-        assertMismatch(errors[1], L.Str, L.Num)
+        assertMismatch(errors[0], TStr, TNum)
+        assertMismatch(errors[1], TStr, TNum)
     }
 
     @Test
     fun and_intAndInt_fails() {
         val errors = infer("1 and 2").errors
         assertEquals(2, errors.size)
-        assertMismatch(errors[0], L.Num, L.Bool)
-        assertMismatch(errors[1], L.Num, L.Bool)
+        assertMismatch(errors[0], TNum, TBool)
+        assertMismatch(errors[1], TNum, TBool)
     }
 
     @Test
     fun not_int_fails() {
         val errors = infer("not 1").errors
         assertEquals(1, errors.size)
-        assertMismatch(errors[0], L.Num, L.Bool)
+        assertMismatch(errors[0], TNum, TBool)
     }
 
     @Test
     fun neg_bool_fails() {
         val errors = infer("-true").errors
         assertEquals(1, errors.size)
-        assertMismatch(errors[0], L.Bool, L.Num)
+        assertMismatch(errors[0], TBool, TNum)
     }
 
     /** Assert [error] is a [TypeError.TypeMismatch] reporting [subtype] cannot be used as [supertype]. */
     private fun assertMismatch(
         error: TypeError,
-        subtype: L,
-        supertype: L,
+        subtype: Type,
+        supertype: Type,
     ) {
         assertIs<TypeError.TypeMismatch>(error)
         assertEquals(subtype, error.subtype)

@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.check.Type.*
-import klein.types.TypeError
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -85,7 +84,7 @@ class GenericsTypeCheckTest {
                 needTwo(Box(5))
                 """.trimIndent(),
             ).errors.filterIsInstance<TypeError.TypeMismatch>().single()
-        assertEquals("{ value: Num }", klein.Type.print(e.subtype))
+        assertEquals("{ value: Num }", Type.print(e.subtype))
     }
 
     @Test

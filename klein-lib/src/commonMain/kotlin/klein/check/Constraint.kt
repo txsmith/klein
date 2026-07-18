@@ -2,8 +2,6 @@ package klein.check
 
 import klein.*
 import klein.check.Type.*
-import klein.types.TypeError
-import klein.types.Variance
 
 data class ConstraintInterval(
     val lowerBound: Type,

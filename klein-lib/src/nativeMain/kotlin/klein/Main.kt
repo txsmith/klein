@@ -1,8 +1,8 @@
 package klein
 
 import klein.check.Checker
-import klein.check.toSurface
-import klein.types.*
+import klein.check.Type
+import klein.check.TypeEnv
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
@@ -17,8 +17,6 @@ import platform.posix.ftell
 import platform.posix.rewind
 import platform.posix.stdin
 
-enum class TypeFormat { CANONICAL, IR_BOUNDS, IR_COMPACT }
-
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
         printUsage()
@@ -26,12 +24,10 @@ fun main(args: Array<String>) {
     }
 
     val command = args[0]
-    // Each command accepts its own flags; `check` (Operation Bidi) has no IR formats — its type is a plain
-    // structural tree with nothing to dump. Help/unknown commands (null) skip flag validation.
+    // Each command accepts its own flags; help/unknown commands (null) skip flag validation.
     val knownFlags: Set<String>? =
         when (command) {
             "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
-            "infer", "i" -> setOf("--stdin", "--raw", "--canonical", "--ir-bounds", "--ir-compact")
             "check", "c" -> setOf("--stdin", "--raw")
             else -> null
         }
@@ -49,14 +45,6 @@ fun main(args: Array<String>) {
     val useStdin = "--stdin" in args
     val fileArg = args.drop(1).firstOrNull { !it.startsWith("-") }
 
-    val typeFormat =
-        when {
-            "--canonical" in args -> TypeFormat.CANONICAL
-            "--ir-bounds" in args -> TypeFormat.IR_BOUNDS
-            "--ir-compact" in args -> TypeFormat.IR_COMPACT
-            else -> TypeFormat.CANONICAL
-        }
-
     when (command) {
         "tokens", "t" -> {
             val source = getSource(useStdin, fileArg) ?: return
@@ -65,10 +53,6 @@ fun main(args: Array<String>) {
         "parse", "p" -> {
             val source = getSource(useStdin, fileArg) ?: return
             parse(source, rawErrors, verbose)
-        }
-        "infer", "i" -> {
-            val source = getSource(useStdin, fileArg) ?: return
-            infer(source, rawErrors, typeFormat)
         }
         "check", "c" -> {
             val source = getSource(useStdin, fileArg) ?: return
@@ -104,7 +88,6 @@ private fun printUsage() {
         Commands:
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
-          infer, i     Infer and print types (legacy SimpleSub engine)
           check, c     Type-check with the Operation Bidi checker; print types and pass/fail
           help         Show this help
 
@@ -112,11 +95,6 @@ private fun printUsage() {
           --stdin      Read from stdin instead of file
           --raw        Print raw errors with SourceSpan (for tooling)
           --verbose    Show nesting stack on lexer errors (tokens, parse)
-
-        Type output format (infer only):
-          --canonical      Canonical type (default)
-          --ir-compact     Internal TypeComponents representation
-          --ir-bounds      Internal SimpleType with bounds
         """.trimIndent(),
     )
 }
@@ -166,62 +144,6 @@ private fun parse(
     }
 }
 
-private fun infer(
-    source: String,
-    rawErrors: Boolean,
-    format: TypeFormat,
-) {
-    try {
-        val tokens = Lexer(source).tokenize().toList()
-        val program = Parser(tokens).parseProgram()
-        val result = Typer.infer(program, TypeEnv.empty())
-
-        println("Inference result:")
-
-        fun formatType(type: SimpleType): String =
-            when (format) {
-                TypeFormat.CANONICAL -> Type.print(TypeSimplifier.simplifyCanonical(type, result.env))
-                TypeFormat.IR_BOUNDS -> TypePrinter.printRaw(type)
-                TypeFormat.IR_COMPACT -> TypePrinter.printCompact(type, result.env)
-            }
-
-        for (stmt in program.stmts) {
-            when (stmt) {
-                is Val -> {
-                    val type = result.env.lookupAndInstantiate(stmt.name)!!
-                    println("${stmt.name} : ${formatType(type)}")
-                }
-                is FunDef -> {
-                    val type = result.env.lookupAndInstantiate(stmt.name)!!
-                    println("${stmt.name} : ${formatType(type)}")
-                }
-                is TypeDef -> {
-                    println("type ${stmt.name}")
-                }
-                is Expr -> {
-                    val type = result.exprTypes[stmt.span] ?: result.type
-                    val exprSource = source.substring(stmt.span.start, stmt.span.end)
-                    println("$exprSource : ${formatType(type)}")
-                }
-            }
-        }
-
-        for (error in result.errors) {
-            if (rawErrors) {
-                printRawError(error, result.env)
-            } else {
-                printError(source, error.span, error.render(result.env), rawOutput = false)
-            }
-        }
-    } catch (e: LexerError) {
-        printError(source, e.span, e.message ?: "Lexer error", rawErrors)
-    } catch (e: ParseError) {
-        printError(source, e.span, e.message ?: "Parse error", rawErrors)
-    } catch (e: NotImplementedError) {
-        println("Type inference not yet implemented: ${e.message}")
-    }
-}
-
 /**
  * Run the Operation Bidi bidirectional checker: print the type of each top-level binding (and the trailing
  * expression), then a pass/fail verdict. Exits non-zero when the program has type errors, so `check`
@@ -245,20 +167,20 @@ private fun check(
     }
 
     val checker = Checker()
-    val env = klein.check.TypeEnv.empty()
+    val env = TypeEnv.empty()
     val lastType = checker.synthProgram(program, env)
 
     for (stmt in program.stmts) {
         when (stmt) {
-            is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toSurface())}") }
-            is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toSurface())}") }
+            is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
+            is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
             is TypeDef -> println("type ${stmt.name}")
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
         }
     }
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
-        println("$exprSource : ${Type.print(lastType.toSurface())}")
+        println("$exprSource : ${Type.print(lastType)}")
     }
 
     val errors = checker.getErrors()
@@ -266,28 +188,10 @@ private fun check(
         println("✓ Type checks")
         return
     }
-    // New-checker errors carry no ConstraintContext, so rendering never inspects the (legacy) env.
-    val renderEnv = TypeEnv.empty()
     for (error in errors) {
-        if (rawErrors) {
-            printRawError(error, renderEnv)
-        } else {
-            printError(source, error.span, error.render(renderEnv), rawOutput = false)
-        }
+        printError(source, error.span, error.message, rawErrors)
     }
     exitProcess(1)
-}
-
-private fun printRawError(
-    error: TypeError,
-    env: TypeEnv,
-) {
-    println("Error: ${error.renderMessage(env)} at ${error.span}")
-    if (error.context.isNotEmpty()) {
-        for (ctx in error.context) {
-            println("  ${ctx.render(env)}")
-        }
-    }
 }
 
 private fun printError(

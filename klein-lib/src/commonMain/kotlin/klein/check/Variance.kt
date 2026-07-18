@@ -1,38 +1,4 @@
-package klein.types
-
-import klein.FieldDecl
-import klein.SourceSpan
-
-/**
- * Internal representation for type definitions.
- * These get used for recognizing user defined types like List
- */
-
-data class TypeDefInfo(
-    val name: String,
-    val typeParams: List<TypeParamInfo>,
-    val iface: TypeBinding.Poly,
-    val span: SourceSpan,
-)
-
-data class TypeParamInfo(
-    val name: String,
-    val variance: Variance,
-    val tvar: SimpleType.TVar,
-)
-
-data class ConstructorInfo(
-    val name: String,
-    val typeParams: List<String>,
-    val fields: List<FieldDecl>,
-    val parentType: String,
-    val span: SourceSpan,
-)
-
-data class FunDefInfo(
-    val name: String,
-    val paramNames: List<String>,
-)
+package klein.check
 
 enum class Variance {
     Covariant,

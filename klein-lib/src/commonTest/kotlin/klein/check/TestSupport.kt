@@ -3,7 +3,6 @@ package klein.check
 import klein.Lexer
 import klein.Parser
 import klein.check.Type.*
-import klein.types.TypeError
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -57,8 +56,8 @@ fun assertMismatch(
 ) {
     val e = infer(src).errors.single()
     assertIs<TypeError.TypeMismatch>(e)
-    assertEquals(subtype, klein.Type.print(e.subtype))
-    assertEquals(supertype, klein.Type.print(e.supertype))
+    assertEquals(subtype, Type.print(e.subtype))
+    assertEquals(supertype, Type.print(e.supertype))
 }
 
 /** Assert [src] checks cleanly and its type is [expected], up to skolem renaming. */
@@ -70,7 +69,7 @@ fun assertInfersType(
     assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
     assertTrue(
         expected.alphaEquals(r.type),
-        "expected ${klein.Type.print(expected.toSurface())}, got ${klein.Type.print(r.type.toSurface())}",
+        "expected ${Type.print(expected)}, got ${Type.print(r.type)}",
     )
 }
 
