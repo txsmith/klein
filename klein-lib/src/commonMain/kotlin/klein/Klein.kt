@@ -1,26 +1,21 @@
 package klein
 
-import klein.types.TypeEnv
+import klein.check.Checker
+import klein.check.TypeEnv
+import klein.check.toSurface
 import klein.types.TypeError
-import klein.types.TypeSimplifier
-import klein.types.Typer
 
 /**
- * Main entry point for the Klein type inference system.
- *
- * Provides a unified API for:
- * - Parsing Klein source code
- * - Type inference with automatic simplification
- * - Access to simplified type representations
+ * Library entry point: lex → parse → type-check with the bidirectional checker.
  *
  * Example usage:
  * ```
- * val result = Klein.infer("|x -> x|(42)")
- * println(result.type)  // "Num"
+ * val result = Klein.check("|x: Num -> x|(42)")
+ * println(Type.print(result.type))  // "Num"
  * ```
  */
 object Klein {
-    data class InferenceResult(
+    data class CheckResult(
         val program: Program,
         val type: Type,
         val errors: List<TypeError>,
@@ -28,35 +23,19 @@ object Klein {
         val hasErrors: Boolean get() = errors.isNotEmpty()
     }
 
-    fun infer(
+    fun check(
         source: String,
         env: TypeEnv = TypeEnv.empty(),
-    ): InferenceResult {
-        val tokens = Lexer(source).tokenize().toList()
-        val program = Parser(tokens).parseProgram()
-        val result = Typer.infer(program, env)
-
-        val scheme = TypeSimplifier.simplify(result.type, result.env)
-        val type = TypeSimplifier.coalesceType(scheme, result.env)
-
-        return InferenceResult(
+    ): CheckResult {
+        val program = parse(source)
+        val checker = Checker()
+        val type = checker.synthProgram(program, env)
+        return CheckResult(
             program = program,
-            type = type,
-            errors = result.errors,
+            type = type.toSurface(),
+            errors = checker.getErrors(),
         )
     }
-
-    fun inferOrNull(
-        source: String,
-        env: TypeEnv = TypeEnv.empty(),
-    ): InferenceResult? =
-        try {
-            infer(source, env)
-        } catch (_: LexerError) {
-            null
-        } catch (_: ParseError) {
-            null
-        }
 
     fun parse(source: String): Program {
         val tokens = Lexer(source).tokenize().toList()
