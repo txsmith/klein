@@ -5,6 +5,7 @@ package klein.parser
 import klein.ParseError
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * Parser tests for the `null` literal.
@@ -545,48 +546,48 @@ class NullTest {
     fun nullAsVariableName_fails() {
         val error = assertFailsWith<ParseError> { parseStmt("null = 42") }
         // Expects identifier for binding, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullAsFunctionName_fails() {
         val error = assertFailsWith<ParseError> { parseTopLevel("fun null(x) = x") }
         // Expects identifier for function name, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullAsParameterName_fails() {
         val error = assertFailsWith<ParseError> { parse("|null -> 42|") }
         // Expects identifier for parameter, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullAsMultipleParameterName_fails() {
         val error = assertFailsWith<ParseError> { parse("|x, null -> 42|") }
         // Expects identifier for parameter, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullAsFunctionParameter_fails() {
         val error = assertFailsWith<ParseError> { parseTopLevel("fun f(null) = 42") }
         // Expects identifier for parameter, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullAsRecordFieldName_fails() {
         val error = assertFailsWith<ParseError> { parse("{ null = 42 }") }
         // Expects identifier for field name, got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 
     @Test
     fun nullInFieldAccess_fails() {
         val error = assertFailsWith<ParseError> { parse("x.null") }
         // Expects identifier after '.', got keyword
-        assert(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
     }
 }
