@@ -183,7 +183,7 @@ class Subtyping {
         return TRef(ctor.parentType, parentArgs)
     }
 
-    private fun ifaceOf(
+    internal fun ifaceOf(
         ref: TRef,
         env: TypeEnv,
     ): Type {

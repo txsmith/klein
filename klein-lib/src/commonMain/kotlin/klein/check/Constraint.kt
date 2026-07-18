@@ -117,6 +117,11 @@ class ConstraintGenerator(
                 }
             }
 
+            // A nominal lower bound meets a structural record: unfold to its interface and match
+            // structurally, so a type variable in the record can be solved from a nominal argument.
+            lower is TRef && upper is TRecord && env.lookupTypeDef(lower.name) != null ->
+                generate(quantified, unknowns, subtyping.ifaceOf(lower, env), upper, env)
+
             else ->
                 if (subtyping.isSubtype(lower, upper, env)) {
                     emptyConstraints()

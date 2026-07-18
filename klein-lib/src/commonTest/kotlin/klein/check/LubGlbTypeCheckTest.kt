@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.types.TypeError
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -393,15 +392,54 @@ class LubGlbTypeCheckTest {
             """.trimIndent(),
         )
 
+    // The polymorphic branch is instantiated against the monomorphic one (as at an application),
+    // so synth mode needs no annotation.
     @Test
-    fun synthOnePolyBranch_isError() =
-        cannotJoin(
+    fun synthOnePolyBranch_instantiatesToMono() =
+        assertLub(
+            "(Num) -> Num",
             """
             fun id(x: 'T): 'T = x
             fun g(n: Num): Num = n
             if true then id else g
             """.trimIndent(),
+        )
+
+    // Which branch is polymorphic doesn't matter — the join is commutative.
+    @Test
+    fun synthOnePolyBranch_monoThenPoly() =
+        assertLub(
+            "(Num) -> Num",
+            """
+            fun id(x: 'T): 'T = x
+            fun g(n: Num): Num = n
+            if true then g else id
+            """.trimIndent(),
+        )
+
+    // No instantiation of the polymorphic branch fits the mono branch, so it can't be grounded.
+    @Test
+    fun synthOnePolyBranch_noFittingInstantiation_rejects() =
+        cannotJoin(
+            """
+            fun id(x: 'T): 'T = x
+            fun h(n: Num): String = "x"
+            if true then id else h
+            """.trimIndent(),
             message = "Cannot join polymorphic if-branches",
+        )
+
+    // A polymorphic value (a phantom-typed binding) is instantiated against the mono record branch;
+    // the free variable is unconstrained by the record, so the join is the record.
+    @Test
+    fun synthPolyValueBranch_joinsWithRecord() =
+        assertLub(
+            "{ tag: Num }",
+            """
+            type Phantom<'A> = Phantom { tag: Num }
+            q: Phantom<'A> = Phantom(4)
+            if true then q else { tag = 8 }
+            """.trimIndent(),
         )
 
     @Test
@@ -416,9 +454,7 @@ class LubGlbTypeCheckTest {
             """.trimIndent(),
         )
 
-    // Joining two polymorphic branches would need to synthesize a polymorphic (TForall) result,
-    // which the branch join does not yet produce.
-    @Ignore
+    // Two polymorphic branches join to the more general scheme (here the shared one), kept polymorphic.
     @Test
     fun polymorphicBranches_join() {
         val r =

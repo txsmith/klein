@@ -45,6 +45,49 @@ class GenericsTypeCheckTest {
             ).type,
         )
 
+    // A nominal type satisfies a structural interface, so a generic function over `{ value: 'T }`
+    // takes a nominal argument and solves `'T` from its field — in synth mode, with no result demand.
+    @Test
+    fun genericRecordParam_solvedFromNominalArg() =
+        assertEquals(
+            TNum,
+            infer(
+                """
+                type Box = Box { value: Num }
+                fun getValue(r: { value: 'T }): 'T = r.value
+                getValue(Box(5))
+                """.trimIndent(),
+            ).type,
+        )
+
+    // The nominal carries extra fields beyond what the parameter demands — plain width subtyping.
+    @Test
+    fun genericRecordParam_nominalArgWithExtraField() =
+        assertEquals(
+            TNum,
+            infer(
+                """
+                type Box = Box { value: Num, extra: String }
+                fun getValue(r: { value: 'T }): 'T = r.value
+                getValue(Box(5, "hi"))
+                """.trimIndent(),
+            ).type,
+        )
+
+    // The nominal is missing a field the parameter demands, so no instantiation of `'T` matches.
+    @Test
+    fun genericRecordParam_rejectsNominalMissingField() {
+        val e =
+            infer(
+                """
+                type Box = Box { value: Num }
+                fun needTwo(r: { value: 'T, extra: String }): 'T = r.value
+                needTwo(Box(5))
+                """.trimIndent(),
+            ).errors.filterIsInstance<TypeError.TypeMismatch>().single()
+        assertEquals("{ value: Num }", klein.Type.print(e.subtype))
+    }
+
     @Test
     fun genericFunctionResult() =
         assertEquals(
@@ -127,6 +170,20 @@ class GenericsTypeCheckTest {
             { a = f(0), b = f(true) }
             """.trimIndent()
         assertEquals(TRecord(mapOf("a" to TNum, "b" to TBool)), infer(program).type)
+    }
+
+    // A phantom-typed binding generalizes at the annotation, so the value is used at two instantiations.
+    @Test
+    fun localPoly_phantomValUsedAtTwoTypes() {
+        val program =
+            """
+            type Phantom<'A> = Phantom { tag: Num }
+            fun useNum(p: Phantom<Num>): Num = p.tag
+            fun useStr(p: Phantom<String>): Num = p.tag
+            q: Phantom<'A> = Phantom(4)
+            { a = useNum(q), b = useStr(q) }
+            """.trimIndent()
+        assertEquals(TRecord(mapOf("a" to TNum, "b" to TNum)), infer(program).type)
     }
 
     @Test

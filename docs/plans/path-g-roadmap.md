@@ -166,7 +166,22 @@ DELETE-AT-TEARDOWN suites. Strip `TVar` lower/upper bounds, coalescing, and
 to whatever M5 (joins & sums) actually keeps. Retire the differential harness once
 the old engine is gone.
 
+Also **rework the `TypeError` hierarchy to eliminate `TypeError.Misc`.** The Path G
+checker leans on `Misc(String)` as a catch-all (branch-join failures, recursive-function
+"needs a declared return type", etc.); each should become a proper typed error with the
+fields tests assert on, so no user-facing diagnostic is an untyped string.
+
 *Depends on: M7 green.*
+
+---
+
+## Polymorphism follow-ups (deferred checker bugs)
+
+Found while finishing M4/M5; to fix under a dedicated "polymorphism bugs" pass.
+
+1. **Branch join over-rejects when neither branch subsumes the other.** `if c then q else { tag = 1, extra = true }`, with `q : Phantom<'A>` (interface `{ tag: Num }`), rejects — yet the join `{ tag: Num }` plainly exists (the all-monomorphic version gives it). `synthIfThenElse` grounds a polymorphic branch by instantiating it to a *subtype of the whole* other branch (`groundPolyBranch` → `solveQuantified`), so it only produces joins where one branch subsumes the other, never a genuine third common supertype. Fix: match the poly branch against the *field intersection* — a lenient `generate` that skips fields the poly lacks, kept separate from the strict call-site `generate` where a missing field is a real error (the `needTwo` reject) — solve the variables (defaulting untouched ones), then `lub`. The supertype comes from `lub`, not the solver; no co-solving of "substitution + supertype" is needed.
+
+2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Path G declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
 
 ---
 

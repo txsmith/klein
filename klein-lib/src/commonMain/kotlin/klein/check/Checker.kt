@@ -385,6 +385,25 @@ class Checker {
         return if (isNullableApply) optionalOf(result) else result
     }
 
+    /** A ground branch is returned as-is; a polymorphic branch is instantiated so its body fits the
+     *  other (monomorphic) branch. Null when it can't be grounded — both branches polymorphic, or no
+     *  instantiation of this branch fits the other. */
+    private fun groundPolyBranch(
+        branch: Type,
+        other: Type,
+        env: TypeEnv,
+    ): Type? {
+        if (branch !is TForall) return branch
+        // Fit against the other branch — or, when it is itself polymorphic, a rigid skolemization of
+        // it, so success means "fits every instantiation" (i.e. `branch <: other`).
+        val target = if (other is TForall) skolemize(other) else other
+        val solved = constraints.solveQuantified(branch, target, target, env)
+        return if (solved.errors.isEmpty()) solved.type else null
+    }
+
+    private fun skolemize(forall: TForall): Type =
+        substitute(forall.body, forall.params.associateWith { freshSkolem(it.name) })
+
     private fun synthIfThenElse(
         expr: IfThenElse,
         env: TypeEnv,
@@ -396,10 +415,23 @@ class Checker {
             return optionalOf(thenBranchType)
         }
         val elseBranchType = synth(expr.elseBranch, env)
-        if (thenBranchType is TForall || elseBranchType is TForall) {
+        // Both branches polymorphic: neither is ground, so the join is the more general scheme — the
+        // one that subsumes the other. (Lub-ing two independently-skolemized bodies would not.)
+        if (thenBranchType is TForall && elseBranchType is TForall) {
+            return when {
+                groundPolyBranch(thenBranchType, elseBranchType, env) != null -> elseBranchType
+                groundPolyBranch(elseBranchType, thenBranchType, env) != null -> thenBranchType
+                else -> recordError(TypeError.Misc("Cannot join polymorphic if-branches", expr.span))
+            }
+        }
+        // At most one branch is polymorphic: instantiate it against the other (as at an application)
+        // and join as usual.
+        val thenGround = groundPolyBranch(thenBranchType, elseBranchType, env)
+        val elseGround = groundPolyBranch(elseBranchType, thenBranchType, env)
+        if (thenGround == null || elseGround == null) {
             return recordError(TypeError.Misc("Cannot join polymorphic if-branches", expr.span))
         }
-        val (joined, failures) = subtyping.lub(thenBranchType, elseBranchType, env)
+        val (joined, failures) = subtyping.lub(thenGround, elseGround, env)
         return if (failures.isEmpty()) {
             joined
         } else {
