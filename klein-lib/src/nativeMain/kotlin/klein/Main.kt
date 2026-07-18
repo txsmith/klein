@@ -1,7 +1,7 @@
 package klein
 
 import klein.check.Checker
-import klein.check.toLegacy
+import klein.check.toSurface
 import klein.types.*
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -26,7 +26,7 @@ fun main(args: Array<String>) {
     }
 
     val command = args[0]
-    // Each command accepts its own flags; `check` (Path G) has no IR formats — its type is a plain
+    // Each command accepts its own flags; `check` (Operation Bidi) has no IR formats — its type is a plain
     // structural tree with nothing to dump. Help/unknown commands (null) skip flag validation.
     val knownFlags: Set<String>? =
         when (command) {
@@ -105,7 +105,7 @@ private fun printUsage() {
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
           infer, i     Infer and print types (legacy SimpleSub engine)
-          check, c     Type-check with the Path G checker; print types and pass/fail
+          check, c     Type-check with the Operation Bidi checker; print types and pass/fail
           help         Show this help
 
         Options:
@@ -223,7 +223,7 @@ private fun infer(
 }
 
 /**
- * Run the Path G bidirectional checker: print the type of each top-level binding (and the trailing
+ * Run the Operation Bidi bidirectional checker: print the type of each top-level binding (and the trailing
  * expression), then a pass/fail verdict. Exits non-zero when the program has type errors, so `check`
  * is usable as a gate in scripts.
  */
@@ -250,15 +250,15 @@ private fun check(
 
     for (stmt in program.stmts) {
         when (stmt) {
-            is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toLegacy())}") }
-            is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toLegacy())}") }
+            is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toSurface())}") }
+            is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it.toSurface())}") }
             is TypeDef -> println("type ${stmt.name}")
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
         }
     }
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
-        println("$exprSource : ${Type.print(lastType.toLegacy())}")
+        println("$exprSource : ${Type.print(lastType.toSurface())}")
     }
 
     val errors = checker.getErrors()

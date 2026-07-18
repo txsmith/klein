@@ -70,7 +70,7 @@ fun assertInfersType(
     assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
     assertTrue(
         expected.alphaEquals(r.type),
-        "expected ${klein.Type.print(expected.toLegacy())}, got ${klein.Type.print(r.type.toLegacy())}",
+        "expected ${klein.Type.print(expected.toSurface())}, got ${klein.Type.print(r.type.toSurface())}",
     )
 }
 

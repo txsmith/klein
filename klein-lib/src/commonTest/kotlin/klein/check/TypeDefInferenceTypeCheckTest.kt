@@ -22,7 +22,7 @@ class TypeDefInferenceTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toLegacy()))
+        assertEquals(expected, klein.Type.print(r.type.toSurface()))
     }
 
     private fun cannotJoin(src: String) = assertTrue(infer(src).errors.isNotEmpty(), "expected a join failure")

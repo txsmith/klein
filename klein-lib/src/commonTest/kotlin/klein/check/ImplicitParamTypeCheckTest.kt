@@ -21,7 +21,7 @@ class ImplicitParamTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toLegacy()))
+        assertEquals(expected, klein.Type.print(r.type.toSurface()))
     }
 
     private inline fun <reified T : TypeError> assertError(src: String) {
