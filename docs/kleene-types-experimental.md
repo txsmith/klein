@@ -1,6 +1,6 @@
 # Klein Kleene Types
 
-**Status: Research feature, not part of initial implementation. Predates Path G and assumes Hindley-Milner inference — orthogonal to the current bidirectional checker; revisit only if pursued.**
+**Status: Research feature, not part of initial implementation. Predates Operation Bidi and assumes Hindley-Milner inference — orthogonal to the current bidirectional checker; revisit only if pursued.**
 
 Kleene types are a potential extension to Klein's type system that builds cardinality (how many values exist) into types as a first-class concept, with full type inference via Hindley-Milner extended with cardinality polymorphism.
 

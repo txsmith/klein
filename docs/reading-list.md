@@ -2,7 +2,7 @@
 
 A curated reading list for Klein's type system.
 
-> **Note (2026-06-24):** Klein moved to **local bidirectional checking** (Path G). The SimpleSub / MLstruct material below is now **background and history** — it informed the decision and explains what was tried — not the current implementation path. The primary reference for the current approach is bidirectional typing.
+> **Note (2026-06-24):** Klein moved to **local bidirectional checking** (Operation Bidi). The SimpleSub / MLstruct material below is now **background and history** — it informed the decision and explains what was tried — not the current implementation path. The primary reference for the current approach is bidirectional typing.
 
 ## Tier 0: The Current Approach
 

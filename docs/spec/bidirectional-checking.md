@@ -1,13 +1,13 @@
 # M0 — Surface Spec: Local Bidirectional Type Checking
 
-**Status:** Drafting · **Milestone:** Path G / M0 · **Started:** 2026-06-24
+**Status:** Drafting · **Milestone:** Operation Bidi / M0 · **Started:** 2026-06-24
 
 This is the contract the rewrite (`rewrite/type-checker`) is built and tested
 against. It specifies **how Klein decides types locally**, without global
 inference. The *why* is in
 [`../decisions/2026-06-23-polarity-wall-and-type-system-direction.md`](../decisions/2026-06-23-polarity-wall-and-type-system-direction.md);
 the build/teardown sequencing is in
-[`../plans/path-g-roadmap.md`](../plans/path-g-roadmap.md).
+[`../plans/operation-bidi-roadmap.md`](../plans/operation-bidi-roadmap.md).
 
 **In scope:** the *existing* surface — top-level `type` defs, `fun`/binding/param
 annotations, records, tuples, applied types, function types, `if`, the `?`
@@ -103,7 +103,7 @@ every signature's **input** is known up front. Processing:
    signatures fully known before any body is checked, dissolving the cycle.
 
 Rationale: inferring a return type from a body that calls itself would need a
-fixpoint over a type variable — exactly the constraint machinery Path G removes. A
+fixpoint over a type variable — exactly the constraint machinery Operation Bidi removes. A
 declared return type breaks the cycle locally.
 
 *Why every member, not the minimum?* A single declared return can technically

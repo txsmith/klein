@@ -1,12 +1,12 @@
 # Test Porting Order (M1)
 
-The order in which the existing type-test suites get ported as the Path G checker is
-built (see [path-g-roadmap.md](./path-g-roadmap.md)). Each suite is tagged:
+The order in which the existing type-test suites get ported as the Operation Bidi checker is
+built (see [operation-bidi-roadmap.md](./operation-bidi-roadmap.md)). Each suite is tagged:
 
-- **KEEP** — ports ~verbatim (verdict-stable; same answers under Path G)
+- **KEEP** — ports ~verbatim (verdict-stable; same answers under Operation Bidi)
 - **REWRITE** — port with annotations added / reframed for bidirectional checking
 - **GUARD** — keep only a few tests as a rejection guard; delete the rest
-- **DELETE** — gone (tests machinery or programs Path G removes)
+- **DELETE** — gone (tests machinery or programs Operation Bidi removes)
 
 The **M7 green-bar** = every KEEP suite green on the new checker before any teardown.
 
@@ -14,7 +14,7 @@ The **M7 green-bar** = every KEEP suite green on the new checker before any tear
 
 - `TypeSimplifierTest`, `LevelConstraintTest` — simplifier / let-poly levels (deleted).
 - `SimpleSubTest` — SimpleSub-only programs (self-application, let-polymorphism,
-  inferred connectives) that Path G rejects (deleted).
+  inferred connectives) that Operation Bidi rejects (deleted).
 
 ## Phase A — Substrate (engine-agnostic; port first)
 

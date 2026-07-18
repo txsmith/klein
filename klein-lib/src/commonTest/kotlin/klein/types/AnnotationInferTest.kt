@@ -440,7 +440,7 @@ class AnnotationInferTest {
         )
     }
 
-    // Pre-existing WIP failure (from 626f665). AnnotationInferTest is slated for the Path G
+    // Pre-existing WIP failure (from 626f665). AnnotationInferTest is slated for the Operation Bidi
     // rewrite (this case is in the union/intersection drop-pile) — see docs/plans/test-porting.md.
     @Ignore
     @Test
@@ -716,7 +716,7 @@ class AnnotationInferTest {
         assertEquals(1, errors.size)
     }
 
-    // Pre-existing WIP failure (from 626f665). AnnotationInferTest is slated for the Path G
+    // Pre-existing WIP failure (from 626f665). AnnotationInferTest is slated for the Operation Bidi
     // rewrite (this generics case is a keeper to revisit then) — see docs/plans/test-porting.md.
     @Ignore
     @Test

@@ -43,4 +43,4 @@ Adopt **Path G**: keep structural + nominal subtyping, drop global/inferred poly
 ## References
 
 - Spec: [../spec/bidirectional-checking.md](../spec/bidirectional-checking.md)
-- Roadmap: [../plans/path-g-roadmap.md](../plans/path-g-roadmap.md)
+- Roadmap: [../plans/operation-bidi-roadmap.md](../plans/operation-bidi-roadmap.md)

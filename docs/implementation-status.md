@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** The type system is mid-migration to **Path G** — local bidirectional checking (see [plans/path-g-roadmap.md](plans/path-g-roadmap.md)). The new checker (`klein.check`, reachable via the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine (`klein.types`, reachable via `infer`) still backs the default pipeline and is slated for retirement at cutover (M7) and teardown (M8). No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5, with M7 cutover done). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine (`klein.types`, reachable only via the `infer` CLI command) awaits deletion in the teardown PR (M8). No interpreter.
 
 ## Parser
 
@@ -75,14 +75,14 @@
 
 ## Type System
 
-The type system is mid-migration to **Path G** (local bidirectional checking). See
+The type system runs on **Operation Bidi** (local bidirectional checking). See
 [type-system.md](type-system.md) for design and
-[plans/path-g-roadmap.md](plans/path-g-roadmap.md) for the milestone plan. Two engines
-currently coexist: the new Path G checker (`klein.check`, `check` command) is the target;
-the legacy SimpleSub engine (`klein.types`, `infer` command) still backs the default
-pipeline and is retired at cutover/teardown (M7/M8).
+[plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md) for the milestone plan. The cutover
+(M7) is done: the library entry (`Klein.check`) and the `check` CLI command run the
+`klein.check` checker. The legacy SimpleSub engine (`klein.types`) survives only behind
+the `infer` CLI command and its own test suites, awaiting deletion in the teardown PR (M8).
 
-### Path G checker — complete (roadmap M2–M5)
+### Operation Bidi checker — complete (roadmap M2–M5)
 
 | Feature | Notes |
 |---------|-------|
@@ -101,19 +101,18 @@ pipeline and is retired at cutover/teardown (M7/M8).
 | Optional types | `T?`, null safety, safe navigation `?.`, `NullNotAllowed` |
 | Branch joins | `if`/`else` results join to a common supertype (`lub`), nominal join/meet by variance |
 
-### Path G checker — ahead
+### Operation Bidi checker — ahead
 
 | Feature | Notes |
 |---------|-------|
-| Declared bounds | `where 'T <: B` (roadmap M6) |
-| Cutover | Route the default pipeline through `klein.check` (M7) |
-| Teardown | Delete SimpleSub machinery (M8) |
+| Teardown | Delete SimpleSub machinery (M8, its own PR) |
+| Declared bounds | `where 'T <: B` (roadmap M6 — deferred) |
 | Pattern matching | `match x with \| Some v -> v \| None -> 0` |
 | Kleene types | `T*`, `T+` (experimental; `T?` done) |
 
 ### Legacy SimpleSub engine — being retired (M8)
 
-Still present under `klein.types`; features specific to it (not carried into Path G):
+Still present under `klein.types`; features specific to it (not carried into Operation Bidi):
 
 | Feature | Notes |
 |---------|-------|

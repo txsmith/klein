@@ -209,7 +209,7 @@ class RecordTypeCheckTest {
         )
 
     // --- Not portable: unannotated-lambda inference + polymorphic record fields ---
-    // Each infers the type of an *unannotated* lambda from usage, which Path G doesn't do (bare
+    // Each infers the type of an *unannotated* lambda from usage, which Operation Bidi doesn't do (bare
     // params are an error). The polymorphic results would also need polymorphic record fields —
     // explicit `forall`, still deferred; records stay monomorphic. Not a milestone away, so they
     // stay out unless rewritten into annotated/monomorphic forms:

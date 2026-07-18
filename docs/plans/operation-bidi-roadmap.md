@@ -1,23 +1,27 @@
-# Path G Roadmap — Local Bidirectional Type Checking
+# Operation Bidi Roadmap — Local Bidirectional Type Checking
 
 **Status:** In progress · **Started:** 2026-06-24 · **Branch:** `rewrite/type-checker`
 
-**Progress:** M2 (bidirectional core), M3 (concrete subtyping), and M4 (generics) are built and green in `klein.check`; M5 (joins & sums) is substantially done. M6 (declared bounds), M7 (cutover), and M8 (teardown) are ahead — the default pipeline still runs the legacy engine, with Path G reachable via the `check` command.
+**Progress:** M2 (bidirectional core), M3 (concrete subtyping), M4 (generics), and M5 (joins & sums) are built and green in `klein.check`. M7 (cutover) is done: the library entry (`Klein.check`) and the `check` CLI command both run the new checker; the legacy engine survives only behind the `infer` CLI command and its own test suites. M6 (declared bounds) is **deferred** — it gates nothing else and lands whenever bounded polymorphism becomes a priority. M8 (teardown) happens as its own PR so the deletion stays separately revertable.
 
 This roadmap sequences Klein's move off SimpleSub-style global inference and onto
-**Path G**: drop inferred polymorphism, keep structural + nominal subtyping, and
+**Operation Bidi**: drop inferred polymorphism, keep structural + nominal subtyping, and
 replace constraint-based inference with **local bidirectional checking** (annotate
 signatures, infer interiors).
 
+> **Naming:** Operation Bidi was called "Path G" while it was one of the polarity-wall
+> ADR's candidate ways out (option G, "Go"). The ADRs are immutable history and keep
+> the old name; everything living says Operation Bidi.
+
 The *why* lives in the decision record —
 [`2026-06-23-polarity-wall-and-type-system-direction.md`](../decisions/2026-06-23-polarity-wall-and-type-system-direction.md)
-— and is not re-argued here. In one line: demanding subtyping **and** principal global inference forces first-class `&`/`|`, which forces either incompleteness or MLstruct's full Boolean-algebra engine; Path G keeps subtyping and gives up the global inference that created the wall. This document is the build/teardown plan.
+— and is not re-argued here. In one line: demanding subtyping **and** principal global inference forces first-class `&`/`|`, which forces either incompleteness or MLstruct's full Boolean-algebra engine; Operation Bidi keeps subtyping and gives up the global inference that created the wall. This document is the build/teardown plan.
 
 ## Guiding invariant
 
 The surface language and the checker's output are **one language**: whatever the
 checker prints must be writable, and whatever is writable must be checkable. Under
-Path G this is easy to honor — types are *written and gated per site*, not emergent
+Operation Bidi this is easy to honor — types are *written and gated per site*, not emergent
 from a solver — but every milestone should be checked against it.
 
 ## Two streams
@@ -80,14 +84,14 @@ spec — they arrive with M6 and a later milestone respectively.)
 Triage every existing test against the M0 spec into three buckets:
 - **KEEP** — verdict/error tests (program → accept/reject/error). Engine-agnostic;
   these become the **M7 acceptance contract**.
-- **REWRITE** — inferred-string tests. Each is a *decision*: does Path G still
+- **REWRITE** — inferred-string tests. Each is a *decision*: does Operation Bidi still
   infer this, or does it now require an annotation? This is the migration ledger,
   led by `AnnotationInferTest` and the `*InferTest` files.
 - **DELETE-AT-TEARDOWN** — machinery-internal suites that test the solver/simplifier
   directly: `TypeSimplifierTest`, `LevelConstraintTest`. These die in M8; deleting them
   is correct, not lost coverage. (`LubGlbSimplificationTest` and `ScopeGraphSccTest` were
   originally listed here but are **KEEP** — the join lattice and SCC ordering / recursion
-  detection are Path G features, not SimpleSub machinery; see [test-porting.md](./test-porting.md).)
+  detection are Operation Bidi features, not SimpleSub machinery; see [test-porting.md](./test-porting.md).)
 
 *Depends on: M0 (can't classify required-vs-inferred without the spec).*
 *Output: per-file worklist + the precise definition of the M7 green bar →
@@ -128,14 +132,17 @@ policy, not eager upcasting; the exact policy (resolve to parent vs.
 require-annotation) is open. **Prioritized ahead of bounds** — this is what makes `if`/`else` usable,
 the bread-and-butter need, and it depends on neither generics nor bounds.
 
-Known gap: `synthIfThenElse` does not yet compute a join — it only accepts a branch
-that is a subtype of the other, and crashes on a `∀`-typed branch. The join must be
-`subtyping.lub` extended to polymorphic values (α-equal → that scheme, else reject).
-Red targets in `IfThenElseLubTest`.
+Done: `synthIfThenElse` joins via `subtyping.lub`; polymorphic branches ground
+against the other branch (or, both-poly, resolve to the more general scheme). The
+remaining over-rejection is logged under *Polymorphism follow-ups* below.
 
 *Depends on: M3; touches both the new checker and existing nominal machinery.*
 
-### M6 · Declared bounds 🔨
+### M6 · Declared bounds 🔨 (deferred)
+**Deferred past the cutover:** nothing downstream depends on it, and the type-system
+push is pausing in favor of the interpreter/effects work. Land it when bounded
+polymorphism earns its place.
+
 `where 'T <: B`: skolem-with-upper-bound, checked locally at instantiation.
 Mergeable (record/interface) bounds merge at declaration; nominal-intersection
 bounds reject. This subsumes the entire carrier/`as` bounded-polymorphism saga —
@@ -146,30 +153,41 @@ milestones.
 *Depends on: M4.*
 
 ### Checking-tests track 🔨
-A test category Path G *adds* and that does not exist today: annotation
+A test category Operation Bidi *adds* and that does not exist today: annotation
 accept/reject against a body, generic instantiation, `where`-bound
 satisfaction/violation, join-or-error. Grows alongside M2–M6.
 
-### M7 · Cutover 🔀
-Route `Typer.kt` through the new checker. Build a **differential harness**: run
-every program snippet from the existing tests through old-engine and new-checker,
-diff the *verdicts* (string diffs are expected noise; verdict diffs are real
-behavioral changes to scrutinize). The M1 KEEP set must go green before any
-deletion.
+### M7 · Cutover 🔀 ✅
+Done. `Klein.check` (the library entry) and the `check` CLI command run the new
+checker; the legacy engine is reachable only via the `infer` CLI command and its
+own test suites (whose assertions now drive `Typer` directly).
 
-*Depends on: M2–M6.*
+The planned **differential harness** was skipped: the ported `klein.check` suites —
+every KEEP/REWRITE case re-expressed against the checker, all green — serve as the
+acceptance contract, and `infer` vs `check` on the CLI covered spot comparisons.
+
+*Depended on: M2–M5 (M6 deferred out of the critical path).*
 
 ### M8 · Teardown 🧹
-Delete `Subtyping.kt`, `TypeComponents.kt`, `TypeSimplifier.kt`, and the
-DELETE-AT-TEARDOWN suites. Strip `TVar` lower/upper bounds, coalescing, and
-`freshenAbove` let-poly from `SimpleType.kt`. Collapse `Type.kt`'s `Union`/`Inter`
-to whatever M5 (joins & sums) actually keeps. Retire the differential harness once
-the old engine is gone.
+**Its own PR**, so the deletion stays revertable independently of the rewrite.
+Delete the `klein/types` engine (`Typer.kt`, `SimpleType.kt`, `Subtyping.kt`,
+`TypeComponents.kt`, `TypeSimplifier.kt`, `TypePrinter.kt`, plus the now-shadowed
+`TypeEnv`/`ScopeGraph`/`TypeDef`/`TypeDefPreprocessor`), the `infer` CLI command
+and its `--ir-*` flags, and the legacy test suites.
 
-Also **rework the `TypeError` hierarchy to eliminate `TypeError.Misc`.** The Path G
-checker leans on `Misc(String)` as a catch-all (branch-join failures, recursive-function
-"needs a declared return type", etc.); each should become a proper typed error with the
-fields tests assert on, so no user-facing diagnostic is an untyped string.
+**Collapse to one type hierarchy.** `klein.Type` exists only to be printed: nothing
+in `klein.check` produces its `Union`/`Inter` variants (only the legacy simplifier
+does), and `toSurface` is a lossy copy made solely for error payloads and CLI
+output. So: move `TypeError` into `klein.check` embedding checker types, print
+checker types directly (folding `toSurface`'s flatten-`∀`/name-skolems into the
+printer), and delete `klein.Type` wholesale — `Union`/`Inter` die with it. The
+parser's `UnionTypeExpr`/`IntersectionTypeExpr` stay: they exist so `A | B` in an
+annotation gets the typed `AnonymousUnionType` rejection rather than a parse error,
+and first-class unions are committed-but-deferred, so the syntax returns.
+
+Remaining `TypeError` pruning (the `Misc` catch-all is already gone — branch joins,
+recursive-return, and anonymous union/intersection annotations have typed errors):
+drop variants and `ConstraintContext` machinery only the legacy engine emitted.
 
 *Depends on: M7 green.*
 
@@ -181,7 +199,7 @@ Found while finishing M4/M5; to fix under a dedicated "polymorphism bugs" pass.
 
 1. **Branch join over-rejects when neither branch subsumes the other.** `if c then q else { tag = 1, extra = true }`, with `q : Phantom<'A>` (interface `{ tag: Num }`), rejects — yet the join `{ tag: Num }` plainly exists (the all-monomorphic version gives it). `synthIfThenElse` grounds a polymorphic branch by instantiating it to a *subtype of the whole* other branch (`groundPolyBranch` → `solveQuantified`), so it only produces joins where one branch subsumes the other, never a genuine third common supertype. Fix: match the poly branch against the *field intersection* — a lenient `generate` that skips fields the poly lacks, kept separate from the strict call-site `generate` where a missing field is a real error (the `needTwo` reject) — solve the variables (defaulting untouched ones), then `lub`. The supertype comes from `lub`, not the solver; no co-solving of "substitution + supertype" is needed.
 
-2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Path G declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
+2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Operation Bidi declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
 
 ---
 
@@ -202,7 +220,7 @@ inference behavior we are deliberately removing. The four strata and their fates
 
 `LubGlbSimplificationTest` and `ScopeGraphSccTest` (+ `ScopeGraphTest`) are **KEEP**, not
 machinery: the join lattice (ported to `LubGlbTypeCheckTest`) and SCC-based dependency
-ordering / recursion detection (ported to `klein.check`, wiring `synthBlockStmts`) are Path G
+ordering / recursion detection (ported to `klein.check`, wiring `synthBlockStmts`) are Operation Bidi
 features. Forward references and mutual recursion depend on the scope graph and were broken
 without it.
 
@@ -213,7 +231,8 @@ Consequences, baked into the milestones above:
 3. **Inferred-string tests are a ledger, not a port** — a worklist for discovering
    the spec's edge cases empirically.
 4. **The differential harness** turns "did I break something" into a reviewable
-   list of verdict diffs.
+   list of verdict diffs. *(In the end skipped — the ported suites made it
+   redundant; see M7.)*
 
 ---
 
@@ -229,10 +248,10 @@ supersession forward (in the new ADR) plus a one-line `Status` pointer.
   `lub-glb-type-simplification`, `rigid-type-variables-in-annotations`,
   `rigid-tvar-interactions`, `constructor-type-options`.
 
-**Living docs — transform to Path G**
+**Living docs — transform to Operation Bidi**
 - [x] `type-system.md` — rewrote the inference half → bidirectional; kept subtyping / records /
   variance / nominal-structural / inferred-interface / tuples.
-- [x] `roadmap.md` — reshaped into a forward-looking plan; Path G is the next phase.
+- [x] `roadmap.md` — reshaped into a forward-looking plan; Operation Bidi is the next phase.
 - [ ] `implementation-status.md` — living; update as the rewrite lands.
 - [x] `CLAUDE.md` — design decisions, CLI (`check` + `--ir`), project structure, index lines.
 - [x] `reference.md` — flagged `match` as not-yet (no inference claims to scrub).
@@ -242,7 +261,7 @@ supersession forward (in the new ADR) plus a one-line `Status` pointer.
 **Speculative / ideas — relabel, don't rewrite**
 - [x] `ideas/type-simplification-future.md` → marked moot (simplifier deleted).
 - [x] `ideas/2026-01-27-constraint-context-tracing-design.md` → marked stale (solver-era).
-- [x] `kleene-types-experimental.md` → marked pre-Path-G / orthogonal.
+- [x] `kleene-types-experimental.md` → marked pre-Operation Bidi / orthogonal.
 - [x] `reading-list.md` → added bidirectional-typing (Dunfield & Krishnaswami); reframed SimpleSub/MLstruct as background.
 - (`ideas/constructors-produce-parent-type.md` is the *not-taken* Option 1 — leave as an
   alternative; `ideas/pattern-match-synthetic-type.md` still live — no change.)
@@ -251,10 +270,10 @@ supersession forward (in the new ADR) plus a one-line `Status` pointer.
 
 ## Tooling / DX
 
-- **CLI: make it easy to check a program.** ✅ Done — the `check` command runs the Path G
+- **CLI: make it easy to check a program.** ✅ Done — the `check` command runs the Operation Bidi
   checker on a file or `--stdin`, prints each top-level binding's type plus a pass/fail verdict,
   and exits non-zero on error (usable as a script gate). `infer` is left on the legacy engine for
-  differential comparison. `check` deliberately exposes no type IR — the Path G type is a plain
+  differential comparison. `check` deliberately exposes no type IR — the Operation Bidi type is a plain
   structural tree. (`klein.Main`, `check`/`c`.)
 
 ## Open questions

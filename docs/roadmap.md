@@ -2,7 +2,7 @@
 
 A look ahead — how Klein evolves from here toward the full language. The detailed
 build/teardown plan for the type checker lives in
-[plans/path-g-roadmap.md](./plans/path-g-roadmap.md).
+[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
 
 ## Done so far
 
@@ -13,7 +13,7 @@ build/teardown plan for the type checker lives in
 - **Type checking** — a SimpleSub-style inferencer exists but is **being replaced**
   (see Phase 1 and [adopt-path-g](./decisions/2026-06-24-adopt-path-g.md)).
 
-## Phase 1 — Type-checker rewrite (Path G) ← next
+## Phase 1 — Type-checker rewrite (Operation Bidi) ← next
 
 Replace global SimpleSub inference with **local bidirectional checking**: annotate
 signatures, infer interiors; keep structural + nominal subtyping; delete the
@@ -21,7 +21,7 @@ constraint solver and simplifier. Generics by implicit quantification; joins
 resolve to a nominal supertype or error; bounded polymorphism for "both"-ness.
 
 Full milestones, test strategy, and doc updates:
-[plans/path-g-roadmap.md](./plans/path-g-roadmap.md).
+[plans/operation-bidi-roadmap.md](./plans/operation-bidi-roadmap.md).
 
 ## Phase 2 — Pattern Matching
 
@@ -55,7 +55,7 @@ Lower priority; add as needed.
 |------|-------|
 | Extension methods | `on` keyword for method receiver |
 | Modules | `module Name` + imports |
-| First-class intersection | `A & B` everywhere — deferred Path G candidate (see spec §8) |
+| First-class intersection | `A & B` everywhere — deferred Operation Bidi candidate (see spec §8) |
 
 ## Phase 5 — Execution
 

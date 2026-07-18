@@ -6,7 +6,7 @@ import klein.check.Type.*
 import klein.types.Variance
 
 /**
- * Path G types: concrete structural / nominal trees.
+ * Operation Bidi types: concrete structural / nominal trees.
  *
  * Unlike the SimpleSub-era [klein.types.SimpleType], there are **no inference variables,
  * mutable bounds, or levels** — a type is fully determined by its structure. Polymorphism
