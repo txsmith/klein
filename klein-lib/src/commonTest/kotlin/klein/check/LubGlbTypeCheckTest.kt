@@ -1,6 +1,5 @@
 package klein.check
 
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -22,7 +21,7 @@ class LubGlbTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toSurface()))
+        assertEquals(expected, Type.print(r.type))
     }
 
     private fun cannotJoin(
@@ -32,8 +31,8 @@ class LubGlbTypeCheckTest {
     ) {
         val e = infer(src).errors.single()
         assertIs<TypeError.CannotJoinBranches>(e)
-        thenType?.let { assertEquals(it, klein.Type.print(e.thenType)) }
-        elseType?.let { assertEquals(it, klein.Type.print(e.elseType)) }
+        thenType?.let { assertEquals(it, Type.print(e.thenType)) }
+        elseType?.let { assertEquals(it, Type.print(e.elseType)) }
     }
 
     // --- Sibling constructors join to their parent ---

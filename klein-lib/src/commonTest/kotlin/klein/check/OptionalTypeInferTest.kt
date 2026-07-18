@@ -1,5 +1,6 @@
 package klein.check
 
+import klein.check.Type.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -22,7 +23,7 @@ class OptionalTypeInferTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toSurface()))
+        assertEquals(expected, Type.print(r.type))
     }
 
     // --- null literal ---
@@ -96,8 +97,8 @@ class OptionalTypeInferTest {
     @Test
     fun nonOptionalAnnotation_rejectsNull() {
         val e = infer("x: Num = null").errors.single()
-        assertIs<klein.types.TypeError.NullNotAllowed>(e)
-        assertEquals(klein.Type.Num, e.expected)
+        assertIs<TypeError.NullNotAllowed>(e)
+        assertEquals(TNum, e.expected)
     }
 
     // --- if-else with a null branch joins to optional ---

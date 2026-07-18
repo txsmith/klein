@@ -2,7 +2,6 @@ package klein.check
 
 import klein.*
 import klein.check.Type.*
-import klein.types.TypeError
 
 data class TypeCheckResult(
     val program: Program,
@@ -271,7 +270,7 @@ class Checker {
                     val annotated = resolveType(param.typeAnnotation, bodyEnv)
                     if (!subtyping.isSubtype(expectedParamType, annotated, env)) {
                         recordError(
-                            TypeError.TypeMismatch(expectedParamType.toSurface(), annotated.toSurface(), param.span),
+                            TypeError.TypeMismatch(expectedParamType, annotated, param.span),
                         )
                     }
                     annotated
@@ -334,7 +333,7 @@ class Checker {
                 TBottom
             }
             body !is TFun ->
-                recordError(TypeError.NotAFunction(body.toSurface(), expr.span))
+                recordError(TypeError.NotAFunction(body, expr.span))
             body.params.size != expr.args.size ->
                 recordError(TypeError.CallArityMismatch(body.params.size, expr.args.size, expr.span))
             else -> {
@@ -344,7 +343,7 @@ class Checker {
                     } else {
                         emptyMap<TSkolem, Type>() to emptyList()
                     }
-                demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
+                demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower, it.upper, expr.span)) }
                 val fn = if (demandSubst.isEmpty()) body else substitute(body, demandSubst) as TFun
                 val unknowns = scheme.params - demandSubst.keys
                 val calleeName =
@@ -376,7 +375,7 @@ class Checker {
                 val target = if (demand == null) fn.result else TTop
                 val (instantiated, errors) =
                     constraints.solveQuantified(TForall(unknowns, fn), TFun(argTypes, TTop), target, env)
-                errors.forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
+                errors.forEach { recordError(TypeError.TypeMismatch(it.lower, it.upper, expr.span)) }
                 if (demandFailures.isEmpty() && errors.isEmpty()) (instantiated as TFun).result else TBottom
             }
         }
@@ -420,7 +419,7 @@ class Checker {
                 groundPolyBranch(thenBranchType, elseBranchType, env) != null -> elseBranchType
                 groundPolyBranch(elseBranchType, thenBranchType, env) != null -> thenBranchType
                 else ->
-                    recordError(TypeError.CannotJoinBranches(thenBranchType.toSurface(), elseBranchType.toSurface(), expr.span))
+                    recordError(TypeError.CannotJoinBranches(thenBranchType, elseBranchType, expr.span))
             }
         }
         // At most one branch is polymorphic: instantiate it against the other (as at an application)
@@ -428,13 +427,13 @@ class Checker {
         val thenGround = groundPolyBranch(thenBranchType, elseBranchType, env)
         val elseGround = groundPolyBranch(elseBranchType, thenBranchType, env)
         if (thenGround == null || elseGround == null) {
-            return recordError(TypeError.CannotJoinBranches(thenBranchType.toSurface(), elseBranchType.toSurface(), expr.span))
+            return recordError(TypeError.CannotJoinBranches(thenBranchType, elseBranchType, expr.span))
         }
         val (joined, failures) = subtyping.lub(thenGround, elseGround, env)
         return if (failures.isEmpty()) {
             joined
         } else {
-            recordError(TypeError.CannotJoinBranches(thenGround.toSurface(), elseGround.toSurface(), expr.span))
+            recordError(TypeError.CannotJoinBranches(thenGround, elseGround, expr.span))
         }
     }
 
@@ -511,7 +510,7 @@ class Checker {
         }
         for (name in expected.fields.keys) {
             if (name !in present) {
-                recordError(TypeError.MissingField(name, expected.toSurface(), expr.span))
+                recordError(TypeError.MissingField(name, expected, expr.span))
             }
         }
     }
@@ -544,12 +543,12 @@ class Checker {
             // The receiver already errored (⊥); don't cascade a second error, just stay ⊥.
             TBottom -> TBottom
             is TRecord ->
-                rec.fields[field] ?: recordError(TypeError.MissingField(field, rec.toSurface(), span))
+                rec.fields[field] ?: recordError(TypeError.MissingField(field, rec, span))
             is TRef -> {
                 val def = env.lookupTypeDef(rec.name)
                 val fieldType = def?.iface?.fields?.get(field)
                 if (def == null || fieldType == null) {
-                    recordError(TypeError.MissingField(field, rec.toSurface(), span))
+                    recordError(TypeError.MissingField(field, rec, span))
                 } else {
                     substitute(
                         fieldType,
@@ -561,7 +560,7 @@ class Checker {
                 }
             }
             else -> {
-                recordError(TypeError.NotARecord(rec.toSurface(), field, span))
+                recordError(TypeError.NotARecord(rec, field, span))
             }
         }
 
@@ -646,12 +645,12 @@ class Checker {
             constraints
                 .solveQuantified(synthesized, expected, expected, env)
                 .errors
-                .forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
+                .forEach { recordError(TypeError.TypeMismatch(it.lower, it.upper, expr.span)) }
         } else if (!subtyping.isSubtype(synthesized, expected, env)) {
             if ((synthesized is TNull || synthesized is TOptional) && expected !is TOptional) {
-                recordError(TypeError.NullNotAllowed(expected.toSurface(), expr.span))
+                recordError(TypeError.NullNotAllowed(expected, expr.span))
             } else {
-                recordError(TypeError.TypeMismatch(synthesized.toSurface(), expected.toSurface(), expr.span))
+                recordError(TypeError.TypeMismatch(synthesized, expected, expr.span))
             }
         }
     }

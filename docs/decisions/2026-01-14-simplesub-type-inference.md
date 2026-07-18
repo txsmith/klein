@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-14
 
-**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md)
+**Status:** Superseded by [2026-06-24-adopt-operation-bidi.md](./2026-06-24-adopt-operation-bidi.md)
 
 ## Context
 

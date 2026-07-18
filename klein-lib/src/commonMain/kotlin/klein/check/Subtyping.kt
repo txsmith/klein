@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.check.Type.*
-import klein.types.Variance
 
 class Subtyping {
 

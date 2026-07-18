@@ -1,13 +1,11 @@
-# M0 — Surface Spec: Local Bidirectional Type Checking
+# Surface Spec: Local Bidirectional Type Checking
 
-**Status:** Drafting · **Milestone:** Operation Bidi / M0 · **Started:** 2026-06-24
+**Status:** Implemented (Operation Bidi) · **Started:** 2026-06-24
 
-This is the contract the rewrite (`rewrite/type-checker`) is built and tested
-against. It specifies **how Klein decides types locally**, without global
-inference. The *why* is in
-[`../decisions/2026-06-23-polarity-wall-and-type-system-direction.md`](../decisions/2026-06-23-polarity-wall-and-type-system-direction.md);
-the build/teardown sequencing is in
-[`../plans/operation-bidi-roadmap.md`](../plans/operation-bidi-roadmap.md).
+This is the contract the `klein.check` checker is built and tested against. It
+specifies **how Klein decides types locally**, without global inference. The *why*
+is in
+[`../decisions/2026-06-23-polarity-wall-and-type-system-direction.md`](../decisions/2026-06-23-polarity-wall-and-type-system-direction.md).
 
 **In scope:** the *existing* surface — top-level `type` defs, `fun`/binding/param
 annotations, records, tuples, applied types, function types, `if`, the `?`

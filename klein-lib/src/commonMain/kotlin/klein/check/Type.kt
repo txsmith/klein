@@ -3,17 +3,14 @@ package klein.check
 import klein.FieldDecl
 import klein.SourceSpan
 import klein.check.Type.*
-import klein.types.Variance
 
 /**
- * Operation Bidi types: concrete structural / nominal trees.
+ * Operation Bidi types: concrete structural / nominal trees — the one and only type
+ * hierarchy, printed directly by [Type.print].
  *
- * Unlike the SimpleSub-era [klein.types.SimpleType], there are **no inference variables,
- * mutable bounds, or levels** — a type is fully determined by its structure. Polymorphism
- * is expressed by rigid skolems ([TSkolem]) introduced at signatures, not by inference.
- *
- * This hierarchy grows as the checker does; it currently covers what the synth skeleton
- * needs (primitives, functions, records).
+ * Unlike the SimpleSub-era `SimpleType`, there are **no inference variables, mutable
+ * bounds, or levels** — a type is fully determined by its structure. Polymorphism is
+ * expressed by rigid skolems ([TSkolem]) introduced at signatures, not by inference.
  */
 sealed class Type {
     data object TNum : Type()
@@ -63,6 +60,41 @@ sealed class Type {
         val params: Set<TSkolem>,
         val body: Type,
     ) : Type()
+
+    companion object {
+        /** Render a type in surface syntax. A [TForall] prints as its body — surface types
+         *  have no quantifiers — so its skolems appear by name (`(A) -> A`). */
+        fun print(type: Type): String =
+            when (type) {
+                TNum -> "Num"
+                TStr -> "String"
+                TBool -> "Bool"
+                TNull -> "Null"
+                TUnit -> "Unit"
+                TTop -> "Any"
+                TBottom -> "Nothing"
+                is TSkolem -> type.name
+                is TForall -> print(type.body)
+                is TFun -> "(${type.params.joinToString(", ") { print(it) }}) -> ${print(type.result)}"
+                is TRecord -> printRecord(type)
+                is TOptional -> if (type.type is TFun) "(${print(type.type)})?" else "${print(type.type)}?"
+                is TRef ->
+                    if (type.typeArgs.isEmpty()) {
+                        type.name
+                    } else {
+                        "${type.name}<${type.typeArgs.joinToString(", ") { print(it) }}>"
+                    }
+            }
+
+        private fun printRecord(rec: TRecord): String {
+            if (rec.fields.isEmpty()) return "{}"
+            val fields =
+                rec.fields.entries
+                    .sortedBy { it.key }
+                    .joinToString(", ") { (k, v) -> "$k: ${print(v)}" }
+            return "{ $fields }"
+        }
+    }
 }
 
 data class TypeParamInfo(

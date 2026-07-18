@@ -1,6 +1,6 @@
 # Future Type Simplification
 
-> **Status (2026-06-24): moot.** Operation Bidi deletes the type simplifier entirely — there are no inferred types left to simplify. Kept for historical context. See [decisions/2026-06-24-adopt-path-g.md](../decisions/2026-06-24-adopt-path-g.md).
+> **Status (2026-06-24): moot.** Operation Bidi deletes the type simplifier entirely — there are no inferred types left to simplify. Kept for historical context. See [decisions/2026-06-24-adopt-operation-bidi.md](../decisions/2026-06-24-adopt-operation-bidi.md).
 
 Type simplification avenues that are not yet implemented. These are lower priority and some depend on pattern matching design decisions.
 

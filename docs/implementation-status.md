@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins (roadmap M2–M5, with M7 cutover done). Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine (`klein.types`, reachable only via the `infer` CLI command) awaits deletion in the teardown PR (M8). No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
 
 ## Parser
 
@@ -76,13 +76,14 @@
 ## Type System
 
 The type system runs on **Operation Bidi** (local bidirectional checking). See
-[type-system.md](type-system.md) for design and
-[plans/operation-bidi-roadmap.md](plans/operation-bidi-roadmap.md) for the milestone plan. The cutover
-(M7) is done: the library entry (`Klein.check`) and the `check` CLI command run the
-`klein.check` checker. The legacy SimpleSub engine (`klein.types`) survives only behind
-the `infer` CLI command and its own test suites, awaiting deletion in the teardown PR (M8).
+[type-system.md](type-system.md) for design,
+[spec/bidirectional-checking.md](spec/bidirectional-checking.md) for the checking contract, and
+[decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md) for the decision record.
+The `klein.check` checker is the only engine — the SimpleSub machinery is deleted. There is a
+single type hierarchy (`klein.check.Type`, printed directly) and a single typed error
+hierarchy (`klein.check.TypeError`).
 
-### Operation Bidi checker — complete (roadmap M2–M5)
+### Operation Bidi checker — complete
 
 | Feature | Notes |
 |---------|-------|
@@ -105,22 +106,17 @@ the `infer` CLI command and its own test suites, awaiting deletion in the teardo
 
 | Feature | Notes |
 |---------|-------|
-| Teardown | Delete SimpleSub machinery (M8, its own PR) |
-| Declared bounds | `where 'T <: B` (roadmap M6 — deferred) |
+| Declared bounds | `where 'T <: B` — deferred |
 | Pattern matching | `match x with \| Some v -> v \| None -> 0` |
 | Kleene types | `T*`, `T+` (experimental; `T?` done) |
 
-### Legacy SimpleSub engine — being retired (M8)
+### Known gaps (deferred checker bugs)
 
-Still present under `klein.types`; features specific to it (not carried into Operation Bidi):
+To fix under a dedicated "polymorphism bugs" pass:
 
-| Feature | Notes |
-|---------|-------|
-| Global type inference | SimpleSub algorithm — replaced by bidirectional checking |
-| Union/intersection | `a \| b`, `a & b` — anonymous connectives dropped in core |
-| Recursive types | `{ head: Num, tail: a } as a` |
-| Type simplification | Canonicalization of recursive types |
-| LUB/GLB simplification | Exhaustive collapse, same-name merging, invariant where clauses |
+1. **Branch join over-rejects when neither branch subsumes the other.** `if c then q else { tag = 1, extra = true }`, with `q : Phantom<'A>` (interface `{ tag: Num }`), rejects — yet the join `{ tag: Num }` plainly exists (the all-monomorphic version gives it). `synthIfThenElse` grounds a polymorphic branch by instantiating it to a *subtype of the whole* other branch (`groundPolyBranch` → `solveQuantified`), so it only produces joins where one branch subsumes the other, never a genuine third common supertype. Fix: match the poly branch against the *field intersection* — a lenient `generate` that skips fields the poly lacks, kept separate from the strict call-site `generate` where a missing field is a real error — solve the variables (defaulting untouched ones), then `lub`. The supertype comes from `lub`, not the solver.
+
+2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Operation Bidi declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
 
 ## Interpreter
 

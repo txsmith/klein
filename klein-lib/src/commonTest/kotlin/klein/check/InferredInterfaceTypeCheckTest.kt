@@ -1,6 +1,5 @@
 package klein.check
 
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,7 +19,7 @@ class InferredInterfaceTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toSurface()))
+        assertEquals(expected, Type.print(r.type))
     }
 
     private fun assertMissingField(

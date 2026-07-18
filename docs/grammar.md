@@ -238,7 +238,7 @@ TypeAtom
 > nominal `type` for "either" and (planned) bounded polymorphism for "both".
 > `where`-clauses and `match` are planned features, not yet in the grammar. See
 > [type-system.md](./type-system.md) and
-> [decisions/2026-06-24-adopt-path-g.md](./decisions/2026-06-24-adopt-path-g.md).
+> [decisions/2026-06-24-adopt-operation-bidi.md](./decisions/2026-06-24-adopt-operation-bidi.md).
 
 ### Record Types
 

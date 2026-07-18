@@ -17,7 +17,7 @@ class IfThenElseTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toSurface()))
+        assertEquals(expected, Type.print(r.type))
     }
 
     // --- the condition must be Bool ---

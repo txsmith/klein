@@ -1,6 +1,5 @@
 package klein.check
 
-import klein.types.TypeError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -21,7 +20,7 @@ class ConstructorBindingTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toSurface()))
+        assertEquals(expected, Type.print(r.type))
     }
 
     // --- constructors infer to functions ---
@@ -188,7 +187,7 @@ class ConstructorBindingTypeCheckTest {
         assertEquals(1, errors.size, "errors: $errors")
         val e = errors[0]
         assertIs<TypeError.TypeMismatch>(e)
-        assertEquals("String", klein.Type.print(e.subtype))
-        assertEquals("Num", klein.Type.print(e.supertype))
+        assertEquals("String", Type.print(e.subtype))
+        assertEquals("Num", Type.print(e.supertype))
     }
 }
