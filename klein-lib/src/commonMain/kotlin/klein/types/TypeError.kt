@@ -105,6 +105,15 @@ sealed class TypeError {
         }
     }
 
+    data class CannotJoinBranches(
+        val thenType: Type,
+        val elseType: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Branches of if-else have no common type: '${Type.print(thenType)}' vs '${Type.print(elseType)}'"
+    }
+
     data class MissingField(
         val field: String,
         val recordType: Type,
@@ -168,6 +177,13 @@ sealed class TypeError {
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Recursive value '$name' cannot be defined in terms of itself: ${cycle.joinToString(" -> ")}"
+    }
+
+    data class RecursiveFunctionNeedsReturnType(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Recursive function '$name' needs a declared return type"
     }
 
     data class CallArityMismatch(
@@ -248,17 +264,17 @@ sealed class TypeError {
         override val message = "$operator is not allowed in $position position"
     }
 
-    data class UnsupportedAnnotation(
-        val description: String,
+    data class AnonymousUnionType(
         override val span: SourceSpan,
     ) : TypeError() {
-        override val message = "Unsupported annotation: $description"
+        override val message = "Anonymous union types ('A | B') aren't supported — define a nominal type"
     }
 
-    data class Misc(
-        override val message: String,
+    data class AnonymousIntersectionType(
         override val span: SourceSpan,
-    ) : TypeError()
+    ) : TypeError() {
+        override val message = "Anonymous intersection types ('A & B') aren't supported yet"
+    }
 
     open fun render(env: TypeEnv): String {
         val msg = renderMessage(env)

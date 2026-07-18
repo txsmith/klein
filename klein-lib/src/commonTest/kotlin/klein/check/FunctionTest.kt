@@ -110,8 +110,11 @@ class FunctionTest {
     fun returnMismatchErrors() = assertTrue(infer("fun f(x: Num): Bool = x").errors.isNotEmpty())
 
     @Test
-    fun recursionWithoutDeclaredReturnErrors() =
-        assertTrue(infer("fun loop(n: Num) = loop(n)").errors.isNotEmpty())
+    fun recursionWithoutDeclaredReturnErrors() {
+        val e = infer("fun loop(n: Num) = loop(n)").errors.single()
+        assertIs<TypeError.RecursiveFunctionNeedsReturnType>(e)
+        assertEquals("loop", e.name)
+    }
 
     @Test
     fun lambdaBoundWithEqualsCannotSelfRefer() {

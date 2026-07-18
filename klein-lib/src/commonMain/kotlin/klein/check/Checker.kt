@@ -169,9 +169,7 @@ class Checker {
                     when {
                         funDef.returnType != null -> resolveType(funDef.returnType, fnEnv)
                         isRecursive ->
-                            recordError(
-                                TypeError.Misc("Recursive function '${funDef.name}' needs a declared return type", funDef.span),
-                            )
+                            recordError(TypeError.RecursiveFunctionNeedsReturnType(funDef.name, funDef.span))
                         else -> synth(funDef.body, fnEnv) // non-recursive: infer straight from the body
                     }
                 env.bind(funDef.name, quantify(fnEnv.localTypeVars(), TFun(paramTypes, returnType, funDef.params.map { it.name })))
@@ -273,7 +271,7 @@ class Checker {
                     val annotated = resolveType(param.typeAnnotation, bodyEnv)
                     if (!subtyping.isSubtype(expectedParamType, annotated, env)) {
                         recordError(
-                            TypeError.TypeMismatch(expectedParamType.toLegacy(), annotated.toLegacy(), param.span),
+                            TypeError.TypeMismatch(expectedParamType.toSurface(), annotated.toSurface(), param.span),
                         )
                     }
                     annotated
@@ -336,7 +334,7 @@ class Checker {
                 TBottom
             }
             body !is TFun ->
-                recordError(TypeError.NotAFunction(body.toLegacy(), expr.span))
+                recordError(TypeError.NotAFunction(body.toSurface(), expr.span))
             body.params.size != expr.args.size ->
                 recordError(TypeError.CallArityMismatch(body.params.size, expr.args.size, expr.span))
             else -> {
@@ -346,7 +344,7 @@ class Checker {
                     } else {
                         emptyMap<TSkolem, Type>() to emptyList()
                     }
-                demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
+                demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
                 val fn = if (demandSubst.isEmpty()) body else substitute(body, demandSubst) as TFun
                 val unknowns = scheme.params - demandSubst.keys
                 val calleeName =
@@ -378,7 +376,7 @@ class Checker {
                 val target = if (demand == null) fn.result else TTop
                 val (instantiated, errors) =
                     constraints.solveQuantified(TForall(unknowns, fn), TFun(argTypes, TTop), target, env)
-                errors.forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
+                errors.forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
                 if (demandFailures.isEmpty() && errors.isEmpty()) (instantiated as TFun).result else TBottom
             }
         }
@@ -421,7 +419,8 @@ class Checker {
             return when {
                 groundPolyBranch(thenBranchType, elseBranchType, env) != null -> elseBranchType
                 groundPolyBranch(elseBranchType, thenBranchType, env) != null -> thenBranchType
-                else -> recordError(TypeError.Misc("Cannot join polymorphic if-branches", expr.span))
+                else ->
+                    recordError(TypeError.CannotJoinBranches(thenBranchType.toSurface(), elseBranchType.toSurface(), expr.span))
             }
         }
         // At most one branch is polymorphic: instantiate it against the other (as at an application)
@@ -429,13 +428,13 @@ class Checker {
         val thenGround = groundPolyBranch(thenBranchType, elseBranchType, env)
         val elseGround = groundPolyBranch(elseBranchType, thenBranchType, env)
         if (thenGround == null || elseGround == null) {
-            return recordError(TypeError.Misc("Cannot join polymorphic if-branches", expr.span))
+            return recordError(TypeError.CannotJoinBranches(thenBranchType.toSurface(), elseBranchType.toSurface(), expr.span))
         }
         val (joined, failures) = subtyping.lub(thenGround, elseGround, env)
         return if (failures.isEmpty()) {
             joined
         } else {
-            recordError(TypeError.Misc("Branches of if-else need to be of the same type", expr.span))
+            recordError(TypeError.CannotJoinBranches(thenGround.toSurface(), elseGround.toSurface(), expr.span))
         }
     }
 
@@ -512,7 +511,7 @@ class Checker {
         }
         for (name in expected.fields.keys) {
             if (name !in present) {
-                recordError(TypeError.MissingField(name, expected.toLegacy(), expr.span))
+                recordError(TypeError.MissingField(name, expected.toSurface(), expr.span))
             }
         }
     }
@@ -545,12 +544,12 @@ class Checker {
             // The receiver already errored (⊥); don't cascade a second error, just stay ⊥.
             TBottom -> TBottom
             is TRecord ->
-                rec.fields[field] ?: recordError(TypeError.MissingField(field, rec.toLegacy(), span))
+                rec.fields[field] ?: recordError(TypeError.MissingField(field, rec.toSurface(), span))
             is TRef -> {
                 val def = env.lookupTypeDef(rec.name)
                 val fieldType = def?.iface?.fields?.get(field)
                 if (def == null || fieldType == null) {
-                    recordError(TypeError.MissingField(field, rec.toLegacy(), span))
+                    recordError(TypeError.MissingField(field, rec.toSurface(), span))
                 } else {
                     substitute(
                         fieldType,
@@ -562,7 +561,7 @@ class Checker {
                 }
             }
             else -> {
-                recordError(TypeError.NotARecord(rec.toLegacy(), field, span))
+                recordError(TypeError.NotARecord(rec.toSurface(), field, span))
             }
         }
 
@@ -647,12 +646,12 @@ class Checker {
             constraints
                 .solveQuantified(synthesized, expected, expected, env)
                 .errors
-                .forEach { recordError(TypeError.TypeMismatch(it.lower.toLegacy(), it.upper.toLegacy(), expr.span)) }
+                .forEach { recordError(TypeError.TypeMismatch(it.lower.toSurface(), it.upper.toSurface(), expr.span)) }
         } else if (!subtyping.isSubtype(synthesized, expected, env)) {
             if ((synthesized is TNull || synthesized is TOptional) && expected !is TOptional) {
-                recordError(TypeError.NullNotAllowed(expected.toLegacy(), expr.span))
+                recordError(TypeError.NullNotAllowed(expected.toSurface(), expr.span))
             } else {
-                recordError(TypeError.TypeMismatch(synthesized.toLegacy(), expected.toLegacy(), expr.span))
+                recordError(TypeError.TypeMismatch(synthesized.toSurface(), expected.toSurface(), expr.span))
             }
         }
     }
@@ -709,12 +708,16 @@ class Checker {
                     else -> TRef(typeExpr.name, args)
                 }
             }
-            is UnionTypeExpr ->
-                recordError(
-                    TypeError.Misc("Anonymous union types ('A | B') aren't supported — define a nominal type", typeExpr.span),
-                )
-            is IntersectionTypeExpr ->
-                recordError(TypeError.Misc("Anonymous intersection types ('A & B') aren't supported yet", typeExpr.span))
+            // Recover with Any: returning the Bottom error-default would also fail whatever value
+            // the rejected annotation governs, burying the real error under a spurious mismatch.
+            is UnionTypeExpr -> {
+                recordError(TypeError.AnonymousUnionType(typeExpr.span))
+                TTop
+            }
+            is IntersectionTypeExpr -> {
+                recordError(TypeError.AnonymousIntersectionType(typeExpr.span))
+                TTop
+            }
         }
 
     /** Introduce each not-yet-in-scope type variable in [annotations] as a fresh skolem at [sigEnv] —

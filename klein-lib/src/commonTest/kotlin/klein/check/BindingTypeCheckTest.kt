@@ -46,6 +46,16 @@ class BindingTypeCheckTest {
     fun typeVarAnnotation_rigidSkolemRejectsConcrete() = assertMismatch("Num", "A", "q: 'A = 4")
 
     @Test
+    fun annotation_anonymousUnion_rejected() {
+        assertIs<TypeError.AnonymousUnionType>(infer("x: Num | String = 1").errors.single())
+    }
+
+    @Test
+    fun annotation_anonymousIntersection_rejected() {
+        assertIs<TypeError.AnonymousIntersectionType>(infer("x: Num & Num = 1").errors.single())
+    }
+
+    @Test
     fun typeVarAnnotation_genericSkolemFromPolymorphicConstructor() =
         assertInfersType(
             TRef("Option", listOf(tv("A"))),

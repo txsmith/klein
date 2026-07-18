@@ -22,16 +22,18 @@ class LubGlbTypeCheckTest {
     ) {
         val r = infer(src)
         assertTrue(r.errors.isEmpty(), "unexpected errors: ${r.errors}")
-        assertEquals(expected, klein.Type.print(r.type.toLegacy()))
+        assertEquals(expected, klein.Type.print(r.type.toSurface()))
     }
 
     private fun cannotJoin(
         src: String,
-        message: String = "Branches of if-else need to be of the same type",
+        thenType: String? = null,
+        elseType: String? = null,
     ) {
         val e = infer(src).errors.single()
-        assertIs<TypeError.Misc>(e)
-        assertEquals(message, e.message)
+        assertIs<TypeError.CannotJoinBranches>(e)
+        thenType?.let { assertEquals(it, klein.Type.print(e.thenType)) }
+        elseType?.let { assertEquals(it, klein.Type.print(e.elseType)) }
     }
 
     // --- Sibling constructors join to their parent ---
@@ -317,7 +319,7 @@ class LubGlbTypeCheckTest {
 
     @Test
     fun records_disjoint_isError() =
-        cannotJoin("if true then { x = 1 } else { y = 2 }")
+        cannotJoin("if true then { x = 1 } else { y = 2 }", thenType = "{ x: Num }", elseType = "{ y: Num }")
 
     @Test
     fun functions_lub_glbsParamsLubsResult() =
@@ -426,7 +428,6 @@ class LubGlbTypeCheckTest {
             fun h(n: Num): String = "x"
             if true then id else h
             """.trimIndent(),
-            message = "Cannot join polymorphic if-branches",
         )
 
     // A polymorphic value (a phantom-typed binding) is instantiated against the mono record branch;
