@@ -11,7 +11,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[grammar.md](./docs/grammar.md)** - Complete formal grammar for Klein expressions and types, including indentation rules, operator precedence, and parser method mappings
 - **[reference.md](./docs/reference.md)** - Complete language reference with syntax, examples, and usage patterns for all Klein features
 - **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, subtyping, records, and the tilde operator (inference sections being rewritten for Operation Bidi)
-- **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (Operation Bidi M0 surface spec)
+- **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (the Operation Bidi surface spec)
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
 
 ### Implementation Guides
@@ -26,7 +26,7 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 
 **Current type-system direction:**
 
-- **[2026-06-24-adopt-path-g.md](./docs/decisions/2026-06-24-adopt-path-g.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
+- **[2026-06-24-adopt-operation-bidi.md](./docs/decisions/2026-06-24-adopt-operation-bidi.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
 - **[2026-06-23-polarity-wall-and-type-system-direction.md](./docs/decisions/2026-06-23-polarity-wall-and-type-system-direction.md)** - Why SimpleSub was abandoned: the polarity wall and the three ways out.
 
 **Foundational language decisions (still current):**

@@ -13,7 +13,7 @@ A look ahead — how Klein evolves from here toward the full language.
   implicit quantification; joins resolve to a nominal supertype or error. The
   SimpleSub inference engine is deleted. Deferred: declared bounds
   (`where 'T <: B`) for "both"-ness. See
-  [adopt-path-g](./decisions/2026-06-24-adopt-path-g.md) and
+  [adopt-operation-bidi](./decisions/2026-06-24-adopt-operation-bidi.md) and
   [implementation-status](./implementation-status.md).
 
 ## Phase 2 — Pattern Matching

@@ -1,4 +1,4 @@
-# Adopt Path G: Local Bidirectional Type Checking
+# Adopt Operation Bidi: Local Bidirectional Type Checking
 
 **Date:** 2026-06-24
 
@@ -25,7 +25,7 @@
 
 ## Decision
 
-Adopt **Path G**: keep structural + nominal subtyping, drop global/inferred polymorphism, check **locally and bidirectionally**.
+Adopt **Operation Bidi**: keep structural + nominal subtyping, drop global/inferred polymorphism, check **locally and bidirectionally**.
 
 - **Annotate signatures, infer interiors** — mutually-recursive `synth` / `check`; most rules need ~zero annotations because inputs are host-provided and host-typed.
 - **No `&` / `|` type connectives** — "either" is a nominal sum, "both" is bounded polymorphism (a later feature); `Optional` (`T?`) stays as the one built-in tagged union.

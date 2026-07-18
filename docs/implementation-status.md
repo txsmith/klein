@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-path-g.md](decisions/2026-06-24-adopt-path-g.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
 
 ## Parser
 
@@ -78,7 +78,7 @@
 The type system runs on **Operation Bidi** (local bidirectional checking). See
 [type-system.md](type-system.md) for design,
 [spec/bidirectional-checking.md](spec/bidirectional-checking.md) for the checking contract, and
-[decisions/2026-06-24-adopt-path-g.md](decisions/2026-06-24-adopt-path-g.md) for the decision record.
+[decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md) for the decision record.
 The `klein.check` checker is the only engine — the SimpleSub machinery is deleted. There is a
 single type hierarchy (`klein.check.Type`, printed directly) and a single typed error
 hierarchy (`klein.check.TypeError`).

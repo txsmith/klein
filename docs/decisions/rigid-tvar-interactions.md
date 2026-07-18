@@ -1,6 +1,6 @@
 # Rigid TVar interactions for union/intersection annotations
 
-**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md)
+**Status:** Superseded by [2026-06-24-adopt-operation-bidi.md](./2026-06-24-adopt-operation-bidi.md)
 
 ## Context
 

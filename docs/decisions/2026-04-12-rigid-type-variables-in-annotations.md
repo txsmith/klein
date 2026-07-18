@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-12
 
-**Status:** Superseded by [2026-06-24-adopt-path-g.md](./2026-06-24-adopt-path-g.md) — the OR-trial encoding is retired; the `'T` skolem idea survives.
+**Status:** Superseded by [2026-06-24-adopt-operation-bidi.md](./2026-06-24-adopt-operation-bidi.md) — the OR-trial encoding is retired; the `'T` skolem idea survives.
 
 ## Context
 
