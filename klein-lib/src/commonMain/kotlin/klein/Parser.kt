@@ -522,6 +522,8 @@ class Parser(
 
             IF -> parseIfThenElse(token)
 
+            MATCH -> parseMatch(token)
+
             LPAREN -> {
                 advance()
                 val expr = parseExpr()
@@ -570,6 +572,156 @@ class Parser(
         if (token.startsLineBefore(minIndent)) return null
         advance()
         return parseBlockOrExpr()
+    }
+
+    private fun parseMatch(matchToken: Token): Match {
+        advance()
+        val scrutinee = parseExpr()
+
+        val first = peek()
+        if (!first.startsLineAfter(lineIndentOf(matchToken))) {
+            throw ParseError("Expected indented match arms after scrutinee", first.span)
+        }
+        val armIndent = lineIndentOf(first)
+
+        val arms = mutableListOf<MatchArm>()
+        var boundaryIndent = lineIndentOf(matchToken)
+        while (!isBlockEnd(boundaryIndent)) {
+            arms.add(parseMatchArm())
+            boundaryIndent = armIndent
+        }
+        if (arms.isEmpty()) {
+            throw ParseError("Expected at least one match arm", first.span)
+        }
+
+        return Match(scrutinee, arms, matchToken.span + arms.last().span)
+    }
+
+    private fun parseMatchArm(): MatchArm {
+        val pattern = parsePattern()
+        val guard =
+            if (peek().kind == IF) {
+                advance()
+                parseExpr()
+            } else {
+                null
+            }
+        expectAndAdvance(ARROW, message = "Expected '->' after pattern")
+        val body = parseBlockOrExpr()
+        return MatchArm(pattern, guard, body, pattern.span + body.span)
+    }
+
+    private fun parsePattern(): Pattern {
+        val token = peek()
+        return when (token.kind) {
+            INT -> {
+                advance()
+                val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                LiteralPattern(IntLiteral(value, token.span), token.span)
+            }
+
+            DOUBLE -> {
+                advance()
+                val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                LiteralPattern(DoubleLiteral(value, token.span), token.span)
+            }
+
+            MINUS, MINUS_TIGHT -> {
+                advance()
+                val number = expectAndAdvance(INT, DOUBLE, message = "Expected number after '-' in pattern")
+                val span = token.span + number.span
+                val literal =
+                    when (number.kind) {
+                        INT -> IntLiteral(-number.text!!.toLong(), span)
+                        else -> DoubleLiteral(-number.text!!.toDouble(), span)
+                    }
+                LiteralPattern(literal, span)
+            }
+
+            STRING -> {
+                advance()
+                LiteralPattern(StringLiteral(token.text!!, token.span), token.span)
+            }
+
+            TRUE -> {
+                advance()
+                LiteralPattern(BoolLiteral(true, token.span), token.span)
+            }
+
+            FALSE -> {
+                advance()
+                LiteralPattern(BoolLiteral(false, token.span), token.span)
+            }
+
+            NULL -> {
+                advance()
+                LiteralPattern(NullLiteral(token.span), token.span)
+            }
+
+            IDENT -> {
+                advance()
+                if (token.text == "_") WildcardPattern(token.span) else VariablePattern(token.text!!, token.span)
+            }
+
+            UPPER_IDENT -> {
+                advance()
+                when (peek().kind) {
+                    LBRACE -> {
+                        val record = parseRecordPattern()
+                        ConstructorPattern(token.text!!, null, record, token.span + record.span)
+                    }
+                    IDENT -> {
+                        val binder = advance()
+                        val binderName = binder.text!!.takeUnless { it == "_" }
+                        ConstructorPattern(token.text!!, binderName, null, token.span + binder.span)
+                    }
+                    else -> ConstructorPattern(token.text!!, null, null, token.span)
+                }
+            }
+
+            LBRACE -> parseRecordPattern()
+
+            else -> throw ParseError("Expected pattern, got $token", token.span)
+        }
+    }
+
+    private fun parseRecordPattern(): RecordPattern {
+        val open = expectAndAdvance(LBRACE, message = "Expected '{'")
+        if (peek().kind == RBRACE) {
+            throw ParseError("Record pattern must name at least one field", open.span + peek().span)
+        }
+
+        val fields = mutableListOf<FieldPattern>()
+        val seenFields = mutableSetOf<String>()
+
+        while (true) {
+            val fieldToken = expectIdentifier("Expected field name")
+            if (!seenFields.add(fieldToken.text!!)) {
+                throw ParseError("Duplicate field in pattern: '${fieldToken.text}'", fieldToken.span)
+            }
+
+            val binder =
+                if (peek().kind == EQ) {
+                    advance()
+                    expectIdentifier("Expected binder name or '_' after '='")
+                } else {
+                    fieldToken
+                }
+            val binderName = binder.text!!.takeUnless { it == "_" }
+            fields.add(FieldPattern(fieldToken.text, binderName, fieldToken.span + binder.span))
+
+            when (peek().kind) {
+                RBRACE -> break
+                COMMA -> {
+                    advance()
+                    if (peek().kind == RBRACE) break
+                }
+                else -> throw ParseError("Expected ',' or '}'", peek().span)
+            }
+        }
+
+        val close = advance()
+        return RecordPattern(fields, open.span + close.span)
     }
 
     private fun parseLambda(open: Token): Lambda {

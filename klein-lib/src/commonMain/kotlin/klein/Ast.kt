@@ -175,6 +175,61 @@ data class IfThenElse(
     override val span: SourceSpan,
 ) : Expr()
 
+data class Match(
+    val scrutinee: Expr,
+    val arms: List<MatchArm>,
+    override val span: SourceSpan,
+) : Expr()
+
+data class MatchArm(
+    val pattern: Pattern,
+    val guard: Expr?,
+    val body: Expr,
+    val span: SourceSpan,
+)
+
+sealed class Pattern {
+    abstract val span: SourceSpan
+}
+
+data class WildcardPattern(
+    override val span: SourceSpan,
+) : Pattern()
+
+/** `42`, `"yes"`, `true`, `null` — [literal] is one of the literal Expr nodes. */
+data class LiteralPattern(
+    val literal: Expr,
+    override val span: SourceSpan,
+) : Pattern()
+
+data class VariablePattern(
+    val name: String,
+    override val span: SourceSpan,
+) : Pattern()
+
+/**
+ * `Circle`, `Circle c` (whole-value binder), or `Circle { radius }` (destructure).
+ * [binder] and [record] are mutually exclusive; both null for the bare form.
+ */
+data class ConstructorPattern(
+    val name: String,
+    val binder: String?,
+    val record: RecordPattern?,
+    override val span: SourceSpan,
+) : Pattern()
+
+data class RecordPattern(
+    val fields: List<FieldPattern>,
+    override val span: SourceSpan,
+) : Pattern()
+
+/** `name` (pun: binder = field), `name = n` (rename), or `name = _` (test only: binder = null). */
+data class FieldPattern(
+    val field: String,
+    val binder: String?,
+    val span: SourceSpan,
+)
+
 data class FieldAccess(
     val target: Expr,
     val field: String,
@@ -208,6 +263,9 @@ val Expr.usesImplicitParam: Boolean
                 condition.usesImplicitParam ||
                     thenBranch.usesImplicitParam ||
                     (elseBranch?.usesImplicitParam ?: false)
+            is Match ->
+                scrutinee.usesImplicitParam ||
+                    arms.any { (it.guard?.usesImplicitParam ?: false) || it.body.usesImplicitParam }
             is Block ->
                 stmts.any { stmt ->
                     when (stmt) {
@@ -233,6 +291,7 @@ val Expr.children: List<Expr>
             is FieldAccess -> listOf(target)
             is SafeFieldAccess -> listOf(target)
             is IfThenElse -> listOfNotNull(condition, thenBranch, elseBranch)
+            is Match -> listOf(scrutinee) + arms.flatMap { listOfNotNull(it.guard, it.body) }
         }
 
 data class RecordField(

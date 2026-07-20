@@ -11,8 +11,9 @@ is in
 annotations, records, tuples, applied types, function types, `if`, the `?`
 optional, and `'T` type variables.
 
-**Out of scope (deferred features, not M0):** `match` expressions, `where 'T <: …`
-declared bounds. These are net-new and specced later.
+**Out of scope (deferred features, not M0):** `where 'T <: …` declared bounds.
+`match` expressions were specced and implemented later — see
+[pattern-matching.md](./pattern-matching.md); they follow this spec's §7 discipline.
 
 ---
 
@@ -185,8 +186,8 @@ teardown list accordingly.
 - In **synth mode**, synthesize both branches and resolve their results to a
   **common supertype, or error — never a silent `Any`.**
 
-(`match` is deferred; when added it follows the same check-distributes /
-synth-joins discipline over its arms.)
+(`match` follows the same check-distributes / synth-joins discipline over its
+arms — see [pattern-matching.md](./pattern-matching.md).)
 
 **Open — exact supertype computation (defer detail to M6):** for nominal sums the
 join is the declared parent (`Ok` ⊔ `Err` = `Result`); for records the natural
@@ -194,9 +195,9 @@ candidate is the common-field (width) record; incompatible branches (e.g.
 `Num` vs `String`) error. Whether record branches width-join silently or must
 match is the one real sub-decision, left to M6. **Polymorphic branches** (both
 `∀`-typed) are a further open sub-case — α-equal → that scheme, otherwise reject.
-*Status:* `synthIfThenElse` does not yet compute a join at all (it only accepts a
-branch that is a subtype of the other) and crashes on a `∀`-typed branch; red
-targets in `IfThenElseLubTest`.
+*Status:* implemented — `synthIfThenElse` (and match's `joinMatchArms`) join via
+`lub`, grounding polymorphic branches first (`groundPolyBranch`). One
+over-rejection remains a known gap; see implementation-status.md "Known gaps" #1.
 
 ---
 
@@ -216,7 +217,8 @@ language.**
   the annotation experiment); the checker rejects it, directing the author to a
   nominal `type`. The "either" capability lives in nominal sums, which supply the
   three things an anonymous union lacks: a **tag** (the constructor), an
-  **elimination form** (`match`, later), and **exhaustiveness**.
+  **elimination form** (`match` — see [pattern-matching.md](./pattern-matching.md)),
+  and **exhaustiveness**.
 - **Intersection (`A & B`)** — **deferred, not rejected on principle.** The
   "both" capability is served first by **bounded polymorphism** (`where 'T <: A,
   'T <: B`, a later milestone), which is the form that keeps every value type
@@ -268,8 +270,8 @@ later feature once bounds exist and most of its value is already covered.
 2. **First-class structural intersection** — deferred candidate (§8). Revisit after
    bounds: target-shape-dispatch subtyping + tag-preserving record extension. Carries
    a value-semantics bill (equality / serialization / `match` over extended records).
-3. **Polymorphic `if` branches** — how to join two `∀`-typed branches (α-equal → that
-   scheme, else reject). (§7; `IfThenElseLubTest`)
 
 *Resolved:* anonymous `A | B` rejected (nominal sums); `A & B` deferred in favour of
-bounded polymorphism (§8).
+bounded polymorphism (§8); **polymorphic branch joins** implemented — `groundPolyBranch`
+grounds a `∀`-typed branch against the other, then `lub` (one over-rejection remains a
+known gap, see implementation-status.md).

@@ -55,6 +55,7 @@ enum class TokenKind(
     OR(keyword = "or"),
     NOT(keyword = "not"),
     TYPE(keyword = "type"),
+    MATCH(keyword = "match"),
 
     // Symbols
     PLUS(symbol = "+"),

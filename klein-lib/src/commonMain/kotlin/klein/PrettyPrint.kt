@@ -106,5 +106,32 @@ fun Expr.prettyPrint(indent: Int = 0): String {
             "${pad}Record\n$fieldsStr"
         }
         is Ascription -> "${pad}Ascription(${type.prettyPrint()})\n${expr.prettyPrint(indent + 1)}"
+        is Match -> {
+            val armsStr =
+                arms.joinToString("\n") { arm ->
+                    val guardStr = arm.guard?.let { " if\n${it.prettyPrint(indent + 2)}" } ?: ""
+                    "$pad  Arm ${arm.pattern.prettyPrint()}$guardStr\n${arm.body.prettyPrint(indent + 2)}"
+                }
+            "${pad}Match\n${scrutinee.prettyPrint(indent + 1)}\n$armsStr"
+        }
     }
 }
+
+fun Pattern.prettyPrint(): String =
+    when (this) {
+        is WildcardPattern -> "_"
+        is VariablePattern -> name
+        is LiteralPattern ->
+            when (literal) {
+                is IntLiteral -> literal.value.toString()
+                is DoubleLiteral -> literal.value.toString()
+                is StringLiteral -> "\"${literal.value}\""
+                is BoolLiteral -> literal.value.toString()
+                is NullLiteral -> "null"
+                else -> literal.toString()
+            }
+        is ConstructorPattern ->
+            name + (binder?.let { " $it" } ?: "") + (record?.let { " ${it.prettyPrint()}" } ?: "")
+        is RecordPattern ->
+            "{ ${fields.joinToString(", ") { if (it.field == it.binder) it.field else "${it.field} = ${it.binder ?: "_"}" }} }"
+    }
