@@ -2,7 +2,7 @@
 
 package klein.lexer
 
-import klein.TokenKind.*
+import klein.surface.TokenKind.*
 import kotlin.test.Test
 
 class KeywordTest {
@@ -58,8 +58,8 @@ class KeywordTest {
 
     @Test
     fun everyKeywordLexesAsItsOwnTokenKindNeverAsAnIdentifier() {
-        klein.TokenKind.entries.filter { it.keyword != null }.forEach { kind ->
-            val first = klein.Lexer(kind.keyword!!).tokenize().first()
+        klein.surface.TokenKind.entries.filter { it.keyword != null }.forEach { kind ->
+            val first = klein.surface.Lexer(kind.keyword!!).tokenize().first()
             kotlin.test.assertEquals(kind, first.kind, "keyword '${kind.keyword}' must not lex as ${first.kind}")
         }
     }

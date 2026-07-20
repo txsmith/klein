@@ -1,8 +1,8 @@
 package klein.parser
 
-import klein.DoubleLiteral
-import klein.IntLiteral
-import klein.ParseError
+import klein.surface.DoubleLiteral
+import klein.surface.IntLiteral
+import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

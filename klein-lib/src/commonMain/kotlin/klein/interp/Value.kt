@@ -1,6 +1,6 @@
 package klein.interp
 
-import klein.Expr
+import klein.surface.Expr
 
 /**
  * A Klein runtime value. The hierarchy is deliberately small and sealed: host interop later

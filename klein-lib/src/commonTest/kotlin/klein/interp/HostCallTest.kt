@@ -1,7 +1,7 @@
 package klein.interp
 
 import klein.Klein
-import klein.Program
+import klein.surface.Program
 import klein.interp.Value.VNum
 import kotlin.test.Test
 import kotlin.test.assertEquals

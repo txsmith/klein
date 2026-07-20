@@ -1,6 +1,6 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.surface.TokenKind.*
 
 fun Token.prettyPrint(): String {
     val base =

@@ -1,6 +1,7 @@
 package klein.check
 
-import klein.*
+import klein.SourceSpan
+import klein.surface.*
 import klein.check.Type.*
 
 data class TypeCheckResult(

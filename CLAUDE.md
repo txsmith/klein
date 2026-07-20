@@ -125,14 +125,16 @@ klein-lang/
 ├── klein-lib/
 │   ├── src/
 │   │   ├── commonMain/kotlin/klein/
-│   │   │   ├── Lexer.kt          # Tokenization
-│   │   │   ├── Parser.kt         # Parsing
-│   │   │   ├── Ast.kt            # AST definitions
-│   │   │   ├── Token.kt          # Token types
-│   │   │   ├── SourceSpan.kt     # Source location tracking
-│   │   │   ├── PrettyPrint.kt    # AST pretty-printing
+│   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
 │   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → interpret)
 │   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
+│   │   │   │   ├── Lexer.kt        # Tokenization
+│   │   │   │   ├── Parser.kt       # Parsing
+│   │   │   │   ├── Ast.kt          # Surface AST definitions
+│   │   │   │   ├── Token.kt        # Token types
+│   │   │   │   └── PrettyPrint.kt  # AST pretty-printing
+│   │   │   ├── core/             # Core IR + lowering (placeholder; the IR work lands here)
 │   │   │   ├── interp/           # The CESK machine interpreter
 │   │   │   │   ├── Interpreter.kt  # begin/run + the machine's step loop
 │   │   │   │   ├── Frame.kt        # Defunctionalized continuation frames (the K)

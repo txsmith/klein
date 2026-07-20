@@ -1,6 +1,9 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.KleinError
+import klein.SourceSpan
+
+import klein.surface.TokenKind.*
 
 class ParseError(
     override val message: String,

@@ -1,8 +1,8 @@
 package klein.parser
 
-import klein.AppliedTypeExpr
-import klein.ParseError
-import klein.TypeVar
+import klein.surface.AppliedTypeExpr
+import klein.surface.ParseError
+import klein.surface.TypeVar
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

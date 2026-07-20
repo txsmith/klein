@@ -1,4 +1,6 @@
-package klein
+package klein.surface
+
+import klein.SourceSpan
 
 import kotlinx.serialization.Serializable
 

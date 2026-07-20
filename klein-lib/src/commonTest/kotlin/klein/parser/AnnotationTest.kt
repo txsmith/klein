@@ -1,7 +1,7 @@
 package klein.parser
 
-import klein.FunctionTypeExpr
-import klein.Val
+import klein.surface.FunctionTypeExpr
+import klein.surface.Val
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,12 +48,12 @@ class AnnotationTest {
 
     @Test
     fun keywordAsRecordTypeFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.ParseError> { parseStmt("x: { fun: Num } = y") }
+        kotlin.test.assertFailsWith<klein.surface.ParseError> { parseStmt("x: { fun: Num } = y") }
     }
 
     @Test
     fun underscoreAsRecordTypeFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.ParseError> { parseStmt("x: { _: Num } = y") }
+        kotlin.test.assertFailsWith<klein.surface.ParseError> { parseStmt("x: { _: Num } = y") }
     }
     @Test
     fun topLevelLetAnnotation() {

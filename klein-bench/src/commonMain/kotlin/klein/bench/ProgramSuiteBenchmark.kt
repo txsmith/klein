@@ -1,9 +1,9 @@
 package klein.bench
 
 import klein.Klein
-import klein.Program
+import klein.surface.Program
 import klein.StageResult
-import klein.Token
+import klein.surface.Token
 import klein.check.Type
 import klein.interp.Value
 import kotlinx.benchmark.Benchmark

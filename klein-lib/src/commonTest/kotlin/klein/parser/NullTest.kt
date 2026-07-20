@@ -2,7 +2,7 @@
 
 package klein.parser
 
-import klein.ParseError
+import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue

@@ -1,5 +1,6 @@
 package klein
 
+import klein.surface.*
 import klein.check.Type
 import klein.check.TypeEnv
 import klein.interp.Value
