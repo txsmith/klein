@@ -32,10 +32,28 @@ The IR serves three masters at once:
   to one response: re-derive from source, never migrate the IR schema. That is the whole
   integrity story — one mechanism (source is truth), two cheap triggers. (Deferred until the
   edge design exists: an edge fingerprint as a third trigger, same handler.)
-- **Names dissolve into slots, survive as metadata.** `Ident` → (depth, slot); env frames
-  become integer arrays over the store. Reference nodes keep the source name, lambdas carry
-  an optional inferred name (from `fun` or the binding) — the JVM `LocalVariableTable`
-  pattern: indices for speed, names for humans.
+- **Names dissolve into slots, survive as metadata.** `Ident` → `LocalRef(depth, slot)`.
+  Reference nodes keep the source name, lambdas carry an optional inferred name (from `fun`
+  or the binding) — the JVM `LocalVariableTable` pattern: indices for speed, names for humans.
+- **Vocabulary (2026-07-20): never call a lexical env level a "frame".** A **scope** is a
+  lexical env level (a lambda's params, a block's bindings) — the thing `(depth, slot)`
+  addresses; a **frame** is a runtime activation record, one per call. The `(depth, slot)`
+  walk is a *scope-chain* walk; frames (activations) and stack traces (which come from the
+  K continuation, not the scope chain) are untouched by how names resolve.
+- **v1 name resolution — deliberately minimal (2026-07-20).** Uniform `LocalRef(depth, slot)`
+  for *all* references, top-level/host/constructors included (they sit in the outermost scope,
+  reached by depth). **Keep the store** (scope holds slot→address `IntArray`, store holds
+  address→`Value`) — same model as the current CESK machine, so the delta is just
+  `Map<String,Int>` → `IntArray` and name-lookup → slot-index, killing the one real cost
+  (per-read string hashing). Two optimizations are explicitly **deferred behind benchmarks**,
+  not built in v1:
+  - `GlobalRef(index)` — direct-index the outermost scope so global refs skip the walk.
+  - Closure conversion / flat per-function scopes — collapse the scope-chain walk to O(1)
+    local/captured/global addressing. Rejected for v1 because the walk is O(scope depth),
+    which is 1–2 in practice (business rules don't nest deeply) and dwarfed by boxing/dispatch.
+    Klein's immutability would make it the *easy* version (capture by value, no upvalue cells)
+    if the numbers ever call for it; the one wrinkle is local recursive bindings (top-level
+    recursion is fine).
 - **Tail calls with trace policy, host-chosen per execution.** Call markers (callee name +
   call span) are pushed on entry and pop as identity frames; a tail call *replaces* the top
   marker. `begin()` takes a trace mode: `full` / `budgeted(n)` / `elided` — budgeted is the
@@ -78,12 +96,57 @@ The IR serves three masters at once:
 
 ## Task list
 
-- [ ] **1. Define the core IR and its metadata** — ~15 node classes; spans everywhere;
-  types/`TypeDef`s/`Ascription` erased (constructors become plan constants); slot refs with
-  names; scope plans (slot count, SCC-ordered binds, fills) on scope nodes; lambda names;
-  `usesImplicitParam` precomputed; version stamp.
-- [ ] **2. Checked-program artifact from `check`** — program + type + scope/SCC analysis as
-  the stage's output; the SCC computation happens once, in the checker.
+- [ ] **1. Define the core IR and its metadata** — spans everywhere; types/`TypeDef`s/
+  `Ascription` erased (constructors become scope-bound values); slot refs with names as
+  metadata; lambda names; numeric literals flattened at lowering (IEEE double for now);
+  version stamp. Node decisions whiteboarded 2026-07-20:
+  - `Lam(arity, body, name?)` — multi-arg (positional-function ADR forbids currying); no
+    `isImplicit` (the `.` param lowers to an ordinary slot-0 ref); thunk = arity 0.
+  - `Match(scrutinee, arms)` — **no scrutinee binder field**: the lowerer hoists non-trivial
+    scrutinees into an ordinary scope slot (evaluate-once), so the scrutinee is always a
+    trivial ref. Constructor arms carry `tag` + `fieldKeys: List<String>` (semantic: which
+    fields to extract into the arm's slots — position = slot; variable names are gone).
+    Full desugar of field extraction into `FieldGet`+`Scope` blocked by guards
+    (first-match fallthrough needs the pattern-match compiler); revisit with nested patterns.
+  - `Scope(items, slotCount, result)` — items **in textual order**, interleaved
+    `Bind(expr, name?)` (fills next slot) / `Run(expr)` (evaluated, discarded — statements
+    don't waste slots); slot = bind-ordinal, implicit; `result` is a distinguished field
+    because it evaluates in **tail position** (pop ScopeK, then evaluate on the parent K —
+    this also fixes a latent bug: the current machine leaks one ScopeK per call for
+    block-bodied tail recursion). No `Rec`/`NonRec` encoding — recursion structure has no
+    runtime consumer; re-derivable if an optimizer ever wants it. No "store to slot" node —
+    fills are frame behavior implied by structure (that instruction materializes only at a
+    future linear/bytecode tier).
+  - **Evaluation order is strictly textual** (funs hoisted — their creation is unobservable;
+    everything else as written). Verified 2026-07-20: the checker *already* rejects forward
+    `val` references ("Unbound variable") and already hoists `fun`s, so this is not a
+    semantics change — the binds-before-statements phasing in the current machine was an
+    implementation artifact (observable as effects running out of written order) that the
+    IR machine simply drops.
+  - **Final node set (settled 2026-07-20, in Core.kt):** `Literal`, `Var`, `Lambda`, `Apply`,
+    `PrimApp` (with `Prim` a plain enum — operators only, all strict; `and`/`or` lower to
+    `Match`), `MakeData(tag?, fieldNames, args)` (nullable tag unifies records and
+    constructor data — the tag is all that survives erasure of nominal-vs-structural; `VRecord`
+    dies at runtime too), `FieldGet`, `Suspend(name, args)`, `Scope`, `Match` (guards on all
+    arms; no scrutinee binder — non-trivial scrutinees hoist to a slot; no `If` node — it's a
+    `Match` on Bool). Lowering rule: Core form follows *surface syntax class* — operator
+    syntax → `PrimApp`, call syntax → `Apply` (uniformly), data literals → `MakeData`.
+  - **Every callable is a closure — uniform `Apply`, one dispatch case.** Constructors are
+    eta-expanded lambdas over `MakeData`; host natives are wrapper lambdas over `Suspend`
+    (manufactured at `begin()` from host bindings — the lowerer never emits `Suspend`);
+    future named builtins (`sqrt`) are pre-bound lambdas over prim bodies. `VNative` and
+    `VConstructor` both leave the `Value` hierarchy. `Suspend` is the effect-operation
+    (`perform`) node the future effects design needs, arrived at via uniformity.
+  - **No saturated-call fast paths in v1.** Compile-time β-reduction of known callees is
+    *one* future optimization applied by policy, not per-kind carve-outs: constructors —
+    can and should; natives — can but must not (inlining `Suspend` would bake host-ness
+    into the stored artifact and break mock/replay host swapping via slot rebinding);
+    user closures — the optimizer-tier question. Wrapper spans are synthetic; host-call
+    error locations recover the call site via the task-6 markers.
+- [ ] **2. Checked-program artifact from `check`** — program + type as the stage's output.
+  (Shrunk 2026-07-20: no SCC/scope deliverable needed — textual order is correct because
+  forward val refs are already check errors and funs hoist; SCC remains checker-internal
+  for its recursive-fun-group rules.)
 - [ ] **3. Lowering pass** — checked artifact → IR: slot resolution, erasure, name
   inference. Unit tests: slot layout, name inference, erasure. Update host-call tests to
   check first (helper that binds native types).
