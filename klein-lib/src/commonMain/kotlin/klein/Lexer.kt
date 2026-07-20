@@ -3,10 +3,11 @@ package klein
 import klein.TokenKind.*
 
 class LexerError(
-    message: String,
-    val span: SourceSpan,
+    override val message: String,
+    override val span: SourceSpan,
     val nestingStack: List<String> = emptyList(),
-) : Exception(message)
+) : Exception(message),
+    KleinError
 
 class Lexer(
     private val source: String,

@@ -56,11 +56,20 @@ import klein.WildcardPattern
 
 private val noSpan = SourceSpan.zero
 
-fun int(value: Long) = IntLiteral(value, noSpan)
+fun int(
+    value: Long,
+    text: String = value.toString(),
+) = IntLiteral(value, noSpan, text)
 
-fun int(value: Int) = IntLiteral(value.toLong(), noSpan)
+fun int(
+    value: Int,
+    text: String = value.toString(),
+) = IntLiteral(value.toLong(), noSpan, text)
 
-fun double(value: Double) = DoubleLiteral(value, noSpan)
+fun double(
+    value: Double,
+    text: String = value.toString(),
+) = DoubleLiteral(value, noSpan, text)
 
 fun string(value: String) = StringLiteral(value, noSpan)
 
@@ -232,8 +241,8 @@ fun Pattern.stripSpan(): Pattern =
 
 fun Expr.stripSpans(): Expr =
     when (this) {
-        is IntLiteral -> IntLiteral(value, noSpan)
-        is DoubleLiteral -> DoubleLiteral(value, noSpan)
+        is IntLiteral -> IntLiteral(value, noSpan, text)
+        is DoubleLiteral -> DoubleLiteral(value, noSpan, text)
         is StringLiteral -> StringLiteral(value, noSpan)
         is BoolLiteral -> BoolLiteral(value, noSpan)
         is NullLiteral -> NullLiteral(noSpan)

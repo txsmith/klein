@@ -1,10 +1,11 @@
 package klein.check
 
+import klein.KleinError
 import klein.SourceSpan
 
-sealed class TypeError {
-    abstract val span: SourceSpan
-    abstract val message: String
+sealed class TypeError : KleinError {
+    abstract override val span: SourceSpan
+    abstract override val message: String
 
     data class UnboundVariable(
         val name: String,

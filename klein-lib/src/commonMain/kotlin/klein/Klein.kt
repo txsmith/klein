@@ -3,44 +3,81 @@ package klein
 import klein.check.Checker
 import klein.check.Type
 import klein.check.TypeEnv
-import klein.check.TypeError
+import klein.interp.HostCall
+import klein.interp.Interpreter
+import klein.interp.Value
 
 /**
- * Library entry point: lex → parse → type-check with the bidirectional checker.
+ * Library entry point: the pipeline stages, each a total function with the uniform
+ * [StageResult] error surface. Stages take the previous stage's output — composition is
+ * the caller's, via [StageResult.andThen]:
  *
- * Example usage:
  * ```
- * val result = Klein.check("|x: Num -> x|(42)")
- * println(Type.print(result.type))  // "Num"
+ * val result: StageResult<Value> =
+ *     Klein
+ *         .tokenize(source)
+ *         .andThen(Klein::parse)
+ *         .andThen { program -> Klein.check(program).andThen { Klein.interpret(program) } }
  * ```
+ *
+ * Exceptions never escape these functions; stage-internal aborts are converted to errors
+ * in the result. The underlying throwing implementations ([Lexer], [Parser],
+ * [Interpreter]) remain available for tools that want them raw.
  */
 object Klein {
-    data class CheckResult(
-        val program: Program,
-        val type: Type,
-        val errors: List<TypeError>,
-    ) {
-        val hasErrors: Boolean get() = errors.isNotEmpty()
-    }
+    fun tokenize(source: String): StageResult<List<Token>> =
+        try {
+            StageResult.success(Lexer(source).tokenize().toList())
+        } catch (e: LexerError) {
+            StageResult.failure(e)
+        }
 
+    fun parse(tokens: List<Token>): StageResult<Program> =
+        try {
+            StageResult.success(Parser(tokens).parseProgram())
+        } catch (e: ParseError) {
+            StageResult.failure(e)
+        }
+
+    /**
+     * The checker synthesizes a type even for ill-typed programs, so the result can carry
+     * both an output and errors; [StageResult.andThen] still refuses to continue past
+     * errors. [env] is mutated with the program's bindings — pass your own to inspect
+     * them afterwards, or to pre-bind host types.
+     */
     fun check(
-        source: String,
+        program: Program,
         env: TypeEnv = TypeEnv.empty(),
-    ): CheckResult {
-        val program = parse(source)
+    ): StageResult<Type> {
         val checker = Checker()
         val type = checker.synthProgram(program, env)
-        return CheckResult(
-            program = program,
-            type = type,
-            errors = checker.getErrors(),
-        )
+        return StageResult(type, checker.getErrors())
     }
 
-    fun parse(source: String): Program {
-        val tokens = Lexer(source).tokenize().toList()
-        return Parser(tokens).parseProgram()
-    }
-
-    fun tokenize(source: String): List<Token> = Lexer(source).tokenize().toList()
+    /**
+     * Evaluate a program that passed [check] — the interpreter assumes checked input — driving
+     * every host call through [onHostCall] synchronously. By default a host call is an error.
+     *
+     * [bindings] is the host's seam: bind [Value.VNative] declarations or data there (with
+     * matching types in the [check] env) to expose them to the program. Hosts that want to
+     * control scheduling themselves — suspend on a host call, resume later — use
+     * [Interpreter.begin] and step the returned [klein.interp.Execution] directly.
+     */
+    fun interpret(
+        program: Program,
+        bindings: Map<String, Value> = emptyMap(),
+        onHostCall: ((HostCall) -> Value)? = null,
+    ): StageResult<Value> =
+        try {
+            val interpreter = Interpreter()
+            val value =
+                if (onHostCall == null) {
+                    interpreter.run(program, bindings)
+                } else {
+                    interpreter.run(program, bindings, onHostCall)
+                }
+            StageResult.success(value)
+        } catch (e: klein.interp.KleinRuntimeError) {
+            StageResult.failure(e)
+        }
 }

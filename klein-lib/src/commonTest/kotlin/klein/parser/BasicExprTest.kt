@@ -1,9 +1,12 @@
 package klein.parser
 
+import klein.DoubleLiteral
+import klein.IntLiteral
 import klein.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class BasicExprTest {
     @Test
@@ -16,6 +19,19 @@ class BasicExprTest {
     fun doubleLiteral() {
         val expr = parse("3.14")
         assertExprEquals(expr, double(3.14))
+    }
+
+    @Test
+    fun numericLiteralsPreserveSourceText() {
+        // "0.10" as a Double round-trips to "0.1" — the text field must keep what was written,
+        // so exact numeric models (decimals, rationals) can parse the literal themselves.
+        val trailingZero = parse("0.10")
+        assertIs<DoubleLiteral>(trailingZero)
+        assertEquals("0.10", trailingZero.text)
+
+        val int = parse("42")
+        assertIs<IntLiteral>(int)
+        assertEquals("42", int.text)
     }
 
     @Test

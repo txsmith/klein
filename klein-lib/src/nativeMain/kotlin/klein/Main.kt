@@ -1,8 +1,8 @@
 package klein
 
-import klein.check.Checker
 import klein.check.Type
 import klein.check.TypeEnv
+import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
@@ -28,7 +28,7 @@ fun main(args: Array<String>) {
     val knownFlags: Set<String>? =
         when (command) {
             "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
-            "check", "c" -> setOf("--stdin", "--raw")
+            "check", "c", "run", "r" -> setOf("--stdin", "--raw")
             else -> null
         }
     if (knownFlags != null) {
@@ -57,6 +57,10 @@ fun main(args: Array<String>) {
         "check", "c" -> {
             val source = getSource(useStdin, fileArg) ?: return
             check(source, rawErrors)
+        }
+        "run", "r" -> {
+            val source = getSource(useStdin, fileArg) ?: return
+            run(source, rawErrors)
         }
         "help", "-h", "--help" -> printUsage()
         else -> {
@@ -89,6 +93,7 @@ private fun printUsage() {
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
           check, c     Type-check with the Operation Bidi checker; print types and pass/fail
+          run, r       Type-check, then evaluate; print the program's value
           help         Show this help
 
         Options:
@@ -99,22 +104,40 @@ private fun printUsage() {
     )
 }
 
+/**
+ * Print every error from a stage result uniformly, plus any verbose stage-specific detail,
+ * and exit non-zero. No-op when the result is clean.
+ */
+private fun exitOnErrors(
+    result: StageResult<*>,
+    source: String,
+    rawErrors: Boolean,
+    verbose: Boolean = false,
+) {
+    if (!result.hasErrors) return
+    for (error in result.errors) {
+        printError(source, error.span, error.message, rawErrors)
+        if (verbose && error is LexerError && error.nestingStack.isNotEmpty()) {
+            println("\nNesting stack:")
+            error.nestingStack.forEach { println("  $it") }
+        }
+        if (verbose && error is ParseError) {
+            println("\nCall stack:")
+            printFormattedStackTrace(error)
+        }
+    }
+    exitProcess(1)
+}
+
 private fun tokenize(
     source: String,
     rawOutput: Boolean,
     verbose: Boolean,
 ) {
-    try {
-        val tokens = Lexer(source).tokenize()
-        for (token in tokens) {
-            println(token.prettyPrint())
-        }
-    } catch (e: LexerError) {
-        printError(source, e.span, e.message ?: "Lexer error", rawOutput)
-        if (verbose && e.nestingStack.isNotEmpty()) {
-            println("\nNesting stack:")
-            e.nestingStack.forEach { println("  $it") }
-        }
+    val result = Klein.tokenize(source)
+    exitOnErrors(result, source, rawOutput, verbose)
+    for (token in result.output!!) {
+        println(token.prettyPrint())
     }
 }
 
@@ -123,24 +146,10 @@ private fun parse(
     rawOutput: Boolean,
     verbose: Boolean,
 ) {
-    try {
-        val tokens = Lexer(source).tokenize().toList()
-        val program = Parser(tokens).parseProgram()
-        for (stmt in program.stmts) {
-            println(stmt.prettyPrint())
-        }
-    } catch (e: LexerError) {
-        printError(source, e.span, e.message ?: "Lexer error", rawOutput)
-        if (verbose && e.nestingStack.isNotEmpty()) {
-            println("\nNesting stack:")
-            e.nestingStack.forEach { println("  $it") }
-        }
-    } catch (e: ParseError) {
-        printError(source, e.span, e.message ?: "Parse error", rawOutput)
-        if (verbose) {
-            println("\nCall stack:")
-            printFormattedStackTrace(e)
-        }
+    val result = Klein.tokenize(source).andThen(Klein::parse)
+    exitOnErrors(result, source, rawOutput, verbose)
+    for (stmt in result.output!!.stmts) {
+        println(stmt.prettyPrint())
     }
 }
 
@@ -153,22 +162,12 @@ private fun check(
     source: String,
     rawErrors: Boolean,
 ) {
-    val tokens: List<Token>
-    val program: Program
-    try {
-        tokens = Lexer(source).tokenize().toList()
-        program = Parser(tokens).parseProgram()
-    } catch (e: LexerError) {
-        printError(source, e.span, e.message ?: "Lexer error", rawErrors)
-        exitProcess(1)
-    } catch (e: ParseError) {
-        printError(source, e.span, e.message ?: "Parse error", rawErrors)
-        exitProcess(1)
-    }
+    val parsed = Klein.tokenize(source).andThen(Klein::parse)
+    exitOnErrors(parsed, source, rawErrors)
+    val program = parsed.output!!
 
-    val checker = Checker()
     val env = TypeEnv.empty()
-    val lastType = checker.synthProgram(program, env)
+    val checked = Klein.check(program, env)
 
     for (stmt in program.stmts) {
         when (stmt) {
@@ -184,18 +183,28 @@ private fun check(
     }
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
-        println("$exprSource : ${Type.print(lastType)}")
+        println("$exprSource : ${Type.print(checked.output!!)}")
     }
 
-    val errors = checker.getErrors()
-    if (errors.isEmpty()) {
-        println("✓ Type checks")
-        return
-    }
-    for (error in errors) {
-        printError(source, error.span, error.message, rawErrors)
-    }
-    exitProcess(1)
+    exitOnErrors(checked, source, rawErrors)
+    println("✓ Type checks")
+}
+
+/**
+ * The full pipeline: tokenize, parse, type-check, evaluate, print the resulting value.
+ * Errors from any stage print uniformly and exit non-zero.
+ */
+private fun run(
+    source: String,
+    rawErrors: Boolean,
+) {
+    val result =
+        Klein
+            .tokenize(source)
+            .andThen(Klein::parse)
+            .andThen { program -> Klein.check(program).andThen { Klein.interpret(program) } }
+    exitOnErrors(result, source, rawErrors)
+    println(Value.print(result.output!!))
 }
 
 private fun printError(
