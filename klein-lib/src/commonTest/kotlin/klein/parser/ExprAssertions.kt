@@ -18,15 +18,23 @@ import klein.IfThenElse
 import klein.ImplicitParam
 import klein.IntLiteral
 import klein.IntersectionTypeExpr
+import klein.ConstructorPattern
+import klein.FieldPattern
 import klein.Lambda
 import klein.Lexer
+import klein.LiteralPattern
+import klein.Match
+import klein.MatchArm
 import klein.NullLiteral
 import klein.Operator
 import klein.Param
 import klein.ParseError
 import klein.Parser
+import klein.Pattern
+import klein.PatternVal
 import klein.OptionalTypeExpr
 import klein.Program
+import klein.RecordPattern
 import klein.RecordField
 import klein.RecordLiteral
 import klein.RecordTypeExpr
@@ -43,6 +51,8 @@ import klein.UnaryOp
 import klein.UnaryOperator
 import klein.UnionTypeExpr
 import klein.Val
+import klein.VariablePattern
+import klein.WildcardPattern
 
 private val noSpan = SourceSpan.zero
 
@@ -175,6 +185,51 @@ fun annotatedRecord(vararg fields: RecordField) =
 fun recordField(name: String, value: Expr, typeAnnotation: TypeExpr? = null) =
     RecordField(name, value, typeAnnotation)
 
+fun matchExpr(
+    scrutinee: Expr,
+    vararg arms: MatchArm,
+) = Match(scrutinee, arms.toList(), noSpan)
+
+fun arm(
+    pattern: Pattern,
+    body: Expr,
+    guard: Expr? = null,
+) = MatchArm(pattern, guard, body, noSpan)
+
+fun wildcardP() = WildcardPattern(noSpan)
+
+fun litP(literal: Expr) = LiteralPattern(literal, noSpan)
+
+fun varP(name: String) = VariablePattern(name, noSpan)
+
+fun ctorP(name: String) = ConstructorPattern(name, null, null, noSpan)
+
+fun ctorBindP(
+    name: String,
+    binder: String,
+) = ConstructorPattern(name, binder, null, noSpan)
+
+fun ctorP(
+    name: String,
+    vararg fields: FieldPattern,
+) = ConstructorPattern(name, null, RecordPattern(fields.toList(), noSpan), noSpan)
+
+fun recordP(vararg fields: FieldPattern) = RecordPattern(fields.toList(), noSpan)
+
+fun fieldP(
+    field: String,
+    binder: String? = field,
+) = FieldPattern(field, binder, noSpan)
+
+fun Pattern.stripSpan(): Pattern =
+    when (this) {
+        is WildcardPattern -> WildcardPattern(noSpan)
+        is LiteralPattern -> LiteralPattern(literal.stripSpans(), noSpan)
+        is VariablePattern -> VariablePattern(name, noSpan)
+        is ConstructorPattern -> ConstructorPattern(name, binder, record?.stripSpan() as RecordPattern?, noSpan)
+        is RecordPattern -> RecordPattern(fields.map { FieldPattern(it.field, it.binder, noSpan) }, noSpan)
+    }
+
 fun Expr.stripSpans(): Expr =
     when (this) {
         is IntLiteral -> IntLiteral(value, noSpan)
@@ -194,6 +249,12 @@ fun Expr.stripSpans(): Expr =
         is ImplicitParam -> ImplicitParam(noSpan)
         is RecordLiteral -> RecordLiteral(fields.map { RecordField(it.name, it.value.stripSpans(), it.typeAnnotation?.stripSpan()) }, noSpan)
         is Ascription -> Ascription(expr.stripSpans(), type.stripSpan(), noSpan)
+        is Match ->
+            Match(
+                scrutinee.stripSpans(),
+                arms.map { MatchArm(it.pattern.stripSpan(), it.guard?.stripSpans(), it.body.stripSpans(), noSpan) },
+                noSpan,
+            )
     }
 
 fun parse(source: String): Expr {
@@ -213,6 +274,11 @@ fun valStmt(
     value: Expr,
     typeAnnotation: TypeExpr? = null,
 ) = Val(name, value, noSpan, typeAnnotation)
+
+fun patternVal(
+    pattern: Pattern,
+    value: Expr,
+) = PatternVal(pattern, value, noSpan)
 
 fun funDef(
     name: String,
@@ -287,6 +353,7 @@ fun parseTopLevel(source: String): Stmt {
 fun Stmt.stripSpan(): Stmt =
     when (this) {
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
+        is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
         is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
         is Expr -> stripSpans()

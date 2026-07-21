@@ -81,6 +81,7 @@ class Checker {
             is ImplicitParam -> synthImplicitParam(expr, env)
             is Ascription -> synthAscription(expr, env)
             is Block -> synthBlockStmts(expr.stmts, env.child())
+            is Match -> inferMatch(expr, null, env, emptyList())
         }
 
     /**
@@ -102,6 +103,7 @@ class Checker {
             is RecordLiteral -> checkRecordLiteral(expr, expected, env, expectedSource)
             is IfThenElse -> checkIfThenElse(expr, expected, env, expectedSource)
             is Apply -> checkApply(expr, expected, env)
+            is Match -> inferMatch(expr, expected, env, expectedSource)
             else -> synthAndCheckSubtype(expr, expected, env)
         }
     }
@@ -115,16 +117,24 @@ class Checker {
         val scope = ScopeGraph.constructGraph(stmts)
         scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
 
+        val processedPatternVals = mutableSetOf<PatternVal>()
         for (component in scope.graph.computeSCCs()) {
             val bindings = component.nodes.map { it.binding }
             when {
                 bindings.all { it is FunDef } -> bindFunGroup(bindings.filterIsInstance<FunDef>(), component.isRecursive, env)
                 bindings.size == 1 && bindings.single() is Val -> synthAndBindVal(bindings.single() as Val, env)
+                bindings.size == 1 && bindings.single() is PatternVal -> {
+                    val stmt = bindings.single() as PatternVal
+                    if (processedPatternVals.add(stmt)) checkPatternVal(stmt, env)
+                }
                 else ->
-                    component.nodes.filter { it.binding is Val }.forEach { node ->
-                        recordError(TypeError.RecursiveVal(node.name, scope.graph.findCycle(node.name), (node.binding as Val).span))
+                    component.nodes.filter { it.binding is Val || it.binding is PatternVal }.forEach { node ->
+                        recordError(TypeError.RecursiveVal(node.name, scope.graph.findCycle(node.name), node.binding.span))
                     }
             }
+        }
+        for (stmt in stmts) {
+            if (stmt is PatternVal && processedPatternVals.add(stmt)) checkPatternVal(stmt, env)
         }
 
         var last: Type = TUnit
@@ -132,6 +142,25 @@ class Checker {
             if (stmt is Expr) last = synth(stmt, env)
         }
         return last
+    }
+
+    private fun checkPatternVal(
+        stmt: PatternVal,
+        env: TypeEnv,
+    ) {
+        val rhsType = synth(stmt.value, env)
+        val coverage = if (rhsType is TBottom) null else MatchCoverage.of(rhsType, env)
+        if (coverage == null) {
+            if (rhsType !is TBottom) recordError(TypeError.CannotMatchOn(rhsType, stmt.value.span))
+            stmt.pattern.boundNames.forEach { env.bind(it, TBottom) }
+            return
+        }
+        val errorsBefore = errors.size
+        checkPattern(stmt.pattern, coverage, env, env)
+        coverage.cover(stmt.pattern)
+        if (errors.size == errorsBefore && !coverage.exhausted()) {
+            recordError(TypeError.RefutableBinding(coverage.missing(), stmt.span))
+        }
     }
 
     /**
@@ -412,29 +441,9 @@ class Checker {
             return optionalOf(thenBranchType)
         }
         val elseBranchType = synth(expr.elseBranch, env)
-        // Both branches polymorphic: neither is ground, so the join is the more general scheme — the
-        // one that subsumes the other. (Lub-ing two independently-skolemized bodies would not.)
-        if (thenBranchType is TForall && elseBranchType is TForall) {
-            return when {
-                groundPolyBranch(thenBranchType, elseBranchType, env) != null -> elseBranchType
-                groundPolyBranch(elseBranchType, thenBranchType, env) != null -> thenBranchType
-                else ->
-                    recordError(TypeError.CannotJoinBranches(thenBranchType, elseBranchType, expr.span))
-            }
-        }
-        // At most one branch is polymorphic: instantiate it against the other (as at an application)
-        // and join as usual.
-        val thenGround = groundPolyBranch(thenBranchType, elseBranchType, env)
-        val elseGround = groundPolyBranch(elseBranchType, thenBranchType, env)
-        if (thenGround == null || elseGround == null) {
-            return recordError(TypeError.CannotJoinBranches(thenBranchType, elseBranchType, expr.span))
-        }
-        val (joined, failures) = subtyping.lub(thenGround, elseGround, env)
-        return if (failures.isEmpty()) {
-            joined
-        } else {
-            recordError(TypeError.CannotJoinBranches(thenGround, elseGround, expr.span))
-        }
+        return joinBranches(thenBranchType, elseBranchType, env) { a, b ->
+            TypeError.CannotJoinBranches(a, b, expr.span)
+        } ?: TBottom
     }
 
     private fun checkIfThenElse(
@@ -452,6 +461,150 @@ class Checker {
             // and yielding the Optional), then subsume verifies it against expected.
             synthAndCheckSubtype(expr, expected, env)
         }
+    }
+
+    private fun inferMatch(
+        expr: Match,
+        expected: Type?,
+        env: TypeEnv,
+        expectedSource: List<ExpectedType>,
+    ): Type {
+        val scrutineeType = synth(expr.scrutinee, env)
+        if (scrutineeType is TBottom) return TBottom
+        val coverage =
+            MatchCoverage.of(scrutineeType, env)
+                ?: return recordError(TypeError.CannotMatchOn(scrutineeType, expr.scrutinee.span))
+
+        val armTypes = mutableListOf<Type>()
+        for (arm in expr.arms) {
+            if (!coverage.reaches(arm.pattern)) recordError(TypeError.UnreachableMatchArm(arm.pattern.span))
+            val armEnv = env.child()
+            checkPattern(arm.pattern, coverage, armEnv, env)
+            if (arm.guard == null) coverage.cover(arm.pattern)
+            arm.guard?.let { check(it, TBool, armEnv) }
+            if (expected != null) {
+                check(arm.body, expected, armEnv, expectedSource)
+            } else {
+                armTypes.add(synth(arm.body, armEnv))
+            }
+        }
+
+        if (!coverage.exhausted()) {
+            recordError(TypeError.NonExhaustiveMatch(coverage.missing(), expr.span))
+        }
+
+        if (expected != null) return expected
+        return joinArmTypes(armTypes, expr.span, env)
+    }
+
+    private fun checkPattern(
+        pattern: Pattern,
+        coverage: MatchCoverage,
+        armEnv: TypeEnv,
+        env: TypeEnv,
+    ) {
+        when (pattern) {
+            is WildcardPattern -> {}
+            is VariablePattern -> armEnv.bind(pattern.name, coverage.residual())
+            is LiteralPattern -> checkLiteralPattern(pattern, coverage, armEnv, env)
+            is ConstructorPattern -> checkConstructorPattern(pattern, coverage.core, armEnv, env)
+            is RecordPattern ->
+                pattern.fields.forEach { fp ->
+                    val fieldType = projectFieldType(coverage.core, fp.field, fp.span, env)
+                    fp.binder?.let { armEnv.bind(it, fieldType) }
+                }
+        }
+    }
+
+    private fun checkLiteralPattern(
+        pattern: LiteralPattern,
+        coverage: MatchCoverage,
+        armEnv: TypeEnv,
+        env: TypeEnv,
+    ) {
+        if (pattern.literal is NullLiteral) {
+            if (!coverage.isOptional) recordError(TypeError.NullNotAllowed(coverage.scrutinee, pattern.span))
+            return
+        }
+        val litType = synth(pattern.literal, armEnv)
+        if (!subtyping.isSubtype(litType, coverage.core, env)) {
+            recordError(TypeError.TypeMismatch(litType, coverage.core, pattern.span))
+        }
+    }
+
+    private fun checkConstructorPattern(
+        pattern: ConstructorPattern,
+        core: Type,
+        armEnv: TypeEnv,
+        env: TypeEnv,
+    ) {
+        val ctor = env.lookupConstructor(pattern.name)
+        if (ctor == null || core !is TRef || (core.name != pattern.name && ctor.parentType != core.name)) {
+            recordError(TypeError.NotAConstructorOf(pattern.name, core, pattern.span))
+            return
+        }
+        val ctorRef = constructorInstance(pattern.name, ctor, core, env)
+        pattern.binder?.let { armEnv.bind(it, ctorRef) }
+        pattern.record?.fields?.forEach { fp ->
+            val fieldType = projectFieldType(ctorRef, fp.field, fp.span, env)
+            fp.binder?.let { armEnv.bind(it, fieldType) }
+        }
+    }
+
+    private fun constructorInstance(
+        name: String,
+        ctor: ConstructorInfo,
+        core: TRef,
+        env: TypeEnv,
+    ): TRef {
+        if (core.name == name) return core
+        val parentDef = env.getTypeDef(core.name)
+        val argByName = parentDef.typeParams.map { it.skolem.name }.zip(core.typeArgs).toMap()
+        return TRef(name, ctor.typeParams.map { argByName[it] ?: TBottom })
+    }
+
+    private fun joinArmTypes(
+        armTypes: List<Type>,
+        span: SourceSpan,
+        env: TypeEnv,
+    ): Type {
+        var joined = armTypes.first()
+        for (armType in armTypes.drop(1)) {
+            joined = joinBranches(joined, armType, env) { a, b ->
+                TypeError.CannotJoinMatchArms(a, b, span)
+            } ?: return TBottom
+        }
+        return joined
+    }
+
+    private fun joinBranches(
+        a: Type,
+        b: Type,
+        env: TypeEnv,
+        error: (Type, Type) -> TypeError,
+    ): Type? {
+        if (a is TForall && b is TForall) {
+            return when {
+                groundPolyBranch(a, b, env) != null -> b
+                groundPolyBranch(b, a, env) != null -> a
+                else -> {
+                    recordError(error(a, b))
+                    null
+                }
+            }
+        }
+        val groundA = groundPolyBranch(a, b, env)
+        val groundB = groundPolyBranch(b, a, env)
+        if (groundA == null || groundB == null) {
+            recordError(error(a, b))
+            return null
+        }
+        val (joined, failures) = subtyping.lub(groundA, groundB, env)
+        if (failures.isNotEmpty()) {
+            recordError(error(groundA, groundB))
+            return null
+        }
+        return joined
     }
 
     private fun synthIdent(

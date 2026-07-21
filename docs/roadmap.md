@@ -18,6 +18,14 @@ A look ahead — how Klein evolves from here toward the full language.
 
 ## Phase 2 — Pattern Matching
 
+**Done** (2026-07-18, `pattern-matching` branch) — parser + checker per
+[spec/pattern-matching.md](spec/pattern-matching.md). Notable deltas from the table
+below: arms are bare (no `|` marker), destructuring is record-only (`Ok { value }`,
+no positional `Some(x)`), a matched value is named with a constructor binder
+(`Dog d`) or variable pattern — there is no scrutinee flow-narrowing — and
+exhaustiveness is a hard type error. Nested patterns deferred. Evaluator lands
+with the interpreter.
+
 | Item | Notes |
 |------|-------|
 | Match keyword | `match expr` with arms |

@@ -122,6 +122,92 @@ class BindingTest {
     }
 
     @Test
+    fun destructuringBinding() {
+        val stmt = parseStmt("{ name, age } = person")
+        assertStmtEquals(stmt, patternVal(recordP(fieldP("name"), fieldP("age")), id("person")))
+    }
+
+    @Test
+    fun destructuringWithRenameAndWildcard() {
+        val stmt = parseStmt("{ name = n, age = _ } = person")
+        assertStmtEquals(stmt, patternVal(recordP(fieldP("name", "n"), fieldP("age", null)), id("person")))
+    }
+
+    @Test
+    fun destructuringInAFunctionBody() {
+        val stmt =
+            parseTopLevel(
+                """
+                fun f(p: { a: Num }): Num =
+                  { a } = p
+                  a
+                """.trimIndent(),
+            )
+        assertStmtEquals(
+            stmt,
+            funDef(
+                "f",
+                listOf(param("p", recordType("a" to typeName("Num")))),
+                block(patternVal(recordP(fieldP("a")), id("p")), id("a")),
+                typeName("Num"),
+            ),
+        )
+    }
+
+    @Test
+    fun recordComparisonIsNotADestructuring() {
+        val stmt = parseStmt("x = { a } == b")
+        assertStmtEquals(stmt, valStmt("x", eq(record("a" to id("a")), id("b"))))
+    }
+
+    @Test
+    fun bareRecordLiteralStatementStillParses() {
+        val stmt = parseStmt("{ a = 1 }")
+        assertStmtEquals(stmt, record("a" to int(1)))
+    }
+
+    @Test
+    fun annotatedDestructuringIsRejected() {
+        assertFailsWith<ParseError> { parseStmt("{ name }: Person = x") }
+    }
+
+    @Test
+    fun emptyDestructuringPatternIsRejected() {
+        assertFailsWith<ParseError> { parseStmt("{} = x") }
+    }
+
+    @Test
+    fun constructorDestructuringBinding() {
+        val stmt = parseStmt("Person { name } = someone")
+        assertStmtEquals(stmt, patternVal(ctorP("Person", fieldP("name")), id("someone")))
+    }
+
+    @Test
+    fun constructorBinderBinding() {
+        val stmt = parseStmt("Circle c = circle")
+        assertStmtEquals(stmt, patternVal(ctorBindP("Circle", "c"), id("circle")))
+    }
+
+    @Test
+    fun bareConstructorIsNotABinding() {
+        assertFailsWith<ParseError> { parseStmt("Circle = x") }
+    }
+
+    @Test
+    fun literalPatternsAreNotBindings() {
+        assertFailsWith<ParseError> { parseStmt("42 = x") }
+        assertFailsWith<ParseError> { parseStmt("-1 = x") }
+        assertFailsWith<ParseError> { parseStmt("\"a\" = x") }
+        assertFailsWith<ParseError> { parseStmt("true = x") }
+        assertFailsWith<ParseError> { parseStmt("null = x") }
+    }
+
+    @Test
+    fun literalInDestructuringFieldIsRejected() {
+        assertFailsWith<ParseError> { parseStmt("{ a = 1 } = p") }
+    }
+
+    @Test
     fun numberAsName() {
         val error = assertFailsWith<ParseError> { parseStmt("123 = 1") }
         assertTrue(error.message!!.startsWith("Expected newline but got '='"))

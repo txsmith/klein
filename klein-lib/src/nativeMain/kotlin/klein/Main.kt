@@ -173,6 +173,10 @@ private fun check(
     for (stmt in program.stmts) {
         when (stmt) {
             is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
+            is PatternVal ->
+                stmt.pattern.boundNames.forEach { name ->
+                    env.lookup(name)?.let { println("$name : ${Type.print(it)}") }
+                }
             is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
             is TypeDef -> println("type ${stmt.name}")
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type

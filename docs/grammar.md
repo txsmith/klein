@@ -27,6 +27,7 @@ stmt        = binding
             | expr
 
 binding     = IDENT (':' type)? '=' block_or_expr
+            | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
 
 block_or_expr = block
               | expr
@@ -52,10 +53,25 @@ atom        = INT
             | '(' expr (':' type)? ')'
             | lambda
             | if_expr
+            | match_expr
             | implicit_param
             | record
 
 if_expr     = 'if' expr 'then' block_or_expr ('else' block_or_expr)?
+
+match_expr  = 'match' expr NEWLINE INDENT arm+ DEDENT
+
+arm         = pattern ('if' expr)? '->' block_or_expr
+
+pattern     = '_'                              # wildcard (lexes as IDENT "_")
+            | literal                          # 42, -1, 2.5, "yes", true, null
+            | IDENT                            # variable — binds the value
+            | UPPER_IDENT (IDENT | record_pattern)?  # constructor: bare, binder (Dog d), or destructure
+            | record_pattern                   # bare record destructure
+
+record_pattern = '{' field_pat (',' field_pat)* ','? '}'
+
+field_pat   = IDENT ('=' IDENT)?           # pun, or rename: { value = v }
 
 implicit_param = '.' IDENT?
 
@@ -95,6 +111,10 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | apply          | `parseApply()`        |
 | atom           | `parseAtom()`         |
 | if_expr        | `parseIfThenElse()`   |
+| match_expr     | `parseMatch()`        |
+| arm            | `parseMatchArm()`     |
+| pattern        | `parsePattern()`      |
+| record_pattern | `parseRecordPattern()` |
 | implicit_param | `parseImplicitParam()` |
 | record         | `parseRecordLiteral()` |
 | args           | `parseArgs()`         |
@@ -236,7 +256,7 @@ TypeAtom
 > **Not part of the type system.** Anonymous union (`A | B`) and intersection
 > (`A & B`) may still be parsed, but the checker **rejects** them as types — use a
 > nominal `type` for "either" and (planned) bounded polymorphism for "both".
-> `where`-clauses and `match` are planned features, not yet in the grammar. See
+> `where`-clauses are a planned feature, not yet in the grammar. See
 > [type-system.md](./type-system.md) and
 > [decisions/2026-06-24-adopt-operation-bidi.md](./decisions/2026-06-24-adopt-operation-bidi.md).
 

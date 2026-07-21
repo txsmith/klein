@@ -52,7 +52,6 @@
 | Tuple accessors | `pair._1` |
 | String interpolation | `"Hello ${name}"` |
 | String concatenation | `++` operator |
-| Match expressions | `match x` with arms |
 | For comprehensions | `for x in xs yield expr` |
 | Tilde operator | `f~(record)` |
 | Operators as values | `nums.fold(0, (+))` |
@@ -101,13 +100,15 @@ hierarchy (`klein.check.TypeError`).
 | Inferred interfaces | Common fields across constructors (incompatible fields erased) |
 | Optional types | `T?`, null safety, safe navigation `?.`, `NullNotAllowed` |
 | Branch joins | `if`/`else` results join to a common supertype (`lub`), nominal join/meet by variance |
+| Pattern matching | `match` with bare arms, record destructuring, constructor binders (`Dog d`), exhaustiveness + reachability as hard errors — see [spec/pattern-matching.md](spec/pattern-matching.md) |
+| Destructuring bindings | `{ name, age } = person`, irrefutable-only — see [spec/destructuring-bindings.md](spec/destructuring-bindings.md) |
 
 ### Operation Bidi checker — ahead
 
 | Feature | Notes |
 |---------|-------|
 | Declared bounds | `where 'T <: B` — deferred |
-| Pattern matching | `match x with \| Some v -> v \| None -> 0` |
+| Nested patterns | `Cons { head = Circle { radius } }` — deferred (needs usefulness-matrix exhaustiveness) |
 | Kleene types | `T*`, `T+` (experimental; `T?` done) |
 
 ### Known gaps (deferred checker bugs)

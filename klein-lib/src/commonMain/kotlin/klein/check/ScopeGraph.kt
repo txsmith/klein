@@ -214,6 +214,23 @@ data class ScopeGraph(
                         classify(stmt.name, refs)
                         nodes.add(Node(stmt.name, stmt, graphs))
                     }
+                    is PatternVal -> {
+                        val fresh = mutableListOf<String>()
+                        stmt.pattern.boundNames.forEach { binder ->
+                            if (seen.add(binder)) fresh.add(binder) else duplicates.add(binder to stmt.span)
+                        }
+                        val (graphs, refs) = findReferences(stmt.value)
+                        if (fresh.isEmpty()) {
+                            classify(null, refs)
+                            anonChildren.addAll(graphs)
+                        } else {
+                            fresh.forEachIndexed { i, name ->
+                                classify(name, refs)
+                                nodes.add(Node(name, stmt, if (i == 0) graphs else emptyList()))
+                            }
+                            valsInScope.addAll(fresh)
+                        }
+                    }
                     is Expr -> {
                         val (graphs, refs) = findReferences(stmt)
                         classify(null, refs) // bare expression: no source node, so no edges

@@ -170,6 +170,60 @@ sealed class TypeError {
         override val message = "'$name' shadows a builtin type"
     }
 
+    data class RefutableBinding(
+        val missing: List<String>,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            if (missing.isEmpty()) {
+                "Refutable pattern in a binding; use match"
+            } else {
+                "Refutable pattern in a binding — not covered: ${missing.joinToString(", ")}; use match"
+            }
+    }
+
+    data class NonExhaustiveMatch(
+        val missing: List<String>,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            if (missing.isEmpty()) {
+                "Match is not exhaustive; add a '_ ->' arm"
+            } else {
+                "Match is not exhaustive — missing: ${missing.joinToString(", ")}; add the missing arms or a '_ ->' arm"
+            }
+    }
+
+    data class UnreachableMatchArm(
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Unreachable match arm: earlier arms already cover it"
+    }
+
+    data class NotAConstructorOf(
+        val constructorName: String,
+        val scrutinee: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "'$constructorName' is not a constructor of '${Type.print(scrutinee)}'"
+    }
+
+    data class CannotMatchOn(
+        val scrutinee: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Cannot match on a value of type '${Type.print(scrutinee)}'"
+    }
+
+    data class CannotJoinMatchArms(
+        val armType: Type,
+        val otherType: Type,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Match arms have no common type: '${Type.print(armType)}' vs '${Type.print(otherType)}'"
+    }
+
     data class AnonymousUnionType(
         override val span: SourceSpan,
     ) : TypeError() {
