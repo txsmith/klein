@@ -192,4 +192,9 @@ class SafeFieldAccessTest {
             safeFieldAccess(nullLit(), "x"),
         )
     }
+
+    @Test
+    fun underscoreAsFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parse("x?._") }
+    }
 }

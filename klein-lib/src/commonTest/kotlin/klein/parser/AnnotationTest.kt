@@ -1,9 +1,60 @@
 package klein.parser
 
+import klein.FunctionTypeExpr
+import klein.Val
 import kotlin.test.Ignore
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class AnnotationTest {
+    private fun functionAnnotationOf(src: String): FunctionTypeExpr {
+        val stmt = parseStmt(src).stripSpan()
+        assertIs<Val>(stmt)
+        return assertIs<FunctionTypeExpr>(stmt.typeAnnotation)
+    }
+
+    @Test
+    fun twoParamFunctionTypeHasTwoParams() {
+        val fn = functionAnnotationOf("f: (Num, String) -> Num = y")
+        assertEquals(listOf(typeName("Num"), typeName("String")), fn.paramTypes)
+        assertEquals(typeName("Num"), fn.returnType)
+    }
+
+    @Test
+    fun threeParamFunctionTypeHasThreeParams() {
+        val fn = functionAnnotationOf("f: (Num, Num, Num) -> Num = y")
+        assertEquals(3, fn.paramTypes.size)
+    }
+
+    @Test
+    fun zeroParamFunctionTypeHasNoParams() {
+        val fn = functionAnnotationOf("f: () -> Num = y")
+        assertEquals(emptyList(), fn.paramTypes)
+    }
+
+    @Test
+    fun singleParamFunctionTypeHasOneParam() {
+        val fn = functionAnnotationOf("f: (Num) -> Num = y")
+        assertEquals(listOf(typeName("Num")), fn.paramTypes)
+    }
+
+    @Test
+    fun tupleNotBeforeArrowStaysATuple() {
+        val stmt = parseStmt("x: (Num, String) = y").stripSpan()
+        assertIs<Val>(stmt)
+        assertEquals(tupleType(typeName("Num"), typeName("String")), stmt.typeAnnotation)
+    }
+
+    @Test
+    fun keywordAsRecordTypeFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parseStmt("x: { fun: Num } = y") }
+    }
+
+    @Test
+    fun underscoreAsRecordTypeFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parseStmt("x: { _: Num } = y") }
+    }
     @Test
     fun topLevelLetAnnotation() {
         val stmt = parseStmt("x: Num = 42")

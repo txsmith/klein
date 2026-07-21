@@ -3,6 +3,7 @@ package klein.check
 import klein.check.Type.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** Programs that bottom out in `check` / `subsume` / `isSubtype`. */
@@ -71,5 +72,56 @@ class CheckTest {
                 f(true)
                 """.trimIndent(),
             ).errors.isNotEmpty(),
+        )
+
+    @Test
+    fun lambdaDiscardParamTakesAndIgnoresTheArgument() =
+        assertInfersType(
+            TFun(listOf(TNum), TNum),
+            """
+            f: (Num) -> Num = |_ -> 0|
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun lambdaDiscardParamIsNotReferenceable() {
+        val e =
+            infer(
+                """
+                f: (Num) -> Num = |_ -> _ + 1|
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.UnboundVariable>(e)
+    }
+
+    @Test
+    fun lambdaWithTwoDiscardParamsIsFine() =
+        assertInfersType(
+            TFun(listOf(TNum, TStr), TNum),
+            """
+            q = |_: Num, _: String -> 0|
+            q
+            """.trimIndent(),
+        )
+
+    @Test
+    fun annotatedLambdaDiscardParamChecks() =
+        assertInfersType(
+            TFun(listOf(TNum), TNum),
+            """
+            q = |_: Num -> 0|
+            q
+            """.trimIndent(),
+        )
+
+    @Test
+    fun twoParamFunctionTypeAnnotationChecksATwoParamLambda() =
+        assertInfersType(
+            TFun(listOf(TNum, TStr), TNum),
+            """
+            f: (Num, String) -> Num = |_, _ -> 0|
+            f
+            """.trimIndent(),
         )
 }

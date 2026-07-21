@@ -1216,6 +1216,18 @@ class MatchTypeCheckTest {
     }
 
     @Test
+    fun wildcardArmDoesNotBindAVariableNamedUnderscore() {
+        val e =
+            infer(
+                """
+                fun f(n: Num): Num = match n
+                  _ -> _
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.UnboundVariable>(e)
+    }
+
+    @Test
     fun optionalSumConstructorBinderIsTypedAsTheConstructor() {
         assertInfersType(
             TFun(listOf(TOptional(TRef("Animal"))), TStr),

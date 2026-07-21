@@ -432,4 +432,66 @@ class FunctionTest {
         assertIs<TypeError.UnboundVariable>(e)
         assertEquals("foo", e.name)
     }
+
+    @Test
+    fun discardParamTakesAndIgnoresTheArgument() =
+        assertInfersType(
+            TFun(listOf(TNum, TNum), TNum),
+            """
+            fun f(_: Num, x: Num): Num = x
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun discardParamIsNotReferenceable() {
+        val e =
+            infer(
+                """
+                fun f(_: Num): Num = _
+                """.trimIndent(),
+            ).errors.single()
+        assertIs<TypeError.UnboundVariable>(e)
+    }
+
+    @Test
+    fun twoDiscardParamsAreFine() =
+        assertInfersType(
+            TFun(listOf(TNum, TStr), TNum),
+            """
+            fun f(_: Num, _: String): Num = 1
+            f
+            """.trimIndent(),
+        )
+
+    @Test
+    fun twoParamFunctionTypedParamIsCallableWithTwoArguments() =
+        assertInfersType(
+            TFun(listOf(TFun(listOf(TNum, TNum), TNum)), TNum),
+            """
+            fun apply(g: (Num, Num) -> Num): Num = g(1, 2)
+            apply
+            """.trimIndent(),
+        )
+
+    @Test
+    fun zeroParamFunctionTypedParamIsCallableWithNoArguments() =
+        assertInfersType(
+            TFun(listOf(TFun(emptyList(), TNum)), TNum),
+            """
+            fun call0(g: () -> Num): Num = g()
+            call0
+            """.trimIndent(),
+        )
+
+    @Test
+    fun higherOrderCallSiteChecksLambdaAgainstBothParams() =
+        assertMismatch(
+            "String",
+            "Num",
+            """
+            fun apply(g: (Num, Num) -> Num): Num = g(1, 2)
+            apply(|a, b -> "x"|)
+            """.trimIndent(),
+        )
 }

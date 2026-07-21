@@ -192,7 +192,7 @@ class Checker {
                             recordError(TypeError.MissingParamAnnotation(param.name, param.span))
                         }
                     }
-                funDef.params.zip(paramTypes).forEach { (param, type) -> fnEnv.bind(param.name, type) }
+                funDef.params.zip(paramTypes).forEach { (param, type) -> if (!param.isDiscard) fnEnv.bind(param.name, type) }
                 val returnType =
                     when {
                         funDef.returnType != null -> resolveType(funDef.returnType, fnEnv)
@@ -233,7 +233,7 @@ class Checker {
     private fun reportDuplicateParams(params: List<Param>) {
         val seen = mutableSetOf<String>()
         params.forEach { param ->
-            if (!seen.add(param.name)) recordError(TypeError.DuplicateParameter(param.name, param.span))
+            if (!param.isDiscard && !seen.add(param.name)) recordError(TypeError.DuplicateParameter(param.name, param.span))
         }
     }
 
@@ -263,7 +263,7 @@ class Checker {
                     } else {
                         recordError(TypeError.MissingParamAnnotation(param.name, param.span))
                     }
-                bodyEnv.bind(param.name, type)
+                if (!param.isDiscard) bodyEnv.bind(param.name, type)
                 type
             }
         val bodyType = synth(expr.body, bodyEnv)
@@ -306,7 +306,7 @@ class Checker {
                 } else {
                     expectedParamType
                 }
-            bodyEnv.bind(param.name, paramType)
+            if (!param.isDiscard) bodyEnv.bind(param.name, paramType)
         }
         check(expr.body, expected.result, bodyEnv)
     }

@@ -329,6 +329,30 @@ class MatchTest {
     }
 
     @Test
+    fun keywordAsPatternFieldIsRejected() {
+        assertFailsWith<ParseError> {
+            parse(
+                """
+                match p
+                  { type } -> 1
+                """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
+    fun underscoreAsPatternFieldIsRejected() {
+        assertFailsWith<ParseError> {
+            parse(
+                """
+                match p
+                  { _ } -> 1
+                """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
     fun duplicateFieldInPatternIsRejected() {
         assertFailsWith<ParseError> {
             parse(

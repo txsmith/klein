@@ -144,6 +144,13 @@ class RecordTest {
     @Test
     fun keywordsInBraces() {
         assertFailsWith<ParseError> { parse("{ if then else }") }
+        assertFailsWith<ParseError> { parse("{ match = 1 }") }
+    }
+
+    @Test
+    fun underscoreAsFieldName() {
+        assertFailsWith<ParseError> { parse("{ _ = 1 }") }
+        assertFailsWith<ParseError> { parse("{ _ }") }
     }
 
     @Test

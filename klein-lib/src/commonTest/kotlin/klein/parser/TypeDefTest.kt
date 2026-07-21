@@ -582,7 +582,7 @@ class TypeDefTest {
                             field(
                                 "f",
                                 functionType(
-                                    tupleType(typeName("Num"), typeName("Num")),
+                                    listOf(typeName("Num"), typeName("Num")),
                                     typeName("Num"),
                                 ),
                             ),
@@ -708,8 +708,28 @@ class TypeDefTest {
     }
 
     @Test
+    fun matchIsAReservedTypeName() {
+        assertFailsWith<ParseError> { parseTypeDef("type Match = Match { v: Num }") }
+    }
+
+    @Test
+    fun matchIsAReservedConstructorName() {
+        assertFailsWith<ParseError> { parseTypeDef("type T = Match") }
+    }
+
+    @Test
+    fun constructorsNamedTrueAndFalseStayLegal() {
+        parseTypeDef("type MyBool = True | False")
+    }
+
+    @Test
     fun keywordAsFieldName() {
         assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { if: Num }") }
+    }
+
+    @Test
+    fun underscoreAsFieldName() {
+        assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { _: Num }") }
     }
 
     @Test
@@ -1398,7 +1418,7 @@ class TypeDefTest {
                             field(
                                 "f",
                                 functionType(
-                                    tupleType(typeName("A"), typeName("B")),
+                                    listOf(typeName("A"), typeName("B")),
                                     tupleType(typeName("C"), typeName("D")),
                                 ),
                             ),
@@ -1625,7 +1645,7 @@ class TypeDefTest {
                     field(
                         "c",
                         functionType(
-                            tupleType(typeVar("A"), typeVar("B")),
+                            listOf(typeVar("A"), typeVar("B")),
                             appliedType("Result", typeVar("A"), typeVar("B")),
                         ),
                     ),
@@ -1975,7 +1995,7 @@ class TypeDefTest {
                             field(
                                 "f",
                                 functionType(
-                                    tupleType(
+                                    listOf(
                                         tupleType(typeName("A"), typeName("B")),
                                         typeName("C"),
                                     ),
