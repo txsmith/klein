@@ -31,6 +31,7 @@ import klein.Param
 import klein.ParseError
 import klein.Parser
 import klein.Pattern
+import klein.PatternVal
 import klein.OptionalTypeExpr
 import klein.Program
 import klein.RecordPattern
@@ -274,6 +275,11 @@ fun valStmt(
     typeAnnotation: TypeExpr? = null,
 ) = Val(name, value, noSpan, typeAnnotation)
 
+fun patternVal(
+    pattern: Pattern,
+    value: Expr,
+) = PatternVal(pattern, value, noSpan)
+
 fun funDef(
     name: String,
     vararg params: String,
@@ -347,6 +353,7 @@ fun parseTopLevel(source: String): Stmt {
 fun Stmt.stripSpan(): Stmt =
     when (this) {
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
+        is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
         is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
         is Expr -> stripSpans()

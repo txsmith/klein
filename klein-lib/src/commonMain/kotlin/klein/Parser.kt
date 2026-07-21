@@ -46,6 +46,7 @@ class Parser(
         val stmt =
             when {
                 peek().kind == TYPE && allowTypeDef -> parseTypeDef()
+                isDestructuringBinding() -> parseDestructuringBinding()
                 isBinding() -> parseBinding()
                 else -> parseExpr()
             }
@@ -855,9 +856,40 @@ class Parser(
     private fun isBinding(): Boolean =
         peek().kind == IDENT && (peekAt(1).kind == EQ || peekAt(1).kind == COLON)
 
+    private fun isDestructuringBinding(): Boolean {
+        var i =
+            when {
+                peek().kind == LBRACE -> 0
+                peek().kind == UPPER_IDENT && peekAt(1).kind == LBRACE -> 1
+                peek().kind == UPPER_IDENT && peekAt(1).kind == IDENT -> return peekAt(2).kind == EQ
+                else -> return false
+            }
+        var depth = 0
+        while (true) {
+            when (peekAt(i).kind) {
+                LBRACE -> depth++
+                RBRACE -> {
+                    depth--
+                    if (depth == 0) return peekAt(i + 1).kind == EQ
+                }
+                EOF -> return false
+                else -> {}
+            }
+            i++
+        }
+    }
+
+    private fun parseDestructuringBinding(): PatternVal {
+        val pattern = parsePattern()
+        expectAndAdvance(EQ, message = "Expected '='")
+        val value = parseBlockOrExpr()
+        return PatternVal(pattern, value, pattern.span + value.span)
+    }
+
     private fun endsWithBlock(stmt: Stmt): Boolean =
         when (stmt) {
             is Val -> endsWithBlockExpr(stmt.value)
+            is PatternVal -> endsWithBlockExpr(stmt.value)
             is FunDef -> endsWithBlockExpr(stmt.body)
             is TypeDef -> false
             is Expr -> endsWithBlockExpr(stmt)

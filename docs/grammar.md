@@ -27,6 +27,7 @@ stmt        = binding
             | expr
 
 binding     = IDENT (':' type)? '=' block_or_expr
+            | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
 
 block_or_expr = block
               | expr

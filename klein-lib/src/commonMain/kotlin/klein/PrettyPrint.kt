@@ -42,6 +42,7 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
                 }
             "${pad}type $name$typeParamsStr = $constructorsStr"
         }
+        is PatternVal -> "${pad}PatternVal(${pattern.prettyPrint()}) =\n${value.prettyPrint(indent + 1)}"
         is Expr -> prettyPrint(indent)
     }
 }

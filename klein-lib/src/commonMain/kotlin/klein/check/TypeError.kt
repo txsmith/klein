@@ -170,6 +170,18 @@ sealed class TypeError {
         override val message = "'$name' shadows a builtin type"
     }
 
+    data class RefutableBinding(
+        val missing: List<String>,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            if (missing.isEmpty()) {
+                "Refutable pattern in a binding; use match"
+            } else {
+                "Refutable pattern in a binding — not covered: ${missing.joinToString(", ")}; use match"
+            }
+    }
+
     data class NonExhaustiveMatch(
         val missing: List<String>,
         override val span: SourceSpan,

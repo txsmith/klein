@@ -117,16 +117,24 @@ class Checker {
         val scope = ScopeGraph.constructGraph(stmts)
         scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
 
+        val processedPatternVals = mutableSetOf<PatternVal>()
         for (component in scope.graph.computeSCCs()) {
             val bindings = component.nodes.map { it.binding }
             when {
                 bindings.all { it is FunDef } -> bindFunGroup(bindings.filterIsInstance<FunDef>(), component.isRecursive, env)
                 bindings.size == 1 && bindings.single() is Val -> synthAndBindVal(bindings.single() as Val, env)
+                bindings.size == 1 && bindings.single() is PatternVal -> {
+                    val stmt = bindings.single() as PatternVal
+                    if (processedPatternVals.add(stmt)) checkPatternVal(stmt, env)
+                }
                 else ->
-                    component.nodes.filter { it.binding is Val }.forEach { node ->
-                        recordError(TypeError.RecursiveVal(node.name, scope.graph.findCycle(node.name), (node.binding as Val).span))
+                    component.nodes.filter { it.binding is Val || it.binding is PatternVal }.forEach { node ->
+                        recordError(TypeError.RecursiveVal(node.name, scope.graph.findCycle(node.name), node.binding.span))
                     }
             }
+        }
+        for (stmt in stmts) {
+            if (stmt is PatternVal && processedPatternVals.add(stmt)) checkPatternVal(stmt, env)
         }
 
         var last: Type = TUnit
@@ -134,6 +142,25 @@ class Checker {
             if (stmt is Expr) last = synth(stmt, env)
         }
         return last
+    }
+
+    private fun checkPatternVal(
+        stmt: PatternVal,
+        env: TypeEnv,
+    ) {
+        val rhsType = synth(stmt.value, env)
+        val coverage = if (rhsType is TBottom) null else MatchCoverage.of(rhsType, env)
+        if (coverage == null) {
+            if (rhsType !is TBottom) recordError(TypeError.CannotMatchOn(rhsType, stmt.value.span))
+            stmt.pattern.boundNames.forEach { env.bind(it, TBottom) }
+            return
+        }
+        val errorsBefore = errors.size
+        checkPattern(stmt.pattern, coverage, env, env)
+        coverage.cover(stmt.pattern)
+        if (errors.size == errorsBefore && !coverage.exhausted()) {
+            recordError(TypeError.RefutableBinding(coverage.missing(), stmt.span))
+        }
     }
 
     /**

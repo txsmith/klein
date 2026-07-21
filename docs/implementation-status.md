@@ -101,6 +101,7 @@ hierarchy (`klein.check.TypeError`).
 | Optional types | `T?`, null safety, safe navigation `?.`, `NullNotAllowed` |
 | Branch joins | `if`/`else` results join to a common supertype (`lub`), nominal join/meet by variance |
 | Pattern matching | `match` with bare arms, record destructuring, constructor binders (`Dog d`), exhaustiveness + reachability as hard errors — see [spec/pattern-matching.md](spec/pattern-matching.md) |
+| Destructuring bindings | `{ name, age } = person`, irrefutable-only — see [spec/destructuring-bindings.md](spec/destructuring-bindings.md) |
 
 ### Operation Bidi checker — ahead
 

@@ -18,6 +18,12 @@ data class Val(
     val typeAnnotation: TypeExpr? = null,
 ) : Stmt()
 
+data class PatternVal(
+    val pattern: Pattern,
+    val value: Expr,
+    override val span: SourceSpan,
+) : Stmt()
+
 data class Param(
     val name: String,
     val typeAnnotation: TypeExpr? = null,
@@ -192,6 +198,15 @@ sealed class Pattern {
     abstract val span: SourceSpan
 }
 
+val Pattern.boundNames: List<String>
+    get() =
+        when (this) {
+            is ConstructorPattern -> listOfNotNull(binder) + (record?.fields?.mapNotNull { it.binder } ?: emptyList())
+            is RecordPattern -> fields.mapNotNull { it.binder }
+            is VariablePattern -> listOf(name)
+            is WildcardPattern, is LiteralPattern -> emptyList()
+        }
+
 data class WildcardPattern(
     override val span: SourceSpan,
 ) : Pattern()
@@ -271,6 +286,7 @@ val Expr.usesImplicitParam: Boolean
                     when (stmt) {
                         is Expr -> stmt.usesImplicitParam
                         is Val -> stmt.value.usesImplicitParam
+                        is PatternVal -> stmt.value.usesImplicitParam
                         is FunDef -> false
                         is TypeDef -> false
                     }
