@@ -1,7 +1,7 @@
 # Surface Spec: Pattern Matching
 
-**Status:** Implemented (lexer, parser, checker; 2026-07-18) — evaluator pending on the
-`interpreter` branch · **Branch:** `pattern-matching`
+**Status:** Implemented and merged (#24, 2026-07-21) — covers `match` and
+destructuring bindings (§9); evaluator pending on the `interpreter` branch
 
 This specifies `match` — the elimination form for nominal sums. It slots into the
 bidirectional checker per
@@ -280,7 +280,67 @@ delivers lexer, parser, and checker.)
   standing decision. (A dedicated as-pattern keyword is unnecessary now that a
   constructor binder `Dog d` names the value directly.)
 
-## 9. Implementation plan
+## 9. Destructuring bindings
+
+A binding's left-hand side may be a pattern — the forms and refutability above,
+plus one rule: **a binding pattern must be irrefutable for the right-hand
+side's type** (as a single unguarded arm, it would exhaust it). No `match`, no
+keyword — bindings stay bare.
+
+```klein
+type Person = Person { name: String, age: Num }
+
+{ name, age } = person           # name : String, age : Num
+{ min = lo, max = hi } = bounds(xs)
+Person { name } = someone        # ok: Person is single-constructor
+Circle c = c0                    # ok when c0 : Circle — binds c : Circle
+```
+
+The headline rejections — a pattern that could fail has no home in a binding:
+
+```klein
+{ name } = maybePerson           # Person? — error: refutable, may be null; use match
+Circle { radius } = s            # s : Shape — error: refutable, may be Square, Tri
+```
+
+Grammar and disambiguation:
+
+```
+binding     = IDENT (':' type)? '=' block_or_expr
+            | pattern '=' block_or_expr
+```
+
+- At statement start, a record pattern (`{ … }`), constructor destructure
+  (`Person { … }`), or constructor binder (`Circle c`) followed by `=` (not
+  `==`) is a destructuring binding; anything else parses as before. (`{ a } == b`
+  stays a comparison; a bare `{ a = 1 }` statement stays a discarded literal;
+  bare `Circle = x` is not claimed.) This stays decidable when structural calls
+  land: a call statement followed by `=` is invalid, so `Person { name } = e`
+  can only be the binding.
+- **No type annotation on a pattern binding** — field types come from the
+  right-hand side; `{ name }: Person = e` is a parse error.
+- Allowed at top level and in blocks alike.
+
+Typing is the arm rule reused: synthesize the right-hand side, check the
+pattern against it. Record fields must exist at their types (`MissingField`;
+width applies — unnamed fields are ignored); nominal right-hand sides project
+through the interface, so `{ name }` works on a `Person` and even on a sum
+whose constructors all carry the field; `{ name = _ }` requires the field and
+binds nothing; a non-record right-hand side is `NotARecord`.
+
+Scoping: the bound names behave as sibling `val`s introduced together after the
+right-hand side — sequential like any `val`, references in the right-hand side
+resolve outward (`{ a } = f(a)` uses an enclosing `a`, exactly like
+`x = x + 1`), and each name participates in duplicate detection individually
+(`{ a = x, b = x } = p` is a duplicate-binding error).
+
+Not included: refutable patterns of any kind (the error names the uncovered
+cases, mirroring non-exhaustive match), bare variable/wildcard as the whole
+pattern (`x = e` is already a binding; `_ = e` is rejected), and
+lambda-parameter patterns (`|{ name } -> name|`) — a separate follow-up on the
+parameter surface.
+
+## 10. Implementation plan
 
 1. **Lexer + AST + parser** — `match` keyword; `Match(scrutinee, arms)`,
    `Arm(pattern, guard, body)`, `Pattern` hierarchy; arm block parsing per the
@@ -295,7 +355,10 @@ delivers lexer, parser, and checker.)
 4. **Interpreter** — on the `interpreter` branch once 1–3 merge.
 
 Steps 1–3 are done (TDD: red suites in `parser/MatchTest` and
-`check/MatchTypeCheckTest`, then the implementation).
+`check/MatchTypeCheckTest`, then the implementation). Destructuring bindings
+(§9) shipped the same way — `PatternVal`, suites in `parser/BindingTest` and
+`check/BindingTypeCheckTest`, reusing `MatchCoverage` + `checkPattern` for the
+irrefutability check.
 
 ## Open questions
 
