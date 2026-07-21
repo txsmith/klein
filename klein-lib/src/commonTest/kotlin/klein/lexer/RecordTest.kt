@@ -135,9 +135,9 @@ class RecordTest {
         """.trimIndent()
         assertTokens(
             program,
-            kw(klein.TokenKind.IF), ident("x"),
-            kw(klein.TokenKind.THEN), sym('{'), ident("a"), sym('='), num("1"), sym('}'),
-            kw(klein.TokenKind.ELSE), sym('{'), ident("b"), sym('='), num("2"), sym('}'),
+            kw(klein.surface.TokenKind.IF), ident("x"),
+            kw(klein.surface.TokenKind.THEN), sym('{'), ident("a"), sym('='), num("1"), sym('}'),
+            kw(klein.surface.TokenKind.ELSE), sym('{'), ident("b"), sym('='), num("2"), sym('}'),
             eof
         )
     }
@@ -216,7 +216,7 @@ class RecordTest {
     fun keywordsInBraces() {
         assertTokens(
             "{ if then else }",
-            sym('{'), kw(klein.TokenKind.IF), kw(klein.TokenKind.THEN), kw(klein.TokenKind.ELSE), sym('}'),
+            sym('{'), kw(klein.surface.TokenKind.IF), kw(klein.surface.TokenKind.THEN), kw(klein.surface.TokenKind.ELSE), sym('}'),
             eof
         )
     }

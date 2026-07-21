@@ -1,11 +1,15 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.KleinError
+import klein.SourceSpan
+
+import klein.surface.TokenKind.*
 
 class ParseError(
-    message: String,
-    val span: SourceSpan,
-) : Exception(message)
+    override val message: String,
+    override val span: SourceSpan,
+) : Exception(message),
+    KleinError
 
 class Parser(
     private val tokens: List<Token>,
@@ -471,13 +475,13 @@ class Parser(
             INT -> {
                 advance()
                 val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                IntLiteral(value, token.span)
+                IntLiteral(value, token.span, token.text)
             }
 
             DOUBLE -> {
                 advance()
                 val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                DoubleLiteral(value, token.span)
+                DoubleLiteral(value, token.span, token.text)
             }
 
             STRING -> {
@@ -614,13 +618,13 @@ class Parser(
             INT -> {
                 advance()
                 val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                LiteralPattern(IntLiteral(value, token.span), token.span)
+                LiteralPattern(IntLiteral(value, token.span, token.text), token.span)
             }
 
             DOUBLE -> {
                 advance()
                 val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                LiteralPattern(DoubleLiteral(value, token.span), token.span)
+                LiteralPattern(DoubleLiteral(value, token.span, token.text), token.span)
             }
 
             MINUS, MINUS_TIGHT -> {
@@ -629,8 +633,8 @@ class Parser(
                 val span = token.span + number.span
                 val literal =
                     when (number.kind) {
-                        INT -> IntLiteral(-number.text!!.toLong(), span)
-                        else -> DoubleLiteral(-number.text!!.toDouble(), span)
+                        INT -> IntLiteral(-number.text!!.toLong(), span, "-${number.text}")
+                        else -> DoubleLiteral(-number.text!!.toDouble(), span, "-${number.text}")
                     }
                 LiteralPattern(literal, span)
             }

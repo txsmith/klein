@@ -1,17 +1,17 @@
 package klein.check
 
-import klein.BoolLiteral
-import klein.ConstructorPattern
-import klein.DoubleLiteral
-import klein.Expr
-import klein.IntLiteral
-import klein.LiteralPattern
-import klein.NullLiteral
-import klein.Pattern
-import klein.RecordPattern
-import klein.StringLiteral
-import klein.VariablePattern
-import klein.WildcardPattern
+import klein.surface.BoolLiteral
+import klein.surface.ConstructorPattern
+import klein.surface.DoubleLiteral
+import klein.surface.Expr
+import klein.surface.IntLiteral
+import klein.surface.LiteralPattern
+import klein.surface.NullLiteral
+import klein.surface.Pattern
+import klein.surface.RecordPattern
+import klein.surface.StringLiteral
+import klein.surface.VariablePattern
+import klein.surface.WildcardPattern
 import klein.check.Type.*
 
 internal class MatchCoverage private constructor(

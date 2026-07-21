@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.ParseError
+import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

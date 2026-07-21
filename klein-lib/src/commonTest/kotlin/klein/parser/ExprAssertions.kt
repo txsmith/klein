@@ -1,66 +1,75 @@
 package klein.parser
 
-import klein.AppliedTypeExpr
-import klein.Apply
-import klein.Ascription
-import klein.BinaryOp
-import klein.Block
-import klein.BoolLiteral
-import klein.Constructor
-import klein.DoubleLiteral
-import klein.Expr
-import klein.FieldAccess
-import klein.FieldDecl
-import klein.FunDef
-import klein.FunctionTypeExpr
-import klein.Ident
-import klein.IfThenElse
-import klein.ImplicitParam
-import klein.IntLiteral
-import klein.IntersectionTypeExpr
-import klein.ConstructorPattern
-import klein.FieldPattern
-import klein.Lambda
-import klein.Lexer
-import klein.LiteralPattern
-import klein.Match
-import klein.MatchArm
-import klein.NullLiteral
-import klein.Operator
-import klein.Param
-import klein.ParseError
-import klein.Parser
-import klein.Pattern
-import klein.PatternVal
-import klein.OptionalTypeExpr
-import klein.Program
-import klein.RecordPattern
-import klein.RecordField
-import klein.RecordLiteral
-import klein.RecordTypeExpr
-import klein.SafeFieldAccess
+import klein.surface.AppliedTypeExpr
+import klein.surface.Apply
+import klein.surface.Ascription
+import klein.surface.BinaryOp
+import klein.surface.Block
+import klein.surface.BoolLiteral
+import klein.surface.Constructor
+import klein.surface.ConstructorPattern
+import klein.surface.DoubleLiteral
+import klein.surface.Expr
+import klein.surface.FieldAccess
+import klein.surface.FieldDecl
+import klein.surface.FieldPattern
+import klein.surface.FunDef
+import klein.surface.FunctionTypeExpr
+import klein.surface.Ident
+import klein.surface.IfThenElse
+import klein.surface.ImplicitParam
+import klein.surface.IntLiteral
+import klein.surface.IntersectionTypeExpr
+import klein.surface.Lambda
+import klein.surface.Lexer
+import klein.surface.LiteralPattern
+import klein.surface.Match
+import klein.surface.MatchArm
+import klein.surface.NullLiteral
+import klein.surface.Operator
+import klein.surface.OptionalTypeExpr
+import klein.surface.Param
+import klein.surface.ParseError
+import klein.surface.Parser
+import klein.surface.Pattern
+import klein.surface.PatternVal
+import klein.surface.Program
+import klein.surface.RecordField
+import klein.surface.RecordLiteral
+import klein.surface.RecordPattern
+import klein.surface.RecordTypeExpr
+import klein.surface.SafeFieldAccess
 import klein.SourceSpan
-import klein.Stmt
-import klein.StringLiteral
-import klein.TupleTypeExpr
-import klein.TypeDef
-import klein.TypeExpr
-import klein.TypeName
-import klein.TypeVar
-import klein.UnaryOp
-import klein.UnaryOperator
-import klein.UnionTypeExpr
-import klein.Val
-import klein.VariablePattern
-import klein.WildcardPattern
+import klein.surface.Stmt
+import klein.surface.StringLiteral
+import klein.surface.TupleTypeExpr
+import klein.surface.TypeDef
+import klein.surface.TypeExpr
+import klein.surface.TypeName
+import klein.surface.TypeVar
+import klein.surface.UnaryOp
+import klein.surface.UnaryOperator
+import klein.surface.UnionTypeExpr
+import klein.surface.Val
+import klein.surface.VariablePattern
+import klein.surface.WildcardPattern
 
 private val noSpan = SourceSpan.zero
 
-fun int(value: Long) = IntLiteral(value, noSpan)
+fun int(
+    value: Long,
+    text: String = value.toString(),
+) = IntLiteral(value, noSpan, text)
 
-fun int(value: Int) = IntLiteral(value.toLong(), noSpan)
+fun int(
+    value: Int,
+    text: String = value.toString(),
+) = IntLiteral(value.toLong(), noSpan, text)
 
-fun double(value: Double) = DoubleLiteral(value, noSpan)
+fun double(
+    value: Double,
+    text: String = value.toString(),
+) = DoubleLiteral(value, noSpan, text)
 
 fun string(value: String) = StringLiteral(value, noSpan)
 
@@ -232,8 +241,8 @@ fun Pattern.stripSpan(): Pattern =
 
 fun Expr.stripSpans(): Expr =
     when (this) {
-        is IntLiteral -> IntLiteral(value, noSpan)
-        is DoubleLiteral -> DoubleLiteral(value, noSpan)
+        is IntLiteral -> IntLiteral(value, noSpan, text)
+        is DoubleLiteral -> DoubleLiteral(value, noSpan, text)
         is StringLiteral -> StringLiteral(value, noSpan)
         is BoolLiteral -> BoolLiteral(value, noSpan)
         is NullLiteral -> NullLiteral(noSpan)

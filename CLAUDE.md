@@ -125,13 +125,22 @@ klein-lang/
 ├── klein-lib/
 │   ├── src/
 │   │   ├── commonMain/kotlin/klein/
-│   │   │   ├── Lexer.kt          # Tokenization
-│   │   │   ├── Parser.kt         # Parsing
-│   │   │   ├── Ast.kt            # AST definitions
-│   │   │   ├── Token.kt          # Token types
-│   │   │   ├── SourceSpan.kt     # Source location tracking
-│   │   │   ├── PrettyPrint.kt    # AST pretty-printing
-│   │   │   ├── Klein.kt          # Library entry (lex → parse → check)
+│   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
+│   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → interpret)
+│   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
+│   │   │   │   ├── Lexer.kt        # Tokenization
+│   │   │   │   ├── Parser.kt       # Parsing
+│   │   │   │   ├── Ast.kt          # Surface AST definitions
+│   │   │   │   ├── Token.kt        # Token types
+│   │   │   │   └── PrettyPrint.kt  # AST pretty-printing
+│   │   │   ├── core/             # Core IR + lowering (placeholder; the IR work lands here)
+│   │   │   ├── interp/           # The CESK machine interpreter
+│   │   │   │   ├── Interpreter.kt  # begin/run + the machine's step loop
+│   │   │   │   ├── Frame.kt        # Defunctionalized continuation frames (the K)
+│   │   │   │   ├── Env.kt          # Persistent env (names → addresses) + the store
+│   │   │   │   ├── Execution.kt    # Done | Suspended — the host-facing execution API
+│   │   │   │   └── Value.kt        # Runtime values (natives are declarations; host calls suspend)
 │   │   │   └── check/            # The Operation Bidi bidirectional checker
 │   │   │       ├── Checker.kt              # synth / check driver
 │   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer
@@ -145,7 +154,8 @@ klein-lang/
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
-│   │   │   └── check/
+│   │   │   ├── check/
+│   │   │   └── interp/
 │   │   └── nativeMain/kotlin/klein/
 │   │       └── Main.kt           # CLI entry point
 │   └── build.gradle.kts
@@ -172,6 +182,24 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
+
+## Running Benchmarks
+
+The benchmark corpus lives in `klein-bench` (kotlinx-benchmark / JMH): a suite of named
+sample Klein programs (`Programs.kt`), each measured at every pipeline stage
+(`parse`, `typecheck`, `eval`, `endToEnd`). Compare per (program, stage) cell before and
+after a change to see whether it actually made things faster.
+
+```bash
+# Full statistical run (use this for real before/after comparisons; takes minutes)
+./gradlew :klein-bench:benchmark
+
+# Quick smoke pass (sanity only, high variance)
+./gradlew :klein-bench:smokeBenchmark
+```
+
+JSON reports land in `klein-bench/build/reports/benchmarks/`. To track a new program, add
+an entry to `Programs.suite` and its name to the `@Param` list in `ProgramSuiteBenchmark`.
 
 ## Implementation Status
 

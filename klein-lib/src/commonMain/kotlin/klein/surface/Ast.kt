@@ -1,4 +1,6 @@
-package klein
+package klein.surface
+
+import klein.SourceSpan
 
 import kotlinx.serialization.Serializable
 
@@ -120,11 +122,16 @@ sealed class Expr : Stmt() {
 data class IntLiteral(
     val value: Long,
     override val span: SourceSpan,
+    // The literal as written in source. Authoritative for numeric models that outrange
+    // Long/Double (exact rationals, decimals); `value` is the eager double-world convenience.
+    val text: String,
 ) : Expr()
 
 data class DoubleLiteral(
     val value: Double,
     override val span: SourceSpan,
+    // The literal as written in source, before IEEE rounding; see IntLiteral.text.
+    val text: String,
 ) : Expr()
 
 data class StringLiteral(
