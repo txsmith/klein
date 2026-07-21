@@ -162,6 +162,17 @@ class FunTest {
         assertFailsWith<ParseError> { parseProgram("fun or(x) = x") }
         assertFailsWith<ParseError> { parseProgram("fun not(x) = x") }
         assertFailsWith<ParseError> { parseProgram("fun fun(x) = x") }
+        assertFailsWith<ParseError> { parseProgram("fun match(x) = x") }
+    }
+
+    @Test
+    fun funWithUnderscoreAsName() {
+        assertFailsWith<ParseError> { parseProgram("fun _(x: Num): Num = x") }
+    }
+
+    @Test
+    fun funWithKeywordAsParamName() {
+        assertFailsWith<ParseError> { parseProgram("fun f(if: Num): Num = 1") }
     }
 
     @Test

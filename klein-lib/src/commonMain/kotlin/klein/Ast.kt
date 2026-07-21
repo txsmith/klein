@@ -28,7 +28,9 @@ data class Param(
     val name: String,
     val typeAnnotation: TypeExpr? = null,
     val span: SourceSpan = SourceSpan.zero,
-)
+) {
+    val isDiscard: Boolean get() = name == "_"
+}
 
 data class FunDef(
     val name: String,

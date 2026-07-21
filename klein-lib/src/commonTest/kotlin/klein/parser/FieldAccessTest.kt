@@ -111,4 +111,14 @@ class FieldAccessTest {
             add(fieldAccess(id("user"), "age"), int(1)),
         )
     }
+
+    @Test
+    fun keywordAsFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parse("x.match") }
+    }
+
+    @Test
+    fun underscoreAsFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parse("x._") }
+    }
 }

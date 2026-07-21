@@ -122,6 +122,12 @@ class BindingTest {
     }
 
     @Test
+    fun underscoreAsName() {
+        val error = assertFailsWith<ParseError> { parseStmt("_ = 1") }
+        assertEquals("_ (underscore) cannot be used as a name", error.message)
+    }
+
+    @Test
     fun destructuringBinding() {
         val stmt = parseStmt("{ name, age } = person")
         assertStmtEquals(stmt, patternVal(recordP(fieldP("name"), fieldP("age")), id("person")))

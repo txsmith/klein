@@ -65,7 +65,7 @@ class Parser(
 
     private fun parseFunDef(): FunDef {
         val funToken = advance()
-        val name = expectIdentifier("Expected function name")
+        val name = expectName("Expected function name")
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
@@ -198,8 +198,7 @@ class Parser(
     }
 
     private fun parseFieldDecl(seenFields: MutableSet<String>): FieldDecl {
-        val nameToken = expectAndAdvance(IDENT, message = "Expected field name")
-        validateNotKeyword(nameToken)
+        val nameToken = expectName("Expected field name")
 
         if (!seenFields.add(nameToken.text!!)) {
             throw ParseError("Duplicate field name: '${nameToken.text}'", nameToken.span)
@@ -217,12 +216,7 @@ class Parser(
         if (peek().kind == ARROW) {
             advance()
             val right = parseTypeExpr()
-            val paramTypes =
-                if (left is TupleTypeExpr && left.elements.isEmpty()) {
-                    emptyList()
-                } else {
-                    listOf(left)
-                }
+            val paramTypes = if (left is TupleTypeExpr) left.elements else listOf(left)
             return FunctionTypeExpr(paramTypes, right, left.span + right.span)
         }
 
@@ -317,7 +311,7 @@ class Parser(
                 advance()
                 val fields = mutableListOf<Pair<String, TypeExpr>>()
                 while (peek().kind != RBRACE && peek().kind != EOF) {
-                    val fieldName = expectAndAdvance(IDENT, message = "Expected field name")
+                    val fieldName = expectName("Expected field name")
                     expectAndAdvance(COLON, message = "Expected ':'")
                     val fieldType = parseTypeExpr()
                     fields.add(fieldName.text!! to fieldType)
@@ -353,16 +347,18 @@ class Parser(
     }
 
     private fun validateNotReserved(token: Token) {
-        val reserved = setOf("Type", "If", "Then", "Else", "Fun", "And", "Or", "Not")
+        val reserved = setOf("Type", "If", "Then", "Else", "Fun", "And", "Or", "Not", "Match")
         if (token.text in reserved) {
             throw ParseError("'${token.text}' is a reserved word", token.span)
         }
     }
 
-    private fun validateNotKeyword(token: Token) {
-        if (TokenKind.fromKeyword(token.text!!) != null) {
-            throw ParseError("'${token.text}' is a keyword and cannot be used as a field name", token.span)
+    private fun expectName(message: String): Token {
+        val token = expectIdentifier(message)
+        if (token.text == "_") {
+            throw ParseError("_ (underscore) cannot be used as a name", token.span)
         }
+        return token
     }
 
     private fun parseFunParams(): List<Param> {
@@ -395,7 +391,7 @@ class Parser(
     }
 
     private fun parseBinding(): Val {
-        val name = expectIdentifier("Expected identifier")
+        val name = expectName("Expected identifier")
         val typeAnnotation = parseOptionalTypeAnnotation()
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
@@ -696,7 +692,7 @@ class Parser(
         val seenFields = mutableSetOf<String>()
 
         while (true) {
-            val fieldToken = expectIdentifier("Expected field name")
+            val fieldToken = expectName("Expected field name")
             if (!seenFields.add(fieldToken.text!!)) {
                 throw ParseError("Duplicate field in pattern: '${fieldToken.text}'", fieldToken.span)
             }
@@ -781,7 +777,7 @@ class Parser(
         val fields = mutableListOf<RecordField>()
 
         while (peek().kind != RBRACE && peek().kind != EOF) {
-            val nameToken = expectIdentifier("Expected field name")
+            val nameToken = expectName("Expected field name")
             val name = nameToken.text!!
 
             val typeAnnotation = parseOptionalTypeAnnotation()
@@ -811,9 +807,8 @@ class Parser(
     private fun parseImplicitParam(dotToken: Token): Expr {
         advance()
         val implicitParam = ImplicitParam(dotToken.span)
-        val field = peek()
-        return if (field.kind == IDENT) {
-            advance()
+        return if (peek().kind == IDENT) {
+            val field = expectName("Expected field name")
             FieldAccess(implicitParam, field.text!!, dotToken.span + field.span)
         } else {
             implicitParam
@@ -843,13 +838,13 @@ class Parser(
 
     private fun parseFieldAccessOn(target: Expr): FieldAccess {
         advance()
-        val field = expectIdentifier("Expected field name after '.'")
+        val field = expectName("Expected field name after '.'")
         return FieldAccess(target, field.text!!, target.span + field.span)
     }
 
     private fun parseSafeFieldAccessOn(target: Expr): SafeFieldAccess {
         advance()
-        val field = expectIdentifier("Expected field name after '?.'")
+        val field = expectName("Expected field name after '?.'")
         return SafeFieldAccess(target, field.text!!, target.span + field.span)
     }
 

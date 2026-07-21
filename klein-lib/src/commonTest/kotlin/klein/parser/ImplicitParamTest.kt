@@ -164,4 +164,9 @@ class ImplicitParamTest {
             lambda(body = call(id("print"), implicitParam())),
         )
     }
+
+    @Test
+    fun underscoreAsImplicitFieldIsRejected() {
+        kotlin.test.assertFailsWith<klein.ParseError> { parse("._") }
+    }
 }

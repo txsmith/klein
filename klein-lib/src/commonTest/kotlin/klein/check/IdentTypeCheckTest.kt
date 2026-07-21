@@ -59,4 +59,10 @@ class IdentTypeCheckTest {
         assertEquals("naem", error.name)
         assertEquals("Unbound variable: naem", error.message)
     }
+
+    @Test
+    fun underscoreIsAlwaysUnbound() {
+        val error = infer("_ + 1").errors.single()
+        assertIs<TypeError.UnboundVariable>(error)
+    }
 }

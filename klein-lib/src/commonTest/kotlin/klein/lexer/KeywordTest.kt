@@ -57,6 +57,14 @@ class KeywordTest {
     }
 
     @Test
+    fun everyKeywordLexesAsItsOwnTokenKindNeverAsAnIdentifier() {
+        klein.TokenKind.entries.filter { it.keyword != null }.forEach { kind ->
+            val first = klein.Lexer(kind.keyword!!).tokenize().first()
+            kotlin.test.assertEquals(kind, first.kind, "keyword '${kind.keyword}' must not lex as ${first.kind}")
+        }
+    }
+
+    @Test
     fun keywordLikePrefixIsIdent() {
         assertTokens(
             "iffy trueish falsey andy oracle funky notty nullable",
