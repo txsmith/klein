@@ -2,7 +2,9 @@ package klein.core
 
 import klein.SourceSpan
 
-sealed class CoreExpr {
+sealed interface Control
+
+sealed class CoreExpr : Control {
     abstract val span: SourceSpan
 }
 
@@ -14,6 +16,7 @@ data class Literal(
 data class Var(
     val depth: Int,
     val slot: Int,
+    val name: String,
     override val span: SourceSpan,
 ) : CoreExpr()
 
@@ -28,15 +31,20 @@ data class Apply(
     val callee: CoreExpr,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
-) : CoreExpr()
+) : CoreExpr(), HasOperands {
+    override val operands = listOf(callee) + args
+    val arity: Int = args.size
+}
 
 data class PrimApp(
-    val prim: Prim,
+    val prim: PrimOp,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
-) : CoreExpr()
+) : CoreExpr(), HasOperands {
+    override val operands get() = args
+}
 
-enum class Prim {
+enum class PrimOp {
     Add,
     Sub,
     Mul,
@@ -57,36 +65,46 @@ data class MakeData(
     val fieldNames: List<String>,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
-) : CoreExpr()
+) : CoreExpr(), HasOperands {
+    override val operands get() = args
+}
 
 data class FieldGet(
     val target: CoreExpr,
     val field: String,
     override val span: SourceSpan,
-) : CoreExpr()
+) : CoreExpr(), HasOperands {
+    override val operands = listOf(target)
+}
 
-data class Suspend(
+data class HostCall(
     val name: String,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
-) : CoreExpr()
+) : CoreExpr(), HasOperands {
+    override val operands get() = args
+}
 
-data class Scope(
-    val stmts: List<Scope.Stmt>,
+data class EnterScope(
+    val stmts: List<EnterScope.Stmt>,
     val result: CoreExpr,
     override val span: SourceSpan,
 ) : CoreExpr() {
+    val bindingCount: Int = stmts.count { it is Bind }
+
     sealed class Stmt {
+        abstract val body: CoreExpr
         abstract val span: SourceSpan
     }
 
     data class Bind(
-        val body: CoreExpr,
+        val slotIdx: Int,
+        override val body: CoreExpr,
         override val span: SourceSpan,
     ) : Stmt()
 
     data class Run(
-        val body: CoreExpr,
+        override val body: CoreExpr,
         override val span: SourceSpan,
     ) : Stmt()
 }
@@ -95,8 +113,10 @@ data class Match(
     val scrutinee: CoreExpr,
     val arms: List<Match.Arm>,
     override val span: SourceSpan,
-) : CoreExpr() {
-    sealed class Arm {
+) : CoreExpr(), HasOperands {
+    override val operands = listOf(scrutinee)
+
+    sealed class Arm : Control {
         abstract val guard: CoreExpr?
         abstract val body: CoreExpr
         abstract val span: SourceSpan
@@ -124,19 +144,25 @@ data class Match(
     ) : Arm()
 }
 
-sealed class Constant
+sealed class Constant {
+    // IEEE for now until we settle on a plan for rationals
+    data class CNum(
+        val value: Double,
+    ) : Constant()
 
-// IEEE for now until we settle on a plan for rationals
-data class NumConst(
-    val value: Double,
-) : Constant()
+    data class CStr(
+        val value: String,
+    ) : Constant()
 
-data class StrConst(
-    val value: String,
-) : Constant()
+    data class CBool(
+        val value: Boolean,
+    ) : Constant()
 
-data class BoolConst(
-    val value: Boolean,
-) : Constant()
+    data object CNull: Constant()
+    data object CUnit: Constant()
 
-data object NullConst : Constant()
+}
+
+interface HasOperands {
+    val operands: List<CoreExpr>
+}

@@ -559,7 +559,9 @@ internal class Machine(
             Value.VUnit -> "the unit value"
             is Value.VRecord -> "a record"
             is Value.VData -> "a ${value.constructorName} value"
+            is Value.VStruct -> if (value.tag == null) "a record" else "a ${value.tag} value"
             is Value.VClosure -> "a function"
+            is Value.VClos -> "a function"
             is Value.VConstructor -> "the constructor ${value.name}"
             is Value.VNative -> "the native function ${value.name}"
         }

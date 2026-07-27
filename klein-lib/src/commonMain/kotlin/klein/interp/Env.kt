@@ -23,30 +23,38 @@ class Env internal constructor(
     }
 }
 
-/**
- * The store: addresses to values. The indirection through addresses is what makes recursive
- * closures acyclic — a closure's environment holds the address of the binding, and the store
- * holds the closure, so `closure → env → address → store → closure` never forms an object
- * cycle. Cells are allocated for a whole scope up front and filled as bindings evaluate
- * (SCC order); reading an unfilled cell is a runtime error rather than undefined behavior.
- */
+typealias StoreAddr = Int
 class Store {
+
     private val cells = ArrayList<Value?>()
 
-    internal fun alloc(): Int {
+    internal val size: Int get() = cells.size
+
+    internal fun copy(): Store {
+        val snapshot = Store()
+        snapshot.cells.addAll(cells)
+        return snapshot
+    }
+
+    internal fun alloc(): StoreAddr {
         cells.add(null)
         return cells.size - 1
     }
 
+    internal fun alloc(value: Value): StoreAddr {
+        cells.add(value)
+        return cells.size - 1
+    }
+
     internal fun set(
-        addr: Int,
+        addr: StoreAddr,
         value: Value,
     ) {
         cells[addr] = value
     }
 
     internal fun get(
-        addr: Int,
+        addr: StoreAddr,
         name: String,
         span: SourceSpan,
     ): Value =

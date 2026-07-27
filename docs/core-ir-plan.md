@@ -87,12 +87,54 @@ The IR serves three masters at once:
   makes divergence exact), IR diffing to prove local edits don't move suspension points,
   and Erlang `code_change`-style authored transforms as the last resort.
 
+- **Boxing (and data-dispatch) is the price of serializable states — v1 pays it on
+  purpose.** Every `Value` is a heap object (`VNum` wraps a `double`; `a+b+c` boxes the
+  intermediate only to unbox it again) and frames dispatch by type rather than by direct
+  call. Both are the accepted cost of "states are data": a uniform, walkable, serializable
+  `Value` representation and *inspectable data frames* are what make suspension-as-data and
+  replay work. This same constraint rules out the fast escapes — value classes unbox only in
+  monomorphic slots (every slot here is `Value`-typed, so they buy nothing), NaN-boxing needs
+  memory-layout control portable KMP doesn't give, and threaded/closure-passing dispatch
+  (function pointer per node) can't be serialized — the same reason the coroutine machine was
+  rejected (opaque frames). Unboxed representations and superinstructions therefore live in a
+  future native/optimizer tier that trades serializability for speed and only runs where the
+  machine isn't suspending. (The one *free* exception, not a real unboxing, is singleton
+  `VBool` — see the near-term wins under Open design flags.)
+
 ## Open design flags
 
+- **ANF lowering to eliminate per-operand frames.** The current machine pushes a control
+  frame for *every* subexpression, including atomic ones (`Literal`, `Var`, `Lambda`) that
+  produce a value in one step with no continuation to return to — pure overhead (a frame
+  alloc + a full dispatch-loop iteration per leaf, and leaves are ~half the nodes on
+  `fib`). Cheap local fix: `collectOperands` evaluates atomic operands inline and only
+  pushes a frame for *serious* operands (`Apply`, `PrimApp`, `HostCall`, `EnterScope`,
+  `Match`). Structural version: lower to ANF so every argument position is atomic by
+  construction, at which point the inline path is the only path and a frame is pushed only
+  to enter a function body or suspend. This attacks throughput (dispatch + eden churn),
+  a separate axis from the store's promotion/growth cost. Revisit once the machine runs
+  `fib` end-to-end and there's a baseline.
 - **Tree vs flat node table.** Current lean: define the IR as a Kotlin tree (readable
   machine code, easy lowering) but keep it acyclic, kotlinx-serializable, and trivially
   flattenable; a flat indexed node table — which suspended-state persistence and IR diffing
   ultimately want, and which is most of the way to bytecode — is a later mechanical step.
+  Its *performance* payoff is specifically the two fundamental tree-interpreter taxes: a
+  contiguous node array addressed by `Int` kills the per-step pointer-chase (index
+  arithmetic, cache-friendly, vs dereferencing scattered heap nodes), and a dense integer
+  **opcode** enables a real `tableswitch`/computed-goto — whereas today's `when (expr) { is
+  Literal … }` over a sealed class compiles to an `instanceof` *chain* (JVM has no
+  type-based jump table), O(arms) per dispatch. This is where pointer-chase and type
+  dispatch both die; it's the substance of the "native tier over the IR" note.
+- **Near-term dispatch/allocation wins (behind the baseline, cheap, non-structural):**
+  - **Order the main `when` arms by dynamic frequency** — hot nodes hit fewer `instanceof`
+    tests. Note the ANF/atomic-inlining flag *shifts* the optimal order: once `Literal`/
+    `Var`/`Lambda` evaluate inline in `collectOperands`, the main loop is dominated by
+    `Apply`/`PrimApp`/`EnterScope`/`Match`, which should then lead.
+  - **Singleton `VBool`.** `applyPrim` allocates a fresh `VBool` per comparison, and since
+    `if`/guards lower to `Match` on a Bool, every conditional boxes a boolean only to
+    pattern-match and discard it. `VNull`/`VUnit` are already `data object`s; make `VBool`
+    two cached instances (`VBool.of(b)`). Free, kills a per-comparison allocation on the
+    hottest control-flow path. (No analogous cheap fix for `VNum` — see boxing decision.)
 
 ## Task list
 
@@ -123,6 +165,17 @@ The IR serves three masters at once:
     semantics change — the binds-before-statements phasing in the current machine was an
     implementation artifact (observable as effects running out of written order) that the
     IR machine simply drops.
+  - **Exception found 2026-07-27 — call-before-bind through a `fun` diverges.** The checker's
+    textual fence is per-reference-site, so `x = g(1); y = 2; fun g(n) = y; x` type-checks
+    (g reads y, y is before g's definition) — but the *call* in x's bind runs before y fills.
+    The legacy SCC-ordered machine returns 2; the textual Core machine hits the pre-allocated
+    empty cell and raises the "used before its binding was evaluated" `KleinRuntimeError` —
+    the JS-TDZ / Scheme-letrec* precedent, and the concrete checked-program witness for why
+    that error is a runtime error, not an invariant violation. Semantics: textual + defined
+    runtime error, with a proposed checker analysis to reject the common cases at check time —
+    see `docs/use-before-initialization.md`. Enshrined in
+    `MachineTest.callBeforeBindThroughAFunctionIsARuntimeError`; belongs in the execution
+    spec when written.
   - **Final node set (settled 2026-07-20, in Core.kt):** `Literal`, `Var`, `Lambda`, `Apply`,
     `PrimApp` (with `Prim` a plain enum — operators only, all strict; `and`/`or` lower to
     `Match`), `MakeData(tag?, fieldNames, args)` (nullable tag unifies records and

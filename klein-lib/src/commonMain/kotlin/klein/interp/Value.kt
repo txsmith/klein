@@ -47,6 +47,17 @@ sealed class Value {
         val arity: Int get() = if (isImplicit) 1 else params.size
     }
 
+    class VClos(
+        val arity: Int,
+        val body: klein.core.CoreExpr,
+        val scope: klein.core.BindingScope,
+    ) : Value()
+
+    data class VStruct(
+        val tag: String?,
+        val fields: Map<String, Value>,
+    ) : Value()
+
     /** A constructor with fields, waiting to be applied; nullary constructors bind as [VData] directly. */
     class VConstructor(
         val name: String,
@@ -80,7 +91,14 @@ sealed class Value {
                     } else {
                         value.fields.values.joinToString(", ", "${value.constructorName}(", ")") { print(it) }
                     }
+                is VStruct ->
+                    when {
+                        value.tag == null -> value.fields.entries.joinToString(", ", "{ ", " }") { (name, v) -> "$name = ${print(v)}" }
+                        value.fields.isEmpty() -> value.tag
+                        else -> value.fields.values.joinToString(", ", "${value.tag}(", ")") { print(it) }
+                    }
                 is VClosure -> "<fun/${value.arity}>"
+                is VClos -> "<fun/${value.arity}>"
                 is VConstructor -> "<constructor ${value.name}/${value.fieldNames.size}>"
                 is VNative -> "<native ${value.name}/${value.arity}>"
             }
