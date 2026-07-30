@@ -1,16 +1,12 @@
-package klein.interp
+package klein.legacy
 
-import klein.KleinError
 import klein.SourceSpan
 import klein.check.ScopeGraph
+import klein.interp.Env
+import klein.interp.KleinRuntimeError
+import klein.interp.Store
+import klein.interp.Value
 import klein.surface.*
-
-/** A fail-fast evaluation error carrying the source location it arose at. */
-class KleinRuntimeError(
-    override val message: String,
-    override val span: SourceSpan,
-) : Exception(message),
-    KleinError
 
 /**
  * A CESK machine over the parsed AST: Control (the expression or value at hand),

@@ -6,6 +6,8 @@ import klein.surface.Lambda as SurfaceLambda
 import klein.surface.Apply as SurfaceApply
 import klein.surface.Match as SurfaceMatch
 
+private const val IMPLICIT_PARAM = "."
+
 class Lowering {
     fun lower(program: Program): CoreExpr = lowerScope(program.stmts, LowerEnv.empty, program.span)
 
@@ -31,23 +33,24 @@ class Lowering {
         }
         val env = parent.child(names)
 
-        val coreStmts = mutableListOf<ScopeStmt>()
+        val hoisted = mutableListOf<ScopeStmt>()
+        val ordered = mutableListOf<ScopeStmt>()
         for (stmt in leading) {
             when (stmt) {
                 is Val ->
-                    coreStmts.add(Bind(slotOf(stmt.name, env), stmt.name, lowerBinding(stmt.value, stmt.name, env), stmt.span))
+                    ordered.add(Bind(slotOf(stmt.name, env), stmt.name, lowerBinding(stmt.value, stmt.name, env), stmt.span))
                 is FunDef ->
-                    coreStmts.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
+                    hoisted.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
                 is TypeDef ->
                     stmt.constructors.forEach { ctor ->
-                        coreStmts.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
+                        hoisted.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
                     }
-                is PatternVal -> coreStmts.addAll(lowerPatternVal(stmt, env))
-                is Expr -> coreStmts.add(Run(lowerExpr(stmt, env), stmt.span))
+                is PatternVal -> ordered.addAll(lowerPatternVal(stmt, env))
+                is Expr -> ordered.add(Run(lowerExpr(stmt, env), stmt.span))
             }
         }
         val result = if (trailing != null) lowerExpr(trailing, env) else Literal(Constant.CUnit, span)
-        return EnterScope(coreStmts, result, span)
+        return EnterScope(hoisted + ordered, result, span)
     }
 
     private fun slotOf(
@@ -73,7 +76,7 @@ class Lowering {
     ): Lambda {
         val paramNames =
             if (expr.params.isEmpty() && expr.body.usesImplicitParam) {
-                listOf("param")
+                listOf(IMPLICIT_PARAM)
             } else {
                 expr.params.map { it.name }
             }
@@ -157,7 +160,12 @@ class Lowering {
                 MakeData(null, expr.fields.map { it.name }, expr.fields.map { lowerExpr(it.value, env) }, expr.span)
             is Ascription -> lowerExpr(expr.expr, env)
             is FieldAccess -> FieldGet(lowerExpr(expr.target, env), expr.field, expr.span)
-            is ImplicitParam -> Var(0, 0, "param", expr.span)
+            is ImplicitParam -> {
+                val ref =
+                    env.resolve(IMPLICIT_PARAM)
+                        ?: throw InvariantViolation("implicit parameter outside an implicit lambda", expr.span)
+                Var(ref.depth, ref.slot, "param", expr.span)
+            }
             is SurfaceApply -> Apply(lowerExpr(expr.callee, env), expr.args.map { lowerExpr(it, env) }, expr.span)
             is Block -> lowerScope(expr.stmts, env, expr.span)
             is IfThenElse -> {

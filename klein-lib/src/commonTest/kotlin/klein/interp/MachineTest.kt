@@ -1,7 +1,6 @@
-package klein.core
+package klein.interp
 
-import klein.interp.KleinRuntimeError
-import klein.interp.Value
+import klein.core.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

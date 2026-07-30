@@ -1,5 +1,7 @@
-package klein.interp
+package klein.legacy
 
+import klein.interp.Env
+import klein.interp.Value
 import klein.surface.*
 
 /**

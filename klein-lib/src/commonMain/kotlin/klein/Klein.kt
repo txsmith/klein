@@ -5,13 +5,13 @@ import klein.check.Checker
 import klein.check.Type
 import klein.check.TypeEnv
 import klein.core.CoreExpr
-import klein.core.Execution
 import klein.core.Lowering
-import klein.core.Machine
-import klein.interp.HostCall
-import klein.interp.Interpreter
+import klein.interp.Execution
 import klein.interp.KleinRuntimeError
+import klein.interp.Machine
 import klein.interp.Value
+import klein.legacy.HostCall
+import klein.legacy.Interpreter
 
 /**
  * Library entry point: the pipeline stages, each a total function with the uniform

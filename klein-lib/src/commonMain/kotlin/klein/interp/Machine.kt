@@ -1,16 +1,8 @@
-package klein.core
+package klein.interp
 
-import klein.KleinError
 import klein.SourceSpan
-import klein.check.ScopeGraph
-import klein.interp.KleinRuntimeError
-import klein.interp.Store
-import klein.interp.StoreAddr
-import klein.interp.Value
-import klein.surface.*
+import klein.core.*
 import kotlin.collections.ArrayList
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.contract
 
 internal class MachineState internal constructor(
     val store: Store,
@@ -501,18 +493,3 @@ class BindingScope(
 }
 
 fun <T> Stack<T>.push(value: T): Stack.Cons<T> = Stack.Cons(value, this)
-
-@OptIn(ExperimentalContracts::class)
-inline fun invariant(
-    condition: Boolean,
-    span: SourceSpan? = null,
-    message: () -> String,
-) {
-    contract { returns() implies condition }
-    if (!condition) throw InvariantViolation(message(), span)
-}
-
-class InvariantViolation(
-    message: String,
-    val span: SourceSpan? = null,
-) : IllegalStateException(if (span != null) "$message at $span" else message)

@@ -50,7 +50,7 @@ sealed class Value {
     class VClos(
         val arity: Int,
         val body: klein.core.CoreExpr,
-        val scope: klein.core.BindingScope,
+        val scope: BindingScope,
     ) : Value()
 
     data class VStruct(

@@ -1,6 +1,8 @@
-package klein.interp
+package klein.legacy
 
 import klein.SourceSpan
+import klein.interp.KleinRuntimeError
+import klein.interp.Value
 
 /** A request from a running program to the host: apply native [function] to [args]. */
 data class HostCall(
