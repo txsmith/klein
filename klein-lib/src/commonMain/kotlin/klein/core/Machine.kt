@@ -141,7 +141,7 @@ class Machine private constructor(
             }
 
         // Phase 2: check if the last run gave us a value for a binding, store it
-        val lastBinding = expr.stmts.getOrNull(collected - 1) as? EnterScope.Bind
+        val lastBinding = expr.stmts.getOrNull(collected - 1) as? Bind
         lastBinding?.let { bind ->
             val addr = current.scope.slots[bind.slotIdx]
             state.store.set(addr, state.peekOperand())
@@ -335,7 +335,7 @@ class Machine private constructor(
         when (arm) {
             is Match.Default -> true
             is Match.LitArm -> constantValue(arm.lit) == scrutinee
-            is Match.ConstructorArm -> scrutinee is Value.VStruct && scrutinee.tag == arm.tag
+            is Match.DataArm -> scrutinee is Value.VStruct && (arm.tag == null || scrutinee.tag == arm.tag)
         }
 
     private fun armScope(
@@ -344,8 +344,8 @@ class Machine private constructor(
         parent: BindingScope,
     ): BindingScope =
         when (arm) {
-            is Match.ConstructorArm -> {
-                invariant(scrutinee is Value.VStruct, arm.span) { "Ill typed term: ${arm.tag} pattern on ${Value.print(scrutinee)}" }
+            is Match.DataArm -> {
+                invariant(scrutinee is Value.VStruct, arm.span) { "Ill typed term: ${arm.tag ?: "record"} pattern on ${Value.print(scrutinee)}" }
                 BindingScope(
                     IntArray(arm.fields.size) {
                         val value = scrutinee.fields[arm.fields[it]]

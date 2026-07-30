@@ -327,6 +327,32 @@ class BindingTypeCheckTest {
     }
 
     @Test
+    fun constructorBinderWithFieldsBindsBoth() {
+        assertInfersType(
+            TNum,
+            """
+            type Shape = Circle { radius: Num } | Square { side: Num }
+            c0: Circle = Circle(2)
+            Circle c { radius } = c0
+            c.radius + radius
+            """.trimIndent(),
+        )
+    }
+
+    @Test
+    fun namedRecordBinderBindsWholeRecordAndFields() {
+        assertInfersType(
+            TStr,
+            """
+            person = { name = "a", age = 1 }
+            r { name } = person
+            total: Num = r.age
+            name
+            """.trimIndent(),
+        )
+    }
+
+    @Test
     fun genericSingleConstructorDestructures() {
         assertInfersType(
             TNum,

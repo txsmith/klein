@@ -7,7 +7,7 @@ import klein.surface.BinaryOp
 import klein.surface.Block
 import klein.surface.BoolLiteral
 import klein.surface.Constructor
-import klein.surface.ConstructorPattern
+import klein.surface.DataPattern
 import klein.surface.DoubleLiteral
 import klein.surface.Expr
 import klein.surface.FieldAccess
@@ -36,7 +36,6 @@ import klein.surface.PatternVal
 import klein.surface.Program
 import klein.surface.RecordField
 import klein.surface.RecordLiteral
-import klein.surface.RecordPattern
 import klein.surface.RecordTypeExpr
 import klein.surface.SafeFieldAccess
 import klein.SourceSpan
@@ -211,19 +210,25 @@ fun litP(literal: Expr) = LiteralPattern(literal, noSpan)
 
 fun varP(name: String) = VariablePattern(name, noSpan)
 
-fun ctorP(name: String) = ConstructorPattern(name, null, null, noSpan)
+fun ctorP(name: String) = DataPattern(name, null, emptyList(), noSpan)
 
 fun ctorBindP(
     name: String,
     binder: String,
-) = ConstructorPattern(name, binder, null, noSpan)
+    vararg fields: FieldPattern,
+) = DataPattern(name, binder, fields.toList(), noSpan)
 
 fun ctorP(
     name: String,
     vararg fields: FieldPattern,
-) = ConstructorPattern(name, null, RecordPattern(fields.toList(), noSpan), noSpan)
+) = DataPattern(name, null, fields.toList(), noSpan)
 
-fun recordP(vararg fields: FieldPattern) = RecordPattern(fields.toList(), noSpan)
+fun recordP(vararg fields: FieldPattern) = DataPattern(null, null, fields.toList(), noSpan)
+
+fun recordBindP(
+    binder: String,
+    vararg fields: FieldPattern,
+) = DataPattern(null, binder, fields.toList(), noSpan)
 
 fun fieldP(
     field: String,
@@ -235,8 +240,7 @@ fun Pattern.stripSpan(): Pattern =
         is WildcardPattern -> WildcardPattern(noSpan)
         is LiteralPattern -> LiteralPattern(literal.stripSpans(), noSpan)
         is VariablePattern -> VariablePattern(name, noSpan)
-        is ConstructorPattern -> ConstructorPattern(name, binder, record?.stripSpan() as RecordPattern?, noSpan)
-        is RecordPattern -> RecordPattern(fields.map { FieldPattern(it.field, it.binder, noSpan) }, noSpan)
+        is DataPattern -> DataPattern(tag, binder, fields.map { FieldPattern(it.field, it.binder, noSpan) }, noSpan)
     }
 
 fun Expr.stripSpans(): Expr =

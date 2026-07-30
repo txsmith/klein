@@ -86,28 +86,29 @@ data class HostCall(
 }
 
 data class EnterScope(
-    val stmts: List<EnterScope.Stmt>,
+    val stmts: List<ScopeStmt>,
     val result: CoreExpr,
     override val span: SourceSpan,
 ) : CoreExpr() {
     val bindingCount: Int = stmts.count { it is Bind }
-
-    sealed class Stmt {
-        abstract val body: CoreExpr
-        abstract val span: SourceSpan
-    }
-
-    data class Bind(
-        val slotIdx: Int,
-        override val body: CoreExpr,
-        override val span: SourceSpan,
-    ) : Stmt()
-
-    data class Run(
-        override val body: CoreExpr,
-        override val span: SourceSpan,
-    ) : Stmt()
 }
+
+sealed class ScopeStmt {
+    abstract val body: CoreExpr
+    abstract val span: SourceSpan
+}
+
+data class Bind(
+    val slotIdx: Int,
+    val name: String,
+    override val body: CoreExpr,
+    override val span: SourceSpan,
+) : ScopeStmt()
+
+data class Run(
+    override val body: CoreExpr,
+    override val span: SourceSpan,
+) : ScopeStmt()
 
 data class Match(
     val scrutinee: CoreExpr,
@@ -122,8 +123,8 @@ data class Match(
         abstract val span: SourceSpan
     }
 
-    data class ConstructorArm(
-        val tag: String,
+    data class DataArm(
+        val tag: String?,
         val fields: List<String>,
         override val guard: CoreExpr?,
         override val body: CoreExpr,

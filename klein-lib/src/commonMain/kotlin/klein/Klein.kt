@@ -4,8 +4,13 @@ import klein.surface.*
 import klein.check.Checker
 import klein.check.Type
 import klein.check.TypeEnv
+import klein.core.CoreExpr
+import klein.core.Execution
+import klein.core.Lowering
+import klein.core.Machine
 import klein.interp.HostCall
 import klein.interp.Interpreter
+import klein.interp.KleinRuntimeError
 import klein.interp.Value
 
 /**
@@ -54,6 +59,30 @@ object Klein {
         val type = checker.synthProgram(program, env)
         return StageResult(type, checker.getErrors())
     }
+
+    /**
+     * Lower a program that passed [check] to the core IR. Assumes checked input: any failure
+     * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
+     * stage carries no errors — it either produces IR or throws.
+     */
+    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(Lowering().lower(program))
+
+    /**
+     * Run lowered [CoreExpr] on the [Machine] to completion. v1 has no host seam, so a suspension
+     * on a host call is reported as an error rather than driven; a [KleinRuntimeError] from the
+     * machine (division by zero, etc.) becomes a stage failure. Invariant violations propagate:
+     * they are machine/lowerer bugs, not user diagnostics.
+     */
+    fun execute(program: CoreExpr): StageResult<Value> =
+        try {
+            when (val exec = Machine.start(program)) {
+                is Execution.Done -> StageResult.success(exec.value)
+                is Execution.AwaitingHost ->
+                    StageResult.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
+            }
+        } catch (e: KleinRuntimeError) {
+            StageResult.failure(e)
+        }
 
     /**
      * Evaluate a program that passed [check] — the interpreter assumes checked input — driving

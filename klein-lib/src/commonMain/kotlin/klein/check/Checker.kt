@@ -508,12 +508,7 @@ class Checker {
             is WildcardPattern -> {}
             is VariablePattern -> armEnv.bind(pattern.name, coverage.residual())
             is LiteralPattern -> checkLiteralPattern(pattern, coverage, armEnv, env)
-            is ConstructorPattern -> checkConstructorPattern(pattern, coverage.core, armEnv, env)
-            is RecordPattern ->
-                pattern.fields.forEach { fp ->
-                    val fieldType = projectFieldType(coverage.core, fp.field, fp.span, env)
-                    fp.binder?.let { armEnv.bind(it, fieldType) }
-                }
+            is DataPattern -> checkDataPattern(pattern, coverage.core, armEnv, env)
         }
     }
 
@@ -533,21 +528,26 @@ class Checker {
         }
     }
 
-    private fun checkConstructorPattern(
-        pattern: ConstructorPattern,
+    private fun checkDataPattern(
+        pattern: DataPattern,
         core: Type,
         armEnv: TypeEnv,
         env: TypeEnv,
     ) {
-        val ctor = env.lookupConstructor(pattern.name)
-        if (ctor == null || core !is TRef || (core.name != pattern.name && ctor.parentType != core.name)) {
-            recordError(TypeError.NotAConstructorOf(pattern.name, core, pattern.span))
-            return
-        }
-        val ctorRef = constructorInstance(pattern.name, ctor, core, env)
-        pattern.binder?.let { armEnv.bind(it, ctorRef) }
-        pattern.record?.fields?.forEach { fp ->
-            val fieldType = projectFieldType(ctorRef, fp.field, fp.span, env)
+        val valueType: Type =
+            if (pattern.tag != null) {
+                val ctor = env.lookupConstructor(pattern.tag)
+                if (ctor == null || core !is TRef || (core.name != pattern.tag && ctor.parentType != core.name)) {
+                    recordError(TypeError.NotAConstructorOf(pattern.tag, core, pattern.span))
+                    return
+                }
+                constructorInstance(pattern.tag, ctor, core, env)
+            } else {
+                core
+            }
+        pattern.binder?.let { armEnv.bind(it, valueType) }
+        pattern.fields.forEach { fp ->
+            val fieldType = projectFieldType(valueType, fp.field, fp.span, env)
             fp.binder?.let { armEnv.bind(it, fieldType) }
         }
     }

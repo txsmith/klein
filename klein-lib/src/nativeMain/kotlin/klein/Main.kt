@@ -3,6 +3,7 @@ package klein
 import klein.surface.*
 import klein.check.Type
 import klein.check.TypeEnv
+import klein.core.CorePrinter
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -29,7 +30,7 @@ fun main(args: Array<String>) {
     val knownFlags: Set<String>? =
         when (command) {
             "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
-            "check", "c", "run", "r" -> setOf("--stdin", "--raw")
+            "check", "c", "run", "r", "core" -> setOf("--stdin", "--raw")
             else -> null
         }
     if (knownFlags != null) {
@@ -63,6 +64,10 @@ fun main(args: Array<String>) {
             val source = getSource(useStdin, fileArg) ?: return
             run(source, rawErrors)
         }
+        "core" -> {
+            val source = getSource(useStdin, fileArg) ?: return
+            core(source, rawErrors)
+        }
         "help", "-h", "--help" -> printUsage()
         else -> {
             println("Unknown command: $command")
@@ -94,6 +99,7 @@ private fun printUsage() {
           tokens, t    Tokenize and print tokens
           parse, p     Parse and print AST
           check, c     Type-check with the Operation Bidi checker; print types and pass/fail
+          core         Type-check, then lower to core IR and print it
           run, r       Type-check, then evaluate; print the program's value
           help         Show this help
 
@@ -192,6 +198,24 @@ private fun check(
 }
 
 /**
+ * Lower a type-checked program to core IR and print it with [CorePrinter] — a "core dump" for
+ * inspecting what the surface lowers to. Checks first (the lowerer assumes checked input), so type
+ * errors gate the dump and print uniformly.
+ */
+private fun core(
+    source: String,
+    rawErrors: Boolean,
+) {
+    val result =
+        Klein
+            .tokenize(source)
+            .andThen(Klein::parse)
+            .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
+    exitOnErrors(result, source, rawErrors)
+    println(CorePrinter.print(result.output!!))
+}
+
+/**
  * The full pipeline: tokenize, parse, type-check, evaluate, print the resulting value.
  * Errors from any stage print uniformly and exit non-zero.
  */
@@ -203,7 +227,8 @@ private fun run(
         Klein
             .tokenize(source)
             .andThen(Klein::parse)
-            .andThen { program -> Klein.check(program).andThen { Klein.interpret(program) } }
+            .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
+            .andThen(Klein::execute)
     exitOnErrors(result, source, rawErrors)
     println(Value.print(result.output!!))
 }

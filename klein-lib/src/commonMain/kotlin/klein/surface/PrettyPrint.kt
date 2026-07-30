@@ -131,8 +131,14 @@ fun Pattern.prettyPrint(): String =
                 is NullLiteral -> "null"
                 else -> literal.toString()
             }
-        is ConstructorPattern ->
-            name + (binder?.let { " $it" } ?: "") + (record?.let { " ${it.prettyPrint()}" } ?: "")
-        is RecordPattern ->
-            "{ ${fields.joinToString(", ") { if (it.field == it.binder) it.field else "${it.field} = ${it.binder ?: "_"}" }} }"
+        is DataPattern ->
+            listOfNotNull(
+                tag,
+                binder,
+                if (fields.isEmpty()) {
+                    null
+                } else {
+                    "{ ${fields.joinToString(", ") { if (it.field == it.binder) it.field else "${it.field} = ${it.binder ?: "_"}" }} }"
+                },
+            ).joinToString(" ")
     }

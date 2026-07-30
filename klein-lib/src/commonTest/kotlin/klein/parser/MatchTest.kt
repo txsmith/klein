@@ -91,6 +91,36 @@ class MatchTest {
     }
 
     @Test
+    fun constructorBinderWithFields() {
+        val expr =
+            parse(
+                """
+                match s
+                  Circle c { radius } -> c
+                """.trimIndent(),
+            )
+        assertExprEquals(
+            expr,
+            matchExpr(id("s"), arm(ctorBindP("Circle", "c", fieldP("radius")), id("c"))),
+        )
+    }
+
+    @Test
+    fun namedRecordPattern() {
+        val expr =
+            parse(
+                """
+                match p
+                  r { name } -> r
+                """.trimIndent(),
+            )
+        assertExprEquals(
+            expr,
+            matchExpr(id("p"), arm(recordBindP("r", fieldP("name")), id("r"))),
+        )
+    }
+
+    @Test
     fun wildcardAndVariableArms() {
         val expr =
             parse(

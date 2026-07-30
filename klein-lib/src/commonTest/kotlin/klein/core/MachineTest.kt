@@ -1,6 +1,5 @@
 package klein.core
 
-import klein.SourceSpan
 import klein.interp.KleinRuntimeError
 import klein.interp.Value
 import kotlin.test.Test
@@ -8,88 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-
-private val s = SourceSpan.zero
-
-private fun num(v: Double) = Literal(Constant.CNum(v), s)
-
-private fun str(v: String) = Literal(Constant.CStr(v), s)
-
-private fun bool(v: Boolean) = Literal(Constant.CBool(v), s)
-
-private fun nul() = Literal(Constant.CNull, s)
-
-private fun unit() = Literal(Constant.CUnit, s)
-
-private fun v(
-    depth: Int,
-    slot: Int,
-) = Var(depth, slot, "v_${depth}_$slot", s)
-
-private fun lam(
-    arity: Int,
-    body: CoreExpr,
-) = Lambda(arity, body, null, s)
-
-private fun app(
-    callee: CoreExpr,
-    vararg args: CoreExpr,
-) = Apply(callee, args.toList(), s)
-
-private fun scope(
-    vararg stmts: EnterScope.Stmt,
-    result: CoreExpr,
-) = EnterScope(stmts.toList(), result, s)
-
-private fun bind(
-    slot: Int,
-    body: CoreExpr,
-) = EnterScope.Bind(slot, body, s)
-
-private fun stmt(body: CoreExpr) = EnterScope.Run(body, s)
-
-private fun host(
-    name: String,
-    vararg args: CoreExpr,
-) = HostCall(name, args.toList(), s)
-
-private fun prim(
-    op: PrimOp,
-    vararg args: CoreExpr,
-) = PrimApp(op, args.toList(), s)
-
-private fun mk(
-    tag: String?,
-    vararg fields: Pair<String, CoreExpr>,
-) = MakeData(tag, fields.map { it.first }, fields.map { it.second }, s)
-
-private fun get(
-    target: CoreExpr,
-    field: String,
-) = FieldGet(target, field, s)
-
-private fun match(
-    scrutinee: CoreExpr,
-    vararg arms: Match.Arm,
-) = Match(scrutinee, arms.toList(), s)
-
-private fun litArm(
-    lit: Constant,
-    body: CoreExpr,
-    guard: CoreExpr? = null,
-) = Match.LitArm(lit, guard, body, s)
-
-private fun ctorArm(
-    tag: String,
-    fields: List<String>,
-    body: CoreExpr,
-    guard: CoreExpr? = null,
-) = Match.ConstructorArm(tag, fields, guard, body, s)
-
-private fun default(
-    body: CoreExpr,
-    guard: CoreExpr? = null,
-) = Match.Default(guard, body, s)
 
 private fun countdown(
     n: Double,
@@ -486,6 +403,21 @@ class MachineTest {
                     ctorArm("Circle", listOf("radius"), v(0, 0)),
                 ),
             ),
+        )
+
+    @Test
+    fun recordArmMatchesAnyStructAndBindsFields() =
+        assertEquals(
+            Value.VStr("alice"),
+            run(match(mk(null, "name" to str("alice")), recordArm(listOf("name"), v(0, 0)))),
+        )
+
+    // A null-tag arm is refutable only against null: a null scrutinee skips it and falls to the default.
+    @Test
+    fun recordArmRefutesNull() =
+        assertEquals(
+            Value.VStr("none"),
+            run(match(nul(), recordArm(listOf("name"), str("rec")), default(str("none")))),
         )
 
     @Test

@@ -1,14 +1,13 @@
 package klein.check
 
 import klein.surface.BoolLiteral
-import klein.surface.ConstructorPattern
+import klein.surface.DataPattern
 import klein.surface.DoubleLiteral
 import klein.surface.Expr
 import klein.surface.IntLiteral
 import klein.surface.LiteralPattern
 import klein.surface.NullLiteral
 import klein.surface.Pattern
-import klein.surface.RecordPattern
 import klein.surface.StringLiteral
 import klein.surface.VariablePattern
 import klein.surface.WildcardPattern
@@ -32,8 +31,8 @@ internal class MatchCoverage private constructor(
     fun reaches(pattern: Pattern): Boolean =
         when (pattern) {
             is WildcardPattern, is VariablePattern -> !exhausted()
-            is RecordPattern -> !coreExhausted
-            is ConstructorPattern -> !coreExhausted && pattern.name !in coveredCtors
+            is DataPattern ->
+                if (pattern.tag == null) !coreExhausted else !coreExhausted && pattern.tag !in coveredCtors
             is LiteralPattern ->
                 if (pattern.literal is NullLiteral) {
                     !nullCovered
@@ -48,11 +47,13 @@ internal class MatchCoverage private constructor(
                 nullCovered = true
                 coreExhausted = true
             }
-            is RecordPattern -> coreExhausted = true
-            is ConstructorPattern -> {
-                coveredCtors.add(pattern.name)
-                if (coreCtors.isNotEmpty() && coveredCtors.containsAll(coreCtors)) coreExhausted = true
-            }
+            is DataPattern ->
+                if (pattern.tag == null) {
+                    coreExhausted = true
+                } else {
+                    coveredCtors.add(pattern.tag)
+                    if (coreCtors.isNotEmpty() && coveredCtors.containsAll(coreCtors)) coreExhausted = true
+                }
             is LiteralPattern ->
                 if (pattern.literal is NullLiteral) {
                     nullCovered = true
