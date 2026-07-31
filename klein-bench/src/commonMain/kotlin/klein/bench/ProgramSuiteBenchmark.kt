@@ -1,6 +1,7 @@
 package klein.bench
 
 import klein.Klein
+import klein.core.CoreExpr
 import klein.surface.Program
 import klein.StageResult
 import klein.surface.Token
@@ -32,6 +33,7 @@ class ProgramSuiteBenchmark {
     private var source = ""
     private lateinit var tokens: List<Token>
     private lateinit var program: Program
+    private lateinit var core: CoreExpr
 
     @Setup
     fun setup() {
@@ -42,6 +44,7 @@ class ProgramSuiteBenchmark {
         program = Klein.parse(tokens).output ?: error("benchmark program '$name' does not parse")
         val checked = Klein.check(program)
         check(checked.errors.isEmpty()) { "benchmark program '$name' has type errors: ${checked.errors}" }
+        core = Klein.lower(program).output ?: error("benchmark program '$name' does not lower")
     }
 
     @Benchmark
@@ -57,9 +60,22 @@ class ProgramSuiteBenchmark {
     fun eval(): StageResult<Value> = Klein.interpret(program)
 
     @Benchmark
+    fun lower(): StageResult<CoreExpr> = Klein.lower(program)
+
+    @Benchmark
+    fun evalCore(): StageResult<Value> = Klein.execute(core)
+
+    @Benchmark
     fun endToEnd(): StageResult<Value> =
         Klein
             .tokenize(source)
             .andThen(Klein::parse)
             .andThen { p -> Klein.check(p).andThen { Klein.interpret(p) } }
+
+    @Benchmark
+    fun endToEndCore(): StageResult<Value> =
+        Klein
+            .tokenize(source)
+            .andThen(Klein::parse)
+            .andThen { p -> Klein.check(p).andThen { Klein.lower(p) }.andThen(Klein::execute) }
 }

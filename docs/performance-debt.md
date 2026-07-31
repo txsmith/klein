@@ -7,6 +7,27 @@ roughly ordered within each section by expected impact.
 
 Each entry: what we do now (and how it bites), why we do it, and the fix.
 
+## The baseline (2026-07-31)
+
+The IR machine vs the AST machine it replaced, `eval` stage (pre-compiled input for both),
+JMH avgt on the same JVM — the last same-run comparison before the AST machine's deletion:
+
+| program | AST machine | IR machine | ratio |
+|---|---|---|---|
+| `arith` | 14.2 µs | 1.78 µs | 8.0× faster |
+| `fib` | 582 µs | 646 µs | 0.90× |
+| `sumTo` | 63.4 µs | 70.7 µs | 0.90× |
+| `closures` | 240 µs | 38.6 µs | 6.2× faster |
+| `records` | 12.3 µs | 2.03 µs | 6.0× faster |
+| `rules` | 48.2 µs | 4.00 µs | 12.0× faster |
+
+`lower` costs 0.5–2 µs/program. The big wins are setup work moved to compile time (the AST
+machine rebuilt scope/SCC analysis and name-keyed envs per execution); the two slightly-red
+cells are the pure stepping loop, where boxing, operand-cons churn, per-`if` arm scopes, and
+per-comparison `VBool`s — the entries below — are the whole story. The old *recursive*
+evaluator's recorded `fib` was 266 µs; the IR machine's 646 µs is the retained price of
+suspension-as-data.
+
 ## The log-persistence rethink (2026-07-31)
 
 A suspended program no longer needs its machine state persisted at all. The machine is
