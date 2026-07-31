@@ -120,9 +120,9 @@ class BlockLoweringTest {
             """,
             """
             scope
-              bind double#1 = fun double/1 -> (n[0;0] * 2)
-              bind x#0 = double[0;1](21)
-              x[0;0]
+              bind double#0 = fun double/1 -> (n[0;0] * 2)
+              bind x#1 = double[0;0](21)
+              x[0;1]
             """,
         )
 

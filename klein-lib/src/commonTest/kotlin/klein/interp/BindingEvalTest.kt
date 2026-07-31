@@ -103,6 +103,36 @@ class BindingEvalTest {
             """,
         )
 
+    // The checker resolves `r = g` positionally: a local val shadows only statements after its
+    // own definition, so `g` here is the top-level fun. The lowerer must agree.
+    @Test
+    fun localValShadowsOnlyAfterItsDefinition() =
+        assertEvaluatesTo(
+            VNum(37.0),
+            """
+            fun f(x: Num): Num =
+                r = g
+                g = 7
+                r(x) + g
+            fun g(y: Num): Num = y * 10
+            f(3)
+            """,
+        )
+
+    @Test
+    fun closureCapturesPositionalResolution() =
+        assertEvaluatesTo(
+            VNum(23.0),
+            """
+            fun f(x: Num): Num =
+                h = |x2: Num -> g(x2)|
+                g = 3
+                h(x) + g
+            fun g(y: Num): Num = y * 10
+            f(2)
+            """,
+        )
+
     @Test
     fun blockLocalValShadowsHoistedFun() =
         assertEvaluatesTo(

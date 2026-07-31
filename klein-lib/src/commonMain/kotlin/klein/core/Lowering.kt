@@ -21,31 +21,37 @@ class Lowering {
 
         if (leading.isEmpty() && trailing != null) return lowerExpr(trailing, parent)
 
-        val names = mutableListOf<String>()
-        for (stmt in leading) {
+        val hoistedNames = mutableListOf<String>()
+        val sequentialNames = mutableListOf<String>()
+        leading.forEachIndexed { i, stmt ->
             when (stmt) {
-                is Val -> names.add(stmt.name)
-                is FunDef -> names.add(stmt.name)
-                is TypeDef -> stmt.constructors.forEach { names.add(it.name) }
-                is PatternVal -> names.addAll(patternValNames(stmt))
+                is Val -> sequentialNames.add(stmt.name)
+                is FunDef -> hoistedNames.add(stmt.name)
+                is TypeDef -> stmt.constructors.forEach { hoistedNames.add(it.name) }
+                is PatternVal -> sequentialNames.addAll(patternValNames(stmt, i))
                 is Expr -> {}
             }
         }
-        val env = parent.child(names)
+        var env = parent.childScope(hoistedNames, sequentialNames)
 
         val hoisted = mutableListOf<ScopeStmt>()
         val ordered = mutableListOf<ScopeStmt>()
-        for (stmt in leading) {
+        leading.forEachIndexed { i, stmt ->
             when (stmt) {
-                is Val ->
+                is Val -> {
                     ordered.add(Bind(slotOf(stmt.name, env), stmt.name, lowerBinding(stmt.value, stmt.name, env), stmt.span))
+                    env = env.reveal(listOf(stmt.name))
+                }
                 is FunDef ->
                     hoisted.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
                 is TypeDef ->
                     stmt.constructors.forEach { ctor ->
                         hoisted.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
                     }
-                is PatternVal -> ordered.addAll(lowerPatternVal(stmt, env))
+                is PatternVal -> {
+                    ordered.addAll(lowerPatternVal(stmt, env, i))
+                    env = env.reveal(patternValNames(stmt, i))
+                }
                 is Expr -> ordered.add(Run(lowerExpr(stmt, env), stmt.span))
             }
         }
@@ -56,7 +62,7 @@ class Lowering {
     private fun slotOf(
         name: String,
         env: LowerEnv,
-    ): Int = env.resolve(name)?.slot ?: throw InvariantViolation("bind '$name' not in its own scope at lowering")
+    ): Int = env.declaredSlot(name) ?: throw InvariantViolation("bind '$name' not in its own scope at lowering")
 
     private fun lowerFunDef(
         fn: FunDef,
@@ -91,19 +97,25 @@ class Lowering {
         return Lambda(fieldNames.size, body, ctor.name, ctor.span)
     }
 
-    private fun patternValNames(pv: PatternVal): List<String> {
+    private fun patternValNames(
+        pv: PatternVal,
+        stmtIdx: Int,
+    ): List<String> {
         val pat = pv.pattern as DataPattern
         val fieldBinders = pat.fields.mapNotNull { it.binder }
         return when {
             pat.binder != null -> listOf(pat.binder) + fieldBinders
-            fieldBinders.size > 1 -> listOf("_rhs") + fieldBinders
+            fieldBinders.size > 1 -> listOf(tempName(stmtIdx)) + fieldBinders
             else -> fieldBinders
         }
     }
 
+    private fun tempName(stmtIdx: Int): String = "_rhs$stmtIdx"
+
     private fun lowerPatternVal(
         pv: PatternVal,
         env: LowerEnv,
+        stmtIdx: Int,
     ): List<ScopeStmt> {
         val pat = pv.pattern as DataPattern
         val projections = pat.fields.filter { it.binder != null }
@@ -116,9 +128,10 @@ class Lowering {
                     Var(0, slot, pat.binder, pv.span)
                 }
                 projections.size > 1 -> {
-                    val tempSlot = slotOf(projections[0].binder!!, env) - 1
-                    binds.add(Bind(tempSlot, "_rhs", lowerExpr(pv.value, env), pv.span))
-                    Var(0, tempSlot, "_rhs", pv.span)
+                    val temp = tempName(stmtIdx)
+                    val tempSlot = slotOf(temp, env)
+                    binds.add(Bind(tempSlot, temp, lowerExpr(pv.value, env), pv.span))
+                    Var(0, tempSlot, temp, pv.span)
                 }
                 projections.size == 1 -> lowerExpr(pv.value, env)
                 else -> return listOf(Run(lowerExpr(pv.value, env), pv.span))
@@ -332,19 +345,36 @@ class Lowering {
 
 class LowerEnv private constructor(
     private val names: List<String>,
+    private val visible: Int,
     private val aliases: Map<String, Resolved>,
     private val parent: LowerEnv?,
 ) {
-    fun child(names: List<String>): LowerEnv = LowerEnv(names, emptyMap(), this)
+    fun child(names: List<String>): LowerEnv = LowerEnv(names, names.size, emptyMap(), this)
+
+    fun childScope(
+        hoisted: List<String>,
+        sequential: List<String>,
+    ): LowerEnv = LowerEnv(hoisted + sequential, hoisted.size, emptyMap(), this)
 
     fun childWithAliases(
         names: List<String>,
         aliases: Map<String, Resolved>,
-    ): LowerEnv = LowerEnv(names, aliases, this)
+    ): LowerEnv = LowerEnv(names, names.size, aliases, this)
+
+    fun reveal(revealed: List<String>): LowerEnv {
+        revealed.forEachIndexed { i, name ->
+            if (names.indexOf(name) != visible + i) {
+                throw InvariantViolation("reveal of '$name' out of layout order at lowering")
+            }
+        }
+        return LowerEnv(names, visible + revealed.size, aliases, parent)
+    }
+
+    fun declaredSlot(name: String): Int? = names.indexOf(name).takeIf { it >= 0 }
 
     fun resolve(name: String): Resolved? {
         val slot = names.indexOf(name)
-        if (slot >= 0) return Resolved(0, slot)
+        if (slot in 0 until visible) return Resolved(0, slot)
         aliases[name]?.let { return Resolved(it.depth + 1, it.slot, it.name) }
         return parent?.resolve(name)?.let { Resolved(it.depth + 1, it.slot, it.name) }
     }
@@ -356,6 +386,6 @@ class LowerEnv private constructor(
     )
 
     companion object {
-        val empty: LowerEnv = LowerEnv(emptyList(), emptyMap(), null)
+        val empty: LowerEnv = LowerEnv(emptyList(), 0, emptyMap(), null)
     }
 }

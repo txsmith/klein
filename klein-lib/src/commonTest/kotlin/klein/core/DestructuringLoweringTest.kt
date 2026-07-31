@@ -50,9 +50,9 @@ class DestructuringLoweringTest {
             """
             scope
               bind person#0 = {name: "alice", age: 30}
-              bind _rhs#1 = person[0;0]
-              bind name#2 = _rhs[0;1].name
-              bind age#3 = _rhs[0;1].age
+              bind _rhs1#1 = person[0;0]
+              bind name#2 = _rhs1[0;1].name
+              bind age#3 = _rhs1[0;1].age
               age[0;3]
             """,
         )
@@ -128,9 +128,9 @@ class DestructuringLoweringTest {
             """
             scope
               bind bounds#0 = fun bounds/0 -> {min: 1, max: 9}
-              bind _rhs#1 = bounds[0;0]()
-              bind lo#2 = _rhs[0;1].min
-              bind hi#3 = _rhs[0;1].max
+              bind _rhs1#1 = bounds[0;0]()
+              bind lo#2 = _rhs1[0;1].min
+              bind hi#3 = _rhs1[0;1].max
               (hi[0;3] - lo[0;2])
             """,
         )
