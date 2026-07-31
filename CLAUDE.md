@@ -19,7 +19,8 @@ Specs are **living contracts** — the current rules, updated in place as the la
 
 ### Implementation Guides
 
-- **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and interpreter
+- **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and execution
+- **[performance-debt.md](./docs/performance-debt.md)** - Deliberate performance corners in the execution pipeline, each with its fix
 - **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
@@ -31,6 +32,13 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 
 - **[2026-06-24-adopt-operation-bidi.md](./docs/decisions/2026-06-24-adopt-operation-bidi.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
 - **[2026-06-23-polarity-wall-and-type-system-direction.md](./docs/decisions/2026-06-23-polarity-wall-and-type-system-direction.md)** - Why SimpleSub was abandoned: the polarity wall and the three ways out.
+
+**Execution decisions (Core IR + CESK machine):**
+
+- **[persist-the-log-replay-the-run.md](./docs/decisions/2026-07-31-persist-the-log-replay-the-run.md)** - **The persistence model.** Machine state is never serialized; the effect log is truth, replay rebuilds everything else
+- **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua (re-centered on embedding, walkable hot tier, fuel)
+- **[source-is-truth-ir-is-a-cache.md](./docs/decisions/2026-07-20-source-is-truth-ir-is-a-cache.md)** - Stored IR integrity: version stamp + checksum, re-derive instead of migrate
+- **[no-load-time-verifier.md](./docs/decisions/2026-07-20-no-load-time-verifier.md)** - Why per-op checks are just unboxing and a verifier was rejected
 
 **Foundational language decisions (still current):**
 
@@ -121,6 +129,32 @@ echo "x = 1 + 2" | ./klein check --stdin
 
 `check` has no IR/format flags — the Operation Bidi type is a plain structural tree with nothing to dump.
 
+### Run
+
+Execute a program on the Core machine (parse → check → lower → run) and print the final value.
+Host calls are not reachable from source yet, so programs must be pure.
+
+```bash
+# From a file
+./klein run example.klein
+
+# Short form
+./klein r example.klein
+
+# From stdin
+echo "1 + 2 * 3" | ./klein run --stdin
+```
+
+### Dump the Core IR
+
+Print the lowered Core IR of a program — slot-addressed `name[depth;slot]` refs, hoisted-first
+scopes, desugared `match`es.
+
+```bash
+./klein core example.klein
+echo "if x > 1 then x else 0" | ./klein core --stdin
+```
+
 ## Project Structure
 
 ```
@@ -128,13 +162,25 @@ klein-lang/
 ├── klein-lib/
 │   ├── src/
 │   │   ├── commonMain/kotlin/klein/
-│   │   │   ├── Lexer.kt          # Tokenization
-│   │   │   ├── Parser.kt         # Parsing
-│   │   │   ├── Ast.kt            # AST definitions
-│   │   │   ├── Token.kt          # Token types
-│   │   │   ├── SourceSpan.kt     # Source location tracking
-│   │   │   ├── PrettyPrint.kt    # AST pretty-printing
-│   │   │   ├── Klein.kt          # Library entry (lex → parse → check)
+│   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
+│   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
+│   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
+│   │   │   │   ├── Lexer.kt        # Tokenization
+│   │   │   │   ├── Parser.kt       # Parsing
+│   │   │   │   ├── Ast.kt          # Surface AST definitions
+│   │   │   │   ├── Token.kt        # Token types
+│   │   │   │   └── PrettyPrint.kt  # AST pretty-printing
+│   │   │   ├── core/             # The compile-time half: Core IR + lowering
+│   │   │   │   ├── Core.kt         # IR nodes (Control, CoreExpr, Match arms, constants)
+│   │   │   │   ├── Lowering.kt     # Surface → Core: slot resolution, hoisting, desugaring
+│   │   │   │   ├── Invariant.kt    # invariant() + InvariantViolation (malformed-IR errors)
+│   │   │   │   └── PrettyPrint.kt  # Core IR printer (backs the `core` CLI command)
+│   │   │   ├── interp/           # The run-time half: the CESK machine over Core
+│   │   │   │   ├── Machine.kt      # Two-stack machine + Execution (Done | AwaitingHost), one-shot resume/clone
+│   │   │   │   ├── Store.kt        # The store: write-once cells behind integer addresses
+│   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
+│   │   │   │   └── KleinRuntimeError.kt
 │   │   │   └── check/            # The Operation Bidi bidirectional checker
 │   │   │       ├── Checker.kt              # synth / check driver
 │   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer
@@ -148,7 +194,9 @@ klein-lang/
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
-│   │   │   └── check/
+│   │   │   ├── check/
+│   │   │   ├── core/             # Lowering golden tests + IR printer tests
+│   │   │   └── interp/           # Machine unit tests + per-feature eval suites (full pipeline)
 │   │   └── nativeMain/kotlin/klein/
 │   │       └── Main.kt           # CLI entry point
 │   └── build.gradle.kts
@@ -175,6 +223,24 @@ klein-lang/
 # Parser tests only
 ./gradlew :klein-lib:jvmTest --tests "klein.parser.*"
 ```
+
+## Running Benchmarks
+
+The benchmark corpus lives in `klein-bench` (kotlinx-benchmark / JMH): a suite of named
+sample Klein programs (`Programs.kt`), each measured at every pipeline stage
+(`parse`, `typecheck`, `eval`, `endToEnd`). Compare per (program, stage) cell before and
+after a change to see whether it actually made things faster.
+
+```bash
+# Full statistical run (use this for real before/after comparisons; takes minutes)
+./gradlew :klein-bench:benchmark
+
+# Quick smoke pass (sanity only, high variance)
+./gradlew :klein-bench:smokeBenchmark
+```
+
+JSON reports land in `klein-bench/build/reports/benchmarks/`. To track a new program, add
+an entry to `Programs.suite` and its name to the `@Param` list in `ProgramSuiteBenchmark`.
 
 ## Implementation Status
 

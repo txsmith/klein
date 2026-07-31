@@ -1,11 +1,15 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.KleinError
+import klein.SourceSpan
+
+import klein.surface.TokenKind.*
 
 class ParseError(
-    message: String,
-    val span: SourceSpan,
-) : Exception(message)
+    override val message: String,
+    override val span: SourceSpan,
+) : Exception(message),
+    KleinError
 
 class Parser(
     private val tokens: List<Token>,
@@ -455,7 +459,14 @@ class Parser(
                 }
 
                 QUESTION_DOT -> {
-                    expr = parseSafeFieldAccessOn(expr)
+                    val access = parseSafeFieldAccessOn(expr)
+                    expr =
+                        if (peek().kind == LPAREN && !peek().startsLineAtOrBefore(exprIndent)) {
+                            val call = parseFunctionCallOn(access)
+                            SafeApply(access.target, access.field, call.args, call.span)
+                        } else {
+                            access
+                        }
                 }
 
                 else -> break
@@ -471,13 +482,13 @@ class Parser(
             INT -> {
                 advance()
                 val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                IntLiteral(value, token.span)
+                IntLiteral(value, token.span, token.text)
             }
 
             DOUBLE -> {
                 advance()
                 val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                DoubleLiteral(value, token.span)
+                DoubleLiteral(value, token.span, token.text)
             }
 
             STRING -> {
@@ -614,13 +625,13 @@ class Parser(
             INT -> {
                 advance()
                 val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                LiteralPattern(IntLiteral(value, token.span), token.span)
+                LiteralPattern(IntLiteral(value, token.span, token.text), token.span)
             }
 
             DOUBLE -> {
                 advance()
                 val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
-                LiteralPattern(DoubleLiteral(value, token.span), token.span)
+                LiteralPattern(DoubleLiteral(value, token.span, token.text), token.span)
             }
 
             MINUS, MINUS_TIGHT -> {
@@ -629,8 +640,8 @@ class Parser(
                 val span = token.span + number.span
                 val literal =
                     when (number.kind) {
-                        INT -> IntLiteral(-number.text!!.toLong(), span)
-                        else -> DoubleLiteral(-number.text!!.toDouble(), span)
+                        INT -> IntLiteral(-number.text!!.toLong(), span, "-${number.text}")
+                        else -> DoubleLiteral(-number.text!!.toDouble(), span, "-${number.text}")
                     }
                 LiteralPattern(literal, span)
             }
@@ -657,32 +668,48 @@ class Parser(
 
             IDENT -> {
                 advance()
-                if (token.text == "_") WildcardPattern(token.span) else VariablePattern(token.text!!, token.span)
+                when {
+                    token.text == "_" -> WildcardPattern(token.span)
+                    peek().kind == LBRACE -> {
+                        val (fields, fieldsSpan) = parseRecordFields()
+                        DataPattern(null, token.text, fields, token.span + fieldsSpan)
+                    }
+                    else -> VariablePattern(token.text!!, token.span)
+                }
             }
 
             UPPER_IDENT -> {
                 advance()
-                when (peek().kind) {
-                    LBRACE -> {
-                        val record = parseRecordPattern()
-                        ConstructorPattern(token.text!!, null, record, token.span + record.span)
+                var span = token.span
+                val binder =
+                    if (peek().kind == IDENT) {
+                        val b = advance()
+                        span += b.span
+                        b.text!!.takeUnless { it == "_" }
+                    } else {
+                        null
                     }
-                    IDENT -> {
-                        val binder = advance()
-                        val binderName = binder.text!!.takeUnless { it == "_" }
-                        ConstructorPattern(token.text!!, binderName, null, token.span + binder.span)
+                val fields =
+                    if (peek().kind == LBRACE) {
+                        val (fs, fieldsSpan) = parseRecordFields()
+                        span += fieldsSpan
+                        fs
+                    } else {
+                        emptyList()
                     }
-                    else -> ConstructorPattern(token.text!!, null, null, token.span)
-                }
+                DataPattern(token.text, binder, fields, span)
             }
 
-            LBRACE -> parseRecordPattern()
+            LBRACE -> {
+                val (fields, fieldsSpan) = parseRecordFields()
+                DataPattern(null, null, fields, fieldsSpan)
+            }
 
             else -> throw ParseError("Expected pattern, got $token", token.span)
         }
     }
 
-    private fun parseRecordPattern(): RecordPattern {
+    private fun parseRecordFields(): Pair<List<FieldPattern>, SourceSpan> {
         val open = expectAndAdvance(LBRACE, message = "Expected '{'")
         if (peek().kind == RBRACE) {
             throw ParseError("Record pattern must name at least one field", open.span + peek().span)
@@ -718,7 +745,7 @@ class Parser(
         }
 
         val close = advance()
-        return RecordPattern(fields, open.span + close.span)
+        return fields to (open.span + close.span)
     }
 
     private fun parseLambda(open: Token): Lambda {
@@ -855,8 +882,10 @@ class Parser(
         var i =
             when {
                 peek().kind == LBRACE -> 0
+                peek().kind == IDENT && peekAt(1).kind == LBRACE -> 1
                 peek().kind == UPPER_IDENT && peekAt(1).kind == LBRACE -> 1
-                peek().kind == UPPER_IDENT && peekAt(1).kind == IDENT -> return peekAt(2).kind == EQ
+                peek().kind == UPPER_IDENT && peekAt(1).kind == IDENT ->
+                    if (peekAt(2).kind == LBRACE) 2 else return peekAt(2).kind == EQ
                 else -> return false
             }
         var depth = 0

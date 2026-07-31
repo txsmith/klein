@@ -1,16 +1,17 @@
 #!/bin/bash
-# Interactive file watcher for klein type inference.
-# Watches the source file and re-runs on changes.
-# Press keys to switch type format on the fly.
+# Interactive file watcher for the klein pipeline.
+# Watches the source file (and the ./klein binary) and re-runs on changes.
+# Press keys to switch pipeline stage on the fly.
 
 file=""
 pass_args=()
-format=""
+mode="core"
 
 for arg in "$@"; do
     case "$arg" in
-        --ir-bounds|--ir-compact|--canonical)
-            format="$arg" ;;
+        --check) mode="check" ;;
+        --core)  mode="core" ;;
+        --run)   mode="run" ;;
         -*)
             pass_args+=("$arg") ;;
         *)
@@ -20,31 +21,30 @@ for arg in "$@"; do
 done
 
 if [[ -z "$file" || ! -f "$file" ]]; then
-    echo "Usage: watch-infer.sh [options] <file>" >&2
-    echo "Keys: b=bounds  c=compact  n=canonical  q=quit" >&2
+    echo "Usage: watch-infer.sh [--check|--core|--run] <file>" >&2
+    echo "Keys: c=check  o=core  r=run  q=quit" >&2
     exit 1
 fi
 
-run_infer() {
+run_stage() {
     clear
-    echo "[${format:---canonical}]  b=bounds  c=compact  n=canonical  q=quit"
+    echo "[${mode}]  c=check  o=core  r=run  q=quit"
     echo ""
-    ./klein infer ${format} "${pass_args[@]}"
+    ./klein "${mode}" "${pass_args[@]}"
 }
 
 get_mtime() { stat -c %Y "$1" 2>/dev/null; }
 
-run_infer
+run_stage
 last_mod=$(get_mtime "$file")
 last_bin=$(get_mtime ./klein)
 
 while true; do
     if read -rsn1 -t 0.5 key; then
         case "$key" in
-            b) format="--ir-bounds";  run_infer ;;
-            c) format="--ir-compact"; run_infer ;;
-            n) format="--canonical";  run_infer ;;
-            "") format="";            run_infer ;;  # Enter = default
+            c) mode="check"; run_stage ;;
+            o) mode="core";  run_stage ;;
+            r) mode="run";   run_stage ;;
             q) echo; exit 0 ;;
         esac
     fi
@@ -53,6 +53,6 @@ while true; do
     if [[ "$cur_mod" != "$last_mod" || "$cur_bin" != "$last_bin" ]]; then
         last_mod="$cur_mod"
         last_bin="$cur_bin"
-        run_infer
+        run_stage
     fi
 done

@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.FieldDecl
+import klein.surface.FieldDecl
 import klein.SourceSpan
 import klein.check.Type.*
 

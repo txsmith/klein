@@ -1,7 +1,7 @@
 package klein.parser
 
-import klein.Match
-import klein.ParseError
+import klein.surface.Match
+import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -87,6 +87,36 @@ class MatchTest {
         assertExprEquals(
             expr,
             matchExpr(id("p"), arm(recordP(fieldP("name"), fieldP("age")), id("name"))),
+        )
+    }
+
+    @Test
+    fun constructorBinderWithFields() {
+        val expr =
+            parse(
+                """
+                match s
+                  Circle c { radius } -> c
+                """.trimIndent(),
+            )
+        assertExprEquals(
+            expr,
+            matchExpr(id("s"), arm(ctorBindP("Circle", "c", fieldP("radius")), id("c"))),
+        )
+    }
+
+    @Test
+    fun namedRecordPattern() {
+        val expr =
+            parse(
+                """
+                match p
+                  r { name } -> r
+                """.trimIndent(),
+            )
+        assertExprEquals(
+            expr,
+            matchExpr(id("p"), arm(recordBindP("r", fieldP("name")), id("r"))),
         )
     }
 

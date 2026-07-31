@@ -1,6 +1,6 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.surface.TokenKind.*
 
 fun Token.prettyPrint(): String {
     val base =
@@ -97,6 +97,10 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         }
         is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
         is SafeFieldAccess -> "${pad}SafeFieldAccess($field)\n${target.prettyPrint(indent + 1)}"
+        is SafeApply -> {
+            val argsStr = args.joinToString("\n") { it.prettyPrint(indent + 2) }
+            "${pad}SafeApply($method)\n${target.prettyPrint(indent + 1)}\n$pad  args:\n$argsStr"
+        }
         is ImplicitParam -> "${pad}ImplicitParam"
         is RecordLiteral -> {
             val fieldsStr =
@@ -131,8 +135,14 @@ fun Pattern.prettyPrint(): String =
                 is NullLiteral -> "null"
                 else -> literal.toString()
             }
-        is ConstructorPattern ->
-            name + (binder?.let { " $it" } ?: "") + (record?.let { " ${it.prettyPrint()}" } ?: "")
-        is RecordPattern ->
-            "{ ${fields.joinToString(", ") { if (it.field == it.binder) it.field else "${it.field} = ${it.binder ?: "_"}" }} }"
+        is DataPattern ->
+            listOfNotNull(
+                tag,
+                binder,
+                if (fields.isEmpty()) {
+                    null
+                } else {
+                    "{ ${fields.joinToString(", ") { if (it.field == it.binder) it.field else "${it.field} = ${it.binder ?: "_"}" }} }"
+                },
+            ).joinToString(" ")
     }

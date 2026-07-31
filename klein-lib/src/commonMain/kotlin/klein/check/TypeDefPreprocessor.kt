@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.*
+import klein.surface.*
 
 class TypeDefPreprocessor(
     private val errors: MutableList<TypeError>,

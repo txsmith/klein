@@ -2,9 +2,9 @@
 
 package klein.lexer
 
-import klein.Lexer
-import klein.LexerError
-import klein.TokenKind.*
+import klein.surface.Lexer
+import klein.surface.LexerError
+import klein.surface.TokenKind.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

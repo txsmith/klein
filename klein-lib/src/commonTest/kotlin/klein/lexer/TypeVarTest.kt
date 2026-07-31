@@ -2,7 +2,7 @@
 
 package klein.lexer
 
-import klein.TokenKind.*
+import klein.surface.TokenKind.*
 import kotlin.test.Test
 
 class TypeVarTest {

@@ -2,7 +2,7 @@
 
 package klein.parser
 
-import klein.ParseError
+import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -589,5 +589,18 @@ class NullTest {
         val error = assertFailsWith<ParseError> { parse("x.null") }
         // Expects identifier after '.', got keyword
         assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+    }
+
+    @Test
+    fun safeMethodCallParsesToSafeApply() {
+        assertExprEquals(parse("r?.double(21)"), safeApply(id("r"), "double", int(21)))
+    }
+
+    @Test
+    fun chainedSafeAccessThenCallParsesToSafeApply() {
+        assertExprEquals(
+            parse("r?.inner?.process(5)"),
+            safeApply(safeFieldAccess(id("r"), "inner"), "process", int(5)),
+        )
     }
 }

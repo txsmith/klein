@@ -2,8 +2,8 @@
 
 package klein.lexer
 
-import klein.Lexer
-import klein.LexerError
+import klein.surface.Lexer
+import klein.surface.LexerError
 import klein.SourceSpan
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,7 +1,7 @@
 package klein.check
 
-import klein.Lexer
-import klein.Parser
+import klein.surface.Lexer
+import klein.surface.Parser
 import klein.check.Type.*
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

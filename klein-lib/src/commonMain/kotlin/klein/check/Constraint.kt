@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.*
+import klein.surface.*
 import klein.check.Type.*
 
 data class ConstraintInterval(

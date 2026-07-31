@@ -55,7 +55,7 @@ class SafeFieldAccessTest {
     fun methodCallOnSafeFieldAccess() {
         assertExprEquals(
             parse(""""hello"?.toUpperCase()"""),
-            call(safeFieldAccess(string("hello"), "toUpperCase")),
+            safeApply(string("hello"), "toUpperCase"),
         )
     }
 
@@ -63,7 +63,7 @@ class SafeFieldAccessTest {
     fun methodCallOnIntLiteralSafe() {
         assertExprEquals(
             parse("42?.toString()"),
-            call(safeFieldAccess(int(42), "toString")),
+            safeApply(int(42), "toString"),
         )
     }
 
@@ -87,7 +87,7 @@ class SafeFieldAccessTest {
     fun functionCallOnSafeFieldAccess() {
         assertExprEquals(
             parse("user?.getName()"),
-            call(safeFieldAccess(id("user"), "getName")),
+            safeApply(id("user"), "getName"),
         )
     }
 
@@ -95,12 +95,7 @@ class SafeFieldAccessTest {
     fun chainedSafeAccessAndCalls() {
         assertExprEquals(
             parse("getUser(1)?.getName()"),
-            call(
-                safeFieldAccess(
-                    call(id("getUser"), int(1)),
-                    "getName",
-                ),
-            ),
+            safeApply(call(id("getUser"), int(1)), "getName"),
         )
     }
 
@@ -160,12 +155,7 @@ class SafeFieldAccessTest {
     fun methodCallAfterSafeFieldAccess() {
         assertExprEquals(
             parse("user?.address?.getCity()"),
-            call(
-                safeFieldAccess(
-                    safeFieldAccess(id("user"), "address"),
-                    "getCity",
-                ),
-            ),
+            safeApply(safeFieldAccess(id("user"), "address"), "getCity"),
         )
     }
 
@@ -195,6 +185,6 @@ class SafeFieldAccessTest {
 
     @Test
     fun underscoreAsFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.ParseError> { parse("x?._") }
+        kotlin.test.assertFailsWith<klein.surface.ParseError> { parse("x?._") }
     }
 }

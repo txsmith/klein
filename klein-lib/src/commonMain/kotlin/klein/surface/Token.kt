@@ -1,6 +1,8 @@
-package klein
+package klein.surface
 
-import klein.TokenKind.*
+import klein.SourceSpan
+
+import klein.surface.TokenKind.*
 
 data class Token(
     val kind: TokenKind,

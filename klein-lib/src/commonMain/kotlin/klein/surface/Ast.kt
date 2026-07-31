@@ -1,4 +1,6 @@
-package klein
+package klein.surface
+
+import klein.SourceSpan
 
 import kotlinx.serialization.Serializable
 
@@ -120,11 +122,16 @@ sealed class Expr : Stmt() {
 data class IntLiteral(
     val value: Long,
     override val span: SourceSpan,
+    // The literal as written in source. Authoritative for numeric models that outrange
+    // Long/Double (exact rationals, decimals); `value` is the eager double-world convenience.
+    val text: String,
 ) : Expr()
 
 data class DoubleLiteral(
     val value: Double,
     override val span: SourceSpan,
+    // The literal as written in source, before IEEE rounding; see IntLiteral.text.
+    val text: String,
 ) : Expr()
 
 data class StringLiteral(
@@ -203,8 +210,7 @@ sealed class Pattern {
 val Pattern.boundNames: List<String>
     get() =
         when (this) {
-            is ConstructorPattern -> listOfNotNull(binder) + (record?.fields?.mapNotNull { it.binder } ?: emptyList())
-            is RecordPattern -> fields.mapNotNull { it.binder }
+            is DataPattern -> listOfNotNull(binder) + fields.mapNotNull { it.binder }
             is VariablePattern -> listOf(name)
             is WildcardPattern, is LiteralPattern -> emptyList()
         }
@@ -225,22 +231,19 @@ data class VariablePattern(
 ) : Pattern()
 
 /**
- * `Circle`, `Circle c` (whole-value binder), or `Circle { radius }` (destructure).
- * [binder] and [record] are mutually exclusive; both null for the bare form.
+ * A tagged-record pattern — the dual of core `MakeData`. [tag] is the constructor name (null for a
+ * structural record), [binder] optionally names the whole value, and [fields] destructures. The
+ * three are independent: `Circle`, `Circle c`, `Circle { radius }`, `Circle c { radius }`,
+ * `{ name }`, `r { name }`.
  */
-data class ConstructorPattern(
-    val name: String,
+data class DataPattern(
+    val tag: String?,
     val binder: String?,
-    val record: RecordPattern?,
-    override val span: SourceSpan,
-) : Pattern()
-
-data class RecordPattern(
     val fields: List<FieldPattern>,
     override val span: SourceSpan,
 ) : Pattern()
 
-/** `name` (pun: binder = field), `name = n` (rename), or `name = _` (test only: binder = null). */
+/** `name` (pun for `name = name`), `name = n` (rename), or `name = _` (test only: binder = null). */
 data class FieldPattern(
     val field: String,
     val binder: String?,
@@ -256,6 +259,13 @@ data class FieldAccess(
 data class SafeFieldAccess(
     val target: Expr,
     val field: String,
+    override val span: SourceSpan,
+) : Expr()
+
+data class SafeApply(
+    val target: Expr,
+    val method: String,
+    val args: List<Expr>,
     override val span: SourceSpan,
 ) : Expr()
 
@@ -276,6 +286,7 @@ val Expr.usesImplicitParam: Boolean
             is Ascription -> expr.usesImplicitParam
             is FieldAccess -> target.usesImplicitParam
             is SafeFieldAccess -> target.usesImplicitParam
+            is SafeApply -> target.usesImplicitParam || args.any { it.usesImplicitParam }
             is IfThenElse ->
                 condition.usesImplicitParam ||
                     thenBranch.usesImplicitParam ||
@@ -308,6 +319,7 @@ val Expr.children: List<Expr>
             is Ascription -> listOf(expr)
             is FieldAccess -> listOf(target)
             is SafeFieldAccess -> listOf(target)
+            is SafeApply -> listOf(target) + args
             is IfThenElse -> listOfNotNull(condition, thenBranch, elseBranch)
             is Match -> listOf(scrutinee) + arms.flatMap { listOfNotNull(it.guard, it.body) }
         }

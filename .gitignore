@@ -4,7 +4,7 @@ build/
 node_modules/
 kls_database.db
 /klein
-core
+/core
 
 # Offline build cache (extracted from local-repo.zip)
 gradle/local-repo/

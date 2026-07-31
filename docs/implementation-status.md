@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. No interpreter.
+**Current state:** The type system runs on **Operation Bidi** — local bidirectional checking (see [decisions/2026-06-24-adopt-operation-bidi.md](decisions/2026-06-24-adopt-operation-bidi.md)). The checker (`klein.check`, behind both `Klein.check` and the `check` CLI command) covers the bidirectional core, concrete subtyping, rank-1 generics, and branch joins. Type annotations (`fun f(x: Num)`, return types, `x: Num = 1`, `T?`) are parsed and checked. The legacy SimpleSub engine is deleted. Checked programs compile to a Core IR (`klein.core.Lowering`) and execute on a CESK machine (`klein.interp.Machine`, behind `Klein.execute` and the `run` CLI command).
 
 ## Parser
 
@@ -119,12 +119,31 @@ To fix under a dedicated "polymorphism bugs" pass:
 
 2. **A phantom / unpinned type variable collapses to `Nothing` in synth mode.** `Phantom(7)` with no demand → `Nothing` plus a misleading `'Nothing' cannot be used as 'Any'`. `inferApply` always instantiates the callee scheme and, when a variable is left unconstrained, defaults it to failure rather than propagating a scheme (propagating would be let-generalization at an application result, which Operation Bidi declines). Needs a decision on intended behavior — a clear "cannot infer `'A`" error, or a benign default — not silent collapse. The annotated form already works: `q: Phantom<'A> = Phantom(4)` generalizes at the binder.
 
-## Interpreter
+## Execution
 
-Not started. See [dsl-project-summary.md](dsl-project-summary.md) for design.
+Checked programs lower to a Core IR (`klein.core`) and run on a two-stack CESK machine
+(`klein.interp.Machine`). The architectural decisions are ADRs (own machine, boxed values,
+source-is-truth, no verifier — see [decisions/](decisions/)); the deliberate performance
+corners live in [performance-debt.md](performance-debt.md); future designs in
+[ideas/](ideas/) (execution traces, suspended-run migration, host environment and interface
+evolution).
+
+### Complete
 
 | Feature | Notes |
 |---------|-------|
-| Expression evaluation | Pure interpreter |
-| Effect system | Suspendable effects, yield/resume |
-| State serialization | Pause and persist execution |
+| Core IR | `Literal`, `Var(depth, slot)`, `Lambda`, `Apply`, `PrimApp`, `MakeData`, `FieldGet`, `HostCall`, `EnterScope`, `Match` — slot-addressed, types erased |
+| Lowering | Positional val visibility with hoisted `fun`s/constructors; desugars `if`/`and`/`or`/`?.`/safe calls (`SafeApply`) to `match`; scrutinee/receiver hoisting; constructor eta-expansion; implicit param via the environment |
+| Machine | Flat-loop two-stack CESK; tail calls run in constant control space; fail-fast `KleinRuntimeError` with spans; malformed IR throws `InvariantViolation` |
+| Values | `VStruct` unifies records and data (nullable tag); structural equality |
+| Match | Tag/literal/default arms, guards with first-match fallthrough, per-arm scopes |
+| Suspension | `Execution.Done \| AwaitingHost` with one-shot `resume` and `clone` — machine-side only; lowering does not yet emit `HostCall` |
+| CLI | `run`/`r` executes, `core` dumps the lowered IR |
+
+### Pending
+
+| Feature | Notes |
+|---------|-------|
+| Host calls from source | No surface mechanism yet — the machine side exists; the extern interface design lives on the `host-interop` branch |
+| Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
+| Serialization | IR + suspension round-trip; see the log-persistence rethink in [performance-debt.md](performance-debt.md) |

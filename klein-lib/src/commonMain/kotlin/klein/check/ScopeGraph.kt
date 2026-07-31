@@ -1,6 +1,7 @@
 package klein.check
 
-import klein.*
+import klein.SourceSpan
+import klein.surface.*
 
 data class ScopeGraph(
     val nodes: List<Node>,

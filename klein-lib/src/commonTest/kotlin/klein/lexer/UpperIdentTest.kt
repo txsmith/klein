@@ -40,7 +40,7 @@ class UpperIdentTest {
     fun typeDefinitionIdentifiers() {
         assertTokens(
             "type Option = Some",
-            kw(klein.TokenKind.TYPE),
+            kw(klein.surface.TokenKind.TYPE),
             upperIdent("Option"),
             sym("="),
             upperIdent("Some"),

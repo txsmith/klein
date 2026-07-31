@@ -167,6 +167,6 @@ class ImplicitParamTest {
 
     @Test
     fun underscoreAsImplicitFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.ParseError> { parse("._") }
+        kotlin.test.assertFailsWith<klein.surface.ParseError> { parse("._") }
     }
 }
