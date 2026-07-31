@@ -10,8 +10,6 @@ import klein.interp.Execution
 import klein.interp.KleinRuntimeError
 import klein.interp.Machine
 import klein.interp.Value
-import klein.legacy.HostCall
-import klein.legacy.Interpreter
 
 /**
  * Library entry point: the pipeline stages, each a total function with the uniform
@@ -23,12 +21,12 @@ import klein.legacy.Interpreter
  *     Klein
  *         .tokenize(source)
  *         .andThen(Klein::parse)
- *         .andThen { program -> Klein.check(program).andThen { Klein.interpret(program) } }
+ *         .andThen { p -> Klein.check(p).andThen { Klein.lower(p) }.andThen(Klein::execute) }
  * ```
  *
  * Exceptions never escape these functions; stage-internal aborts are converted to errors
- * in the result. The underlying throwing implementations ([Lexer], [Parser],
- * [Interpreter]) remain available for tools that want them raw.
+ * in the result. The underlying throwing implementations ([Lexer], [Parser]) remain
+ * available for tools that want them raw.
  */
 object Klein {
     fun tokenize(source: String): StageResult<List<Token>> =
@@ -81,33 +79,6 @@ object Klein {
                     StageResult.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
             }
         } catch (e: KleinRuntimeError) {
-            StageResult.failure(e)
-        }
-
-    /**
-     * Evaluate a program that passed [check] — the interpreter assumes checked input — driving
-     * every host call through [onHostCall] synchronously. By default a host call is an error.
-     *
-     * [bindings] is the host's seam: bind [Value.VNative] declarations or data there (with
-     * matching types in the [check] env) to expose them to the program. Hosts that want to
-     * control scheduling themselves — suspend on a host call, resume later — use
-     * [Interpreter.begin] and step the returned [klein.interp.Execution] directly.
-     */
-    fun interpret(
-        program: Program,
-        bindings: Map<String, Value> = emptyMap(),
-        onHostCall: ((HostCall) -> Value)? = null,
-    ): StageResult<Value> =
-        try {
-            val interpreter = Interpreter()
-            val value =
-                if (onHostCall == null) {
-                    interpreter.run(program, bindings)
-                } else {
-                    interpreter.run(program, bindings, onHostCall)
-                }
-            StageResult.success(value)
-        } catch (e: klein.interp.KleinRuntimeError) {
             StageResult.failure(e)
         }
 }

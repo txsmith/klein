@@ -147,4 +147,3 @@ evolution).
 | Host calls from source | No surface mechanism yet — the machine side exists; interface design in [ideas/host-environment.md](ideas/host-environment.md) and [ideas/host-interface-evolution.md](ideas/host-interface-evolution.md) |
 | Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
 | Serialization | IR + suspension round-trip; see the log-persistence rethink in [performance-debt.md](performance-debt.md) |
-| Legacy machine deletion | `klein.legacy` tree-walker retained as the benchmark baseline until the IR machine is benchmarked against it |

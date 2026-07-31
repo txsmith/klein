@@ -175,10 +175,9 @@ klein-lang/
 │   │   │   │   └── PrettyPrint.kt  # Core IR printer (backs the `core` CLI command)
 │   │   │   ├── interp/           # The run-time half: the CESK machine over Core
 │   │   │   │   ├── Machine.kt      # Two-stack machine + Execution (Done | AwaitingHost), one-shot resume/clone
-│   │   │   │   ├── Env.kt          # The store (write-once cells) + legacy Env
+│   │   │   │   ├── Store.kt        # The store: write-once cells behind integer addresses
 │   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
 │   │   │   │   └── KleinRuntimeError.kt
-│   │   │   ├── legacy/           # The old tree-walking machine; benchmark baseline only, deleted after the IR-vs-tree benchmark
 │   │   │   └── check/            # The Operation Bidi bidirectional checker
 │   │   │       ├── Checker.kt              # synth / check driver
 │   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer

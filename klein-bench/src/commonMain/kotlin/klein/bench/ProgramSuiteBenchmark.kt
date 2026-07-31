@@ -57,23 +57,13 @@ class ProgramSuiteBenchmark {
     fun typecheck(): StageResult<Type> = Klein.check(program)
 
     @Benchmark
-    fun eval(): StageResult<Value> = Klein.interpret(program)
-
-    @Benchmark
     fun lower(): StageResult<CoreExpr> = Klein.lower(program)
 
     @Benchmark
-    fun evalCore(): StageResult<Value> = Klein.execute(core)
+    fun eval(): StageResult<Value> = Klein.execute(core)
 
     @Benchmark
     fun endToEnd(): StageResult<Value> =
-        Klein
-            .tokenize(source)
-            .andThen(Klein::parse)
-            .andThen { p -> Klein.check(p).andThen { Klein.interpret(p) } }
-
-    @Benchmark
-    fun endToEndCore(): StageResult<Value> =
         Klein
             .tokenize(source)
             .andThen(Klein::parse)
