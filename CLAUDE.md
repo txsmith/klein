@@ -30,10 +30,10 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 - **[2026-06-24-adopt-operation-bidi.md](./docs/decisions/2026-06-24-adopt-operation-bidi.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
 - **[2026-06-23-polarity-wall-and-type-system-direction.md](./docs/decisions/2026-06-23-polarity-wall-and-type-system-direction.md)** - Why SimpleSub was abandoned: the polarity wall and the three ways out.
 
-**Execution decisions (Core IR + CESK machine, 2026-07-20):**
+**Execution decisions (Core IR + CESK machine):**
 
-- **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua
-- **[boxed-values-for-serializable-states.md](./docs/decisions/2026-07-20-boxed-values-for-serializable-states.md)** - Boxing and data-frames as the price of suspension-as-data
+- **[persist-the-log-replay-the-run.md](./docs/decisions/2026-07-31-persist-the-log-replay-the-run.md)** - **The persistence model.** Machine state is never serialized; the effect log is truth, replay rebuilds everything else
+- **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua (re-centered on embedding, walkable hot tier, fuel)
 - **[source-is-truth-ir-is-a-cache.md](./docs/decisions/2026-07-20-source-is-truth-ir-is-a-cache.md)** - Stored IR integrity: version stamp + checksum, re-derive instead of migrate
 - **[no-load-time-verifier.md](./docs/decisions/2026-07-20-no-load-time-verifier.md)** - Why per-op checks are just unboxing and a verifier was rejected
 

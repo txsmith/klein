@@ -28,40 +28,33 @@ per-comparison `VBool`s — the entries below — are the whole story. The old *
 evaluator's recorded `fib` was 266 µs; the IR machine's 646 µs is the retained price of
 suspension-as-data.
 
-## The log-persistence rethink (2026-07-31)
+## The log-persistence decision (2026-07-31)
 
-A suspended program no longer needs its machine state persisted at all. The machine is
-deterministic by construction — nondeterminism enters only through the extern boundary —
-so the state at any suspension is a pure function of three recorded things: the compiled
-artifact (pinned by checksum), the extern vals it was linked with, and the extern-fun
-responses so far. Persisting a suspension means persisting that log; resuming means
-re-running the program from the start, feeding logged responses back until the log runs
-out, then continuing live. (Temporal works this way; Klein gets the determinism it has to
-fight for from the language itself.)
-
-Two tiers follow: the in-memory machine is the hot tier (resume is O(1) while the process
-holds it); the log is the durable tier (crash, eviction, migration — resume costs one
-replay). During replay, each re-issued request must match the logged one — name and
-arguments — so any semantic drift fails loudly at resume, not as silent divergence.
-
-Consequences for this list: serializability was the *why* behind the two most expensive
-entries below. With it gone, they are unblocked — marked inline. The trade: `clone()`
-becomes fork-by-replay (O(replay), fine for its only customer, what-if debugging), and
-the evaluation-order semantics pinned by the eval test suite become a compatibility
-contract — replay of old logs depends on them, so the suite guards parked suspensions in
-production, not just correctness today. Sequencing: land the benchmark baseline first,
-then make these changes as measured before/afters.
+Graduated to an ADR:
+[decisions/2026-07-31-persist-the-log-replay-the-run.md](decisions/2026-07-31-persist-the-log-replay-the-run.md).
+Machine state is never serialized; the effect log is the durable tier and replay rebuilds
+the hot tier. Consequence for this list: serializability was the *why* behind the most
+expensive entries below — they are now unblocked (walkability for the hot-tier debugger is
+the surviving constraint, and it gates only host-resident interiors, which debug replays
+run unfused). Sequencing: the baseline above is recorded; make the changes as measured
+before/afters.
 
 ## Representation
 
 **Boxed values.** Every `Value` is a heap object; `VNum` wraps a `double`, so `a + b + c`
 boxes the intermediate `a+b` and unboxes it again for `+c`. This is the defining cost of a
 boxed interpreter.
-- *Why:* a uniform, walkable, serializable `Value` — "states are data." Value classes unbox
-  only in monomorphic slots (every slot here is `Value`-typed) and NaN-boxing needs memory
-  layout control portable KMP doesn't give, so neither helps.
-- *Fix:* an unboxed representation in a native/optimizer tier that runs where the machine
-  isn't suspending; superinstructions that keep doubles unboxed across a `PrimApp` subtree.
+- *Why:* representation obliviousness — erased types, one slot kind, a sealed walkable
+  `Value`. The escapes that don't help: value classes re-box in polymorphic slots (every
+  slot is `Value`-typed); `Array<Any>` is lateral (a `Double` boxes on entry with the same
+  layout as `VNum`, and open dispatch costs the sealed hierarchy's totality); NaN-boxing
+  needs bit-level layout control Kotlin/JS can't give.
+- *Fix (sanctioned, suspension-compatible):* typed slot layouts from checker types —
+  per-scope `DoubleArray` for monomorphic `Num` locals/operands, boxed everywhere
+  polymorphism or width subtyping forces it; `a + b + c` stops allocating.
+- *Fix (gated):* host-resident interiors — superinstructions keeping doubles in Kotlin
+  locals across `HostCall`-free subtrees (statically checkable), or JIT-style
+  rematerialization at suspension boundaries.
 - *Free adjacent win, not yet taken:* `VBool` is allocated per comparison; it has two
   inhabitants and should be two singletons (`VNull`/`VUnit` already are). Every `if`/guard
   boxes a bool only to match on it and discard it.

@@ -16,3 +16,6 @@ Consequences:
   [2026-07-20-no-load-time-verifier.md](2026-07-20-no-load-time-verifier.md)).
 - Deferred until the host-interface design lands: an interface fingerprint as a third
   trigger with the same handler (see [ideas/host-interface-evolution.md](../ideas/host-interface-evolution.md)).
+- The same principle now governs *runs* as governs programs: the effect log is truth and
+  stored traces/snapshots are disposable caches — see
+  [2026-07-31-persist-the-log-replay-the-run.md](2026-07-31-persist-the-log-replay-the-run.md).

@@ -36,9 +36,9 @@ does not yet apply to Klein: nothing rewrites Core after lowering, so term-level
 would pay the every-pass-must-skip-ticks tax without collecting the benefit. Trace machinery
 therefore stays in the machine, keyed by the IR's existing names and spans. The moment an
 optimizer over Core exists, this decision must be revisited — and Klein has an escape GHC
-never had: elided mode plus deterministic replay (see the log-persistence rethink in
-[performance-debt.md](../performance-debt.md)) can recover an exact trace offline, so soft
-markers don't have to mean lost history.
+never had: elided mode plus deterministic replay (see
+[persist-the-log-replay-the-run](../decisions/2026-07-31-persist-the-log-replay-the-run.md))
+can recover an exact trace offline, so soft markers don't have to mean lost history.
 
 ## Open question
 

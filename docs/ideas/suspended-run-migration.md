@@ -6,11 +6,14 @@ A rule program suspended for weeks may need to resume against a newer version of
 Migration is **host policy, not a Klein engine**: Klein's job is to provide the three
 primitives that make every rung of the ladder buildable, and stop there.
 
-The primitives:
+The primitives (updated for
+[persist-the-log-replay-the-run](../decisions/2026-07-31-persist-the-log-replay-the-run.md),
+which makes replay the *primary* persistence mechanism, not a migration trick):
 
-1. **Serializable state** — the CESK machine's suspended states are plain data.
-2. **Effect transcripts** — every host interaction passes through the `Execution` API and
-   can be recorded; determinism makes a transcript a complete account of a run.
+1. **A deterministic machine** — the suspended state is a pure function of the artifact,
+   the extern vals, and the responses so far.
+2. **The effect log** — every host interaction passes through the `Execution` API and is
+   recorded; determinism makes the log a complete account of a run.
 3. **Version-stamped IR with stable identity** — a stored program knows exactly which
    compiled artifact a suspension belongs to.
 
@@ -25,6 +28,4 @@ The host-side ladder, cheapest first:
   last resort.
 
 See also [host-interface-evolution.md](host-interface-evolution.md) for the adjacent
-question (the *host* changed, not the program) and the log-persistence rethink in
-[performance-debt.md](../performance-debt.md), which makes replay the primary persistence
-mechanism rather than a migration trick.
+question (the *host* changed, not the program).
