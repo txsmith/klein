@@ -62,11 +62,23 @@ class OperatorEvalTest {
     // resolve enclosing bindings at depth+1.
     @Test
     fun andRightOperandReadsOuterVar() =
-        assertEvaluatesTo(VBool(true), "fun f(x: Num) = x > 0 and x < 10\nf(5)")
+        assertEvaluatesTo(
+            VBool(true),
+            """
+            fun f(x: Num) = x > 0 and x < 10
+            f(5)
+            """,
+        )
 
     @Test
     fun orRightOperandReadsOuterVar() =
-        assertEvaluatesTo(VBool(false), "fun f(x: Num) = x > 10 or x < 0\nf(5)")
+        assertEvaluatesTo(
+            VBool(false),
+            """
+            fun f(x: Num) = x > 10 or x < 0
+            f(5)
+            """,
+        )
 
     @Test
     fun divisionByZeroFailsFast() {

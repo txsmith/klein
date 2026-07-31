@@ -57,11 +57,23 @@ class FunctionEvalTest {
     // sits one scope deeper than the lambda's params.
     @Test
     fun implicitParamInsideIfBranch() =
-        assertEvaluatesTo(VNum(5.0), "f: Num -> Num = |if . > 1 then . else 0|\nf(5)")
+        assertEvaluatesTo(
+            VNum(5.0),
+            """
+            f: Num -> Num = |if . > 1 then . else 0|
+            f(5)
+            """,
+        )
 
     @Test
     fun implicitParamInsideAndRightOperand() =
-        assertEvaluatesTo(VBool(true), "p: Num -> Bool = |. > 0 and . < 10|\np(5)")
+        assertEvaluatesTo(
+            VBool(true),
+            """
+            p: Num -> Bool = |. > 0 and . < 10|
+            p(5)
+            """,
+        )
 
     @Test
     fun recursiveFib() =
@@ -137,7 +149,13 @@ class FunctionEvalTest {
 
     @Test
     fun discardedArgumentIsStillEvaluated() =
-        assertRunFails("f: (Num) -> Num = |_ -> 0|\nf(1 / 0)", "Division by zero")
+        assertRunFails(
+            """
+            f: (Num) -> Num = |_ -> 0|
+            f(1 / 0)
+            """,
+            "Division by zero",
+        )
 
     @Test
     fun unusedCallbackIsNeverInvoked() =
@@ -162,11 +180,23 @@ class FunctionEvalTest {
 
     @Test
     fun bareImplicitIdentity() =
-        assertEvaluatesTo(VNum(7.0), "f: ('A) -> 'A = |.|\nf(7)")
+        assertEvaluatesTo(
+            VNum(7.0),
+            """
+            f: ('A) -> 'A = |.|
+            f(7)
+            """,
+        )
 
     @Test
     fun implicitParamInsideExplicitParamLambda() =
-        assertEvaluatesTo(VNum(42.0), "f: (Num) -> (Num) -> Num = |x: Num -> |. * 2||\nf(99)(21)")
+        assertEvaluatesTo(
+            VNum(42.0),
+            """
+            f: (Num) -> (Num) -> Num = |x: Num -> |. * 2||
+            f(99)(21)
+            """,
+        )
 
     @Test
     fun genericFunctionAtTwoTypes() =

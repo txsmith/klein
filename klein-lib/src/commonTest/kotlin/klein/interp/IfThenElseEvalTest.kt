@@ -18,11 +18,23 @@ class IfThenElseEvalTest {
     // enclosing binding crashes if the lowerer emits it at the match-site depth.
     @Test
     fun thenBranchReadsOuterVar() =
-        assertEvaluatesTo(VNum(1.0), "fun f(x: Num) = if x < 2 then x else 99\nf(1)")
+        assertEvaluatesTo(
+            VNum(1.0),
+            """
+            fun f(x: Num) = if x < 2 then x else 99
+            f(1)
+            """,
+        )
 
     @Test
     fun elseBranchReadsOuterVar() =
-        assertEvaluatesTo(VNum(5.0), "fun f(x: Num) = if x < 2 then 99 else x\nf(5)")
+        assertEvaluatesTo(
+            VNum(5.0),
+            """
+            fun f(x: Num) = if x < 2 then 99 else x
+            f(5)
+            """,
+        )
 
     @Test
     fun untakenBranchNeverEvaluates() {
