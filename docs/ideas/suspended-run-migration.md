@@ -27,5 +27,5 @@ The host-side ladder, cheapest first:
 - **Authored transforms** — Erlang `code_change`-style hand-written state migrations, the
   last resort.
 
-See also [host-interface-evolution.md](host-interface-evolution.md) for the adjacent
+See also the host interface evolution notes (on the `host-interop` branch) for the adjacent
 question (the *host* changed, not the program).
