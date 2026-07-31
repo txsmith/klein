@@ -68,7 +68,7 @@ fun int(
 
 fun double(
     value: Double,
-    text: String = value.toString(),
+    text: String = if (value % 1.0 == 0.0) "${value.toLong()}.0" else value.toString(),
 ) = DoubleLiteral(value, noSpan, text)
 
 fun string(value: String) = StringLiteral(value, noSpan)
