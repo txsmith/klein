@@ -121,6 +121,9 @@ internal class Machine(
                 // ---- Eval: decompose an expression ----
                 when (e) {
                     is Match -> throw KleinRuntimeError("match is not supported by this evaluator", e.span)
+                    is SafeApply -> {
+                        expr = Apply(SafeFieldAccess(e.target, e.method, e.span), e.args, e.span)
+                    }
                     is IntLiteral -> {
                         value = Value.VNum(e.value.toDouble())
                         expr = null

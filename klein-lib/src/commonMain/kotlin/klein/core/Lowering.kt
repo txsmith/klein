@@ -198,6 +198,7 @@ class Lowering {
             }
             is SurfaceMatch -> lowerMatch(expr, env)
             is SafeFieldAccess -> lowerSafeFieldAccess(expr, env)
+            is SafeApply -> lowerSafeApply(expr, env)
         }
 
     private fun lowerSafeFieldAccess(
@@ -210,6 +211,30 @@ class Lowering {
         val recvVar = Var(0, slotOf("_recv", hoistEnv), "_recv", expr.target.span)
         val bind = Bind(recvVar.slot, "_recv", lowerExpr(expr.target, hoistEnv), expr.target.span)
         return EnterScope(listOf(bind), safeMatch(recvVar, expr.field, expr.span), expr.span)
+    }
+
+    private fun lowerSafeApply(
+        expr: SafeApply,
+        env: LowerEnv,
+    ): CoreExpr {
+        val inlineRecv = lowerExpr(expr.target, env)
+        if (inlineRecv is Var) return safeCallMatch(inlineRecv, expr, env)
+        val hoistEnv = env.child(listOf("_recv"))
+        val recvVar = Var(0, slotOf("_recv", hoistEnv), "_recv", expr.target.span)
+        val bind = Bind(recvVar.slot, "_recv", lowerExpr(expr.target, hoistEnv), expr.target.span)
+        return EnterScope(listOf(bind), safeCallMatch(recvVar, expr, hoistEnv), expr.span)
+    }
+
+    private fun safeCallMatch(
+        recv: Var,
+        expr: SafeApply,
+        env: LowerEnv,
+    ): Match {
+        val nullArm = Match.LitArm(Constant.CNull, null, Literal(Constant.CNull, expr.span), expr.span)
+        val armEnv = env.child(emptyList())
+        val deeper = Var(recv.depth + 1, recv.slot, recv.name, expr.span)
+        val call = Apply(FieldGet(deeper, expr.method, expr.span), expr.args.map { lowerExpr(it, armEnv) }, expr.span)
+        return Match(recv, listOf(nullArm, Match.Default(null, call, expr.span)), expr.span)
     }
 
     private fun safeMatch(

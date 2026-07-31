@@ -56,13 +56,24 @@ class NullEvalTest {
 
     @Test
     fun functionReturningOptional() {
-        assertEvaluatesTo(VNull, "fun pick(b: Bool): Num? = if b then 42 else null\npick(false)")
-        assertEvaluatesTo(VNum(42.0), "fun pick(b: Bool): Num? = if b then 42 else null\npick(true)")
+        fun program(arg: String) =
+            """
+            fun pick(b: Bool): Num? = if b then 42 else null
+            pick($arg)
+            """
+        assertEvaluatesTo(VNull, program("false"))
+        assertEvaluatesTo(VNum(42.0), program("true"))
     }
 
     @Test
     fun nullThroughGenericParameter() =
-        assertEvaluatesTo(VNull, "fun identity(x: 'A) = x\nidentity(null)")
+        assertEvaluatesTo(
+            VNull,
+            """
+            fun identity(x: 'A) = x
+            identity(null)
+            """,
+        )
 
     @Test
     fun plainFieldAccessYieldsNull() =
@@ -180,16 +191,49 @@ class NullEvalTest {
         )
     }
 
+    // The checker types this Num? and short-circuits the call on a null receiver; the lowerer
+    // must not let VNull reach application position.
+    @Test
+    fun safeMethodCallOnNullReceiverYieldsNull() =
+        assertEvaluatesTo(
+            VNull,
+            """
+            r: { double: (Num) -> Num }? = null
+            r?.double(21)
+            """,
+        )
+
+    @Test
+    fun safeMethodCallChainShortCircuitsMidChain() =
+        assertEvaluatesTo(
+            VNull,
+            """
+            r = if true then { inner = if false then { process = |x: Num -> x + 1| } else null } else null
+            r?.inner?.process(5)
+            """,
+        )
+
     @Test
     fun nullEqualsNull() = assertEvaluatesTo(VBool(true), "null == null")
 
     @Test
     fun idiomaticNullTest() {
-        assertEvaluatesTo(VBool(true), "maybe = if false then 42 else null\nmaybe == null")
-        assertEvaluatesTo(VBool(false), "maybe = if true then 42 else null\nmaybe == null")
+        fun program(cond: String) =
+            """
+            maybe = if $cond then 42 else null
+            maybe == null
+            """
+        assertEvaluatesTo(VBool(true), program("false"))
+        assertEvaluatesTo(VBool(false), program("true"))
     }
 
     @Test
     fun optionalComparedToBareValue() =
-        assertEvaluatesTo(VBool(true), "maybe = if true then 42 else null\nmaybe == 42")
+        assertEvaluatesTo(
+            VBool(true),
+            """
+            maybe = if true then 42 else null
+            maybe == 42
+            """,
+        )
 }

@@ -262,6 +262,13 @@ data class SafeFieldAccess(
     override val span: SourceSpan,
 ) : Expr()
 
+data class SafeApply(
+    val target: Expr,
+    val method: String,
+    val args: List<Expr>,
+    override val span: SourceSpan,
+) : Expr()
+
 data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
@@ -279,6 +286,7 @@ val Expr.usesImplicitParam: Boolean
             is Ascription -> expr.usesImplicitParam
             is FieldAccess -> target.usesImplicitParam
             is SafeFieldAccess -> target.usesImplicitParam
+            is SafeApply -> target.usesImplicitParam || args.any { it.usesImplicitParam }
             is IfThenElse ->
                 condition.usesImplicitParam ||
                     thenBranch.usesImplicitParam ||
@@ -311,6 +319,7 @@ val Expr.children: List<Expr>
             is Ascription -> listOf(expr)
             is FieldAccess -> listOf(target)
             is SafeFieldAccess -> listOf(target)
+            is SafeApply -> listOf(target) + args
             is IfThenElse -> listOfNotNull(condition, thenBranch, elseBranch)
             is Match -> listOf(scrutinee) + arms.flatMap { listOfNotNull(it.guard, it.body) }
         }

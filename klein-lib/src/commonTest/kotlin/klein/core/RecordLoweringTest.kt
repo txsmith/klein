@@ -145,4 +145,20 @@ class RecordLoweringTest {
                 _ -> p[1;0].x
             """,
         )
+
+    @Test
+    fun safeMethodCallDesugarsToNullMatchAroundCall() =
+        assertLowersTo(
+            """
+            r = { m = |x: Num -> x + 1| }
+            r?.m(1)
+            """,
+            """
+            scope
+              bind r#0 = {m: fun/1 -> (x[0;0] + 1)}
+              match r[0;0]
+                lit null -> null
+                _ -> r[1;0].m(1)
+            """,
+        )
 }

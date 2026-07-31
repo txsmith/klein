@@ -97,6 +97,10 @@ fun Expr.prettyPrint(indent: Int = 0): String {
         }
         is FieldAccess -> "${pad}FieldAccess($field)\n${target.prettyPrint(indent + 1)}"
         is SafeFieldAccess -> "${pad}SafeFieldAccess($field)\n${target.prettyPrint(indent + 1)}"
+        is SafeApply -> {
+            val argsStr = args.joinToString("\n") { it.prettyPrint(indent + 2) }
+            "${pad}SafeApply($method)\n${target.prettyPrint(indent + 1)}\n$pad  args:\n$argsStr"
+        }
         is ImplicitParam -> "${pad}ImplicitParam"
         is RecordLiteral -> {
             val fieldsStr =

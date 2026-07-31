@@ -459,7 +459,14 @@ class Parser(
                 }
 
                 QUESTION_DOT -> {
-                    expr = parseSafeFieldAccessOn(expr)
+                    val access = parseSafeFieldAccessOn(expr)
+                    expr =
+                        if (peek().kind == LPAREN && !peek().startsLineAtOrBefore(exprIndent)) {
+                            val call = parseFunctionCallOn(access)
+                            SafeApply(access.target, access.field, call.args, call.span)
+                        } else {
+                            access
+                        }
                 }
 
                 else -> break

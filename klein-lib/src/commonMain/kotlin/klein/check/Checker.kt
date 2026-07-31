@@ -78,6 +78,7 @@ class Checker {
             is RecordLiteral -> synthRecordLiteral(expr, env)
             is FieldAccess -> synthFieldAccess(expr, env)
             is SafeFieldAccess -> synthSafeFieldAccess(expr, env)
+            is SafeApply -> inferApply(safeApplyAsApply(expr), null, env)
             is IfThenElse -> synthIfThenElse(expr, env)
             is ImplicitParam -> synthImplicitParam(expr, env)
             is Ascription -> synthAscription(expr, env)
@@ -104,6 +105,7 @@ class Checker {
             is RecordLiteral -> checkRecordLiteral(expr, expected, env, expectedSource)
             is IfThenElse -> checkIfThenElse(expr, expected, env, expectedSource)
             is Apply -> checkApply(expr, expected, env)
+            is SafeApply -> checkApply(safeApplyAsApply(expr), expected, env)
             is Match -> inferMatch(expr, expected, env, expectedSource)
             else -> synthAndCheckSubtype(expr, expected, env)
         }
@@ -676,6 +678,9 @@ class Checker {
         val target = synth(expr.target, env)
         return projectFieldType(target, expr.field, expr.span, env)
     }
+
+    private fun safeApplyAsApply(expr: SafeApply): Apply =
+        Apply(SafeFieldAccess(expr.target, expr.method, expr.span), expr.args, expr.span)
 
     private fun synthSafeFieldAccess(
         expr: SafeFieldAccess,

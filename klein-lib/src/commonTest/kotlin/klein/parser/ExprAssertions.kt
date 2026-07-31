@@ -3,6 +3,7 @@ package klein.parser
 import klein.surface.AppliedTypeExpr
 import klein.surface.Apply
 import klein.surface.Ascription
+import klein.surface.SafeApply
 import klein.surface.BinaryOp
 import klein.surface.Block
 import klein.surface.BoolLiteral
@@ -182,6 +183,12 @@ fun safeFieldAccess(
     field: String,
 ) = SafeFieldAccess(target, field, noSpan)
 
+fun safeApply(
+    target: Expr,
+    method: String,
+    vararg args: Expr,
+) = SafeApply(target, method, args.toList(), noSpan)
+
 fun implicitParam() = ImplicitParam(noSpan)
 
 fun record(vararg fields: Pair<String, Expr>) =
@@ -259,6 +266,7 @@ fun Expr.stripSpans(): Expr =
         is IfThenElse -> IfThenElse(condition.stripSpans(), thenBranch.stripSpans(), elseBranch?.stripSpans(), noSpan)
         is FieldAccess -> FieldAccess(target.stripSpans(), field, noSpan)
         is SafeFieldAccess -> SafeFieldAccess(target.stripSpans(), field, noSpan)
+        is SafeApply -> SafeApply(target.stripSpans(), method, args.map { it.stripSpans() }, noSpan)
         is ImplicitParam -> ImplicitParam(noSpan)
         is RecordLiteral -> RecordLiteral(fields.map { RecordField(it.name, it.value.stripSpans(), it.typeAnnotation?.stripSpan()) }, noSpan)
         is Ascription -> Ascription(expr.stripSpans(), type.stripSpan(), noSpan)
