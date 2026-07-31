@@ -7,6 +7,30 @@ roughly ordered within each section by expected impact.
 
 Each entry: what we do now (and how it bites), why we do it, and the fix.
 
+## The log-persistence rethink (2026-07-31)
+
+A suspended program no longer needs its machine state persisted at all. The machine is
+deterministic by construction — nondeterminism enters only through the extern boundary —
+so the state at any suspension is a pure function of three recorded things: the compiled
+artifact (pinned by checksum), the extern vals it was linked with, and the extern-fun
+responses so far. Persisting a suspension means persisting that log; resuming means
+re-running the program from the start, feeding logged responses back until the log runs
+out, then continuing live. (Temporal works this way; Klein gets the determinism it has to
+fight for from the language itself.)
+
+Two tiers follow: the in-memory machine is the hot tier (resume is O(1) while the process
+holds it); the log is the durable tier (crash, eviction, migration — resume costs one
+replay). During replay, each re-issued request must match the logged one — name and
+arguments — so any semantic drift fails loudly at resume, not as silent divergence.
+
+Consequences for this list: serializability was the *why* behind the two most expensive
+entries below. With it gone, they are unblocked — marked inline. The trade: `clone()`
+becomes fork-by-replay (O(replay), fine for its only customer, what-if debugging), and
+the evaluation-order semantics pinned by the eval test suite become a compatibility
+contract — replay of old logs depends on them, so the suite guards parked suspensions in
+production, not just correctness today. Sequencing: land the benchmark baseline first,
+then make these changes as measured before/afters.
+
 ## Representation
 
 **Boxed values.** Every `Value` is a heap object; `VNum` wraps a `double`, so `a + b + c`
@@ -26,6 +50,9 @@ churns small, short-lived nodes.
 - *Why:* O(1) snapshots — a host-call suspension/clone just shares the spine.
 - *Fix:* mutable `ArrayDeque` stacks + copy-on-snapshot. Cheap steps; pay the O(n) copy only
   when a host call actually clones (rare), which is exactly when you can afford it.
+- *Unblocked by the log rethink:* no snapshot consumer remains — suspension just stops the
+  loop (nobody else holds the stacks) and forking is replay-based. Go straight to mutable
+  `ArrayDeque`, no copy-on-snapshot needed.
 
 ## Machine execution
 
@@ -60,6 +87,12 @@ and never shrinks — a straight-line leak for long-running or loop-heavy progra
 rule-engine workload.
 - *Fix:* reclaim stack-disciplined scopes (a high-water mark rewound on scope exit), or a
   bounded store.
+- *Unblocked by the log rethink:* the global store exists so closures capture integer
+  addresses instead of object references — an acyclic, serializable shape. With nothing
+  serializing machine state, dissolve it: `BindingScope` holds `Array<Value?>` directly
+  (slot *i* of the scope *is* the cell — empty until filled, same early-read error, same
+  letrec behavior since closures share the scope object). Unreachable scopes become
+  ordinary garbage; the leak stops being a problem to solve.
 
 **Every binding gets a store cell.** `stepApply` cells all arguments. But the store
 indirection is only *needed* for allocate-before-fill bindings — recursive and forward-
@@ -69,6 +102,9 @@ capture by value — so they need no cell. Celling them is pure uniformity.
 - *Fix:* non-recursive bindings live as direct values in the `BindingScope`; reserve the store
   for `fun`s (it is really "the recursive-function heap"). This is the single biggest source of
   the store growth above.
+- *Unblocked by the log rethink:* subsumed by the scope-array change above — every binding
+  becomes a direct entry in its scope's array, so the recursive/non-recursive split stops
+  mattering for cost.
 
 ## Lowering
 
