@@ -82,6 +82,16 @@ scrutinee one level deeper. Only constructor arms actually need slots.
   and keep those arm bodies at the match's own depth in the lowerer; the empty alloc and the
   extra hop then survive only on constructor arms, which genuinely bind.
 
+**Every `Var` walks the scope chain.** `(depth, slot)` resolution follows parent pointers,
+O(scope depth) per read.
+- *Why:* depth is 1–2 in practice (business rules don't nest deeply) and the walk is dwarfed
+  by boxing/dispatch; the simple version wins until a profiler disagrees.
+- *Fix (cheap):* `GlobalRef(index)` — direct-index the outermost scope so top-level refs
+  (funs, constructors, host bindings) skip the walk.
+- *Fix (structural):* closure conversion / flat per-function scopes — O(1)
+  local/captured/global addressing. Klein's immutability makes it the easy version (capture
+  by value, no upvalue cells); the one wrinkle is local recursive bindings.
+
 **The store never frees.** `Store.alloc` only appends; the store grows O(total allocations)
 and never shrinks — a straight-line leak for long-running or loop-heavy programs, which is the
 rule-engine workload.

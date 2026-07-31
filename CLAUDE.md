@@ -16,7 +16,8 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 
 ### Implementation Guides
 
-- **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and interpreter
+- **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and execution
+- **[performance-debt.md](./docs/performance-debt.md)** - Deliberate performance corners in the execution pipeline, each with its fix
 - **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
@@ -28,6 +29,13 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 
 - **[2026-06-24-adopt-operation-bidi.md](./docs/decisions/2026-06-24-adopt-operation-bidi.md)** - **Current.** Local bidirectional checking — annotate signatures, infer interiors; drop global inference, keep subtyping.
 - **[2026-06-23-polarity-wall-and-type-system-direction.md](./docs/decisions/2026-06-23-polarity-wall-and-type-system-direction.md)** - Why SimpleSub was abandoned: the polarity wall and the three ways out.
+
+**Execution decisions (Core IR + CESK machine, 2026-07-20):**
+
+- **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua
+- **[boxed-values-for-serializable-states.md](./docs/decisions/2026-07-20-boxed-values-for-serializable-states.md)** - Boxing and data-frames as the price of suspension-as-data
+- **[source-is-truth-ir-is-a-cache.md](./docs/decisions/2026-07-20-source-is-truth-ir-is-a-cache.md)** - Stored IR integrity: version stamp + checksum, re-derive instead of migrate
+- **[no-load-time-verifier.md](./docs/decisions/2026-07-20-no-load-time-verifier.md)** - Why per-op checks are just unboxing and a verifier was rejected
 
 **Foundational language decisions (still current):**
 
@@ -118,6 +126,32 @@ echo "x = 1 + 2" | ./klein check --stdin
 
 `check` has no IR/format flags — the Operation Bidi type is a plain structural tree with nothing to dump.
 
+### Run
+
+Execute a program on the Core machine (parse → check → lower → run) and print the final value.
+Host calls are not reachable from source yet, so programs must be pure.
+
+```bash
+# From a file
+./klein run example.klein
+
+# Short form
+./klein r example.klein
+
+# From stdin
+echo "1 + 2 * 3" | ./klein run --stdin
+```
+
+### Dump the Core IR
+
+Print the lowered Core IR of a program — slot-addressed `name[depth;slot]` refs, hoisted-first
+scopes, desugared `match`es.
+
+```bash
+./klein core example.klein
+echo "if x > 1 then x else 0" | ./klein core --stdin
+```
+
 ## Project Structure
 
 ```
@@ -126,7 +160,7 @@ klein-lang/
 │   ├── src/
 │   │   ├── commonMain/kotlin/klein/
 │   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
-│   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → interpret)
+│   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
 │   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization
@@ -134,13 +168,17 @@ klein-lang/
 │   │   │   │   ├── Ast.kt          # Surface AST definitions
 │   │   │   │   ├── Token.kt        # Token types
 │   │   │   │   └── PrettyPrint.kt  # AST pretty-printing
-│   │   │   ├── core/             # Core IR + lowering (placeholder; the IR work lands here)
-│   │   │   ├── interp/           # The CESK machine interpreter
-│   │   │   │   ├── Interpreter.kt  # begin/run + the machine's step loop
-│   │   │   │   ├── Frame.kt        # Defunctionalized continuation frames (the K)
-│   │   │   │   ├── Env.kt          # Persistent env (names → addresses) + the store
-│   │   │   │   ├── Execution.kt    # Done | Suspended — the host-facing execution API
-│   │   │   │   └── Value.kt        # Runtime values (natives are declarations; host calls suspend)
+│   │   │   ├── core/             # The compile-time half: Core IR + lowering
+│   │   │   │   ├── Core.kt         # IR nodes (Control, CoreExpr, Match arms, constants)
+│   │   │   │   ├── Lowering.kt     # Surface → Core: slot resolution, hoisting, desugaring
+│   │   │   │   ├── Invariant.kt    # invariant() + InvariantViolation (malformed-IR errors)
+│   │   │   │   └── PrettyPrint.kt  # Core IR printer (backs the `core` CLI command)
+│   │   │   ├── interp/           # The run-time half: the CESK machine over Core
+│   │   │   │   ├── Machine.kt      # Two-stack machine + Execution (Done | AwaitingHost), one-shot resume/clone
+│   │   │   │   ├── Env.kt          # The store (write-once cells) + legacy Env
+│   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
+│   │   │   │   └── KleinRuntimeError.kt
+│   │   │   ├── legacy/           # The old tree-walking machine; benchmark baseline only, deleted after the IR-vs-tree benchmark
 │   │   │   └── check/            # The Operation Bidi bidirectional checker
 │   │   │       ├── Checker.kt              # synth / check driver
 │   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer
@@ -155,7 +193,8 @@ klein-lang/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
 │   │   │   ├── check/
-│   │   │   └── interp/
+│   │   │   ├── core/             # Lowering golden tests + IR printer tests
+│   │   │   └── interp/           # Machine unit tests + per-feature eval suites (full pipeline)
 │   │   └── nativeMain/kotlin/klein/
 │   │       └── Main.kt           # CLI entry point
 │   └── build.gradle.kts
