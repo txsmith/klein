@@ -253,12 +253,7 @@ TypeAtom
   | '(' Type ')'                  # parenthesized
 ```
 
-> **Not part of the type system.** Anonymous union (`A | B`) and intersection
-> (`A & B`) may still be parsed, but the checker **rejects** them as types — use a
-> nominal `type` for "either" and (planned) bounded polymorphism for "both".
-> `where`-clauses are a planned feature, not yet in the grammar. See
-> [type-system.md](./type-system.md) and
-> [decisions/2026-06-24-adopt-operation-bidi.md](./decisions/2026-06-24-adopt-operation-bidi.md).
+> `where`-clauses are a planned feature, not yet in the grammar.
 
 ### Record Types
 
