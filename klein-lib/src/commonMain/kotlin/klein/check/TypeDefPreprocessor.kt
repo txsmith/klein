@@ -141,9 +141,6 @@ class TypeDefPreprocessor(
                 }
 
                 is OptionalTypeExpr -> update(typeExpr.inner, ownerName, polarity)
-
-                is UnionTypeExpr -> update(typeExpr.left, ownerName, polarity) or update(typeExpr.right, ownerName, polarity)
-                is IntersectionTypeExpr -> update(typeExpr.left, ownerName, polarity) or update(typeExpr.right, ownerName, polarity)
             }
 
         var changed = true
@@ -240,7 +237,5 @@ internal fun collectTypeVarNames(typeExpr: TypeExpr): List<String> =
         is OptionalTypeExpr -> collectTypeVarNames(typeExpr.inner)
         is TupleTypeExpr -> typeExpr.elements.flatMap { collectTypeVarNames(it) }
         is AppliedTypeExpr -> typeExpr.args.flatMap { collectTypeVarNames(it) }
-        is UnionTypeExpr -> collectTypeVarNames(typeExpr.left) + collectTypeVarNames(typeExpr.right)
-        is IntersectionTypeExpr -> collectTypeVarNames(typeExpr.left) + collectTypeVarNames(typeExpr.right)
         is TypeName -> emptyList()
     }

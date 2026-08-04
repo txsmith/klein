@@ -224,16 +224,4 @@ sealed class TypeError : KleinError {
         override val message =
             "Match arms have no common type: '${Type.print(armType)}' vs '${Type.print(otherType)}'"
     }
-
-    data class AnonymousUnionType(
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message = "Anonymous union types ('A | B') aren't supported — define a nominal type"
-    }
-
-    data class AnonymousIntersectionType(
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message = "Anonymous intersection types ('A & B') aren't supported yet"
-    }
 }

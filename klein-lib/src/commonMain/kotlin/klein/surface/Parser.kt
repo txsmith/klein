@@ -215,7 +215,7 @@ class Parser(
     }
 
     private fun parseTypeExpr(): TypeExpr {
-        val left = parseTypeUnion()
+        val left = parseTypePostfix()
 
         if (peek().kind == ARROW) {
             advance()
@@ -227,29 +227,9 @@ class Parser(
         return left
     }
 
-    private fun parseTypeUnion(): TypeExpr {
-        var left = parseTypeIntersection()
-        while (peek().kind == PIPE) {
-            advance()
-            val right = parseTypeIntersection()
-            left = UnionTypeExpr(left, right, left.span + right.span)
-        }
-        return left
-    }
-
-    private fun parseTypeIntersection(): TypeExpr {
-        var left = parseTypePostfix()
-        while (peek().kind == AMP) {
-            advance()
-            val right = parseTypePostfix()
-            left = IntersectionTypeExpr(left, right, left.span + right.span)
-        }
-        return left
-    }
-
-    /** Postfix `?` (nullable) binds tighter than `&`, `|`, and `->`: `Num -> Num?` is a function
-     *  returning `Num?`, while `(Num -> Num)?` is an optional function. Repeated `?` parse and are
-     *  collapsed to a single optional during type resolution (`T?? = T?`). */
+    /** Postfix `?` (nullable) binds tighter than `->`: `Num -> Num?` is a function returning `Num?`,
+     *  while `(Num -> Num)?` is an optional function. Repeated `?` parse and are collapsed to a
+     *  single optional during type resolution (`T?? = T?`). */
     private fun parseTypePostfix(): TypeExpr {
         var type = parseTypeAtom()
         while (peek().kind == QUESTION) {

@@ -213,18 +213,16 @@ language.**
 
 - **`Optional` (`T?`)** stays — the one built-in tagged union, with its own
   discriminator.
-- **Anonymous union (`A | B`)** — **rejected**. `UnionTypeExpr` parses today (from
-  the annotation experiment); the checker rejects it, directing the author to a
-  nominal `type`. The "either" capability lives in nominal sums, which supply the
-  three things an anonymous union lacks: a **tag** (the constructor), an
-  **elimination form** (`match` — see [pattern-matching.md](./pattern-matching.md)),
-  and **exhaustiveness**.
+- **Anonymous union (`A | B`)** — **rejected.** The "either" capability lives in
+  nominal sums, which supply the three things an anonymous union lacks: a **tag**
+  (the constructor), an **elimination form** (`match` — see
+  [pattern-matching.md](./pattern-matching.md)), and **exhaustiveness**.
 - **Intersection (`A & B`)** — **deferred, not rejected on principle.** The
   "both" capability is served first by **bounded polymorphism** (`where 'T <: A,
   'T <: B`, a later milestone), which is the form that keeps every value type
   *concrete* and so stays complete and negation-free (see §6 and the rationale
   below). First-class structural intersection (a returnable `A & B`) remains a
-  viable *future* feature; `IntersectionTypeExpr` is rejected for now.
+  viable *future* feature.
 
 ### Why intersection ≠ union, and why bounds come first
 

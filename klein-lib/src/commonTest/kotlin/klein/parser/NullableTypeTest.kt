@@ -93,31 +93,6 @@ class NullableTypeTest {
         )
     }
 
-    // `?` binds tighter than `|`: `A | B?` is `A | (B?)`.
-    @Test
-    fun bindsTighterThanUnion() {
-        val stmt = parseStmt("x: A | B? = null")
-        assertStmtEquals(
-            stmt,
-            valStmt("x", nullLit(), typeAnnotation = unionType(typeName("A"), optionalType(typeName("B")))),
-        )
-    }
-
-    // `?` binds tighter than `&`: `A & B?` is `A & (B?)`.
-    @Test
-    fun bindsTighterThanIntersection() {
-        val stmt = parseTopLevel("fun f(x: A & B?): A = x")
-        assertStmtEquals(
-            stmt,
-            funDef(
-                "f",
-                params = listOf(param("x", intersectionType(typeName("A"), optionalType(typeName("B"))))),
-                body = id("x"),
-                returnType = typeName("A"),
-            ),
-        )
-    }
-
     // Optional record vs record with an optional field are distinct parses.
     @Test
     fun optionalRecordVsRecordWithOptionalField() {

@@ -866,16 +866,6 @@ class Checker {
                     else -> TRef(typeExpr.name, args)
                 }
             }
-            // Recover with Any: returning the Bottom error-default would also fail whatever value
-            // the rejected annotation governs, burying the real error under a spurious mismatch.
-            is UnionTypeExpr -> {
-                recordError(TypeError.AnonymousUnionType(typeExpr.span))
-                TTop
-            }
-            is IntersectionTypeExpr -> {
-                recordError(TypeError.AnonymousIntersectionType(typeExpr.span))
-                TTop
-            }
         }
 
     /** Introduce each not-yet-in-scope type variable in [annotations] as a fresh skolem at [sigEnv] —
