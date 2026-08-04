@@ -40,11 +40,18 @@ builds.
 **Capability** — one named, typed thing the host provides for rules to use: either a
 function the host answers every time a rule calls it (`creditCheck(c: Customer): Score`,
 backed by the bureau API), or a value the host supplies once at the start of each run
-(`maxRetries: Num`). A capability is declared to Klein as a signature only; its
-implementation is ordinary code inside the host. Capabilities are versioned individually
-by their signature: change the signature and it is a new capability version. The
-capability is the *only* thing a rule and the host share; everything else in this doc is
-bookkeeping about who provides and who needs which capability versions.
+(`maxRetries: Num`). A capability is declared to Klein as a signature only — a
+declaration with no body, in a Klein source file the host hands over (the language and
+checker side of that file is specified in [spec/contracts.md](../spec/contracts.md)); its
+implementation is ordinary code inside the host, and the host declares a **revision**
+beside that implementation. A version's identity is the hash of the signature plus that
+revision: change the signature and it is a new version mechanically; change what the
+capability *means* without the types moving — a different bureau behind the same
+`Score` — and bumping the revision makes it a new version too. Semantics cannot be
+checked, but they can be declared, and the declaration sits where the thing it
+describes lives, next to the handler (see "Changing what a capability means" below). The capability is the *only* thing a rule and
+the host share; everything else in this doc is bookkeeping about who provides and who
+needs which capability versions.
 
 **Environment** — a place in the host application where rules run: one injection point,
 one business context. An environment fixes three things: the **contract** rules there
@@ -56,7 +63,10 @@ system resolves it (the newest served, non-retired version) at compile time, so 
 state lives in one place. Environments are a product concept; capabilities are shared
 across them (one `creditCheck`, curated by both features).
 
-**Module** — a Klein program exposing types and functions, versioned in the rule store,
+**Module** — *(out of scope for v1: types reach rules by riding capability signatures,
+so the design below works with no module system; what v1 gives up is shared Klein code
+between rules, hub-type version bridging, and module-mediated rule composition)* — a
+Klein program exposing types and functions, versioned in the rule store,
 evolved at editor speed. Modules may depend on other modules, and may call capabilities —
 in which case the requirement travels: a rule using the module inherits its capability
 needs. Pure modules are portable across environments; capability-using modules fit only
@@ -165,7 +175,7 @@ the corpus and parked runs drain).
 
 **Adding a capability.** Deploy binaries that implement and advertise it. Nothing
 references it; a half-rolled fleet is harmless. Once curated into an environment, rules
-may use it. No editions, no drain — additions are free.
+may use it. No new editions are created, no drain — additions are free.
 
 **Changing or removing a capability.** The new binary serves old and new versions (the
 adapter pattern keeps that cheap). As the fleet converges, the reconciler adds
@@ -175,12 +185,35 @@ dev **retires** the old version; its references drain, and at zero the handler c
 removed. There is no synchronization point: no deploy waits on authors, no author waits
 on deploys, and the only clock is the drain query.
 
-**How fast?** Dealer's choice per change. All-compatible corpus: editions bulk-
-compile in seconds and the old version drains as fast as its parked runs finish — the
-"three-phase dance" collapses to an ordinary deploy plus one cleanup. Wide breakage: the
-maintenance queue does its slow human work while both versions serve indefinitely. The
-impact report (which rules, which diagnostics — computed where the rules live) tells you
-which case you're in before you commit.
+**Changing what a capability means.** Types cannot capture "the scores come from a
+different bureau now", so no checker can verify anything about such a change — but it
+can be *declared*: bump the capability's revision marker, and the identity hash makes it
+a new version like any other. Done properly this is an **addition**: the rev-2 handler
+arrives next to rev-1's, old editions genuinely keep the old semantics, and the
+reconciler offers new editions whose one real question — "does your threshold still make
+sense against the new meaning?" — goes to authors through the maintenance queue; rev-1
+drains as reviews complete. When the old semantics cannot be served anymore (the old
+bureau contract is gone), coexistence is off the table and only two honest treatments
+remain: **review-gate** (rev-1 editions become unservable — parked runs stall and
+affected rules go dark until their authors confirm) or **auto-reconcile** (every rule
+moves to the new meaning immediately; available, but drifting). Either way the bump
+earns its one line: pins and the effect log record which meaning every run used —
+"which decisions straddled the scoring change" becomes a query, not archaeology. A bump
+skipped is the system's history lying.
+
+**How long does a transition take?** Two populations move at two speeds. Rules the
+re-check clears migrate automatically — the reconciler compiles their new editions in
+bulk, in seconds. Rules the re-check flags wait for their authors — each sits in the
+maintenance queue until a human resolves it. The old capability version can be retired
+once every affected rule has a newer edition and every parked run pinned to it has
+finished, so the transition ends when the slowest of those happens. In practice: a
+change that flags nothing is done the same day (one ordinary deploy, one cleanup deploy
+later); a change that flags three hundred rules keeps both versions serving until the
+queue empties, which may take weeks and is fine. The impact report — which rules, which
+diagnostics, computed where the rules live — forecasts all of this before the change is
+committed. Only two things in the procedure are decided rather than determined: when to
+retire the old version, and, for revisions, what happens to rules still on the old
+meaning.
 
 **Rollback.** Roll the fleet back and fresh events quietly fall back to old editions
 (they were never deleted). Runs suspended on new-version pins are **stranded, not
@@ -198,9 +231,9 @@ language commitment.
 
 ## What checking costs, and when
 
-- Every (edition, pinned versions) pair is checked **exactly once, at creation**.
-  Immutability on both sides makes the verdict permanent; evolution creates and
-  supersedes pairs, it never invalidates one.
+- Every edition is checked **exactly once, at creation**. Its source and its pinned
+  dependencies are all immutable, so the verdict is permanent; evolution creates and
+  supersedes editions, it never invalidates one.
 - Pin hash comparison skips everything untouched: a capability change re-checks
   only the rules whose editions pin it. This is memoization, not a compatibility
   oracle — a hash mismatch means "go run the checker", nothing more.
@@ -211,11 +244,31 @@ language commitment.
 
 ## Implementing capabilities
 
-The host declares its capabilities (a signature-only file in the host repo) and
-implements them in its own language. To keep declaration and implementation from
-drifting, the code the host writes against is **generated** from the declarations —
-`bindgen`, a build step; CI fails if the checked-in output is stale. Change a
-declaration and the host stops compiling until someone updates the implementation.
+The host declares its capabilities and implements them in its own language. The
+contract is always the same thing — the set of Klein-side signatures and their hashes —
+but there are **two directions** to produce it, chosen per host language and team taste:
+
+- **Contract-first**: write the signatures in a Klein file; a build step (`bindgen`)
+  generates the host-language types and glue from it. CI fails if the checked-in
+  generated code is stale, so changing a declaration stops the host compiling until
+  someone updates the implementation. Right for languages without strong type
+  derivation, and for teams that want the contract to lead.
+- **Code-first**: declare capabilities directly in host code, and *derive* the Klein
+  signatures from the host's own types — compile-time derivation in languages that
+  support it (a serialization-framework descriptor on Kotlin, type-level derivation on
+  Scala), never runtime reflection. The handler is written against real types with
+  nothing generated; hosts that persist parked requests get their serialization from
+  the same machinery for free. The obligation this direction carries is
+  **non-optional**: the build must emit the derived Klein signatures to a checked-in
+  contract file, diffed by CI — because in code-first, an innocent refactor (renaming a
+  field on a shared type) *is* a signature change, a new capability version, and a
+  flood of maintenance-queue entries. The emitted file is what makes that visible as a
+  contract change in the PR, in Klein terms, before it ships.
+
+Either direction, the derived-or-written signatures hash identically — advertisements
+and pins never know which direction produced them. The sections below describe the
+contract-first tooling concretely (Kotlin shown); code-first replaces the generation
+step and keeps everything else.
 
 ### Generated types
 
@@ -236,11 +289,20 @@ produce a wrongly-shaped value — the host compiler won't let it. Records witho
 (`{ a: Num, b: String }` directly in a signature) get a generated class named from their
 shape, shared wherever the shape recurs; declaring a named type is optional polish.
 
-Two restrictions on capability signatures, both mechanical, both checked at declaration:
-**no type variables** (generated code needs concrete types to convert) and **no function
-types** (a Klein function's only meaning is "the machine can run it", and the host is
-not the machine). Everything else crosses fine, including structural records and nested
-data.
+One restriction on capability signatures, checked when the contract is checked: **no
+function types**. A Klein function's only meaning is "the machine can run it", and the
+host is not the machine — a handler given a closure could never call it, so
+`fun sortBy(xs: List<'A>, key: ('A) -> Num): List<'A>` is unimplementable by
+construction. (If host-callable closures are ever wanted, effect handlers are the
+principled answer, and relaxing a restriction is free where tightening one would break
+contracts already written.)
+
+Everything else crosses fine, including structural records, nested data, and **generic
+signatures**: `fun first(xs: List<'A>): 'A` is legal. A polymorphic capability costs the
+host nothing to declare when capabilities are declared as types rather than functions
+(see below) — the type variable binds at the declaration, so there is no call site
+needing a concrete instantiation — and parametricity guarantees such a handler can only
+move values it cannot inspect.
 
 ### The base layer: requests and responses as data
 
@@ -258,13 +320,37 @@ fun Execution.AwaitingHost.decode(): HostRequest
 fun Execution.AwaitingHost.resumeCreditCheck(result: Double): Execution
 ```
 
-A durable host decodes the request into a plain value, persists it next to the parked
+A host that answers across restarts decodes the request into a plain value, persists it
+next to the parked
 run, and lets its normal infrastructure (queue, workflow engine, a human) produce the
 answer; the typed resume feeds it back in. The exhaustive `when` over `HostRequest` is
 the routing — add a capability, and the `when` stops compiling until it is handled.
 
 These request/response classes are also the shape of the effect log: a recorded run is
 the list of requests and answers, typed and serializable, one turn boundary per entry.
+
+**Likely direction — declare capabilities *as* these types** (pending; the sketch above
+assumes the request classes are generated from function-shaped declarations). If a host
+instead declares each capability as the request type itself:
+
+```kotlin
+@Capability(revision = 2)
+data class CreditCheck(val c: Customer) : Capability<Score>
+data class Head<A>(val xs: KList<A>) : Capability<A>
+data object MaxRetries : LinkedCapability<Double>
+```
+
+then one type is the declaration, the wire message, and the log entry at once — nothing
+is generated to twin it. Three things fall out. The declaration is a data class, which
+is the only place a serialization annotation can go, so derivation reads it directly.
+Type variables bind at the class, so polymorphic capabilities need no call-site
+instantiation. And because a request carries no answering strategy, the host chooses
+sync, in-memory async, or persist-and-resume per capability, per deployment — a
+function-shaped declaration would have encoded that choice in the handler's signature.
+Open: whether `Capability` is sealed (an exhaustive `when` makes adding one a host
+compile error, at the cost of one module), how the Klein-side name is derived from the
+class, and the separate supertype marking a value capability, whose promise is that it
+is asked once at the start of each run and constant within it.
 Replay and scenario tooling read and write exactly these classes. (Capability *values* —
 the run-start constants — are recorded as the log's first entry; they never appear as
 requests, so replay would otherwise be missing its inputs.)
@@ -352,3 +438,7 @@ every seam.
   lattice condition anyway; the checker remains the only oracle.
 - **Migrate-all-before-deploy as the only mode**: makes fleet deploys hostage to rule
   authors; kept only as one end of the per-change knob.
+- **Semantic versioning numbers** on capabilities: the major/minor distinction is an
+  unverifiable claim about impact. Kept instead: a declared revision marker inside the
+  identity hash — the only declared fact is "the meaning changed", and the treatment of
+  the old version is decided per change, not encoded in a number.
