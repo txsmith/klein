@@ -67,13 +67,16 @@ class Parser(
         return token.isNewline || token.kind in setOf(PIPE, RPAREN, RBRACE, RBRACKET, ELSE, EOF)
     }
 
-    private fun parseFunDef(): FunDef {
+    private fun parseFunDef(): Stmt {
         val funToken = advance()
         val name = expectName("Expected function name")
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
         val returnType = parseOptionalTypeAnnotation()
+        if (returnType != null && peek().kind != EQ) {
+            return FunDecl(name.text!!, params, returnType, funToken.span + returnType.span)
+        }
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
         return FunDef(name.text!!, params, body, funToken.span + body.span, returnType)
@@ -374,9 +377,12 @@ class Parser(
         return Param(name.text!!, typeAnnotation, span)
     }
 
-    private fun parseBinding(): Val {
+    private fun parseBinding(): Stmt {
         val name = expectName("Expected identifier")
         val typeAnnotation = parseOptionalTypeAnnotation()
+        if (typeAnnotation != null && peek().kind != EQ) {
+            return ValDecl(name.text!!, typeAnnotation, name.span + typeAnnotation.span)
+        }
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
         return Val(name.text!!, value, name.span + value.span, typeAnnotation)
@@ -895,6 +901,7 @@ class Parser(
             is Val -> endsWithBlockExpr(stmt.value)
             is PatternVal -> endsWithBlockExpr(stmt.value)
             is FunDef -> endsWithBlockExpr(stmt.body)
+            is FunDecl, is ValDecl -> false
             is TypeDef -> false
             is Expr -> endsWithBlockExpr(stmt)
         }

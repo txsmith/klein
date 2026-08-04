@@ -30,6 +30,13 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val retStr = if (returnType != null) ": ${returnType.prettyPrint()}" else ""
             "${pad}Fun $name($paramsStr)$retStr =\n${body.prettyPrint(indent + 1)}"
         }
+        is FunDecl -> {
+            val paramsStr = params.joinToString(", ") { p ->
+                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
+            }
+            "${pad}FunDecl $name($paramsStr): ${returnType.prettyPrint()}"
+        }
+        is ValDecl -> "${pad}ValDecl($name: ${type.prettyPrint()})"
         is TypeDef -> {
             val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
             val constructorsStr =

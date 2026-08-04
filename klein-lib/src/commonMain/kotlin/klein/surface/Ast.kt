@@ -42,6 +42,19 @@ data class FunDef(
     val returnType: TypeExpr? = null,
 ) : Stmt()
 
+data class FunDecl(
+    val name: String,
+    val params: List<Param>,
+    val returnType: TypeExpr,
+    override val span: SourceSpan,
+) : Stmt()
+
+data class ValDecl(
+    val name: String,
+    val type: TypeExpr,
+    override val span: SourceSpan,
+) : Stmt()
+
 data class TypeDef(
     val name: String,
     val typeParams: List<String>,
@@ -289,6 +302,8 @@ val Expr.usesImplicitParam: Boolean
                         is Val -> stmt.value.usesImplicitParam
                         is PatternVal -> stmt.value.usesImplicitParam
                         is FunDef -> false
+                        is FunDecl -> false
+                        is ValDecl -> false
                         is TypeDef -> false
                     }
                 }

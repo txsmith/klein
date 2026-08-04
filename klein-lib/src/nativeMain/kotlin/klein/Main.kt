@@ -184,6 +184,8 @@ private fun check(
                     env.lookup(name)?.let { println("$name : ${Type.print(it)}") }
                 }
             is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
+            is FunDecl -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
+            is ValDecl -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
             is TypeDef -> println("type ${stmt.name}")
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
         }

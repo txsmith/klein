@@ -21,6 +21,21 @@ fun infer(
     return InferResult(checker.synthProgram(program, env), checker.getErrors())
 }
 
+/** Result of checking a source string as a capability contract. */
+data class ContractResult(val env: TypeEnv, val errors: List<TypeError>)
+
+/** Parse [src] and check it as a capability contract rather than as a program. */
+fun checkContract(
+    src: String,
+    env: TypeEnv = TypeEnv.empty(),
+): ContractResult {
+    val tokens = Lexer(src).tokenize().toList()
+    val program = Parser(tokens).parseProgram()
+    val checker = Checker()
+    checker.checkContract(program, env)
+    return ContractResult(env, checker.getErrors())
+}
+
 /** A type variable for expected types; alpha-equality compares skolems by name, ignoring the id. */
 fun tv(name: String): TSkolem = TSkolem(name, 0)
 

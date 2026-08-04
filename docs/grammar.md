@@ -7,7 +7,7 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ## Expression Grammar
 
 ```
-prog        = (type_def | fun_def | stmt)*
+prog        = (type_def | fun_def | fun_decl | stmt)*
 
 type_def    = 'type' UPPER_IDENT type_params? '=' constructors
 
@@ -23,11 +23,16 @@ field_decl  = IDENT ':' type
 
 fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 
+fun_decl    = 'fun' IDENT '(' params? ')' ':' type     # declared, not defined — no body
+
 stmt        = binding
+            | val_decl
             | expr
 
 binding     = IDENT (':' type)? '=' block_or_expr
             | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
+
+val_decl    = IDENT ':' type                       # declared, not defined — no value
 
 block_or_expr = block
               | expr
@@ -100,8 +105,10 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | constructors   | `parseConstructors()` (TODO) |
 | constructor    | `parseConstructor()` (TODO) |
 | fun_def        | `parseFunDef()`       |
+| fun_decl       | `parseFunDef()`       |
 | stmt           | `parseStmt()`         |
 | binding        | `parseBinding()`      |
+| val_decl       | `parseBinding()`      |
 | block_or_expr  | `parseBlockOrExpr()`  |
 | block          | `parseBlock()`        |
 | lambda         | `parseLambda()`       |
@@ -118,6 +125,31 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | implicit_param | `parseImplicitParam()` |
 | record         | `parseRecordLiteral()` |
 | args           | `parseArgs()`         |
+
+## Declarations Without Definitions
+
+`fun_decl` and `val_decl` are the definition forms with the definition removed. These are interface definitions used for interaction between Klein and the host language:
+
+```klein
+type Customer = Customer { id: Num, name: String, score: Num }
+
+fun creditCheck(c: Customer): Num
+maxRetries: Num
+```
+
+They parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body.
+
+The annotation is what tells a declaration apart from a definition. After the parameter list, `fun`
+with `: type` and no `=` is a `fun_decl`, while `fun mystery()` with neither is still the parse
+error "Expected '='". A `val_decl` likewise requires its annotation — `IDENT` alone is an
+expression, not a declaration.
+
+Neither form consumes anything past its type: a bodiless declaration never absorbs the following
+line, even when that line opens an indented block.
+
+The parser accepts both wherever a statement is legal, and has no idea whether it is reading a
+program or a contract. Which statements are legal in which — and what a contract is for — is
+checker semantics: see [spec/contracts.md](./spec/contracts.md).
 
 ## Indentation Model
 

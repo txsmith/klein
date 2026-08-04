@@ -13,6 +13,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, subtyping, records, and the tilde operator (inference sections being rewritten for Operation Bidi)
 - **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (the Operation Bidi surface spec)
 - **[spec/pattern-matching.md](./docs/spec/pattern-matching.md)** - Pattern matching and destructuring bindings: pattern forms, match typing, exhaustiveness, refutability
+- **[spec/contracts.md](./docs/spec/contracts.md)** - Capability contracts: declarations without definitions, the two checking modes, what a contract produces
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator

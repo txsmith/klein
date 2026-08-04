@@ -14,7 +14,9 @@ import klein.surface.Expr
 import klein.surface.FieldAccess
 import klein.surface.FieldDecl
 import klein.surface.FieldPattern
+import klein.surface.FunDecl
 import klein.surface.FunDef
+import klein.surface.ValDecl
 import klein.surface.FunctionTypeExpr
 import klein.surface.Ident
 import klein.surface.IfThenElse
@@ -312,6 +314,17 @@ fun funDef(
     returnType: TypeExpr? = null,
 ) = FunDef(name, params, body, noSpan, returnType)
 
+fun funDecl(
+    name: String,
+    params: List<Param>,
+    returnType: TypeExpr,
+) = FunDecl(name, params, returnType, noSpan)
+
+fun valDecl(
+    name: String,
+    type: TypeExpr,
+) = ValDecl(name, type, noSpan)
+
 fun ascription(
     expr: Expr,
     type: TypeExpr,
@@ -375,6 +388,8 @@ fun Stmt.stripSpan(): Stmt =
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
         is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
+        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
+        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan)
         is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
         is Expr -> stripSpans()
     }

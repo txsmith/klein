@@ -59,6 +59,27 @@ object Klein {
     }
 
     /**
+     * Check a parsed [Program] as a capability contract instead of as a program: type definitions
+     * and declarations only. The output is the environment the contract declares, so a program can
+     * be checked against a contract by composition:
+     *
+     * ```
+     * Klein.checkContract(contract).andThen { env -> Klein.check(program, env) }
+     * ```
+     *
+     * Which capabilities a host actually implements, and how a contract is located, versioned, or
+     * bound to an implementation, are all the host's business — this stage only reads the source.
+     */
+    fun checkContract(
+        program: Program,
+        env: TypeEnv = TypeEnv.empty(),
+    ): StageResult<TypeEnv> {
+        val checker = Checker()
+        checker.checkContract(program, env)
+        return StageResult(env, checker.getErrors())
+    }
+
+    /**
      * Lower a program that passed [check] to the core IR. Assumes checked input: any failure
      * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
      * stage carries no errors — it either produces IR or throws.

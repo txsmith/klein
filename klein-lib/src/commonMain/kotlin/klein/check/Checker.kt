@@ -60,6 +60,44 @@ class Checker {
         env: TypeEnv = TypeEnv.empty(),
     ): Type = synthBlockStmts(program.stmts, env)
 
+    fun checkContract(
+        program: Program,
+        env: TypeEnv = TypeEnv.empty(),
+    ) {
+        preprocessor.process(program.stmts.filterIsInstance<TypeDef>(), env)
+
+        val declared = mutableSetOf<String>()
+        fun declare(
+            name: String,
+            span: SourceSpan,
+        ): Boolean {
+            if (declared.add(name)) return true
+            recordError(TypeError.DuplicateBinding(name, span))
+            return false
+        }
+
+        program.stmts.forEach { stmt ->
+            when (stmt) {
+                is TypeDef -> {}
+                is FunDecl ->
+                    if (declare(stmt.name, stmt.span)) {
+                        bindFunDecl(stmt, env)
+                        rejectCarriedFunctions(stmt.name, stmt.span, env, isCallable = true)
+                    }
+                is ValDecl ->
+                    if (declare(stmt.name, stmt.span)) {
+                        bindValDecl(stmt, env)
+                        rejectCarriedFunctions(stmt.name, stmt.span, env, isCallable = false)
+                    }
+                is FunDef -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
+                is Val -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
+                is PatternVal ->
+                    recordError(TypeError.DefinitionInContract(stmt.pattern.boundNames.firstOrNull(), stmt.span))
+                is Expr -> recordError(TypeError.ExpressionInContract(stmt.span))
+            }
+        }
+    }
+
     fun synth(
         expr: Expr,
         env: TypeEnv,
@@ -116,6 +154,20 @@ class Checker {
         env: TypeEnv,
     ): Type {
         preprocessor.process(stmts.filterIsInstance<TypeDef>(), env)
+
+        stmts.forEach { stmt ->
+            when (stmt) {
+                is FunDecl -> {
+                    recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
+                    bindFunDecl(stmt, env)
+                }
+                is ValDecl -> {
+                    recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
+                    bindValDecl(stmt, env)
+                }
+                else -> {}
+            }
+        }
 
         val scope = ScopeGraph.constructGraph(stmts)
         scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
@@ -184,17 +236,7 @@ class Checker {
         // If no signature is declared, and the function is not recursive, synth & bind the type immediately.
         val pendingChecks: List<Triple<FunDef, TypeEnv, Type>> =
             funDefs.mapNotNull { funDef ->
-                val fnEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
-                reportDuplicateParams(funDef.params)
-                introduceTypeVars(funDef.params.mapNotNull { it.typeAnnotation } + listOfNotNull(funDef.returnType), fnEnv)
-                val paramTypes =
-                    funDef.params.map { param ->
-                        if (param.typeAnnotation != null) {
-                            resolveType(param.typeAnnotation, fnEnv)
-                        } else {
-                            recordError(TypeError.MissingParamAnnotation(param.name, param.span))
-                        }
-                    }
+                val (fnEnv, paramTypes) = openSignature(funDef.params, funDef.returnType, env)
                 funDef.params.zip(paramTypes).forEach { (param, type) -> if (!param.isDiscard) fnEnv.bind(param.name, type) }
                 val returnType =
                     when {
@@ -231,6 +273,88 @@ class Checker {
         } else {
             env.bind(stmt.name, synth(stmt.value, env))
         }
+    }
+
+    /**
+     * Bind a declared signature. In a program the caller pairs this with a
+     * [TypeError.DeclarationWithoutBody] — binding anyway keeps call sites checked against the
+     * declared type instead of cascading into "unbound variable". In a contract it is the whole job.
+     */
+    private fun bindFunDecl(
+        stmt: FunDecl,
+        env: TypeEnv,
+    ) {
+        val (sigEnv, paramTypes) = openSignature(stmt.params, stmt.returnType, env)
+        val returnType = resolveType(stmt.returnType, sigEnv)
+        env.bind(stmt.name, quantify(sigEnv.localTypeVars(), TFun(paramTypes, returnType, stmt.params.map { it.name })))
+    }
+
+    private fun rejectCarriedFunctions(
+        name: String,
+        span: SourceSpan,
+        env: TypeEnv,
+        isCallable: Boolean,
+    ) {
+        val bound = env.lookup(name) ?: return
+        val body = if (bound is TForall) bound.body else bound
+        val carried =
+            if (isCallable && body is TFun) {
+                body.params.any { carriesFunction(it, env, mutableSetOf()) } ||
+                    carriesFunction(body.result, env, mutableSetOf())
+            } else {
+                carriesFunction(body, env, mutableSetOf())
+            }
+        if (carried) recordError(TypeError.FunctionTypeInCapability(name, span))
+    }
+
+    private fun carriesFunction(
+        type: Type,
+        env: TypeEnv,
+        seen: MutableSet<String>,
+    ): Boolean =
+        when (type) {
+            is TFun -> true
+            is TOptional -> carriesFunction(type.type, env, seen)
+            is TRecord -> type.fields.values.any { carriesFunction(it, env, seen) }
+            is TForall -> carriesFunction(type.body, env, seen)
+            is TRef ->
+                if (!seen.add(type.name)) {
+                    false
+                } else {
+                    type.typeArgs.any { carriesFunction(it, env, seen) } ||
+                        env.lookupTypeDef(type.name)?.iface?.fields?.values.orEmpty().any {
+                            carriesFunction(it, env, seen)
+                        }
+                }
+            else -> false
+        }
+
+    private fun openSignature(
+        params: List<Param>,
+        returnType: TypeExpr?,
+        env: TypeEnv,
+    ): Pair<TypeEnv, List<Type>> {
+        val sigEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
+        reportDuplicateParams(params)
+        introduceTypeVars(params.mapNotNull { it.typeAnnotation } + listOfNotNull(returnType), sigEnv)
+        val paramTypes =
+            params.map { param ->
+                if (param.typeAnnotation != null) {
+                    resolveType(param.typeAnnotation, sigEnv)
+                } else {
+                    recordError(TypeError.MissingParamAnnotation(param.name, param.span))
+                }
+            }
+        return sigEnv to paramTypes
+    }
+
+    private fun bindValDecl(
+        stmt: ValDecl,
+        env: TypeEnv,
+    ) {
+        val sigEnv = env.child()
+        introduceTypeVars(listOf(stmt.type), sigEnv)
+        env.bind(stmt.name, quantify(sigEnv.localTypeVars(), resolveType(stmt.type, sigEnv)))
     }
 
     private fun reportDuplicateParams(params: List<Param>) {
