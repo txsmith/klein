@@ -34,9 +34,10 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val paramsStr = params.joinToString(", ") { p ->
                 if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
             }
-            "${pad}FunDecl $name($paramsStr): ${returnType.prettyPrint()}"
+            val reviewStr = if (review) " review" else ""
+            "${pad}FunDecl ${revisionedName(name, revision)}($paramsStr): ${returnType.prettyPrint()}$reviewStr"
         }
-        is ValDecl -> "${pad}ValDecl($name: ${type.prettyPrint()})"
+        is ValDecl -> "${pad}ValDecl(${revisionedName(name, revision)}: ${type.prettyPrint()})${if (review) " review" else ""}"
         is TypeDef -> {
             val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
             val constructorsStr =
@@ -47,7 +48,7 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
                         "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
                     }
                 }
-            "${pad}type $name$typeParamsStr = $constructorsStr"
+            "${pad}type ${revisionedName(name, revision)}$typeParamsStr = $constructorsStr"
         }
         is PatternVal -> "${pad}PatternVal(${pattern.prettyPrint()}) =\n${value.prettyPrint(indent + 1)}"
         is Expr -> prettyPrint(indent)
@@ -56,9 +57,9 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
 
 fun TypeExpr.prettyPrint(): String =
     when (this) {
-        is TypeName -> name
+        is TypeName -> revisionedName(name, revision)
         is TypeVar -> "'$name"
-        is AppliedTypeExpr -> "$name<${args.joinToString(", ") { it.prettyPrint() }}>"
+        is AppliedTypeExpr -> "${revisionedName(name, revision)}<${args.joinToString(", ") { it.prettyPrint() }}>"
         is FunctionTypeExpr -> "(${if (paramTypes.isEmpty()) {
             "()"
         } else {

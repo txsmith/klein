@@ -9,7 +9,9 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ```
 prog        = (type_def | fun_def | fun_decl | stmt)*
 
-type_def    = 'type' UPPER_IDENT type_params? '=' constructors
+type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
+
+revision    = '/' INT                              # positive; absent means 1. Contracts only
 
 type_params = '<' TYPE_VAR (',' TYPE_VAR)* '>'
 
@@ -23,7 +25,7 @@ field_decl  = IDENT ':' type
 
 fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 
-fun_decl    = 'fun' IDENT '(' params? ')' ':' type     # declared, not defined — no body
+fun_decl    = 'fun' IDENT revision? '(' params? ')' ':' type 'review'?   # declared, not defined — no body
 
 stmt        = binding
             | val_decl
@@ -32,7 +34,7 @@ stmt        = binding
 binding     = IDENT (':' type)? '=' block_or_expr
             | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
 
-val_decl    = IDENT ':' type                       # declared, not defined — no value
+val_decl    = IDENT revision? ':' type 'review'?   # declared, not defined — no value
 
 block_or_expr = block
               | expr
@@ -101,6 +103,7 @@ binop       = '+' | '-' | '*' | '/' | '%'
 |----------------|-----------------------|
 | prog           | `parseProgram()`      |
 | type_def       | `parseTypeDef()` (TODO) |
+| revision       | `parseRevisionSuffix()` |
 | type_params    | `parseTypeParams()` (TODO) |
 | constructors   | `parseConstructors()` (TODO) |
 | constructor    | `parseConstructor()` (TODO) |
@@ -150,6 +153,59 @@ line, even when that line opens an indented block.
 The parser accepts both wherever a statement is legal, and has no idea whether it is reading a
 program or a contract. Which statements are legal in which — and what a contract is for — is
 checker semantics: see [spec/contracts.md](./spec/contracts.md).
+
+## Revisions
+
+A `/N` suffix on a declared name, so two incompatible versions of a capability or a type coexist in
+one contract file while the old one drains:
+
+```klein
+type Customer = Customer { id: Num }
+type Customer/2 = Customer { id: Num, tier: String }
+
+fun creditScore(c: Customer): Num
+fun creditScore/2(c: Customer/2): Num
+
+maxRetries: Num
+maxRetries/2: Num
+```
+
+`N` is a positive integer literal. **Absent means revision 1**, so `Customer` and `Customer/1` are
+the same name, and declaring both is a duplicate. The suffix appears in exactly two places:
+
+- on the declared name of a `type_def`, `fun_decl` or `val_decl` — never on a definition
+  (`fun f/2(): Num = 1` and `x/2 = 1` are parse errors, as is a revision below 1);
+- on a **type reference**, anywhere a type name may be written: parameter and return types,
+  constructor field types, record and function types, and type arguments (`List<Customer/2>`).
+  A revised type may still be applied and made optional: `Box/2<Num>`, `Customer/2?`.
+
+A revision never appears in an expression — rules do not write them, only contracts do. `Customer`
+and `Customer/2` are unrelated nominal types; nothing is inherited between revisions.
+
+### `/` versus division
+
+No new token: a revision reuses `SLASH` and is recognized by position. Nothing else in the grammar
+can put a `/` where a revision goes, because a type is never an operand of an arithmetic operator
+and a declared name is never an expression. The one lookahead the parser needs is for `val_decl`,
+where a statement may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
+declaration, and anything else is the division it has always been (`total / 2` is unchanged).
+
+## The `review` Marker
+
+A trailing `review` on a `fun_decl` or `val_decl`, after the type and on the same line:
+
+```klein
+fun underwrite/2(a: Application): Decision review
+maxRetries/2: Num review
+```
+
+It records that the *meaning* changed while the types did not — the one thing a signature
+comparison cannot detect (see [ideas/host-integration.md](./ideas/host-integration.md)). It is a
+**contextual keyword**: `review` remains an ordinary identifier everywhere else — a binding name, a
+function name, a parameter, a field, even a declared capability (`review: Num`). Only the position
+immediately after a declaration's type, on that declaration's own line, reads as the marker; a
+`review` on the following line is an expression statement. It is rejected on a definition
+(`x: Num review = 3`).
 
 ## Indentation Model
 
@@ -235,10 +291,13 @@ X % sep  one or more X separated by sep
 
 ```
 TypeDef
-  = 'type' TypeName TypeParams? '=' Constructors
+  = 'type' TypeName Revision? TypeParams? '=' Constructors
 
 TypeName
   = UpperIdent
+
+Revision
+  = '/' INT                       # positive integer; absent means 1
 
 TypeParams
   = '<' TypeVar % ',' '>'
@@ -278,7 +337,7 @@ TypeArgs
   = '<' Type % ',' '>'
 
 TypeAtom
-  = UpperIdent                    # concrete type: Num, String, Person
+  = UpperIdent Revision?          # concrete type: Num, String, Person, Customer/2
   | TypeVar                       # type variable: 'A, 'B, 'T
   | RecordType                    # structural record
   | TupleType                     # tuple

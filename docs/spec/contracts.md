@@ -71,6 +71,44 @@ are as thoroughly checked as a program's:
 On top of that, each declaration binds its signature, and a name declared twice is
 `DuplicateBinding`.
 
+## Revisions
+
+A declaration may carry a revision — `type Customer/2`, `fun creditScore/2`, `maxRetries/2` — so
+two incompatible versions coexist in one file while the old one drains. The syntax is in
+[grammar.md](../grammar.md); what the checker does with it is one rule:
+
+**The key of a declaration is (name, revision), and revision 1 is the bare name.**
+
+```klein
+type Customer = Customer { id: Num }
+type Customer/2 = Customer { id: Num, tier: String }
+
+fun creditScore(c: Customer): Num
+fun creditScore/2(c: Customer/2): Num
+```
+
+Everything follows from that key. `Customer` and `Customer/2` are two entries in the environment,
+so they coexist; declaring `Customer/2` twice, or `creditScore` alongside `creditScore/1`, is
+`DuplicateBinding`. A revised type definition revises its constructors with it — `Customer/2`'s
+constructor is `Customer/2`, and `type Shape/2 = Circle { … } | Square { … }` yields `Circle/2` and
+`Square/2` — which is what lets both revisions of a type keep the same constructor names. Two
+revisions of a type are unrelated nominal types: nothing is inherited, and `Customer/2` is a
+subtype of `Customer` only in the way any two unrelated types are (it isn't).
+
+A revised signature is checked exactly like any other: its parameter and return types resolve
+against the revisions they name (`Customer/3` with no such declaration is `UnboundVariable`), a
+revised capability may not carry a function, and a revision on a builtin (`Num/2`) names nothing.
+
+**Which revision a *rule* gets when it writes a bare `creditScore`** is not decided here. The bare
+name is bound to revision 1 because revision 1 *is* the bare name; resolution across revisions
+belongs to the reconciler and the edition machinery, outside the checker.
+
+### `review`
+
+`fun underwrite/2(a: Application): Decision review` parses and is carried on the declaration node.
+It changes no typing whatsoever: it exists to tell the reconciler that the meaning changed while
+the types did not, which nothing else can detect.
+
 ### One restriction: no functions cross the boundary
 
 A capability may not carry a Klein function — not as a parameter, not as a result, and
@@ -117,6 +155,6 @@ than one real error plus noise.
 
 ## Not covered here
 
-Capability identity and revisions, handler registration, advertisements, editions and
-pins, and the CLI surface for contracts all live outside the checker. See
+Capability identity, handler registration, advertisements, editions and pins, revision
+*resolution*, and the CLI surface for contracts all live outside the checker. See
 [ideas/host-integration.md](../ideas/host-integration.md).

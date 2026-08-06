@@ -4,6 +4,7 @@ import klein.check.Type.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -153,6 +154,32 @@ class ContractTypeCheckTest {
         val error = checkContract("fun creditCheck(c: Nope): Num").errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("Nope", error.name)
+    }
+
+    // --- the checker does not mutate what it is given ---
+
+    @Test
+    fun checkingAContractDoesNotBindIntoTheGivenEnvironment() {
+        val env = TypeEnv.empty()
+        val checked = checkContract("fun creditCheck(c: Num): Num", env)
+        assertEquals(TNum, (checked.env.lookup("creditCheck") as Type.TFun).result)
+        assertNull(env.lookup("creditCheck"), "the caller's environment should be untouched")
+    }
+
+    // The case a child environment would not have isolated: child() shares its parent's type-def map.
+    @Test
+    fun checkingAContractDoesNotRegisterTypesIntoTheGivenEnvironment() {
+        val env = TypeEnv.empty()
+        val checked = checkContract("type Customer = Customer { id: Num }", env)
+        assertTrue(checked.env.lookupTypeDef("Customer") != null)
+        assertNull(env.lookupTypeDef("Customer"), "the caller's environment should be untouched")
+    }
+
+    @Test
+    fun checkingAProgramDoesNotBindIntoTheGivenEnvironment() {
+        val env = TypeEnv.empty()
+        infer("x = 1", env)
+        assertNull(env.lookup("x"), "the caller's environment should be untouched")
     }
 
     @Test

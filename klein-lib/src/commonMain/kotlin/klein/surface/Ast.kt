@@ -47,12 +47,16 @@ data class FunDecl(
     val params: List<Param>,
     val returnType: TypeExpr,
     override val span: SourceSpan,
+    val revision: Int = 1,
+    val review: Boolean = false,
 ) : Stmt()
 
 data class ValDecl(
     val name: String,
     val type: TypeExpr,
     override val span: SourceSpan,
+    val revision: Int = 1,
+    val review: Boolean = false,
 ) : Stmt()
 
 data class TypeDef(
@@ -60,7 +64,13 @@ data class TypeDef(
     val typeParams: List<String>,
     val constructors: List<Constructor>,
     override val span: SourceSpan,
+    val revision: Int = 1,
 ) : Stmt()
+
+fun revisionedName(
+    name: String,
+    revision: Int,
+): String = if (revision == 1) name else "$name/$revision"
 
 data class Constructor(
     val name: String,
@@ -81,12 +91,14 @@ sealed class TypeExpr {
 data class TypeName(
     val name: String,
     override val span: SourceSpan,
+    val revision: Int = 1,
 ) : TypeExpr()
 
 data class AppliedTypeExpr(
     val name: String,
     val args: List<TypeExpr>,
     override val span: SourceSpan,
+    val revision: Int = 1,
 ) : TypeExpr()
 
 data class TypeVar(

@@ -318,12 +318,16 @@ fun funDecl(
     name: String,
     params: List<Param>,
     returnType: TypeExpr,
-) = FunDecl(name, params, returnType, noSpan)
+    revision: Int = 1,
+    review: Boolean = false,
+) = FunDecl(name, params, returnType, noSpan, revision, review)
 
 fun valDecl(
     name: String,
     type: TypeExpr,
-) = ValDecl(name, type, noSpan)
+    revision: Int = 1,
+    review: Boolean = false,
+) = ValDecl(name, type, noSpan, revision, review)
 
 fun ascription(
     expr: Expr,
@@ -334,7 +338,8 @@ fun typeDef(
     name: String,
     typeParams: List<String> = emptyList(),
     vararg constructors: Constructor,
-) = TypeDef(name, typeParams, constructors.toList(), noSpan)
+    revision: Int = 1,
+) = TypeDef(name, typeParams, constructors.toList(), noSpan, revision)
 
 fun constructor(
     name: String,
@@ -346,14 +351,18 @@ fun field(
     type: TypeExpr,
 ) = FieldDecl(name, type, noSpan)
 
-fun typeName(name: String) = TypeName(name, noSpan)
+fun typeName(
+    name: String,
+    revision: Int = 1,
+) = TypeName(name, noSpan, revision)
 
 fun typeVar(name: String) = TypeVar(name, noSpan)
 
 fun appliedType(
     name: String,
     vararg args: TypeExpr,
-) = AppliedTypeExpr(name, args.toList(), noSpan)
+    revision: Int = 1,
+) = AppliedTypeExpr(name, args.toList(), noSpan, revision)
 
 fun functionType(
     paramType: TypeExpr,
@@ -388,9 +397,9 @@ fun Stmt.stripSpan(): Stmt =
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
         is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
-        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
-        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan)
-        is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
+        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan, revision, review)
+        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan, revision, review)
+        is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan, revision)
         is Expr -> stripSpans()
     }
 
@@ -402,9 +411,9 @@ fun FieldDecl.stripSpan(): FieldDecl = FieldDecl(name, type.stripSpan(), noSpan)
 
 fun TypeExpr.stripSpan(): TypeExpr =
     when (this) {
-        is TypeName -> TypeName(name, noSpan)
+        is TypeName -> TypeName(name, noSpan, revision)
         is TypeVar -> TypeVar(name, noSpan)
-        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan)
+        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan, revision)
         is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)

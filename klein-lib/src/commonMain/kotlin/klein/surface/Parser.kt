@@ -70,16 +70,60 @@ class Parser(
     private fun parseFunDef(): Stmt {
         val funToken = advance()
         val name = expectName("Expected function name")
+        val revision = parseRevisionSuffix()
         expectAndAdvance(LPAREN, message = "Expected '('")
         val params = parseFunParams()
         expectAndAdvance(RPAREN, message = "Expected ')'")
         val returnType = parseOptionalTypeAnnotation()
         if (returnType != null && peek().kind != EQ) {
-            return FunDecl(name.text!!, params, returnType, funToken.span + returnType.span)
+            val review = parseReviewMarker()
+            rejectMarkersOnDefinition(revision, review)
+            return FunDecl(
+                name.text!!,
+                params,
+                returnType,
+                funToken.span + (review?.span ?: returnType.span),
+                revision,
+                review != null,
+            )
         }
+        rejectMarkersOnDefinition(revision, null)
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
         return FunDef(name.text!!, params, body, funToken.span + body.span, returnType)
+    }
+
+    private fun parseRevisionSuffix(): Int {
+        if (peek().kind != SLASH) return 1
+        val slash = advance()
+        val number = peek()
+        if (number.kind != INT) {
+            throw ParseError("Expected a revision number after '/', got $number", slash.span + number.span)
+        }
+        advance()
+        val revision = number.text!!.toIntOrNull()
+        if (revision == null || revision < 1) {
+            throw ParseError("Revision must be a positive integer, got '${number.text}'", number.span)
+        }
+        return revision
+    }
+
+    private fun parseReviewMarker(): Token? {
+        val token = peek()
+        return if (token.kind == IDENT && token.text == REVIEW_MARKER && !token.isNewline) advance() else null
+    }
+
+    private fun rejectMarkersOnDefinition(
+        revision: Int,
+        review: Token?,
+    ) {
+        if (peek().kind != EQ) return
+        if (review != null) {
+            throw ParseError("'$REVIEW_MARKER' marks a declaration, which has no '='", review.span + peek().span)
+        }
+        if (revision != 1) {
+            throw ParseError("A revision marks a declaration, which has no '='", peek().span)
+        }
     }
 
     private fun parseTypeDef(): TypeDef {
@@ -89,6 +133,7 @@ class Parser(
         val nameToken = expectUpperIdent("Expected type name")
         validateNotReserved(nameToken)
 
+        val revision = parseRevisionSuffix()
         val typeParams = if (peek().kind == LT) parseTypeParams() else emptyList()
 
         val constructors =
@@ -100,7 +145,7 @@ class Parser(
             }
 
         val endSpan = constructors.lastOrNull()?.span ?: typeParams.lastOrNull()?.let { nameToken.span } ?: nameToken.span
-        return TypeDef(nameToken.text!!, typeParams, constructors, typeToken.span + endSpan)
+        return TypeDef(nameToken.text!!, typeParams, constructors, typeToken.span + endSpan, revision)
     }
 
     private fun parseTypeParams(): List<String> {
@@ -259,11 +304,12 @@ class Parser(
         return when (token.kind) {
             UPPER_IDENT -> {
                 advance()
+                val revision = parseRevisionSuffix()
                 if (peek().kind == LT) {
                     val args = parseTypeArgs()
-                    AppliedTypeExpr(token.text!!, args, token.span + args.last().span)
+                    AppliedTypeExpr(token.text!!, args, token.span + args.last().span, revision)
                 } else {
-                    TypeName(token.text!!, token.span)
+                    TypeName(token.text!!, token.span, revision)
                 }
             }
 
@@ -379,10 +425,20 @@ class Parser(
 
     private fun parseBinding(): Stmt {
         val name = expectName("Expected identifier")
+        val revision = parseRevisionSuffix()
         val typeAnnotation = parseOptionalTypeAnnotation()
         if (typeAnnotation != null && peek().kind != EQ) {
-            return ValDecl(name.text!!, typeAnnotation, name.span + typeAnnotation.span)
+            val review = parseReviewMarker()
+            rejectMarkersOnDefinition(revision, review)
+            return ValDecl(
+                name.text!!,
+                typeAnnotation,
+                name.span + (review?.span ?: typeAnnotation.span),
+                revision,
+                review != null,
+            )
         }
+        rejectMarkersOnDefinition(revision, null)
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
         return Val(name.text!!, value, name.span + value.span, typeAnnotation)
@@ -862,7 +918,10 @@ class Parser(
     }
 
     private fun isBinding(): Boolean =
-        peek().kind == IDENT && (peekAt(1).kind == EQ || peekAt(1).kind == COLON)
+        peek().kind == IDENT && (peekAt(1).kind == EQ || peekAt(1).kind == COLON || isRevisionedBinding())
+
+    private fun isRevisionedBinding(): Boolean =
+        peekAt(1).kind == SLASH && peekAt(2).kind == INT && (peekAt(3).kind == COLON || peekAt(3).kind == EQ)
 
     private fun isDestructuringBinding(): Boolean {
         var i =
@@ -968,5 +1027,9 @@ class Parser(
             throw ParseError("$message, got $token", token.span)
         }
         return if (token.kind == EOF) token else advance()
+    }
+
+    companion object {
+        private const val REVIEW_MARKER = "review"
     }
 }

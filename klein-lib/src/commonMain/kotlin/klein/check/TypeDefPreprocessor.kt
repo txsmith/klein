@@ -26,45 +26,47 @@ class TypeDefPreprocessor(
     ): List<TypeDef> {
         val valid = mutableListOf<TypeDef>()
         for (typeDef in typeDefs) {
+            val typeName = revisionedName(typeDef.name, typeDef.revision)
             if (typeDef.name in PRIMITIVE_TYPE_NAMES) {
-                errors.add(TypeError.ShadowsBuiltinType(typeDef.name, typeDef.span))
+                errors.add(TypeError.ShadowsBuiltinType(typeName, typeDef.span))
                 continue
             }
-            if (env.lookupTypeDef(typeDef.name) != null) {
-                errors.add(TypeError.DuplicateBinding(typeDef.name, typeDef.span))
+            if (env.lookupTypeDef(typeName) != null) {
+                errors.add(TypeError.DuplicateBinding(typeName, typeDef.span))
                 continue
             }
 
             valid.add(typeDef)
             val typeParams = typeDef.typeParams.map { TypeParamInfo(Variance.Bivariant, freshSkolem(it)) }
-            env.registerTypeDef(TypeDefInfo(typeDef.name, typeParams, Type.TRecord(emptyMap()), typeDef.span))
+            env.registerTypeDef(TypeDefInfo(typeName, typeParams, Type.TRecord(emptyMap()), typeDef.span))
 
             for (ctor in typeDef.constructors) {
+                val ctorName = revisionedName(ctor.name, typeDef.revision)
                 if (ctor.name in PRIMITIVE_TYPE_NAMES) {
-                    errors.add(TypeError.ShadowsBuiltinType(ctor.name, ctor.span))
+                    errors.add(TypeError.ShadowsBuiltinType(ctorName, ctor.span))
                     continue
                 }
-                if (ctor.name == typeDef.name && typeDef.constructors.size > 1) {
-                    errors.add(TypeError.DuplicateBinding(ctor.name, ctor.span))
+                if (ctorName == typeName && typeDef.constructors.size > 1) {
+                    errors.add(TypeError.DuplicateBinding(ctorName, ctor.span))
                     continue
                 }
-                if (env.lookupConstructor(ctor.name) != null) {
-                    errors.add(TypeError.DuplicateBinding(ctor.name, ctor.span))
+                if (env.lookupConstructor(ctorName) != null) {
+                    errors.add(TypeError.DuplicateBinding(ctorName, ctor.span))
                     continue
                 }
 
                 val usedTypeVars = ctor.fields.flatMap { collectTypeVarNames(it.type) }.toSet()
                 val declared = typeDef.typeParams.toSet()
                 for (tv in usedTypeVars) {
-                    if (tv !in declared) errors.add(TypeError.UndeclaredTypeParam(tv, typeDef.name, ctor.span))
+                    if (tv !in declared) errors.add(TypeError.UndeclaredTypeParam(tv, typeName, ctor.span))
                 }
                 val ctorTypeParams = typeParams.filter { it.skolem.name in usedTypeVars }
 
                 env.registerConstructor(
-                    ConstructorInfo(ctor.name, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeDef.name, ctor.span),
+                    ConstructorInfo(ctorName, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeName, ctor.span),
                 )
-                if (ctor.name != typeDef.name) {
-                    env.registerTypeDef(TypeDefInfo(ctor.name, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
+                if (ctorName != typeName) {
+                    env.registerTypeDef(TypeDefInfo(ctorName, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
                 }
             }
         }
@@ -105,11 +107,12 @@ class TypeDefPreprocessor(
                 is TypeName -> false
 
                 is AppliedTypeExpr -> {
-                    val refInfo = env.lookupTypeDef(typeExpr.name) ?: return false
+                    val refName = revisionedName(typeExpr.name, typeExpr.revision)
+                    val refInfo = env.lookupTypeDef(refName) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
                         val paramName = refInfo.typeParams.getOrNull(i)?.skolem?.name ?: break
-                        val paramVariance = variances[typeExpr.name to paramName] ?: break
+                        val paramVariance = variances[refName to paramName] ?: break
                         val argPolarity =
                             when (paramVariance) {
                                 Variance.Bivariant, Variance.Covariant -> polarity
