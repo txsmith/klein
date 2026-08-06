@@ -43,13 +43,9 @@ backed by the bureau API), or a value the host supplies once at the start of eac
 (`maxRetries: Num`). A capability is declared to Klein as a signature only — a
 declaration with no body, in a Klein source file the host hands over (the language and
 checker side of that file is specified in [spec/contracts.md](../spec/contracts.md)); its
-implementation is ordinary code inside the host, and the host declares a **revision**
-beside that implementation. A version's identity is the hash of the signature plus that
-revision: change the signature and it is a new version mechanically; change what the
-capability *means* without the types moving — a different bureau behind the same
-`Score` — and bumping the revision makes it a new version too. Semantics cannot be
-checked, but they can be declared, and the declaration sits where the thing it
-describes lives, next to the handler (see "Changing what a capability means" below). The capability is the *only* thing a rule and
+implementation is ordinary code inside the host. A capability version's identity is
+**(name, revision)**, both declared — see below. The name is stable across versions,
+which is the point: evolution never goes through renaming. The capability is the *only* thing a rule and
 the host share; everything else in this doc is bookkeeping about who provides and who
 needs which capability versions.
 
@@ -74,6 +70,46 @@ environments that curate what they need. Shared "hub" types (`Customer`) live in
 and version like everything else; same-named type versions are compatible when
 structurally compatible (the checker bridges them by shape, which is also exactly what
 the machine does at runtime).
+
+**Revision** — a `/N` suffix declared in the contract, on capabilities and on the types
+they carry, so incompatible versions coexist in one file while the old one drains:
+
+```klein
+type Customer = Customer { id: Num }
+type Customer/2 = Customer { id: Num, tier: String }
+
+fun creditScore(c: Customer): Num
+fun creditScore/2(c: Customer/2): Num
+```
+
+Absent means revision 1. Because each declaration names the type revision it carries,
+there is no implicit pinning rule to remember: `creditScore/2` means `Customer/2`
+because it says so.
+
+Revisions are **permanent and never recycled**. Renumbering after a drain is tempting —
+it would keep the numbers small — but the reconciler cannot distinguish "revision 2 was
+rolled back" from "revision 1 was retired and 2 promoted in its place", since both leave
+one bare declaration. Accepting monotonic numbers costs a growing label; recycling costs
+correctness.
+
+**Three shapes of change**, which is what decides whether a revision is needed at all:
+
+| Change | Revision? | What the reconciler does |
+|---|---|---|
+| Type change, compatible (new signature is a subtype) | no | detects it and migrates rules automatically |
+| Type change, incompatible | yes | versions coexist; rules are re-checked and may be flagged |
+| Semantic change, types unmoved | yes, plus `review` | versions coexist; every affected rule goes to the author |
+
+**`review`** — a trailing marker declaring the third case, which nothing else can
+detect:
+
+```klein
+fun underwrite/2(a: Application): Decision review
+```
+
+"The scores come from a different bureau now" is invisible to types, and the new
+revision would otherwise look like an ordinary compatible one. `review` sends rules
+using it to the maintenance queue rather than reconciling them automatically.
 
 **Rule** — a Klein program written by a business author inside one environment, against
 that environment's contract and curated capabilities.
@@ -109,16 +145,35 @@ replay re-executes; effect-log entries sit at turn boundaries; fuel limits bound
 (Distinct from a machine **step** — one dispatch of the interpreter loop; a single turn
 typically executes thousands to millions of steps.)
 
-**Advertisement** — a node's declared capability set: every capability version its
-binary implements, as (name, signature hash) pairs. A node can serve a run iff its
-advertisement covers the run's pinned capabilities. Nodes never serve "an environment
-version"; they serve capability sets.
+**Advertisement** — a node's declared capability set: every (name, revision) pair its
+binary implements. A node can serve a run iff its advertisement covers the
+run's pinned capabilities. A node mid-transition advertises both revisions of whatever
+it is migrating.
 
-**Reconciler** — the incremental background process that keeps the editions in step 
-with the fleet. When the fleet converges on advertising a new capability version (with
-hysteresis, so a mid-rollout rollback doesn't cause flapping), the reconciler checks the
-affected rules — only those whose editions pin the changed capability — adds
-editions for the compatible ones, and flags the rest.
+**Reconciler** — the incremental background process that keeps editions in step with the
+fleet. When the fleet converges on advertising a new contract (with hysteresis, so a
+mid-rollout rollback doesn't cause flapping), it moves the corpus forward. Work sorts
+into three tiers, by diffing the old contract against the new and comparing that to each
+edition's recorded pins:
+
+1. **Untouched** — the rule uses nothing that changed. Nothing to do.
+2. **Compatibly changed** — what it uses changed, but the new signature is a subtype in
+   the right direction, so it stays sound (see the monotonicity argument in
+   [diagnostic-severity.md](./diagnostic-severity.md)). Re-pin now, recheck in the
+   background for newly dead code, which is a warning rather than a blocker.
+3. **Everything else** — run the checker. Compiles → new edition; doesn't → maintenance
+   queue with the errors.
+
+`review` is applied first and overrides all three: a rule using a marked capability goes
+to the queue whatever tier it would land in. That ordering is what makes tiers 1 and 2
+safe, since a semantic change leaves the signature untouched and would otherwise be
+classified as needing no attention.
+
+A note on hashing, because it looks more central than it is. A signature hash is a
+useful *change detector* for pruning this work, and nothing more: it disagrees on
+changes that are perfectly compatible, and agrees on semantic changes that are not. It
+is neither necessary nor sufficient for compatibility, which is why identity is the
+declared (name, revision) and the subtype check is what decides tier 2.
 
 **Maintenance queue** — the flagged rules, routed to their authors with diagnostics
 ("your `Square` arm went dead when `Shape` narrowed"). Warnings gather here too: sound
@@ -135,13 +190,17 @@ loudly), which is why it is a manual act taken when the fleet is stable — and 
 stays reversible until the handler is actually removed. Atomic where the store is
 transactional.
 
-**Drain** — the countdown, after retirement, to removing the version's handler. Two
-counts fall monotonically to zero: rules whose newest edition still pins the version
-(each needs a newer edition free of it — the reconciler's job), and parked runs
-pinned to it (each must finish). At zero the version is **removable**: the next host
-deploy may remove its handler. Editions are never deleted — unservable ones are
-simply routed around; they remain as history. Removal has no deadline; old handlers are
-generated code that costs nothing to carry, so cleanup can be batched quarterly.
+**Drain** — the countdown, after retirement, to removing a capability revision. Two
+counts fall monotonically to zero: rules whose newest edition still pins it (each needs
+a newer edition — the reconciler's job), and parked runs pinned to it (each must
+finish). A run does not record capabilities itself; it records its edition, and the
+edition carries the pins, so both counts are one join over data the host already stores.
+At zero the revision is **removable**: delete its declaration from the contract, and the
+next deploy drops its handler. Editions are never deleted — unservable ones are simply
+routed around and remain as history. Removal has no deadline, so cleanup can be batched.
+
+Note what is *not* recycled: the revision number. Deleting `creditScore` once it drains
+leaves `creditScore/2` as `/2` forever, and the next breaking change is `/3`.
 
 **Adapter** — how a host carries an old capability version during a transition without
 maintaining two real implementations: the old handler is written as a translation onto
@@ -186,20 +245,22 @@ removed. There is no synchronization point: no deploy waits on authors, no autho
 on deploys, and the only clock is the drain query.
 
 **Changing what a capability means.** Types cannot capture "the scores come from a
-different bureau now", so no checker can verify anything about such a change — but it
-can be *declared*: bump the capability's revision marker, and the identity hash makes it
-a new version like any other. Done properly this is an **addition**: the rev-2 handler
-arrives next to rev-1's, old editions genuinely keep the old semantics, and the
-reconciler offers new editions whose one real question — "does your threshold still make
-sense against the new meaning?" — goes to authors through the maintenance queue; rev-1
-drains as reviews complete. When the old semantics cannot be served anymore (the old
-bureau contract is gone), coexistence is off the table and only two honest treatments
-remain: **review-gate** (rev-1 editions become unservable — parked runs stall and
-affected rules go dark until their authors confirm) or **auto-reconcile** (every rule
-moves to the new meaning immediately; available, but drifting). Either way the bump
-earns its one line: pins and the effect log record which meaning every run used —
-"which decisions straddled the scoring change" becomes a query, not archaeology. A bump
-skipped is the system's history lying.
+different bureau now", so no checker can verify such a change — but it can be
+*declared*: publish a new revision with the capability marked `review`. The
+mechanics are then the same as any other change, which is the point of having one
+version axis: the new file's handler arrives alongside the old one, editions pinned to
+the old revision genuinely keep the old semantics, and every affected rule reaches its
+author through the maintenance queue asking the one question a machine cannot — "does
+your threshold still make sense against the new meaning?" The old revision drains as
+those reviews complete.
+
+When the old semantics cannot be served at all (the bureau contract is gone),
+coexistence is off the table and two honest treatments remain: **review-gate** (old
+editions become unservable — parked runs stall and affected rules go dark until their
+authors confirm) or **auto-reconcile** (every rule moves to the new meaning at once;
+available, but drifting). Either way the marker earns its one word: pins and the effect
+log record which meaning each run used, so "which decisions straddled the scoring
+change" is a query rather than archaeology. Omitting it makes the system's history lie.
 
 **How long does a transition take?** Two populations move at two speeds. Rules the
 re-check clears migrate automatically — the reconciler compiles their new editions in
@@ -212,8 +273,8 @@ later); a change that flags three hundred rules keeps both versions serving unti
 queue empties, which may take weeks and is fine. The impact report — which rules, which
 diagnostics, computed where the rules live — forecasts all of this before the change is
 committed. Only two things in the procedure are decided rather than determined: when to
-retire the old version, and, for revisions, what happens to rules still on the old
-meaning.
+retire the old revision, and, when a capability is marked `review`, what
+happens to rules still on the old meaning.
 
 **Rollback.** Roll the fleet back and fresh events quietly fall back to old editions
 (they were never deleted). Runs suspended on new-version pins are **stranded, not
@@ -334,7 +395,6 @@ assumes the request classes are generated from function-shaped declarations). If
 instead declares each capability as the request type itself:
 
 ```kotlin
-@Capability(revision = 2)
 data class CreditCheck(val c: Customer) : Capability<Score>
 data class Head<A>(val xs: KList<A>) : Capability<A>
 data object MaxRetries : LinkedCapability<Double>
@@ -439,6 +499,23 @@ every seam.
 - **Migrate-all-before-deploy as the only mode**: makes fleet deploys hostage to rule
   authors; kept only as one end of the per-change knob.
 - **Semantic versioning numbers** on capabilities: the major/minor distinction is an
-  unverifiable claim about impact. Kept instead: a declared revision marker inside the
-  identity hash — the only declared fact is "the meaning changed", and the treatment of
-  the old version is decided per change, not encoded in a number.
+  unverifiable claim about impact. The only declared fact worth having is "the meaning
+  changed", which is what `review` says, and the treatment of the old version is decided
+  per change rather than encoded in a number.
+- **Host-side revisions, with superseded signatures supplied at registration**: made ids
+  human-facing — you would have to know the hash of a version whose signature had left
+  the contract — and lost the name and number that drain reporting needs. Humans always
+  say (name, revision).
+- **Environment-scoped revisions — numbered snapshot files** (`001.klein`, `002.klein`,
+  each a whole self-consistent surface): elegantly dissolves type pinning, since a
+  file's `creditScore` means that file's `Customer`. Rejected because duplication scales
+  with contract *size* rather than change size — a thousand-line contract copied to bump
+  one capability, and diffs that show everything as changed. Per-declaration `/N` costs
+  syntax and pays for itself in localized change.
+- **Recycling revision numbers after a drain** (renumbering `/2` back to bare so numbers
+  stay small): breaks the reconciler, which cannot distinguish "revision 2 was rolled
+  back" from "revision 1 retired and 2 promoted" — both leave a single bare declaration.
+  Numbers stay monotonic.
+- **Identity by signature hash alone**: a hash disagrees on compatible changes and agrees
+  on semantic ones, so it is neither necessary nor sufficient for compatibility. Kept as
+  a change detector for pruning reconciler work, not as identity.

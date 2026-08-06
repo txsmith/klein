@@ -24,24 +24,37 @@ rather than replacing it.
       a `--contract <file>` flag on `check`/`run` (composes; contract alone when no
       program given), versus a separate `klein contract` command, versus a
       file-extension convention.
-- [ ] **Contract + handler map** *(needs: bodiless declarations)* — a contract is a
-      parsed contract file; the host supplies handlers dynamically, **and supplies the
-      revision alongside each handler** — the revision declares that the
-      implementation's meaning changed, so it belongs next to the implementation, not
-      in the file. Consequences: the file carries signatures only, identity is assembled
-      at load from signature + registered revision, and a contract file alone is enough
-      to *check* a rule but not to compile pins or run one (running needs handlers,
-      which are code). Two rules to get right now because changing them later touches
-      every call site:
-      - **Identity is opaque.** A `CapabilityId` type, computed as `name@rev` for now
-        and as the canonical signature hash later. Name+revision alone is *not* the
-        identity: changing a signature without bumping the revision leaves name+rev
-        unchanged, and a name-keyed handler would then silently serve the new
-        implementation to runs pinned to the old signature.
-      - **Register by name, dispatch by id.** Hosts register handlers by name
-        (+revision); loading resolves them against the parsed contract into an
-        id-keyed dispatch table, failing loudly on either side missing. The node's
-        advertisement is that table's key set.
+- [ ] **`Environment`: contract + implementations** *(needs: bodiless declarations)* —
+      `klein.host.Environment.load(contractSource) { … }`: parse, check the contract,
+      register implementations, validate, **throw** `EnvironmentError` carrying every
+      error (boot-time, unrecoverable — unlike the pipeline stages, which return
+      `StageResult` because an editor renders their diagnostics). Exposes `typeEnv`
+      (seeds `Klein.check` for rules), `capabilities` (declarations + ids; also the
+      node's advertisement), and handler lookup by id. Settled points:
+      - **Two registration forms, one block**, so a capability's whole strategy is
+        visible on its own line and no capability is defined by its absence:
+        `immediate(name, revision = 1) { args -> Value }` answers inline;
+        `deferred(name, revision = 1) { call -> Unit }` takes ownership and answers via
+        `call.resume(v)` (in-process, any thread) or by persisting `call.token` and
+        replaying elsewhere. In-process async and durable both use `deferred` — the
+        split is "answer inline" vs "I own the continuation", not sync vs async.
+      - **Registration is required**: every declaration needs an implementation, so
+        forgetting one is a boot error rather than a 3am surprise the first time a rule
+        calls it. A host that dispatches by hand says so with `deferred(name) { }`.
+        Also validated: every registration names a declaration, and no name twice.
+
+      **Delta from what is built** — revisions moved into contract syntax (`/N`) after
+      this was written, so they are declared rather than supplied at registration.
+      Built today: per-capability `revision` at registration, identity =
+      `hash(name, signature, revision)`. Target: identity is the declared
+      (name, revision); registration names an existing declared revision rather than
+      inventing one; the signature hash survives only as a reconciler change-detector,
+      not as identity. Everything else in `Environment` stands — the two registration
+      forms, the throwing surface, and the validation.
+      - **Handler errors: we don't care.** Exceptions escape unwrapped; no `Result`, no
+        `Failed` state, no Klein-level representation. The log is truth, so a failed
+        turn simply did not happen and the host retries or abandons by its own policy.
+        `call.fail(...)` is additive later if wanted.
 - [ ] **Capabilities reachable from Klein source** *(needs: contract + handler map)* —
       seed the checker's TypeEnv from the contract; lowerer resolves capability names
       (calls -> suspensions, capability vals -> link references) and records pins;
@@ -51,6 +64,14 @@ rather than replacing it.
       shape check at resume against the declared return type, so a bad handler says
       "handler `creditCheck` returned Str, declared Num" instead of failing deep in the
       machine.
+
+- [ ] **Revision + `review` syntax in contracts** *(agent in flight)* — `/N` on declared
+      names and on type references (`fun creditScore/2(c: Customer/2): Num`), absent
+      meaning 1, so incompatible versions coexist in one file and each declaration names
+      the type revision it carries. Plus a trailing `review` marker for a semantic
+      change, which nothing else can detect. Duplicate key becomes (name, revision).
+      Out of scope until editions exist: which revision a *rule* gets when it writes a
+      bare name. Update grammar.md and spec/contracts.md.
 
 ## After that
 
@@ -81,7 +102,14 @@ rather than replacing it.
 - [ ] **Effect log + replay runtime** — per the persist-the-log ADR: record turns
       (requests + answers; link record as entry one); replay a log against an edition
       to rebuild a parked run; resume from replayed state. Parked runs, drain counts,
-      and scenario/migration tooling stand on this.
+      and scenario/migration tooling stand on this. Two invariants settled while
+      designing `Environment`: the log is **host-held and appended per turn**, never a
+      value extracted from a returned `Execution` — `advance` runs several turns per
+      call, and a handler throwing on turn 3 must leave turns 1–2 durably recorded, so
+      appends happen between `resume` and the next handler invocation and must not be
+      batched. And a **pending call is never stored**: replaying (edition + log)
+      deterministically arrives back at the same suspension, so the log holds completed
+      (request, answer) pairs only.
 - [ ] **Runtime lifecycle library** *(needs: editions, severity)* — pure functions +
       report objects over org-supplied data: reconcile (pin-hash prefilter,
       severity-classified reports), retire (cutoff flag: no fresh runs, no new
