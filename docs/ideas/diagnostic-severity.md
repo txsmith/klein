@@ -6,9 +6,9 @@ contexts exist today:
 
 - **Authoring** — a rule is being written or edited (editor, CLI). Everything is an
   error: the author is present and can act.
-- **Evolution re-check** — the reconciler re-checks an existing rule because a
-  capability or module it uses changed (see
-  [host-integration.md](./host-integration.md)). One class is downgraded to warnings.
+- **Evolution re-check** — reconciliation recompiles an existing rule because a
+  capability it uses changed (see
+  [host-integration.md](../spec/host-integration.md)). One class is downgraded to warnings.
 
 ## The trigger program
 
@@ -27,13 +27,13 @@ The capability tightens to `currentShape: Circle` — a compatible narrowing
 the source now finds the `Square` arm unreachable — a hard error at authoring time. The
 program was correct when written; the world improved underneath it. Failing the rule
 would punish its author for someone else's upgrade; saying nothing would let dead code
-accumulate silently. Hence: warning, routed to the maintenance queue.
+accumulate silently. Hence: warning, reported to the author.
 
 ## The criterion
 
 *Could this program misbehave at runtime?*
 
-- **Soundness** — yes: wrong shapes reaching the machine, no arm matching, unfilled
+- **Soundness** — yes: wrong shapes reaching the interpreter, no arm matching, unfilled
   cells. Errors in every context.
 - **Degeneracy** — no: the program is verified sound but provably pointless somewhere —
   an arm that can never fire, a comparison that is always false. Error when authoring,
@@ -61,12 +61,12 @@ classified degeneracy; all remaining `TypeMismatch` emissions are soundness.
 
 ## Classification of every current diagnostic
 
-**Soundness — error in every context.** Each maps to a concrete machine failure.
+**Soundness — error in every context.** Each maps to a concrete runtime failure.
 
 | Diagnostic | Runtime failure it prevents |
 |---|---|
 | `UnboundVariable` | no cell to read |
-| `TypeMismatch` (all sites except equality) | wrong shape reaching a machine operation |
+| `TypeMismatch` (all sites except equality) | wrong shape reaching an interpreter operation |
 | `CannotJoinBranches`, `CannotJoinMatchArms` | untyped value flowing downstream |
 | `MissingField`, `NotARecord` | field access on the wrong shape |
 | `NotAFunction`, `CallArityMismatch` | application of a non-closure / wrong arity |
@@ -91,7 +91,7 @@ soundness; the separate bin exists for that diagnostic-hygiene property.)
 
 | Diagnostic | Why it is sound to run anyway |
 |---|---|
-| `UnreachableMatchArm` | the arm never fires; the machine compiles and skips it |
+| `UnreachableMatchArm` | the arm never fires; the interpreter compiles and skips it |
 | `NotAConstructorOf` | an arm naming a constructor the (narrowed) scrutinee cannot be — it never fires |
 | `IncomparableEquality` (to be split from `TypeMismatch`) | the comparison evaluates, always to `false` |
 

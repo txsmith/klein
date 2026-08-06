@@ -1,6 +1,6 @@
 # TODO
 
-Work to make the host-integration design (docs/ideas/host-integration.md) real.
+Work to make the host-integration spec (docs/spec/host-integration.md) real.
 
 ## Next up — get the pipeline working end to end
 
@@ -24,13 +24,13 @@ rather than replacing it.
       a `--contract <file>` flag on `check`/`run` (composes; contract alone when no
       program given), versus a separate `klein contract` command, versus a
       file-extension convention.
-- [ ] **`Environment`: contract + implementations** *(needs: bodiless declarations)* —
+- [x] **`Environment`: contract + implementations** —
       `klein.host.Environment.load(contractSource) { … }`: parse, check the contract,
       register implementations, validate, **throw** `EnvironmentError` carrying every
       error (boot-time, unrecoverable — unlike the pipeline stages, which return
       `StageResult` because an editor renders their diagnostics). Exposes `typeEnv`
       (seeds `Klein.check` for rules), `capabilities` (declarations + ids; also the
-      node's advertisement), and handler lookup by id. Settled points:
+      set of revisions this host implements), and handler lookup by id. Settled points:
       - **Two registration forms, one block**, so a capability's whole strategy is
         visible on its own line and no capability is defined by its absence:
         `immediate(name, revision = 1) { args -> Value }` answers inline;
@@ -43,14 +43,11 @@ rather than replacing it.
         calls it. A host that dispatches by hand says so with `deferred(name) { }`.
         Also validated: every registration names a declaration, and no name twice.
 
-      **Delta from what is built** — revisions moved into contract syntax (`/N`) after
-      this was written, so they are declared rather than supplied at registration.
-      Built today: per-capability `revision` at registration, identity =
-      `hash(name, signature, revision)`. Target: identity is the declared
-      (name, revision); registration names an existing declared revision rather than
-      inventing one; the signature hash survives only as a reconciler change-detector,
-      not as identity. Everything else in `Environment` stands — the two registration
-      forms, the throwing surface, and the validation.
+      Revisions are declared in the contract (`/N`); registration names an existing
+      declared revision and each declared revision needs its own implementation.
+      Remaining delta: `CapabilityId` still hashes the signature — under the settled
+      design identity is the declared (name, revision) and the hash is only a
+      reconciler change-detector.
       - **Handler errors: we don't care.** Exceptions escape unwrapped; no `Result`, no
         `Failed` state, no Klein-level representation. The log is truth, so a failed
         turn simply did not happen and the host retries or abandons by its own policy.
@@ -65,13 +62,27 @@ rather than replacing it.
       "handler `creditCheck` returned Str, declared Num" instead of failing deep in the
       machine.
 
-- [ ] **Revision + `review` syntax in contracts** *(agent in flight)* — `/N` on declared
-      names and on type references (`fun creditScore/2(c: Customer/2): Num`), absent
-      meaning 1, so incompatible versions coexist in one file and each declaration names
-      the type revision it carries. Plus a trailing `review` marker for a semantic
-      change, which nothing else can detect. Duplicate key becomes (name, revision).
-      Out of scope until editions exist: which revision a *rule* gets when it writes a
-      bare name. Update grammar.md and spec/contracts.md.
+- [x] **Revision syntax in contracts** — `/N` on declared names and type references
+      (`fun creditScore/2(c: Customer/2): Num`), absent meaning 1; duplicate key is
+      (name, revision); a revised type revises its constructors. grammar.md and
+      spec/contracts.md updated. (Landed with a `review` marker that the tag design
+      then obsoleted — removal below.)
+- [ ] **Remove the `review` marker** — the expose map replaced trailing markers
+      (moving a tag is the meaning-preserved attestation; not moving it is the
+      semantic-change treatment). Strip the keyword from parser, AST, tests, and its
+      grammar.md/contracts.md sections. Small and mechanical.
+- [ ] **Expose/tag syntax** — per the settled design in host-integration.md:
+      - Contract: `expose <Name/N> as <tag>` (`expose Customer/2 as Customer`,
+        `expose Customer/1 as Customer@legacy`); target must be declared in the same
+        file. A name with a single revision is implicitly exposed bare; declaring a
+        second revision cancels that, and missing exposure becomes a check error.
+      - Signatures reference declarations only, never tags; bare references mean `/1`
+        and are rejected once the name has a second revision (forced
+        disambiguation; hash-neutral).
+      - Rule side: `@` token, `Name@tag` in type/expression/constructor positions;
+        rule TypeEnv seeded from the expose map under tag names; `/N` rejected in
+        program mode. Payoff: revision-aware mismatch diagnostics ("different versions
+        of the same type").
 
 ## After that
 
@@ -112,9 +123,10 @@ rather than replacing it.
       (request, answer) pairs only.
 - [ ] **Runtime lifecycle library** *(needs: editions, severity)* — pure functions +
       report objects over org-supplied data: reconcile (pin-hash prefilter,
-      severity-classified reports), retire (cutoff flag: no fresh runs, no new
-      editions, resumes allowed, reversible), drain queries, maintenance-queue
-      reports.
+      severity-classified reports), drain queries (edition and parked-run counts per
+      revision; no retire flag — removal is optimistic, stranded runs alert and the
+      revision is restorable), failed-recompile reports (delivery to authors is
+      org-side).
 - [ ] **Call markers, trace modes, error traces** — the older #15: tail-call trace
       modes (full/budgeted/elided), fuel/metering per turn, runtime error traces, CLI
       rendering.

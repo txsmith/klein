@@ -13,7 +13,8 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, subtyping, records, and the tilde operator (inference sections being rewritten for Operation Bidi)
 - **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (the Operation Bidi surface spec)
 - **[spec/pattern-matching.md](./docs/spec/pattern-matching.md)** - Pattern matching and destructuring bindings: pattern forms, match typing, exhaustiveness, refutability
-- **[spec/contracts.md](./docs/spec/contracts.md)** - Capability contracts: declarations without definitions, the two checking modes, what a contract produces
+- **[spec/host-integration.md](./docs/spec/host-integration.md)** - How rules and a host evolve independently: environments, capabilities, revisions, tags, editions, pins, reconciliation, drain
+- **[spec/contracts.md](./docs/spec/contracts.md)** - The v1 contract language: declarations without definitions, revisions, exposure and tags, the two checking modes; sections marked implemented vs target
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
@@ -40,6 +41,10 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 - **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua (re-centered on embedding, walkable hot tier, fuel)
 - **[source-is-truth-ir-is-a-cache.md](./docs/decisions/2026-07-20-source-is-truth-ir-is-a-cache.md)** - Stored IR integrity: version stamp + checksum, re-derive instead of migrate
 - **[no-load-time-verifier.md](./docs/decisions/2026-07-20-no-load-time-verifier.md)** - Why per-op checks are just unboxing and a verifier was rejected
+
+**Host integration decisions:**
+
+- **[2026-08-06-capability-evolution-through-revisions-and-tags.md](./docs/decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md)** - **Current.** Permanent `/N` revisions, tags via `expose`, recompilation as the compatibility verdict, optimistic removal — with the full rejected-alternatives list.
 
 **Foundational language decisions (still current):**
 
