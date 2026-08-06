@@ -70,6 +70,16 @@ class TypeEnv private constructor(
     fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv =
         TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors, implicitParam = implicitParam)
 
+    fun copy(): TypeEnv =
+        TypeEnv(
+            parent = parent,
+            bindings = bindings.toMutableMap(),
+            typeVars = typeVars.toMutableMap(),
+            typeDefs = typeDefs.toMutableMap(),
+            constructors = constructors.toMutableMap(),
+            implicitParam = implicitParam,
+        )
+
     /** The nearest enclosing binder's implicit-param context: a bare lambda makes `.` available, an
      *  explicit-param lambda or named function blocks it, and nothing at all leaves it unbound. */
     fun implicitParamContext(): ImplicitParamContext =

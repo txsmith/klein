@@ -7,33 +7,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Result of type-checking a source string through the [Checker]. */
-data class InferResult(val type: Type, val errors: List<TypeError>)
-
 /** Parse [src] and run the bidirectional checker over it. Shared by all `klein.check` test suites. */
 fun infer(
     src: String,
     env: TypeEnv = TypeEnv.empty(),
-): InferResult {
+): ProgramCheck {
     val tokens = Lexer(src).tokenize().toList()
     val program = Parser(tokens).parseProgram()
-    val checker = Checker()
-    return InferResult(checker.synthProgram(program, env), checker.getErrors())
+    return Checker().checkProgram(program, env)
 }
-
-/** Result of checking a source string as a capability contract. */
-data class ContractResult(val env: TypeEnv, val errors: List<TypeError>)
 
 /** Parse [src] and check it as a capability contract rather than as a program. */
 fun checkContract(
     src: String,
     env: TypeEnv = TypeEnv.empty(),
-): ContractResult {
+): ContractCheck {
     val tokens = Lexer(src).tokenize().toList()
     val program = Parser(tokens).parseProgram()
-    val checker = Checker()
-    checker.checkContract(program, env)
-    return ContractResult(env, checker.getErrors())
+    return Checker().checkContract(program, env)
 }
 
 /** A type variable for expected types; alpha-equality compares skolems by name, ignoring the id. */

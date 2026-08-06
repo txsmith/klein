@@ -53,9 +53,8 @@ object Klein {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): StageResult<Type> {
-        val checker = Checker()
-        val type = checker.synthProgram(program, env)
-        return StageResult(type, checker.getErrors())
+        val checked = Checker().checkProgram(program, env)
+        return StageResult(checked.type, checked.errors)
     }
 
     /**
@@ -74,9 +73,8 @@ object Klein {
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): StageResult<TypeEnv> {
-        val checker = Checker()
-        checker.checkContract(program, env)
-        return StageResult(env, checker.getErrors())
+        val checked = Checker().checkContract(program, env)
+        return StageResult(checked.env, checked.errors)
     }
 
     /**
