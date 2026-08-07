@@ -226,23 +226,6 @@ class RevisionTypeCheckTest {
         assertEquals("Num/2", error.name)
     }
 
-    // --- the review marker is carried, and changes no typing ---
-
-    @Test
-    fun theReviewMarkerDoesNotAffectChecking() {
-        val result =
-            checkContract(
-                """
-                type Application = Application { amount: Num }
-                type Decision = Decision { approved: Bool }
-
-                fun underwrite/2(a: Application): Decision review
-                """.trimIndent(),
-            )
-        assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
-        assertEquals("(Application) -> Decision", Type.print(result.env.lookup("underwrite/2")!!))
-    }
-
     // --- the bare declaration is unchanged by the presence of a revision ---
 
     @Test
@@ -267,5 +250,49 @@ class RevisionTypeCheckTest {
         val contract = checkContract("maxRetries/2: Num")
         assertNull(contract.env.lookup("maxRetries"))
         assertEquals(TNum, contract.env.lookup("maxRetries/2"))
+    }
+
+    // --- structured identity ---
+
+    @Test
+    fun contractCheckReturnsStructuredDeclarations() {
+        val result =
+            checkContract(
+                """
+                type Customer = Customer { id: Num }
+                type Customer/2 = Customer { id: Num, tier: String }
+
+                fun creditScore(c: Customer): Num
+                fun creditScore/2(c: Customer/2): Num
+                maxRetries: Num
+                """.trimIndent(),
+            )
+        assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
+        assertEquals(
+            listOf(
+                Triple("creditScore", 1, DeclarationKind.Function),
+                Triple("creditScore", 2, DeclarationKind.Function),
+                Triple("maxRetries", 1, DeclarationKind.Value),
+            ),
+            result.declarations.map { Triple(it.name, it.revision, it.kind) },
+        )
+        assertEquals("(Customer/2) -> Num", Type.print(result.declarations[1].type))
+    }
+
+    @Test
+    fun twoRevisionsOfATypeAreUnrelatedNominalTypes() {
+        val result =
+            checkContract(
+                """
+                type Customer = Customer { id: Num }
+                type Customer/2 = Customer { id: Num }
+                """.trimIndent(),
+            )
+        val subtyping = Subtyping()
+        val rev1 = TRef("Customer")
+        val rev2 = TRef("Customer", emptyList(), 2)
+        assertTrue(!subtyping.isSubtype(rev1, rev2, result.env))
+        assertTrue(!subtyping.isSubtype(rev2, rev1, result.env))
+        assertTrue(subtyping.isSubtype(rev2, rev2, result.env))
     }
 }

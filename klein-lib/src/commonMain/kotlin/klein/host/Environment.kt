@@ -1,17 +1,15 @@
 package klein.host
 
 import klein.KleinError
+import klein.check.DeclarationKind
 import klein.check.Type
 import klein.check.TypeEnv
 import klein.interp.Value
-import klein.surface.FunDecl
 import klein.surface.Lexer
 import klein.surface.LexerError
 import klein.surface.ParseError
 import klein.surface.Parser
 import klein.surface.Program
-import klein.surface.ValDecl
-import klein.surface.revisionedName
 
 enum class CapabilityKind { Function, Value }
 
@@ -118,7 +116,18 @@ class Environment internal constructor(
             if (checked.errors.isNotEmpty()) throw EnvironmentError(checked.errors)
             val typeEnv = checked.env
 
-            val declarations = declarationsOf(program, typeEnv)
+            val declarations =
+                checked.declarations.map { decl ->
+                    Declaration(
+                        decl.name,
+                        decl.revision,
+                        when (decl.kind) {
+                            DeclarationKind.Function -> CapabilityKind.Function
+                            DeclarationKind.Value -> CapabilityKind.Value
+                        },
+                        decl.type,
+                    )
+                }
             val registry = Registry(declarations).apply(register)
             declarations
                 .filter { (it.name to it.revision) !in registry.registered }
@@ -156,30 +165,6 @@ class Environment internal constructor(
                 throw EnvironmentError(listOf(e))
             } catch (e: ParseError) {
                 throw EnvironmentError(listOf(e))
-            }
-
-        private fun declarationsOf(
-            program: Program,
-            typeEnv: TypeEnv,
-        ): List<Declaration> =
-            program.stmts.mapNotNull { stmt ->
-                when (stmt) {
-                    is FunDecl ->
-                        Declaration(
-                            stmt.name,
-                            stmt.revision,
-                            CapabilityKind.Function,
-                            typeEnv.lookup(revisionedName(stmt.name, stmt.revision))!!,
-                        )
-                    is ValDecl ->
-                        Declaration(
-                            stmt.name,
-                            stmt.revision,
-                            CapabilityKind.Value,
-                            typeEnv.lookup(revisionedName(stmt.name, stmt.revision))!!,
-                        )
-                    else -> null
-                }
             }
     }
 }

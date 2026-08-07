@@ -107,8 +107,9 @@ internal class MatchCoverage private constructor(
             env: TypeEnv,
         ): List<String> {
             if (core !is TRef) return emptyList()
-            val members = env.allConstructors().filter { it.parentType == core.name }.map { it.name }
-            if (members.isEmpty() && env.lookupConstructor(core.name) != null) return listOf(core.name)
+            val members =
+                env.allConstructors().filter { it.parentType == core.name && it.revision == core.revision }.map { it.name }
+            if (members.isEmpty() && env.lookupConstructor(core.name, core.revision) != null) return listOf(core.name)
             return members
         }
     }

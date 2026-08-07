@@ -1,20 +1,17 @@
 package klein.parser
 
 import klein.surface.FunDecl
-import klein.surface.Ident
 import klein.surface.ParseError
 import klein.surface.TypeDef
-import klein.surface.ValDecl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 /**
- * Revisions (`/N`) and the `review` marker — contract syntax. A revision rides a declared name and
- * every type reference; `review` rides a declaration. Neither ever appears in an expression.
+ * Revisions (`/N`) — contract syntax. A revision rides a declared name and every type reference;
+ * it never appears in an expression.
  */
 class RevisionTest {
     // --- the three declaration positions ---
@@ -37,17 +34,15 @@ class RevisionTest {
     }
 
     @Test
-    fun aTypeDefWithoutARevisionIsRevisionOne() {
+    fun aTypeDefWithoutARevisionRecordsNone() {
         val typeDef = assertIs<TypeDef>(parseProgram("type Customer = Customer { id: Num }").stmts.single())
-        assertEquals(1, typeDef.revision)
+        assertNull(typeDef.revision)
     }
 
     @Test
-    fun revisionOneWrittenOutIsTheSameNodeAsBare() {
-        assertProgramEquals(
-            parseProgram("type Customer/1 = Customer { id: Num }"),
-            parseProgram("type Customer = Customer { id: Num }").stmts.map { it.stripSpan() },
-        )
+    fun revisionOneWrittenOutIsRecorded() {
+        val typeDef = assertIs<TypeDef>(parseProgram("type Customer/1 = Customer { id: Num }").stmts.single())
+        assertEquals(1, typeDef.revision)
     }
 
     @Test
@@ -113,8 +108,8 @@ class RevisionTest {
             """.trimIndent()
         val stmts = parseProgram(source).stmts
         assertEquals(4, stmts.size)
-        assertEquals(listOf(1, 2), stmts.filterIsInstance<TypeDef>().map { it.revision })
-        assertEquals(listOf(1, 2), stmts.filterIsInstance<FunDecl>().map { it.revision })
+        assertEquals(listOf(null, 2), stmts.filterIsInstance<TypeDef>().map { it.revision })
+        assertEquals(listOf(null, 2), stmts.filterIsInstance<FunDecl>().map { it.revision })
     }
 
     // --- type references ---
@@ -210,121 +205,6 @@ class RevisionTest {
         )
     }
 
-    // --- the review marker ---
-
-    @Test
-    fun funDeclarationCarriesTheReviewMarker() {
-        assertProgramEquals(
-            parseProgram("fun underwrite(a: Application): Decision review"),
-            listOf(
-                funDecl(
-                    "underwrite",
-                    listOf(param("a", typeName("Application"))),
-                    typeName("Decision"),
-                    review = true,
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun valDeclarationCarriesTheReviewMarker() {
-        assertProgramEquals(
-            parseProgram("maxRetries: Num review"),
-            listOf(valDecl("maxRetries", typeName("Num"), review = true)),
-        )
-    }
-
-    @Test
-    fun reviewCombinesWithARevision() {
-        assertProgramEquals(
-            parseProgram("fun underwrite/2(a: Application): Decision review"),
-            listOf(
-                funDecl(
-                    "underwrite",
-                    listOf(param("a", typeName("Application"))),
-                    typeName("Decision"),
-                    revision = 2,
-                    review = true,
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun anUnmarkedDeclarationIsNotUnderReview() {
-        val decl = assertIs<FunDecl>(parseProgram("fun underwrite(a: Num): Num").stmts.single())
-        assertFalse(decl.review)
-        val value = assertIs<ValDecl>(parseProgram("maxRetries: Num").stmts.single())
-        assertFalse(value.review)
-    }
-
-    @Test
-    fun aMarkedDeclarationDoesNotSwallowTheNextStatement() {
-        val source =
-            """
-            fun underwrite(a: Num): Num review
-            maxRetries: Num
-            """.trimIndent()
-        val stmts = parseProgram(source).stmts
-        assertEquals(2, stmts.size)
-        assertTrue(assertIs<FunDecl>(stmts[0]).review)
-        assertIs<ValDecl>(stmts[1])
-    }
-
-    // `review` is contextual: everywhere else it is an ordinary identifier.
-
-    @Test
-    fun reviewIsStillAnOrdinaryBindingName() {
-        assertProgramEquals(parseProgram("review = 1"), listOf(valStmt("review", int(1))))
-    }
-
-    @Test
-    fun reviewIsStillAnOrdinaryFunctionName() {
-        assertProgramEquals(
-            parseProgram("fun review(a: Num): Num = a"),
-            listOf(funDef("review", listOf(param("a", typeName("Num"))), id("a"), typeName("Num"))),
-        )
-    }
-
-    @Test
-    fun reviewIsStillAnOrdinaryParameterName() {
-        assertProgramEquals(
-            parseProgram("fun score(review: Num): Num"),
-            listOf(funDecl("score", listOf(param("review", typeName("Num"))), typeName("Num"))),
-        )
-    }
-
-    @Test
-    fun reviewIsStillAnOrdinaryFieldName() {
-        assertProgramEquals(
-            parseProgram("type Case = Case { review: Bool }"),
-            listOf(typeDef("Case", constructors = arrayOf(constructor("Case", field("review", typeName("Bool")))))),
-        )
-    }
-
-    @Test
-    fun reviewIsStillAnOrdinaryDeclaredName() {
-        assertProgramEquals(
-            parseProgram("review: Num"),
-            listOf(valDecl("review", typeName("Num"))),
-        )
-    }
-
-    // The marker must be on the declaration's own line — a `review` below it is a new statement.
-    @Test
-    fun reviewOnTheNextLineIsItsOwnExpression() {
-        val source =
-            """
-            maxRetries: Num
-            review
-            """.trimIndent()
-        val stmts = parseProgram(source).stmts
-        assertEquals(2, stmts.size)
-        assertFalse(assertIs<ValDecl>(stmts[0]).review)
-        assertEquals("review", assertIs<Ident>(stmts[1]).name)
-    }
-
     // --- rejected shapes ---
 
     @Test
@@ -341,17 +221,13 @@ class RevisionTest {
     @Test
     fun aRevisionOnAFunctionDefinitionIsAParseError() {
         assertFailsWith<ParseError> { parseProgram("fun creditScore/2(c: Num): Num = c") }
+        assertFailsWith<ParseError> { parseProgram("fun creditScore/1(c: Num): Num = c") }
     }
 
     @Test
     fun aRevisionOnABindingIsAParseError() {
         assertFailsWith<ParseError> { parseProgram("maxRetries/2: Num = 3") }
         assertFailsWith<ParseError> { parseProgram("maxRetries/2 = 3") }
-    }
-
-    @Test
-    fun reviewOnADefinitionIsAParseError() {
-        assertFailsWith<ParseError> { parseProgram("fun underwrite(a: Num): Num review = a") }
-        assertFailsWith<ParseError> { parseProgram("maxRetries: Num review = 3") }
+        assertFailsWith<ParseError> { parseProgram("maxRetries/1 = 3") }
     }
 }

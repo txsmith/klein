@@ -26,47 +26,48 @@ class TypeDefPreprocessor(
     ): List<TypeDef> {
         val valid = mutableListOf<TypeDef>()
         for (typeDef in typeDefs) {
-            val typeName = revisionedName(typeDef.name, typeDef.revision)
+            val revision = typeDef.revision ?: 1
+            val typeDisplay = revisionedName(typeDef.name, revision)
             if (typeDef.name in PRIMITIVE_TYPE_NAMES) {
-                errors.add(TypeError.ShadowsBuiltinType(typeName, typeDef.span))
+                errors.add(TypeError.ShadowsBuiltinType(typeDisplay, typeDef.span))
                 continue
             }
-            if (env.lookupTypeDef(typeName) != null) {
-                errors.add(TypeError.DuplicateBinding(typeName, typeDef.span))
+            if (env.lookupTypeDef(typeDef.name, revision) != null) {
+                errors.add(TypeError.DuplicateBinding(typeDisplay, typeDef.span))
                 continue
             }
 
             valid.add(typeDef)
             val typeParams = typeDef.typeParams.map { TypeParamInfo(Variance.Bivariant, freshSkolem(it)) }
-            env.registerTypeDef(TypeDefInfo(typeName, typeParams, Type.TRecord(emptyMap()), typeDef.span))
+            env.registerTypeDef(TypeDefInfo(typeDef.name, revision, typeParams, Type.TRecord(emptyMap()), typeDef.span))
 
             for (ctor in typeDef.constructors) {
-                val ctorName = revisionedName(ctor.name, typeDef.revision)
+                val ctorDisplay = revisionedName(ctor.name, revision)
                 if (ctor.name in PRIMITIVE_TYPE_NAMES) {
-                    errors.add(TypeError.ShadowsBuiltinType(ctorName, ctor.span))
+                    errors.add(TypeError.ShadowsBuiltinType(ctorDisplay, ctor.span))
                     continue
                 }
-                if (ctorName == typeName && typeDef.constructors.size > 1) {
-                    errors.add(TypeError.DuplicateBinding(ctorName, ctor.span))
+                if (ctor.name == typeDef.name && typeDef.constructors.size > 1) {
+                    errors.add(TypeError.DuplicateBinding(ctorDisplay, ctor.span))
                     continue
                 }
-                if (env.lookupConstructor(ctorName) != null) {
-                    errors.add(TypeError.DuplicateBinding(ctorName, ctor.span))
+                if (env.lookupConstructor(ctor.name, revision) != null) {
+                    errors.add(TypeError.DuplicateBinding(ctorDisplay, ctor.span))
                     continue
                 }
 
                 val usedTypeVars = ctor.fields.flatMap { collectTypeVarNames(it.type) }.toSet()
                 val declared = typeDef.typeParams.toSet()
                 for (tv in usedTypeVars) {
-                    if (tv !in declared) errors.add(TypeError.UndeclaredTypeParam(tv, typeName, ctor.span))
+                    if (tv !in declared) errors.add(TypeError.UndeclaredTypeParam(tv, typeDisplay, ctor.span))
                 }
                 val ctorTypeParams = typeParams.filter { it.skolem.name in usedTypeVars }
 
                 env.registerConstructor(
-                    ConstructorInfo(ctorName, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeName, ctor.span),
+                    ConstructorInfo(ctor.name, revision, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeDef.name, ctor.span),
                 )
-                if (ctorName != typeName) {
-                    env.registerTypeDef(TypeDefInfo(ctorName, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
+                if (ctor.name != typeDef.name) {
+                    env.registerTypeDef(TypeDefInfo(ctor.name, revision, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
                 }
             }
         }
@@ -81,23 +82,24 @@ class TypeDefPreprocessor(
 
         val allTypeDefs = env.allTypeDefs()
         val allConstructors = env.allConstructors()
-        val variances = mutableMapOf<Pair<String, String>, Variance>()
+        val variances = mutableMapOf<Triple<String, Int, String>, Variance>()
 
         for (info in allTypeDefs) {
-            for (param in info.typeParams) variances[info.name to param.skolem.name] = Variance.Bivariant
+            for (param in info.typeParams) variances[Triple(info.name, info.revision, param.skolem.name)] = Variance.Bivariant
         }
 
         fun update(
             typeExpr: TypeExpr,
-            ownerName: String,
+            owner: Pair<String, Int>,
             polarity: Variance,
         ): Boolean =
             when (typeExpr) {
                 is TypeVar -> {
-                    val current = variances[ownerName to typeExpr.name] ?: return false
+                    val key = Triple(owner.first, owner.second, typeExpr.name)
+                    val current = variances[key] ?: return false
                     val merged = current.meet(polarity)
                     if (merged != current) {
-                        variances[ownerName to typeExpr.name] = merged
+                        variances[key] = merged
                         true
                     } else {
                         false
@@ -107,57 +109,57 @@ class TypeDefPreprocessor(
                 is TypeName -> false
 
                 is AppliedTypeExpr -> {
-                    val refName = revisionedName(typeExpr.name, typeExpr.revision)
-                    val refInfo = env.lookupTypeDef(refName) ?: return false
+                    val refRevision = typeExpr.revision ?: 1
+                    val refInfo = env.lookupTypeDef(typeExpr.name, refRevision) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
                         val paramName = refInfo.typeParams.getOrNull(i)?.skolem?.name ?: break
-                        val paramVariance = variances[refName to paramName] ?: break
+                        val paramVariance = variances[Triple(typeExpr.name, refRevision, paramName)] ?: break
                         val argPolarity =
                             when (paramVariance) {
                                 Variance.Bivariant, Variance.Covariant -> polarity
                                 Variance.Contravariant -> polarity.flip()
                                 Variance.Invariant -> Variance.Invariant
                             }
-                        changed = update(arg, ownerName, argPolarity) || changed
+                        changed = update(arg, owner, argPolarity) || changed
                     }
                     changed
                 }
 
                 is FunctionTypeExpr -> {
                     var changed = false
-                    for (param in typeExpr.paramTypes) changed = update(param, ownerName, polarity.flip()) || changed
-                    changed = update(typeExpr.returnType, ownerName, polarity) || changed
+                    for (param in typeExpr.paramTypes) changed = update(param, owner, polarity.flip()) || changed
+                    changed = update(typeExpr.returnType, owner, polarity) || changed
                     changed
                 }
 
                 is TupleTypeExpr -> {
                     var changed = false
-                    for (element in typeExpr.elements) changed = update(element, ownerName, polarity) || changed
+                    for (element in typeExpr.elements) changed = update(element, owner, polarity) || changed
                     changed
                 }
 
                 is RecordTypeExpr -> {
                     var changed = false
-                    for ((_, fieldType) in typeExpr.fields) changed = update(fieldType, ownerName, polarity) || changed
+                    for ((_, fieldType) in typeExpr.fields) changed = update(fieldType, owner, polarity) || changed
                     changed
                 }
 
-                is OptionalTypeExpr -> update(typeExpr.inner, ownerName, polarity)
+                is OptionalTypeExpr -> update(typeExpr.inner, owner, polarity)
             }
 
         var changed = true
         while (changed) {
             changed = false
             for (ctor in allConstructors) {
-                for (field in ctor.fields) changed = update(field.type, ctor.name, Variance.Covariant) || changed
+                for (field in ctor.fields) changed = update(field.type, ctor.name to ctor.revision, Variance.Covariant) || changed
             }
         }
 
         for (ctor in allConstructors) {
             for (param in ctor.typeParams) {
-                val parentKey = ctor.parentType to param
-                val ctorVar = variances[ctor.name to param] ?: Variance.Bivariant
+                val parentKey = Triple(ctor.parentType, ctor.revision, param)
+                val ctorVar = variances[Triple(ctor.name, ctor.revision, param)] ?: Variance.Bivariant
                 variances[parentKey] = (variances[parentKey] ?: Variance.Bivariant).meet(ctorVar)
             }
         }
@@ -169,7 +171,7 @@ class TypeDefPreprocessor(
         for (info in allTypeDefs) {
             val updated =
                 info.typeParams.map { param ->
-                    param.copy(variance = variances[info.name to param.skolem.name] ?: Variance.Invariant)
+                    param.copy(variance = variances[Triple(info.name, info.revision, param.skolem.name)] ?: Variance.Invariant)
                 }
             env.updateTypeDef(info.copy(typeParams = updated))
         }
@@ -177,7 +179,7 @@ class TypeDefPreprocessor(
 
     private fun buildIfaces(env: TypeEnv) {
         for (ctor in env.allConstructors()) {
-            val ctorTypeDef = env.getTypeDef(ctor.name)
+            val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val ctorEnv = env.child()
             ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.skolem.name, it.skolem) }
             val fields = ctor.fields.associate { it.name to resolveType(it.type, ctorEnv) }
@@ -186,10 +188,11 @@ class TypeDefPreprocessor(
     }
 
     private fun buildParentIfaces(env: TypeEnv) {
-        for ((parentName, ctors) in env.allConstructors().groupBy { it.parentType }) {
+        for ((parent, ctors) in env.allConstructors().groupBy { it.parentType to it.revision }) {
+            val (parentName, revision) = parent
             if (ctors.size == 1 && ctors[0].name == parentName) continue
-            val parentDef = env.lookupTypeDef(parentName) ?: continue
-            val ctorIfaces = ctors.map { env.getTypeDef(it.name).iface }
+            val parentDef = env.lookupTypeDef(parentName, revision) ?: continue
+            val ctorIfaces = ctors.map { env.getTypeDef(it.name, it.revision).iface }
             val commonNames = ctorIfaces.map { it.fields.keys }.reduce { a, b -> a intersect b }
             // A field shared by every constructor is readable through the sum only if its types
             // cleanly join. One whose join is degenerate (no common supertype) is erased from the
@@ -212,9 +215,9 @@ class TypeDefPreprocessor(
 
     private fun bindConstructors(env: TypeEnv) {
         for (ctor in env.allConstructors()) {
-            val ctorTypeDef = env.getTypeDef(ctor.name)
+            val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val skolems = ctorTypeDef.typeParams.map { it.skolem }
-            val resultType = Type.TRef(ctor.name, skolems)
+            val resultType = Type.TRef(ctor.name, skolems, ctor.revision)
             val ctorType =
                 if (ctor.fields.isEmpty()) {
                     resultType
@@ -223,7 +226,7 @@ class TypeDefPreprocessor(
                     Type.TFun(fieldTypes, resultType, ctor.fields.map { it.name })
                 }
             val scheme = if (skolems.isEmpty()) ctorType else Type.TForall(skolems.toSet(), ctorType)
-            env.bind(ctor.name, scheme)
+            env.bind(ctor.name, ctor.revision, scheme)
         }
     }
 

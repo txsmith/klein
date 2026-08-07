@@ -85,8 +85,9 @@ against the revisions they name (`Customer/3` with no such declaration is `Unbou
 revised capability may not carry a function, and a revision on a builtin (`Num/2`) names nothing.
 
 Revision syntax is contract-only. A program that writes `/N` — in a type position or anywhere
-else — is rejected. What a rule sees is governed entirely by exposure, below. *(This rejection is
-target; today program mode still accepts revisioned type references.)*
+else — is rejected (`RevisionInProgram`), and a written `/1` is rejected the same as any other:
+the offence is the syntax, not the number. What a rule sees is governed entirely by exposure,
+below.
 
 ## Exposure and tags
 

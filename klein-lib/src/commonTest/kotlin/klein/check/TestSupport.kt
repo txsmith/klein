@@ -47,6 +47,7 @@ fun Type.alphaEquals(other: Type): Boolean {
             a.fields.keys == b.fields.keys && a.fields.all { (k, v) -> v.alphaEquals(b.fields.getValue(k)) }
         a is TRef && b is TRef ->
             a.name == b.name &&
+                a.revision == b.revision &&
                 a.typeArgs.size == b.typeArgs.size &&
                 a.typeArgs.zip(b.typeArgs).all { (p, q) -> p.alphaEquals(q) }
         a is TOptional && b is TOptional -> a.type.alphaEquals(b.type)

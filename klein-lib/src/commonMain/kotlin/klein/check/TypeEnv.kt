@@ -32,7 +32,20 @@ class TypeEnv private constructor(
         bindings[name] = type
     }
 
+    fun bind(
+        name: String,
+        revision: Int,
+        type: Type,
+    ) {
+        bindings[key(name, revision)] = type
+    }
+
     fun lookup(name: String): Type? = bindings[name] ?: parent?.lookup(name)
+
+    fun lookup(
+        name: String,
+        revision: Int,
+    ): Type? = lookup(key(name, revision))
 
     fun bindTypeVar(
         name: String,
@@ -46,24 +59,35 @@ class TypeEnv private constructor(
     fun localTypeVars(): Set<Type.TSkolem> = typeVars.values.toSet()
 
     fun registerTypeDef(info: TypeDefInfo) {
-        typeDefs[info.name] = info
+        typeDefs[key(info.name, info.revision)] = info
     }
 
     fun updateTypeDef(info: TypeDefInfo) {
-        typeDefs[info.name] = info
+        typeDefs[key(info.name, info.revision)] = info
     }
 
     fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
 
-    fun getTypeDef(name: String): TypeDefInfo = typeDefs.getValue(name)
+    fun lookupTypeDef(
+        name: String,
+        revision: Int,
+    ): TypeDefInfo? = typeDefs[key(name, revision)]
+
+    fun getTypeDef(
+        name: String,
+        revision: Int,
+    ): TypeDefInfo = typeDefs.getValue(key(name, revision))
 
     fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
 
     fun registerConstructor(info: ConstructorInfo) {
-        constructors[info.name] = info
+        constructors[key(info.name, info.revision)] = info
     }
 
-    fun lookupConstructor(name: String): ConstructorInfo? = constructors[name]
+    fun lookupConstructor(
+        name: String,
+        revision: Int,
+    ): ConstructorInfo? = constructors[key(name, revision)]
 
     fun allConstructors(): Collection<ConstructorInfo> = constructors.values
 
@@ -87,5 +111,10 @@ class TypeEnv private constructor(
 
     companion object {
         fun empty(): TypeEnv = TypeEnv(parent = null)
+
+        private fun key(
+            name: String,
+            revision: Int,
+        ): String = if (revision == 1) name else "$name/$revision"
     }
 }

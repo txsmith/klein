@@ -2,6 +2,8 @@ package klein.surface
 
 import klein.surface.TokenKind.*
 
+private fun revisionSuffix(revision: Int?): String = if (revision == null) "" else "/$revision"
+
 fun Token.prettyPrint(): String {
     val base =
         when (kind) {
@@ -34,10 +36,9 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val paramsStr = params.joinToString(", ") { p ->
                 if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
             }
-            val reviewStr = if (review) " review" else ""
-            "${pad}FunDecl ${revisionedName(name, revision)}($paramsStr): ${returnType.prettyPrint()}$reviewStr"
+            "${pad}FunDecl $name${revisionSuffix(revision)}($paramsStr): ${returnType.prettyPrint()}"
         }
-        is ValDecl -> "${pad}ValDecl(${revisionedName(name, revision)}: ${type.prettyPrint()})${if (review) " review" else ""}"
+        is ValDecl -> "${pad}ValDecl($name${revisionSuffix(revision)}: ${type.prettyPrint()})"
         is TypeDef -> {
             val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
             val constructorsStr =
@@ -48,7 +49,7 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
                         "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
                     }
                 }
-            "${pad}type ${revisionedName(name, revision)}$typeParamsStr = $constructorsStr"
+            "${pad}type $name${revisionSuffix(revision)}$typeParamsStr = $constructorsStr"
         }
         is PatternVal -> "${pad}PatternVal(${pattern.prettyPrint()}) =\n${value.prettyPrint(indent + 1)}"
         is Expr -> prettyPrint(indent)
@@ -57,9 +58,9 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
 
 fun TypeExpr.prettyPrint(): String =
     when (this) {
-        is TypeName -> revisionedName(name, revision)
+        is TypeName -> "$name${revisionSuffix(revision)}"
         is TypeVar -> "'$name"
-        is AppliedTypeExpr -> "${revisionedName(name, revision)}<${args.joinToString(", ") { it.prettyPrint() }}>"
+        is AppliedTypeExpr -> "$name${revisionSuffix(revision)}<${args.joinToString(", ") { it.prettyPrint() }}>"
         is FunctionTypeExpr -> "(${if (paramTypes.isEmpty()) {
             "()"
         } else {

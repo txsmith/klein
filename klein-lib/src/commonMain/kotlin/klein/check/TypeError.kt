@@ -88,6 +88,15 @@ sealed class TypeError : KleinError {
         override val message = "'$name' is already defined"
     }
 
+    data class RevisionInProgram(
+        val name: String,
+        val revision: Int,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "'$name/$revision' names a revision; revision syntax is only allowed in a capability contract"
+    }
+
     data class DeclarationWithoutBody(
         val name: String,
         override val span: SourceSpan,

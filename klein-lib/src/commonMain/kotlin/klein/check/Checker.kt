@@ -17,8 +17,18 @@ data class ProgramCheck(
     val errors: List<TypeError>,
 )
 
+enum class DeclarationKind { Function, Value }
+
+data class ContractDeclaration(
+    val name: String,
+    val revision: Int,
+    val kind: DeclarationKind,
+    val type: Type,
+)
+
 data class ContractCheck(
     val env: TypeEnv,
+    val declarations: List<ContractDeclaration>,
     val errors: List<TypeError>,
 )
 
@@ -56,6 +66,7 @@ sealed class ExpectedTypeSource {
 
 class Checker {
     private val errors = mutableListOf<TypeError>()
+    private var contractMode = false
     private var skolemCounter = 0
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)
@@ -68,6 +79,7 @@ class Checker {
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramCheck {
         errors.clear()
+        contractMode = false
         val scope = env.copy()
         val type = synthBlockStmts(program.stmts, scope)
         return ProgramCheck(type, errors.toList())
@@ -78,40 +90,49 @@ class Checker {
         env: TypeEnv = TypeEnv.empty(),
     ): ContractCheck {
         errors.clear()
+        contractMode = true
         val scope = env.copy()
-        checkContractInto(program, scope)
-        return ContractCheck(scope, errors.toList())
+        val declarations = checkContractInto(program, scope)
+        return ContractCheck(scope, declarations, errors.toList())
     }
 
     private fun checkContractInto(
         program: Program,
         env: TypeEnv,
-    ) {
+    ): List<ContractDeclaration> {
         preprocessor.process(program.stmts.filterIsInstance<TypeDef>(), env)
 
-        val declared = mutableSetOf<String>()
+        val declared = mutableSetOf<Pair<String, Int>>()
         fun declare(
             name: String,
+            revision: Int,
             span: SourceSpan,
         ): Boolean {
-            if (declared.add(name)) return true
-            recordError(TypeError.DuplicateBinding(name, span))
+            if (declared.add(name to revision)) return true
+            recordError(TypeError.DuplicateBinding(revisionedName(name, revision), span))
             return false
         }
 
+        val declarations = mutableListOf<ContractDeclaration>()
         program.stmts.forEach { stmt ->
             when (stmt) {
                 is TypeDef -> {}
-                is FunDecl ->
-                    if (declare(revisionedName(stmt.name, stmt.revision), stmt.span)) {
-                        bindFunDecl(stmt, env)
-                        rejectCarriedFunctions(revisionedName(stmt.name, stmt.revision), stmt.span, env, isCallable = true)
+                is FunDecl -> {
+                    val revision = stmt.revision ?: 1
+                    if (declare(stmt.name, revision, stmt.span)) {
+                        val type = bindFunDecl(stmt, env)
+                        rejectCarriedFunctions(revisionedName(stmt.name, revision), type, stmt.span, env, isCallable = true)
+                        declarations.add(ContractDeclaration(stmt.name, revision, DeclarationKind.Function, type))
                     }
-                is ValDecl ->
-                    if (declare(revisionedName(stmt.name, stmt.revision), stmt.span)) {
-                        bindValDecl(stmt, env)
-                        rejectCarriedFunctions(revisionedName(stmt.name, stmt.revision), stmt.span, env, isCallable = false)
+                }
+                is ValDecl -> {
+                    val revision = stmt.revision ?: 1
+                    if (declare(stmt.name, revision, stmt.span)) {
+                        val type = bindValDecl(stmt, env)
+                        rejectCarriedFunctions(revisionedName(stmt.name, revision), type, stmt.span, env, isCallable = false)
+                        declarations.add(ContractDeclaration(stmt.name, revision, DeclarationKind.Value, type))
                     }
+                }
                 is FunDef -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
                 is Val -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
                 is PatternVal ->
@@ -119,6 +140,7 @@ class Checker {
                 is Expr -> recordError(TypeError.ExpressionInContract(stmt.span))
             }
         }
+        return declarations
     }
 
     fun synth(
@@ -176,18 +198,29 @@ class Checker {
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Type {
+        stmts.forEach { stmt ->
+            if (stmt is TypeDef && stmt.revision != null) {
+                recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
+            }
+        }
         preprocessor.process(stmts.filterIsInstance<TypeDef>(), env)
 
         stmts.forEach { stmt ->
             when (stmt) {
-                is FunDecl -> {
-                    recordError(TypeError.DeclarationWithoutBody(revisionedName(stmt.name, stmt.revision), stmt.span))
-                    bindFunDecl(stmt, env)
-                }
-                is ValDecl -> {
-                    recordError(TypeError.DeclarationWithoutBody(revisionedName(stmt.name, stmt.revision), stmt.span))
-                    bindValDecl(stmt, env)
-                }
+                is FunDecl ->
+                    if (stmt.revision != null) {
+                        recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
+                    } else {
+                        recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
+                        bindFunDecl(stmt, env)
+                    }
+                is ValDecl ->
+                    if (stmt.revision != null) {
+                        recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
+                    } else {
+                        recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
+                        bindValDecl(stmt, env)
+                    }
                 else -> {}
             }
         }
@@ -306,22 +339,21 @@ class Checker {
     private fun bindFunDecl(
         stmt: FunDecl,
         env: TypeEnv,
-    ) {
+    ): Type {
         val (sigEnv, paramTypes) = openSignature(stmt.params, stmt.returnType, env)
         val returnType = resolveType(stmt.returnType, sigEnv)
-        env.bind(
-            revisionedName(stmt.name, stmt.revision),
-            quantify(sigEnv.localTypeVars(), TFun(paramTypes, returnType, stmt.params.map { it.name })),
-        )
+        val type = quantify(sigEnv.localTypeVars(), TFun(paramTypes, returnType, stmt.params.map { it.name }))
+        env.bind(stmt.name, stmt.revision ?: 1, type)
+        return type
     }
 
     private fun rejectCarriedFunctions(
         name: String,
+        bound: Type,
         span: SourceSpan,
         env: TypeEnv,
         isCallable: Boolean,
     ) {
-        val bound = env.lookup(name) ?: return
         val body = if (bound is TForall) bound.body else bound
         val carried =
             if (isCallable && body is TFun) {
@@ -336,7 +368,7 @@ class Checker {
     private fun carriesFunction(
         type: Type,
         env: TypeEnv,
-        seen: MutableSet<String>,
+        seen: MutableSet<Pair<String, Int>>,
     ): Boolean =
         when (type) {
             is TFun -> true
@@ -344,11 +376,11 @@ class Checker {
             is TRecord -> type.fields.values.any { carriesFunction(it, env, seen) }
             is TForall -> carriesFunction(type.body, env, seen)
             is TRef ->
-                if (!seen.add(type.name)) {
+                if (!seen.add(type.name to type.revision)) {
                     false
                 } else {
                     type.typeArgs.any { carriesFunction(it, env, seen) } ||
-                        env.lookupTypeDef(type.name)?.iface?.fields?.values.orEmpty().any {
+                        env.lookupTypeDef(type.name, type.revision)?.iface?.fields?.values.orEmpty().any {
                             carriesFunction(it, env, seen)
                         }
                 }
@@ -377,10 +409,12 @@ class Checker {
     private fun bindValDecl(
         stmt: ValDecl,
         env: TypeEnv,
-    ) {
+    ): Type {
         val sigEnv = env.child()
         introduceTypeVars(listOf(stmt.type), sigEnv)
-        env.bind(revisionedName(stmt.name, stmt.revision), quantify(sigEnv.localTypeVars(), resolveType(stmt.type, sigEnv)))
+        val type = quantify(sigEnv.localTypeVars(), resolveType(stmt.type, sigEnv))
+        env.bind(stmt.name, stmt.revision ?: 1, type)
+        return type
     }
 
     private fun reportDuplicateParams(params: List<Param>) {
@@ -688,8 +722,8 @@ class Checker {
     ) {
         val valueType: Type =
             if (pattern.tag != null) {
-                val ctor = env.lookupConstructor(pattern.tag)
-                if (ctor == null || core !is TRef || (core.name != pattern.tag && ctor.parentType != core.name)) {
+                val ctor = if (core is TRef) env.lookupConstructor(pattern.tag, core.revision) else null
+                if (core !is TRef || ctor == null || (core.name != pattern.tag && ctor.parentType != core.name)) {
                     recordError(TypeError.NotAConstructorOf(pattern.tag, core, pattern.span))
                     return
                 }
@@ -711,9 +745,9 @@ class Checker {
         env: TypeEnv,
     ): TRef {
         if (core.name == name) return core
-        val parentDef = env.getTypeDef(core.name)
+        val parentDef = env.getTypeDef(core.name, core.revision)
         val argByName = parentDef.typeParams.map { it.skolem.name }.zip(core.typeArgs).toMap()
-        return TRef(name, ctor.typeParams.map { argByName[it] ?: TBottom })
+        return TRef(name, ctor.typeParams.map { argByName[it] ?: TBottom }, core.revision)
     }
 
     private fun joinArmTypes(
@@ -854,7 +888,7 @@ class Checker {
             is TRecord ->
                 rec.fields[field] ?: recordError(TypeError.MissingField(field, rec, span))
             is TRef -> {
-                val def = env.lookupTypeDef(rec.name)
+                val def = env.lookupTypeDef(rec.name, rec.revision)
                 val fieldType = def?.iface?.fields?.get(field)
                 if (def == null || fieldType == null) {
                     recordError(TypeError.MissingField(field, rec, span))
@@ -970,16 +1004,21 @@ class Checker {
     ): Type =
         when (typeExpr) {
             is TypeName ->
-                primitiveType(typeExpr.name).takeIf { typeExpr.revision == 1 } ?: run {
-                    val name = revisionedName(typeExpr.name, typeExpr.revision)
-                    val def = env.lookupTypeDef(name)
-                    when {
-                        def == null -> recordError(TypeError.UnboundVariable(name, typeExpr.span))
-                        def.typeParams.isNotEmpty() -> {
-                            recordError(TypeError.TypeArityMismatch(name, def.typeParams.size, 0, typeExpr.span))
-                            TRef(name, emptyList())
+                if (!contractMode && typeExpr.revision != null) {
+                    recordError(TypeError.RevisionInProgram(typeExpr.name, typeExpr.revision, typeExpr.span))
+                } else {
+                    primitiveType(typeExpr.name).takeIf { typeExpr.revision == null || typeExpr.revision == 1 } ?: run {
+                        val revision = typeExpr.revision ?: 1
+                        val display = revisionedName(typeExpr.name, typeExpr.revision)
+                        val def = env.lookupTypeDef(typeExpr.name, revision)
+                        when {
+                            def == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
+                            def.typeParams.isNotEmpty() -> {
+                                recordError(TypeError.TypeArityMismatch(display, def.typeParams.size, 0, typeExpr.span))
+                                TRef(typeExpr.name, emptyList(), revision)
+                            }
+                            else -> TRef(typeExpr.name, emptyList(), revision)
                         }
-                        else -> TRef(name, emptyList())
                     }
                 }
             is FunctionTypeExpr ->
@@ -997,19 +1036,23 @@ class Checker {
             is TypeVar ->
                 env.lookupTypeVar(typeExpr.name)
                     ?: recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-            is AppliedTypeExpr -> {
-                val name = revisionedName(typeExpr.name, typeExpr.revision)
-                val info = env.lookupTypeDef(name)
-                val args = typeExpr.args.map { resolveType(it, env) }
-                when {
-                    info == null -> recordError(TypeError.UnboundVariable(name, typeExpr.span))
-                    info.typeParams.size != args.size -> {
-                        recordError(TypeError.TypeArityMismatch(name, info.typeParams.size, args.size, typeExpr.span))
-                        TRef(name, args)
+            is AppliedTypeExpr ->
+                if (!contractMode && typeExpr.revision != null) {
+                    recordError(TypeError.RevisionInProgram(typeExpr.name, typeExpr.revision, typeExpr.span))
+                } else {
+                    val revision = typeExpr.revision ?: 1
+                    val display = revisionedName(typeExpr.name, typeExpr.revision)
+                    val info = env.lookupTypeDef(typeExpr.name, revision)
+                    val args = typeExpr.args.map { resolveType(it, env) }
+                    when {
+                        info == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
+                        info.typeParams.size != args.size -> {
+                            recordError(TypeError.TypeArityMismatch(display, info.typeParams.size, args.size, typeExpr.span))
+                            TRef(typeExpr.name, args, revision)
+                        }
+                        else -> TRef(typeExpr.name, args, revision)
                     }
-                    else -> TRef(name, args)
                 }
-            }
         }
 
     private fun primitiveType(name: String): Type? =

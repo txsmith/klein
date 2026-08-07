@@ -88,10 +88,14 @@ class ConstraintGenerator(
                 )
 
             lower is TRef && upper is TRef -> {
-                val lowerDef = env.lookupTypeDef(lower.name)
-                val upperDef = env.lookupTypeDef(upper.name)
+                val lowerDef = env.lookupTypeDef(lower.name, lower.revision)
+                val upperDef = env.lookupTypeDef(upper.name, upper.revision)
                 val related =
-                    lower.name == upper.name || env.lookupConstructor(lower.name)?.parentType == upper.name
+                    lower.revision == upper.revision &&
+                        (
+                            lower.name == upper.name ||
+                                env.lookupConstructor(lower.name, lower.revision)?.parentType == upper.name
+                        )
                 if (lowerDef == null || upperDef == null || !related) {
                     emptyMap<TSkolem, ConstraintInterval>() to listOf(Failure(lower, upper))
                 } else {
@@ -117,7 +121,7 @@ class ConstraintGenerator(
 
             // A nominal lower bound meets a structural record: unfold to its interface and match
             // structurally, so a type variable in the record can be solved from a nominal argument.
-            lower is TRef && upper is TRecord && env.lookupTypeDef(lower.name) != null ->
+            lower is TRef && upper is TRecord && env.lookupTypeDef(lower.name, lower.revision) != null ->
                 generate(quantified, unknowns, subtyping.ifaceOf(lower, env), upper, env)
 
             else ->
@@ -261,7 +265,7 @@ class ConstraintGenerator(
                 is TRecord -> t.fields.values.forEach { walk(it, positive) }
                 is TOptional -> walk(t.type, positive)
                 is TRef -> {
-                    val def = env.lookupTypeDef(t.name)
+                    val def = env.lookupTypeDef(t.name, t.revision)
                     t.typeArgs.forEachIndexed { i, arg ->
                         when (def?.typeParams?.getOrNull(i)?.variance) {
                             Variance.Covariant -> walk(arg, positive)

@@ -318,16 +318,14 @@ fun funDecl(
     name: String,
     params: List<Param>,
     returnType: TypeExpr,
-    revision: Int = 1,
-    review: Boolean = false,
-) = FunDecl(name, params, returnType, noSpan, revision, review)
+    revision: Int? = null,
+) = FunDecl(name, params, returnType, noSpan, revision)
 
 fun valDecl(
     name: String,
     type: TypeExpr,
-    revision: Int = 1,
-    review: Boolean = false,
-) = ValDecl(name, type, noSpan, revision, review)
+    revision: Int? = null,
+) = ValDecl(name, type, noSpan, revision)
 
 fun ascription(
     expr: Expr,
@@ -338,7 +336,7 @@ fun typeDef(
     name: String,
     typeParams: List<String> = emptyList(),
     vararg constructors: Constructor,
-    revision: Int = 1,
+    revision: Int? = null,
 ) = TypeDef(name, typeParams, constructors.toList(), noSpan, revision)
 
 fun constructor(
@@ -353,7 +351,7 @@ fun field(
 
 fun typeName(
     name: String,
-    revision: Int = 1,
+    revision: Int? = null,
 ) = TypeName(name, noSpan, revision)
 
 fun typeVar(name: String) = TypeVar(name, noSpan)
@@ -361,7 +359,7 @@ fun typeVar(name: String) = TypeVar(name, noSpan)
 fun appliedType(
     name: String,
     vararg args: TypeExpr,
-    revision: Int = 1,
+    revision: Int? = null,
 ) = AppliedTypeExpr(name, args.toList(), noSpan, revision)
 
 fun functionType(
@@ -397,8 +395,8 @@ fun Stmt.stripSpan(): Stmt =
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
         is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
-        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan, revision, review)
-        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan, revision, review)
+        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan, revision)
+        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan, revision)
         is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan, revision)
         is Expr -> stripSpans()
     }

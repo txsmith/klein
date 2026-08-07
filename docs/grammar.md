@@ -25,7 +25,7 @@ field_decl  = IDENT ':' type
 
 fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 
-fun_decl    = 'fun' IDENT revision? '(' params? ')' ':' type 'review'?   # declared, not defined — no body
+fun_decl    = 'fun' IDENT revision? '(' params? ')' ':' type   # declared, not defined — no body
 
 stmt        = binding
             | val_decl
@@ -34,7 +34,7 @@ stmt        = binding
 binding     = IDENT (':' type)? '=' block_or_expr
             | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
 
-val_decl    = IDENT revision? ':' type 'review'?   # declared, not defined — no value
+val_decl    = IDENT revision? ':' type   # declared, not defined — no value
 
 block_or_expr = block
               | expr
@@ -189,23 +189,6 @@ can put a `/` where a revision goes, because a type is never an operand of an ar
 and a declared name is never an expression. The one lookahead the parser needs is for `val_decl`,
 where a statement may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
 declaration, and anything else is the division it has always been (`total / 2` is unchanged).
-
-## The `review` Marker
-
-A trailing `review` on a `fun_decl` or `val_decl`, after the type and on the same line:
-
-```klein
-fun underwrite/2(a: Application): Decision review
-maxRetries/2: Num review
-```
-
-It records that the *meaning* changed while the types did not — the one thing a signature
-comparison cannot detect (see [ideas/host-integration.md](./ideas/host-integration.md)). It is a
-**contextual keyword**: `review` remains an ordinary identifier everywhere else — a binding name, a
-function name, a parameter, a field, even a declared capability (`review: Num`). Only the position
-immediately after a declaration's type, on that declaration's own line, reads as the marker; a
-`review` on the following line is an expression statement. It is rejected on a definition
-(`x: Num review = 3`).
 
 ## Indentation Model
 

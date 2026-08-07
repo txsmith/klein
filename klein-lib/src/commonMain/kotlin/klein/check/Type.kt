@@ -43,6 +43,7 @@ sealed class Type {
     data class TRef(
         val name: String,
         val typeArgs: List<Type> = emptyList(),
+        val revision: Int = 1,
     ) : Type()
 
     data class TSkolem(
@@ -78,12 +79,14 @@ sealed class Type {
                 is TFun -> "(${type.params.joinToString(", ") { print(it) }}) -> ${print(type.result)}"
                 is TRecord -> printRecord(type)
                 is TOptional -> if (type.type is TFun) "(${print(type.type)})?" else "${print(type.type)}?"
-                is TRef ->
+                is TRef -> {
+                    val name = if (type.revision == 1) type.name else "${type.name}/${type.revision}"
                     if (type.typeArgs.isEmpty()) {
-                        type.name
+                        name
                     } else {
-                        "${type.name}<${type.typeArgs.joinToString(", ") { print(it) }}>"
+                        "$name<${type.typeArgs.joinToString(", ") { print(it) }}>"
                     }
+                }
             }
 
         private fun printRecord(rec: TRecord): String {
@@ -104,6 +107,7 @@ data class TypeParamInfo(
 
 data class TypeDefInfo(
     val name: String,
+    val revision: Int,
     val typeParams: List<TypeParamInfo>,
     val iface: Type.TRecord,
     val span: SourceSpan,
@@ -111,6 +115,7 @@ data class TypeDefInfo(
 
 data class ConstructorInfo(
     val name: String,
+    val revision: Int,
     val typeParams: List<String>,
     val fields: List<FieldDecl>,
     val parentType: String,
@@ -146,7 +151,7 @@ internal fun substitute(
         is TFun -> TFun(type.params.map { substitute(it, subst) }, substitute(type.result, subst), type.paramNames)
         is TRecord -> TRecord(type.fields.mapValues { substitute(it.value, subst) })
         is TOptional -> TOptional(substitute(type.type, subst))
-        is TRef -> TRef(type.name, type.typeArgs.map { substitute(it, subst) })
+        is TRef -> TRef(type.name, type.typeArgs.map { substitute(it, subst) }, type.revision)
         is TForall -> TForall(type.params, substitute(type.body, subst - type.params))
         TNum, TStr, TBool, TUnit, TNull, TTop, TBottom -> type
     }
