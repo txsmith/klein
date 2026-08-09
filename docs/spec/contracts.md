@@ -88,8 +88,14 @@ revisions of a type are unrelated nominal types: nothing is inherited, and neith
 of the other.
 
 A revised signature is checked exactly like any other: its parameter and return types resolve
-against the revisions they name (`Customer/3` with no such declaration is `UnboundVariable`), a
-revised capability may not carry a function, and a revision on a builtin (`Num/2`) names nothing.
+against the revisions they name (`Customer/3` with no such declaration is `UnboundVariable`), and a
+revised capability may not carry a function.
+
+**A built-in type has no revisions.** A revision names one version of *declared* vocabulary, and
+`Num`, `String`, `Bool`, `Unit`, `Any` and `Nothing` are never declared — a contract cannot define
+them at any revision. So `Num/2` is `RevisionOnPrimitive`, in every position a type may appear, and
+so is `Num/1`: as with a rule writing `/N`, the offence is writing the syntax at all rather than the
+number it names. Bare `Num` is of course unaffected.
 
 Revision syntax is contract-only. A rule that writes `/N` — in a type position or anywhere else —
 is a parse error, and a written `/1` is rejected the same as any other: the offence is the syntax,

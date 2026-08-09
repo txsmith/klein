@@ -1,6 +1,7 @@
 package klein.check
 
 import klein.Revision
+import klein.SourceSpan
 import klein.check.Type.*
 import klein.surface.*
 
@@ -26,17 +27,18 @@ class TypeResolver(
         when (typeExpr) {
             is TypeName -> {
                 val revision = typeExpr.revision ?: Revision(1)
-                primitiveType(typeExpr.name).takeIf { revision.value == 1 } ?: run {
-                    val display = revisionedName(typeExpr.name, typeExpr.revision)
-                    val def = env.lookupTypeDef(typeExpr.name, revision)
-                    when {
-                        def == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
-                        def.typeParams.isNotEmpty() -> {
-                            recordError(TypeError.TypeArityMismatch(display, def.typeParams.size, 0, typeExpr.span))
-                            TRef(typeExpr.name, emptyList(), revision)
-                        }
-                        else -> TRef(typeExpr.name, emptyList(), revision)
+                val primitive = primitiveType(typeExpr.name)
+                val display = revisionedName(typeExpr.name, typeExpr.revision)
+                val def = if (primitive == null) env.lookupTypeDef(typeExpr.name, revision) else null
+                when {
+                    primitive != null ->
+                        rejectRevisionOnPrimitive(typeExpr.name, typeExpr.revision, typeExpr.span) ?: primitive
+                    def == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
+                    def.typeParams.isNotEmpty() -> {
+                        recordError(TypeError.TypeArityMismatch(display, def.typeParams.size, 0, typeExpr.span))
+                        TRef(typeExpr.name, emptyList(), revision)
                     }
+                    else -> TRef(typeExpr.name, emptyList(), revision)
                 }
             }
             is FunctionTypeExpr ->
@@ -59,7 +61,9 @@ class TypeResolver(
                 val display = revisionedName(typeExpr.name, typeExpr.revision)
                 val info = env.lookupTypeDef(typeExpr.name, revision)
                 val args = typeExpr.args.map { resolve(it, env) }
+                val primitiveRejection = rejectRevisionOnPrimitive(typeExpr.name, typeExpr.revision, typeExpr.span)
                 when {
+                    primitiveRejection != null -> primitiveRejection
                     info == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
                     info.typeParams.size != args.size -> {
                         recordError(TypeError.TypeArityMismatch(display, info.typeParams.size, args.size, typeExpr.span))
@@ -109,6 +113,22 @@ class TypeResolver(
             }
         return sigEnv to paramTypes
     }
+
+    /**
+     * A written revision on a built-in type, at any number. Takes the *unresolved* revision, since
+     * the point is to tell `Num` from `Num/1` — everywhere else they mean the same thing, and here
+     * only one of them was written by a person.
+     */
+    private fun rejectRevisionOnPrimitive(
+        name: String,
+        revision: Revision?,
+        span: SourceSpan,
+    ): Type? =
+        if (revision != null && primitiveType(name) != null) {
+            recordError(TypeError.RevisionOnPrimitive(name, revision, span))
+        } else {
+            null
+        }
 
     private fun primitiveType(name: String): Type? =
         when (name) {

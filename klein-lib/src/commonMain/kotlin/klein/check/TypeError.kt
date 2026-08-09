@@ -1,6 +1,7 @@
 package klein.check
 
 import klein.KleinError
+import klein.Revision
 import klein.SourceSpan
 
 sealed class TypeError : KleinError {
@@ -126,6 +127,21 @@ sealed class TypeError : KleinError {
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type '$typeName' expects $expected type parameter(s), got $actual"
+    }
+
+    /**
+     * A revision names one version of *declared* vocabulary, and a built-in type is never declared —
+     * a contract cannot define `Num` at any revision, so `Num/1` is as meaningless as `Num/2`.
+     * `/1` is rejected too: it survives elsewhere only because revision 1 is the default, and
+     * letting it pass here would make the bare name and the written `/1` differ in what they permit.
+     */
+    data class RevisionOnPrimitive(
+        val typeName: String,
+        val revision: Revision,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "'$typeName' is a built-in type and has no revisions; write '$typeName' without '/${revision.value}'"
     }
 
     data class ImplicitParamOutsideLambda(
