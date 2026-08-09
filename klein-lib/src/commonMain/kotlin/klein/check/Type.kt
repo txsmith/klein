@@ -1,5 +1,6 @@
 package klein.check
 
+import klein.Revision
 import klein.surface.FieldDecl
 import klein.SourceSpan
 import klein.check.Type.*
@@ -43,7 +44,7 @@ sealed class Type {
     data class TRef(
         val name: String,
         val typeArgs: List<Type> = emptyList(),
-        val revision: Int = 1,
+        val revision: Revision = Revision(1),
     ) : Type()
 
     data class TSkolem(
@@ -80,7 +81,7 @@ sealed class Type {
                 is TRecord -> printRecord(type)
                 is TOptional -> if (type.type is TFun) "(${print(type.type)})?" else "${print(type.type)}?"
                 is TRef -> {
-                    val name = if (type.revision == 1) type.name else "${type.name}/${type.revision}"
+                    val name = if (type.revision.value == 1) type.name else "${type.name}/${type.revision.value}"
                     if (type.typeArgs.isEmpty()) {
                         name
                     } else {
@@ -107,7 +108,7 @@ data class TypeParamInfo(
 
 data class TypeDefInfo(
     val name: String,
-    val revision: Int,
+    val revision: Revision,
     val typeParams: List<TypeParamInfo>,
     val iface: Type.TRecord,
     val span: SourceSpan,
@@ -115,9 +116,9 @@ data class TypeDefInfo(
 
 data class ConstructorInfo(
     val name: String,
-    val revision: Int,
+    val revision: Revision,
     val typeParams: List<String>,
-    val fields: List<FieldDecl>,
+    val fields: List<FieldDecl<*>>,
     val parentType: String,
     val span: SourceSpan,
 )

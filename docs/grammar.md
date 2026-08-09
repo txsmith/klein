@@ -7,7 +7,8 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ## Expression Grammar
 
 ```
-prog        = (type_def | fun_def | fun_decl | release | stmt)*
+prog        = (type_def | fun_def | stmt)*         # a rule; Parser.parseProgram()
+contract    = (type_def | fun_decl | val_decl | release)*   # Parser.parseContract()
 
 type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
 
@@ -31,7 +32,6 @@ fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 fun_decl    = 'fun' IDENT revision? '(' params? ')' ':' type   # declared, not defined — no body
 
 stmt        = binding
-            | val_decl
             | expr
 
 binding     = IDENT (':' type)? '=' block_or_expr
@@ -143,19 +143,21 @@ fun creditCheck(c: Customer): Num
 maxRetries: Num
 ```
 
-They parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body.
+They parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body,
+and not statements: they are `Declaration`s, held by a `ContractExpr` rather than by a `Program`.
 
 The annotation is what tells a declaration apart from a definition. After the parameter list, `fun`
-with `: type` and no `=` is a `fun_decl`, while `fun mystery()` with neither is still the parse
-error "Expected '='". A `val_decl` likewise requires its annotation — `IDENT` alone is an
-expression, not a declaration.
+with `: type` and no `=` is a `fun_decl`, while `fun mystery()` with neither is still a parse error.
+A `val_decl` likewise requires its annotation — `IDENT` alone is an expression, not a declaration.
 
 Neither form consumes anything past its type: a bodiless declaration never absorbs the following
 line, even when that line opens an indented block.
 
-The parser accepts both wherever a statement is legal, and has no idea whether it is reading a
-program or a contract. Which statements are legal in which — and what a contract is for — is
-checker semantics: see [spec/contracts.md](./spec/contracts.md).
+`prog` and `contract` are separate productions with separate entry points, so the parser always
+knows which kind of file it is reading. A form written into the wrong one is a **parse error at the
+place it is written**: a bodiless `fun` or a `val_decl` in a program, and a definition, a bare
+expression or a `release` block in a contract. What a contract is *for* is still checker semantics:
+see [spec/contracts.md](./spec/contracts.md).
 
 ## Revisions
 
@@ -185,12 +187,16 @@ the same name, and declaring both is a duplicate. The suffix appears in exactly 
 A revision never appears in an expression — rules do not write them, only contracts do. `Customer`
 and `Customer/2` are unrelated nominal types; nothing is inherited between revisions.
 
+Revisions belong to the `contract` production alone. The rule parser reads every type reference with
+a revision reader that has nothing to return, so a `/N` anywhere in a program is a parse error and
+the parsed rule provably carries none.
+
 ### `/` versus division
 
 No new token: a revision reuses `SLASH` and is recognized by position. Nothing else in the grammar
 can put a `/` where a revision goes, because a type is never an operand of an arithmetic operator
 and a declared name is never an expression. The one lookahead the parser needs is for `val_decl`,
-where a statement may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
+where a contract line may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
 declaration, and anything else is the division it has always been (`total / 2` is unchanged).
 
 ## Releases
@@ -219,9 +225,9 @@ which is not a legal statement otherwise. Everywhere else it is an ordinary iden
 positional recognition used for revisions, and for the same reason: the surface stays free for
 rule authors.
 
-Like every other contract-only form, a release block parses in both kinds of file. A release in a
-program is a type error rather than a parse error, so checking continues and the rest of the file
-is still diagnosed.
+A release block belongs to the `contract` production. The rule parser runs the same lookahead for
+one reason only: to say "a release block belongs in a capability contract" rather than letting the
+line fail as a stray expression.
 
 ## Indentation Model
 

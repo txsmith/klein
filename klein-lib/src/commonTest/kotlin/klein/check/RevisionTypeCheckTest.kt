@@ -1,6 +1,8 @@
 package klein.check
 
+import klein.Revision
 import klein.check.Type.*
+import klein.check.contract.DeclarationKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -270,9 +272,9 @@ class RevisionTypeCheckTest {
         assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
         assertEquals(
             listOf(
-                Triple("creditScore", 1, DeclarationKind.Function),
-                Triple("creditScore", 2, DeclarationKind.Function),
-                Triple("maxRetries", 1, DeclarationKind.Value),
+                Triple("creditScore", Revision(1), DeclarationKind.Function),
+                Triple("creditScore", Revision(2), DeclarationKind.Function),
+                Triple("maxRetries", Revision(1), DeclarationKind.Value),
             ),
             result.declarations.map { Triple(it.name, it.revision, it.kind) },
         )
@@ -290,7 +292,7 @@ class RevisionTypeCheckTest {
             )
         val subtyping = Subtyping()
         val rev1 = TRef("Customer")
-        val rev2 = TRef("Customer", emptyList(), 2)
+        val rev2 = TRef("Customer", emptyList(), Revision(2))
         assertTrue(!subtyping.isSubtype(rev1, rev2, result.env))
         assertTrue(!subtyping.isSubtype(rev2, rev1, result.env))
         assertTrue(subtyping.isSubtype(rev2, rev2, result.env))

@@ -1,0 +1,22 @@
+package klein
+
+import kotlin.jvm.JvmInline
+
+/**
+ * The `/N` half of a declaration's key. `contracts.md` §Revisions has one rule — *the key of a
+ * declaration is (name, revision), and a bare declaration is revision 1* — and this type is what
+ * makes that rule legible in the signatures instead of in a comment.
+ *
+ * A revision is contract-side data: it identifies a declaration, permanently. It is not a version
+ * number a person orders migrations by; that is `ReleaseNumber`, and the two are different types
+ * precisely so one can never be passed for the other.
+ *
+ * It lives in the root package for the same reason [SourceSpan] does: `surface`, `check` and
+ * `host` all need it, and none of them may depend on another.
+ */
+@JvmInline
+value class Revision(
+    val value: Int,
+) {
+    override fun toString(): String = value.toString()
+}

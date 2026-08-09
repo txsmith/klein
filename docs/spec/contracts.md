@@ -1,8 +1,8 @@
 # Capability Contracts
 
 A **contract** declares what a host application provides to Klein programs: type definitions and
-signatures, with no implementations. Klein checks a contract in its own mode, and what rules can
-see is governed by the contract's releases.
+signatures, with no implementations. Klein reads and checks a contract as its own language, and
+what rules can see is governed by the contract's releases.
 
 This spec describes the contract language as v1 must deliver it. Each section carries a status:
 **implemented** means the test suites enforce it today; **target** means it is settled design the
@@ -29,30 +29,37 @@ not the interface *of* some implementation file, it is a standalone declaration 
 Any host language can therefore produce and consume one through the parser already in the
 library, without a host-language-specific API.
 
-## Two modes, one grammar
+## Two grammars, one lexer
 
 Status: implemented, except the `release` row (target).
 
-The parser has no idea which kind of file it is reading. The checker does, through two entry
-points:
+A contract and a rule are disjoint languages. They share a lexer and a type grammar, and nothing
+else — not a root, not an entry point. `Parser.parseProgram` reads the one that runs;
+`Parser.parseContract` reads the one that only declares:
 
-| Statement | `Klein.check` (program) | `Klein.checkContract` (contract) |
+| Form | `parseProgram` (rule) | `parseContract` (contract) |
 |-----------|-------------------------|----------------------------------|
 | `type_def` | allowed | allowed |
-| `fun_decl`, `val_decl` | `DeclarationWithoutBody` | allowed — this is the point |
-| `fun_def`, `binding` | allowed | `DefinitionInContract` |
-| bare `expr` | allowed — it is the result | `ExpressionInContract` |
-| `release` | error | allowed |
+| `fun_decl`, `val_decl` | parse error | allowed — this is the point |
+| `fun_def`, `binding` | allowed | parse error |
+| bare `expr` | allowed — it is the result | parse error |
+| `release` | parse error | allowed |
+| `/N` anywhere | parse error | allowed |
 
 Each direction for one reason:
 
-- A **declaration in a program** has nothing to run. Only a contract's declarations are answered
-  by something outside the program.
+- A **declaration in a rule** has nothing to run. Only a contract's declarations are answered
+  by something outside the rule.
 - A **definition in a contract** computes, and a contract declares rather than computes.
-- A **bare expression in a program** is its result; a contract has no result.
+- A **bare expression in a rule** is its result; a contract has no result.
 
-All of these are type errors, not parse errors, so checking continues and the rest of the file is
-still diagnosed.
+Because the parser knows which language it is reading, each of these is caught at the place it is
+written rather than diagnosed later. Until parser recovery lands they are **first-offence** errors:
+a file with three mistakes reports one.
+
+The one form that genuinely overlaps is a type reference, and it is parameterised rather than
+moded — a rule's type expression has no slot to write a revision into, so `RevisionInProgram` is
+not a diagnostic the checker carries but a state the AST cannot represent.
 
 ## Revisions
 
@@ -84,10 +91,9 @@ A revised signature is checked exactly like any other: its parameter and return 
 against the revisions they name (`Customer/3` with no such declaration is `UnboundVariable`), a
 revised capability may not carry a function, and a revision on a builtin (`Num/2`) names nothing.
 
-Revision syntax is contract-only. A program that writes `/N` — in a type position or anywhere
-else — is rejected (`RevisionInProgram`), and a written `/1` is rejected the same as any other:
-the offence is the syntax, not the number. What a rule sees is governed entirely by releases,
-below.
+Revision syntax is contract-only. A rule that writes `/N` — in a type position or anywhere else —
+is a parse error, and a written `/1` is rejected the same as any other: the offence is the syntax,
+not the number. What a rule sees is governed entirely by releases, below.
 
 ## Releases
 
@@ -341,8 +347,8 @@ Everything above is enforced at contract check time. The remaining rules are sma
 - **A repeated or out-of-order release number.** Blocks are read in file order and each one builds
   on the last, so the numbers must increase down the file. Gaps are legal: a gap is a release that
   has been retired.
-- **A release in a program.** Like every other contract-only form, this is a type error rather
-  than a parse error, so checking continues and the rest of the file is still diagnosed.
+- **A release in a rule.** Like every other contract-only form, this is a parse error at the line
+  that wrote it.
 
 An empty block is legal. As the oldest block it states a release that exposes nothing; anywhere
 else it states a release identical to the one before it.
@@ -397,21 +403,6 @@ and no caller can tell the two apart: undeclared fields are unreachable through 
 so the only instrument that notices is `==`, and both versions give the same `==` results. The
 boundary promises what the types promise. Authors who need a field to survive a host round trip
 put it in the declared type — where it had to be anyway for the host to be allowed to look at it.
-
-## Errors are recorded, bindings are kept
-
-Status: implemented.
-
-In program mode a declaration records `DeclarationWithoutBody` **and still binds its signature**.
-Otherwise every use of the declared name cascades into a spurious `UnboundVariable`. So:
-
-```klein
-fun creditCheck(c: Num): Num
-creditCheck("nope")
-```
-
-yields exactly two honest errors — the declaration, and the argument mismatch — rather than one
-real error plus noise.
 
 ## Not covered here
 

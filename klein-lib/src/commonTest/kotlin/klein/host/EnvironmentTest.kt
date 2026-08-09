@@ -1,5 +1,6 @@
 package klein.host
 
+import klein.Revision
 import klein.check.Type
 import klein.check.TypeError
 import klein.interp.Value
@@ -58,7 +59,7 @@ class EnvironmentTest {
 
     @Test
     fun registrationsDefaultToRevisionOne() {
-        assertTrue(Environment.load(CONTRACT, ::registerAll).capabilities.all { it.revision == 1 })
+        assertTrue(Environment.load(CONTRACT, ::registerAll).capabilities.all { it.revision == Revision(1) })
     }
 
     @Test
@@ -78,11 +79,11 @@ class EnvironmentTest {
                 maxRetries: Num
                 """.trimIndent(),
             ) {
-                immediate("creditCheck", revision = 3) { Value.VNum(1.0) }
+                immediate("creditCheck", revision = Revision(3)) { Value.VNum(1.0) }
                 immediate("maxRetries") { Value.VNum(3.0) }
             }
-        assertEquals(3, env.capabilities.first { it.name == "creditCheck" }.revision)
-        assertEquals(1, env.capabilities.first { it.name == "maxRetries" }.revision)
+        assertEquals(Revision(3), env.capabilities.first { it.name == "creditCheck" }.revision)
+        assertEquals(Revision(1), env.capabilities.first { it.name == "maxRetries" }.revision)
     }
 
     @Test
@@ -117,11 +118,11 @@ class EnvironmentTest {
     fun aDeclaredRevisionIsACapability() {
         val env =
             Environment.load("fun creditScore/2(c: Num): Num") {
-                immediate("creditScore", revision = 2) { Value.VNum(1.0) }
+                immediate("creditScore", revision = Revision(2)) { Value.VNum(1.0) }
             }
         val capability = env.capabilities.single()
         assertEquals("creditScore", capability.name)
-        assertEquals(2, capability.revision)
+        assertEquals(Revision(2), capability.revision)
         assertTrue(env[capability.id] != null)
     }
 
@@ -135,9 +136,9 @@ class EnvironmentTest {
                 """.trimIndent(),
             ) {
                 immediate("creditScore") { Value.VNum(1.0) }
-                immediate("creditScore", revision = 2) { Value.VNum(2.0) }
+                immediate("creditScore", revision = Revision(2)) { Value.VNum(2.0) }
             }
-        assertEquals(listOf(1, 2), env.capabilities.map { it.revision })
+        assertEquals(listOf(Revision(1), Revision(2)), env.capabilities.map { it.revision })
         assertNotEquals(env.capabilities[0].id, env.capabilities[1].id)
     }
 
@@ -147,7 +148,7 @@ class EnvironmentTest {
             assertFailsWith<EnvironmentError> {
                 Environment.load("fun creditScore(c: Num): Num") {
                     immediate("creditScore") { Value.VNum(1.0) }
-                    immediate("creditScore", revision = 2) { Value.VNum(2.0) }
+                    immediate("creditScore", revision = Revision(2)) { Value.VNum(2.0) }
                 }
             }
         assertTrue(error.message!!.contains("revision 2"), "message should name the revision: ${error.message}")
@@ -168,10 +169,10 @@ class EnvironmentTest {
                 """.trimIndent(),
             ) {
                 immediate("creditCheck") { Value.VNum(1.0) }
-                immediate("creditCheck", revision = 2) { Value.VNum(2.0) }
+                immediate("creditCheck", revision = Revision(2)) { Value.VNum(2.0) }
             }
         val both = env.capabilities.filter { it.name == "creditCheck" }
-        assertEquals(listOf(1, 2), both.map { it.revision })
+        assertEquals(listOf(Revision(1), Revision(2)), both.map { it.revision })
         assertNotEquals(both[0].type, both[1].type)
         both.forEach { assertTrue(env[it.id] != null, "revision ${it.revision} should be implemented") }
     }

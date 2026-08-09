@@ -17,21 +17,6 @@ data class ProgramCheck(
     val errors: List<TypeError>,
 )
 
-enum class DeclarationKind { Function, Value }
-
-data class ContractDeclaration(
-    val name: String,
-    val revision: Int,
-    val kind: DeclarationKind,
-    val type: Type,
-)
-
-data class ContractCheck(
-    val env: TypeEnv,
-    val declarations: List<ContractDeclaration>,
-    val errors: List<TypeError>,
-)
-
 data class ExpectedType(
     val type: Type,
     val source: ExpectedTypeSource,
@@ -64,83 +49,28 @@ sealed class ExpectedTypeSource {
     ) : ExpectedTypeSource()
 }
 
+/**
+ * The program checker: the bidirectional checker for the *rule* language. A capability contract is
+ * a different language with a different root, and is checked by
+ * [klein.check.contract.ContractChecker]; the two share [TypeResolver] and nothing else.
+ */
 class Checker {
     private val errors = mutableListOf<TypeError>()
-    private var contractMode = false
-    private var skolemCounter = 0
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)
-    private val preprocessor = TypeDefPreprocessor(errors, ::freshSkolem, ::resolveType, subtyping)
+    private val resolver = TypeResolver(errors)
+    private val preprocessor = TypeDefPreprocessor(errors, resolver::freshSkolem, resolver::resolve, subtyping)
 
-    private fun freshSkolem(name: String): TSkolem = TSkolem(name, skolemCounter++)
+    private fun freshSkolem(name: String): TSkolem = resolver.freshSkolem(name)
 
     fun checkProgram(
         program: Program,
         env: TypeEnv = TypeEnv.empty(),
     ): ProgramCheck {
         errors.clear()
-        contractMode = false
         val scope = env.copy()
         val type = synthBlockStmts(program.stmts, scope)
         return ProgramCheck(type, errors.toList())
-    }
-
-    fun checkContract(
-        program: Program,
-        env: TypeEnv = TypeEnv.empty(),
-    ): ContractCheck {
-        errors.clear()
-        contractMode = true
-        val scope = env.copy()
-        val declarations = checkContractInto(program, scope)
-        return ContractCheck(scope, declarations, errors.toList())
-    }
-
-    private fun checkContractInto(
-        program: Program,
-        env: TypeEnv,
-    ): List<ContractDeclaration> {
-        preprocessor.process(program.stmts.filterIsInstance<TypeDef>(), env)
-
-        val declared = mutableSetOf<Pair<String, Int>>()
-        fun declare(
-            name: String,
-            revision: Int,
-            span: SourceSpan,
-        ): Boolean {
-            if (declared.add(name to revision)) return true
-            recordError(TypeError.DuplicateBinding(revisionedName(name, revision), span))
-            return false
-        }
-
-        val declarations = mutableListOf<ContractDeclaration>()
-        program.stmts.forEach { stmt ->
-            when (stmt) {
-                is TypeDef -> {}
-                is FunDecl -> {
-                    val revision = stmt.revision ?: 1
-                    if (declare(stmt.name, revision, stmt.span)) {
-                        val type = bindFunDecl(stmt, env)
-                        rejectCarriedFunctions(revisionedName(stmt.name, revision), type, stmt.span, env, isCallable = true)
-                        declarations.add(ContractDeclaration(stmt.name, revision, DeclarationKind.Function, type))
-                    }
-                }
-                is ValDecl -> {
-                    val revision = stmt.revision ?: 1
-                    if (declare(stmt.name, revision, stmt.span)) {
-                        val type = bindValDecl(stmt, env)
-                        rejectCarriedFunctions(revisionedName(stmt.name, revision), type, stmt.span, env, isCallable = false)
-                        declarations.add(ContractDeclaration(stmt.name, revision, DeclarationKind.Value, type))
-                    }
-                }
-                is FunDef -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
-                is Val -> recordError(TypeError.DefinitionInContract(stmt.name, stmt.span))
-                is PatternVal ->
-                    recordError(TypeError.DefinitionInContract(stmt.pattern.boundNames.firstOrNull(), stmt.span))
-                is Expr -> recordError(TypeError.ExpressionInContract(stmt.span))
-            }
-        }
-        return declarations
     }
 
     fun synth(
@@ -198,32 +128,7 @@ class Checker {
         stmts: List<Stmt>,
         env: TypeEnv,
     ): Type {
-        stmts.forEach { stmt ->
-            if (stmt is TypeDef && stmt.revision != null) {
-                recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
-            }
-        }
-        preprocessor.process(stmts.filterIsInstance<TypeDef>(), env)
-
-        stmts.forEach { stmt ->
-            when (stmt) {
-                is FunDecl ->
-                    if (stmt.revision != null) {
-                        recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
-                    } else {
-                        recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
-                        bindFunDecl(stmt, env)
-                    }
-                is ValDecl ->
-                    if (stmt.revision != null) {
-                        recordError(TypeError.RevisionInProgram(stmt.name, stmt.revision, stmt.span))
-                    } else {
-                        recordError(TypeError.DeclarationWithoutBody(stmt.name, stmt.span))
-                        bindValDecl(stmt, env)
-                    }
-                else -> {}
-            }
-        }
+        preprocessor.process(stmts.filterIsInstance<TypeDef<*>>(), env)
 
         val scope = ScopeGraph.constructGraph(stmts)
         scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
@@ -331,98 +236,13 @@ class Checker {
         }
     }
 
-    /**
-     * Bind a declared signature. In a program the caller pairs this with a
-     * [TypeError.DeclarationWithoutBody] — binding anyway keeps call sites checked against the
-     * declared type instead of cascading into "unbound variable". In a contract it is the whole job.
-     */
-    private fun bindFunDecl(
-        stmt: FunDecl,
-        env: TypeEnv,
-    ): Type {
-        val (sigEnv, paramTypes) = openSignature(stmt.params, stmt.returnType, env)
-        val returnType = resolveType(stmt.returnType, sigEnv)
-        val type = quantify(sigEnv.localTypeVars(), TFun(paramTypes, returnType, stmt.params.map { it.name }))
-        env.bind(stmt.name, stmt.revision ?: 1, type)
-        return type
-    }
-
-    private fun rejectCarriedFunctions(
-        name: String,
-        bound: Type,
-        span: SourceSpan,
-        env: TypeEnv,
-        isCallable: Boolean,
-    ) {
-        val body = if (bound is TForall) bound.body else bound
-        val carried =
-            if (isCallable && body is TFun) {
-                body.params.any { carriesFunction(it, env, mutableSetOf()) } ||
-                    carriesFunction(body.result, env, mutableSetOf())
-            } else {
-                carriesFunction(body, env, mutableSetOf())
-            }
-        if (carried) recordError(TypeError.FunctionTypeInCapability(name, span))
-    }
-
-    private fun carriesFunction(
-        type: Type,
-        env: TypeEnv,
-        seen: MutableSet<Pair<String, Int>>,
-    ): Boolean =
-        when (type) {
-            is TFun -> true
-            is TOptional -> carriesFunction(type.type, env, seen)
-            is TRecord -> type.fields.values.any { carriesFunction(it, env, seen) }
-            is TForall -> carriesFunction(type.body, env, seen)
-            is TRef ->
-                if (!seen.add(type.name to type.revision)) {
-                    false
-                } else {
-                    type.typeArgs.any { carriesFunction(it, env, seen) } ||
-                        env.lookupTypeDef(type.name, type.revision)?.iface?.fields?.values.orEmpty().any {
-                            carriesFunction(it, env, seen)
-                        }
-                }
-            else -> false
-        }
-
     private fun openSignature(
-        params: List<Param>,
-        returnType: TypeExpr?,
+        params: List<Param<*>>,
+        returnType: TypeExpr<*>?,
         env: TypeEnv,
-    ): Pair<TypeEnv, List<Type>> {
-        val sigEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
-        reportDuplicateParams(params)
-        introduceTypeVars(params.mapNotNull { it.typeAnnotation } + listOfNotNull(returnType), sigEnv)
-        val paramTypes =
-            params.map { param ->
-                if (param.typeAnnotation != null) {
-                    resolveType(param.typeAnnotation, sigEnv)
-                } else {
-                    recordError(TypeError.MissingParamAnnotation(param.name, param.span))
-                }
-            }
-        return sigEnv to paramTypes
-    }
+    ): Pair<TypeEnv, List<Type>> = resolver.openSignature(params, returnType, env)
 
-    private fun bindValDecl(
-        stmt: ValDecl,
-        env: TypeEnv,
-    ): Type {
-        val sigEnv = env.child()
-        introduceTypeVars(listOf(stmt.type), sigEnv)
-        val type = quantify(sigEnv.localTypeVars(), resolveType(stmt.type, sigEnv))
-        env.bind(stmt.name, stmt.revision ?: 1, type)
-        return type
-    }
-
-    private fun reportDuplicateParams(params: List<Param>) {
-        val seen = mutableSetOf<String>()
-        params.forEach { param ->
-            if (!param.isDiscard && !seen.add(param.name)) recordError(TypeError.DuplicateParameter(param.name, param.span))
-        }
-    }
+    private fun reportDuplicateParams(params: List<Param<*>>) = resolver.reportDuplicateParams(params)
 
     private fun usesImplicitParam(expr: Expr): Boolean =
         when (expr) {
@@ -999,91 +819,14 @@ class Checker {
     }
 
     private fun resolveType(
-        typeExpr: TypeExpr,
+        typeExpr: TypeExpr<*>,
         env: TypeEnv,
-    ): Type =
-        when (typeExpr) {
-            is TypeName ->
-                if (!contractMode && typeExpr.revision != null) {
-                    recordError(TypeError.RevisionInProgram(typeExpr.name, typeExpr.revision, typeExpr.span))
-                } else {
-                    primitiveType(typeExpr.name).takeIf { typeExpr.revision == null || typeExpr.revision == 1 } ?: run {
-                        val revision = typeExpr.revision ?: 1
-                        val display = revisionedName(typeExpr.name, typeExpr.revision)
-                        val def = env.lookupTypeDef(typeExpr.name, revision)
-                        when {
-                            def == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
-                            def.typeParams.isNotEmpty() -> {
-                                recordError(TypeError.TypeArityMismatch(display, def.typeParams.size, 0, typeExpr.span))
-                                TRef(typeExpr.name, emptyList(), revision)
-                            }
-                            else -> TRef(typeExpr.name, emptyList(), revision)
-                        }
-                    }
-                }
-            is FunctionTypeExpr ->
-                TFun(typeExpr.paramTypes.map { resolveType(it, env) }, resolveType(typeExpr.returnType, env))
-            is RecordTypeExpr ->
-                recordOf(typeExpr.fields.associate { (name, t) -> name to resolveType(t, env) })
-            is OptionalTypeExpr ->
-                optionalOf(resolveType(typeExpr.inner, env))
-            is TupleTypeExpr ->
-                if (typeExpr.elements.isEmpty()) {
-                    TUnit
-                } else {
-                    TRecord(typeExpr.elements.mapIndexed { i, t -> "_${i + 1}" to resolveType(t, env) }.toMap())
-                }
-            is TypeVar ->
-                env.lookupTypeVar(typeExpr.name)
-                    ?: recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
-            is AppliedTypeExpr ->
-                if (!contractMode && typeExpr.revision != null) {
-                    recordError(TypeError.RevisionInProgram(typeExpr.name, typeExpr.revision, typeExpr.span))
-                } else {
-                    val revision = typeExpr.revision ?: 1
-                    val display = revisionedName(typeExpr.name, typeExpr.revision)
-                    val info = env.lookupTypeDef(typeExpr.name, revision)
-                    val args = typeExpr.args.map { resolveType(it, env) }
-                    when {
-                        info == null -> recordError(TypeError.UnboundVariable(display, typeExpr.span))
-                        info.typeParams.size != args.size -> {
-                            recordError(TypeError.TypeArityMismatch(display, info.typeParams.size, args.size, typeExpr.span))
-                            TRef(typeExpr.name, args, revision)
-                        }
-                        else -> TRef(typeExpr.name, args, revision)
-                    }
-                }
-        }
+    ): Type = resolver.resolve(typeExpr, env)
 
-    private fun primitiveType(name: String): Type? =
-        when (name) {
-            "Num" -> TNum
-            "String" -> TStr
-            "Bool" -> TBool
-            "Unit" -> TUnit
-            "Any" -> TTop
-            "Nothing" -> TBottom
-            else -> null
-        }
-
-    /** Introduce each not-yet-in-scope type variable in [annotations] as a fresh skolem at [sigEnv] —
-     *  the binder owns where its `'T`s are quantified; [resolveType] only ever *references* them. */
     private fun introduceTypeVars(
-        annotations: List<TypeExpr>,
+        annotations: List<TypeExpr<*>>,
         sigEnv: TypeEnv,
-    ) {
-        annotations.forEach { annotation ->
-            collectTypeVarNames(annotation).forEach { name ->
-                if (sigEnv.lookupTypeVar(name) == null) sigEnv.bindTypeVar(name, freshSkolem(name))
-            }
-        }
-    }
-
-    /** `∀params. body`, or just `body` when there's nothing to quantify. */
-    private fun quantify(
-        params: Set<TSkolem>,
-        body: Type,
-    ): Type = if (params.isEmpty()) body else TForall(params, body)
+    ) = resolver.introduceTypeVars(annotations, sigEnv)
 
     /** Whether [type] mentions none of the [unknowns] — concrete enough to check an argument against. */
     private fun isGround(

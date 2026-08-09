@@ -1,15 +1,16 @@
 package klein.check
 
+import klein.Revision
 import klein.surface.*
 
 class TypeDefPreprocessor(
     private val errors: MutableList<TypeError>,
     private val freshSkolem: (String) -> Type.TSkolem,
-    private val resolveType: (TypeExpr, TypeEnv) -> Type,
+    private val resolveType: (TypeExpr<*>, TypeEnv) -> Type,
     private val subtyping: Subtyping,
 ) {
     fun process(
-        typeDefs: List<TypeDef>,
+        typeDefs: List<TypeDef<*>>,
         env: TypeEnv,
     ) {
         if (typeDefs.isEmpty()) return
@@ -21,12 +22,12 @@ class TypeDefPreprocessor(
     }
 
     private fun registerPlaceholders(
-        typeDefs: List<TypeDef>,
+        typeDefs: List<TypeDef<*>>,
         env: TypeEnv,
-    ): List<TypeDef> {
-        val valid = mutableListOf<TypeDef>()
+    ): List<TypeDef<*>> {
+        val valid = mutableListOf<TypeDef<*>>()
         for (typeDef in typeDefs) {
-            val revision = typeDef.revision ?: 1
+            val revision = typeDef.revision ?: Revision(1)
             val typeDisplay = revisionedName(typeDef.name, revision)
             if (typeDef.name in PRIMITIVE_TYPE_NAMES) {
                 errors.add(TypeError.ShadowsBuiltinType(typeDisplay, typeDef.span))
@@ -75,22 +76,22 @@ class TypeDefPreprocessor(
     }
 
     private fun computeVariance(
-        typeDefs: List<TypeDef>,
+        typeDefs: List<TypeDef<*>>,
         env: TypeEnv,
     ) {
         if (typeDefs.isEmpty()) return
 
         val allTypeDefs = env.allTypeDefs()
         val allConstructors = env.allConstructors()
-        val variances = mutableMapOf<Triple<String, Int, String>, Variance>()
+        val variances = mutableMapOf<Triple<String, Revision, String>, Variance>()
 
         for (info in allTypeDefs) {
             for (param in info.typeParams) variances[Triple(info.name, info.revision, param.skolem.name)] = Variance.Bivariant
         }
 
         fun update(
-            typeExpr: TypeExpr,
-            owner: Pair<String, Int>,
+            typeExpr: TypeExpr<*>,
+            owner: Pair<String, Revision>,
             polarity: Variance,
         ): Boolean =
             when (typeExpr) {
@@ -109,7 +110,7 @@ class TypeDefPreprocessor(
                 is TypeName -> false
 
                 is AppliedTypeExpr -> {
-                    val refRevision = typeExpr.revision ?: 1
+                    val refRevision = typeExpr.revision ?: Revision(1)
                     val refInfo = env.lookupTypeDef(typeExpr.name, refRevision) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
@@ -235,7 +236,7 @@ class TypeDefPreprocessor(
     }
 }
 
-internal fun collectTypeVarNames(typeExpr: TypeExpr): List<String> =
+internal fun collectTypeVarNames(typeExpr: TypeExpr<*>): List<String> =
     when (typeExpr) {
         is TypeVar -> listOf(typeExpr.name)
         is FunctionTypeExpr -> typeExpr.paramTypes.flatMap { collectTypeVarNames(it) } + collectTypeVarNames(typeExpr.returnType)

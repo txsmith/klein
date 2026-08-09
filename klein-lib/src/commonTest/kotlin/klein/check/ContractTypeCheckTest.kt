@@ -8,9 +8,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The contract mode is the mirror image of the program mode: a capability contract declares what
- * the host provides and nothing else, so declarations are legal here and anything that computes —
- * a body, a value, a bare expression — is the degeneracy.
+ * Checking a capability contract. The wrong-mode forms — a body, a value, a bare expression — no
+ * longer reach here at all: the contract parser refuses them, so what is left for the checker is
+ * what a declaration *means*. See `klein.parser.ContractTest` for the language split itself.
  */
 class ContractTypeCheckTest {
     @Test
@@ -53,70 +53,6 @@ class ContractTypeCheckTest {
         assertEquals(TNum, result.env.lookup("maxRetries"))
     }
 
-    // The polarity flip: the same statements that are errors in a program are the point of a contract.
-
-    @Test
-    fun declarationsAreNotAnErrorInAContract() {
-        val result =
-            checkContract(
-                """
-                fun creditCheck(c: Num): Num
-                maxRetries: Num
-                """.trimIndent(),
-            )
-        assertTrue(
-            result.errors.none { it is TypeError.DeclarationWithoutBody },
-            "declarations must be legal in a contract: ${result.errors}",
-        )
-    }
-
-    @Test
-    fun functionWithABodyIsRejected() {
-        val error = checkContract("fun creditCheck(c: Num): Num = c").errors.single()
-        assertIs<TypeError.DefinitionInContract>(error)
-        assertEquals("creditCheck", error.name)
-    }
-
-    @Test
-    fun bindingWithAValueIsRejected() {
-        val error = checkContract("maxRetries: Num = 3").errors.single()
-        assertIs<TypeError.DefinitionInContract>(error)
-        assertEquals("maxRetries", error.name)
-    }
-
-    @Test
-    fun bareExpressionIsRejected() {
-        val error = checkContract("1 + 2").errors.single()
-        assertIs<TypeError.ExpressionInContract>(error)
-    }
-
-    @Test
-    fun destructuringBindingIsRejected() {
-        val error = checkContract("{ name } = customer").errors.single()
-        assertIs<TypeError.DefinitionInContract>(error)
-        assertEquals("name", error.name)
-    }
-
-    @Test
-    fun errorMessageSaysWhatAContractIsFor() {
-        val error = checkContract("maxRetries: Num = 3").errors.single()
-        assertTrue("maxRetries" in error.message, error.message)
-        assertTrue("contract" in error.message, error.message)
-    }
-
-    @Test
-    fun everyDegenerateStatementIsReported() {
-        val result =
-            checkContract(
-                """
-                fun creditCheck(c: Num): Num = c
-                maxRetries: Num = 3
-                1 + 2
-                """.trimIndent(),
-            )
-        assertEquals(3, result.errors.size)
-    }
-
     @Test
     fun duplicateDeclarationIsRejected() {
         val result =
@@ -154,6 +90,19 @@ class ContractTypeCheckTest {
         val error = checkContract("fun creditCheck(c: Nope): Num").errors.single()
         assertIs<TypeError.UnboundVariable>(error)
         assertEquals("Nope", error.name)
+    }
+
+    @Test
+    fun everyBadSignatureIsReported() {
+        val result =
+            checkContract(
+                """
+                fun a(x: Nope): Num
+                fun b(y: AlsoNope): Num
+                """.trimIndent(),
+            )
+        assertEquals(2, result.errors.size, "${result.errors}")
+        assertTrue(result.errors.all { it is TypeError.UnboundVariable }, "${result.errors}")
     }
 
     // --- the checker does not mutate what it is given ---
@@ -240,6 +189,19 @@ class ContractTypeCheckTest {
         assertTrue(result.errors.isEmpty(), "unexpected errors: ${result.errors}")
     }
 
+    @Test
+    fun declarationsComeBackInFileOrder() {
+        val result =
+            checkContract(
+                """
+                fun creditCheck(c: Num): Num
+                maxRetries: Num
+                fun riskScore(c: Num): Num
+                """.trimIndent(),
+            )
+        assertEquals(listOf("creditCheck", "maxRetries", "riskScore"), result.declarations.map { it.name })
+    }
+
     // The payoff: a program checked against the environment a contract declares.
 
     @Test
@@ -270,16 +232,25 @@ class ContractTypeCheckTest {
         val declared =
             klein.Klein
                 .tokenize("maxRetries: Num")
-                .andThen(klein.Klein::parse)
+                .andThen(klein.Klein::parseContract)
                 .andThen { klein.Klein.checkContract(it) }
         assertTrue(declared.errors.isEmpty(), "unexpected errors: ${declared.errors}")
         assertEquals(TNum, declared.output!!.lookup("maxRetries"))
 
         val rejected =
             klein.Klein
-                .tokenize("maxRetries: Num = 3")
-                .andThen(klein.Klein::parse)
+                .tokenize("fun creditCheck(c: Nope): Num")
+                .andThen(klein.Klein::parseContract)
                 .andThen { klein.Klein.checkContract(it) }
-        assertIs<TypeError.DefinitionInContract>(rejected.errors.single())
+        assertIs<TypeError.UnboundVariable>(rejected.errors.single())
+    }
+
+    @Test
+    fun aDefinitionNeverReachesTheContractStage() {
+        val parsed =
+            klein.Klein
+                .tokenize("maxRetries: Num = 3")
+                .andThen(klein.Klein::parseContract)
+        assertIs<klein.surface.ParseError>(parsed.errors.single())
     }
 }

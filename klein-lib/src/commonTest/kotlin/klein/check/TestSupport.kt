@@ -3,6 +3,8 @@ package klein.check
 import klein.surface.Lexer
 import klein.surface.Parser
 import klein.check.Type.*
+import klein.check.contract.ContractChecker
+import klein.check.contract.ContractResult
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -17,14 +19,14 @@ fun infer(
     return Checker().checkProgram(program, env)
 }
 
-/** Parse [src] and check it as a capability contract rather than as a program. */
+/** Parse [src] as a capability contract and check it. */
 fun checkContract(
     src: String,
     env: TypeEnv = TypeEnv.empty(),
-): ContractCheck {
+): ContractResult {
     val tokens = Lexer(src).tokenize().toList()
-    val program = Parser(tokens).parseProgram()
-    return Checker().checkContract(program, env)
+    val contract = Parser(tokens).parseContract()
+    return ContractChecker().check(contract, env)
 }
 
 /** A type variable for expected types; alpha-equality compares skolems by name, ignoring the id. */

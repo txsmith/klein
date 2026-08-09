@@ -8,10 +8,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class AnnotationTest {
-    private fun functionAnnotationOf(src: String): FunctionTypeExpr {
+    private fun functionAnnotationOf(src: String): FunctionTypeExpr<Nothing?> {
         val stmt = parseStmt(src).stripSpan()
         assertIs<Val>(stmt)
-        return assertIs<FunctionTypeExpr>(stmt.typeAnnotation)
+        return assertIs<FunctionTypeExpr<Nothing?>>(stmt.typeAnnotation)
     }
 
     @Test

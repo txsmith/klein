@@ -1,8 +1,9 @@
 package klein.surface
 
+import klein.Revision
 import klein.surface.TokenKind.*
 
-private fun revisionSuffix(revision: Int?): String = if (revision == null) "" else "/$revision"
+private fun revisionSuffix(revision: Revision?): String = if (revision == null) "" else "/${revision.value}"
 
 fun Token.prettyPrint(): String {
     val base =
@@ -32,14 +33,7 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val retStr = if (returnType != null) ": ${returnType.prettyPrint()}" else ""
             "${pad}Fun $name($paramsStr)$retStr =\n${body.prettyPrint(indent + 1)}"
         }
-        is FunDecl -> {
-            val paramsStr = params.joinToString(", ") { p ->
-                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
-            }
-            "${pad}FunDecl $name${revisionSuffix(revision)}($paramsStr): ${returnType.prettyPrint()}"
-        }
-        is ValDecl -> "${pad}ValDecl($name${revisionSuffix(revision)}: ${type.prettyPrint()})"
-        is TypeDef -> {
+        is TypeDef<*> -> {
             val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
             val constructorsStr =
                 constructors.joinToString(" | ") { c ->
@@ -56,7 +50,23 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
     }
 }
 
-fun TypeExpr.prettyPrint(): String =
+fun ContractExpr.prettyPrint(): String =
+    (types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() }).joinToString("\n")
+
+fun Declaration.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    return when (this) {
+        is FunDecl -> {
+            val paramsStr = params.joinToString(", ") { p ->
+                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
+            }
+            "${pad}FunDecl $name${revisionSuffix(revision)}($paramsStr): ${returnType.prettyPrint()}"
+        }
+        is ValDecl -> "${pad}ValDecl($name${revisionSuffix(revision)}: ${type.prettyPrint()})"
+    }
+}
+
+fun TypeExpr<*>.prettyPrint(): String =
     when (this) {
         is TypeName -> "$name${revisionSuffix(revision)}"
         is TypeVar -> "'$name"

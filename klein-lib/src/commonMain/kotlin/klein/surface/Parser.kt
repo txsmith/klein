@@ -1,6 +1,7 @@
 package klein.surface
 
 import klein.KleinError
+import klein.Revision
 import klein.SourceSpan
 
 import klein.surface.TokenKind.*
@@ -24,6 +25,7 @@ class Parser(
 
     private fun lineIndentOf(token: Token): Int = token.indent ?: lastTokenIndent
 
+    /** The rule language: type definitions, function definitions, and statements that run. */
     fun parseProgram(): Program {
         val start = peek().span
         val stmts = mutableListOf<Stmt>()
@@ -31,13 +33,44 @@ class Parser(
             val stmt =
                 when (peek().kind) {
                     FUN -> parseFunDef()
-                    TYPE -> parseTypeDef()
+                    TYPE -> parseTypeDef(::programRevision)
                     else -> parseStmt()
                 }
             stmts.add(stmt)
         }
         val end = if (stmts.isNotEmpty()) stmts.last().span else start
         return Program(stmts, start + end)
+    }
+
+    /**
+     * The contract language: type definitions and declarations, and nothing that computes. The
+     * sub-parsers below `parseType` are shared with [parseProgram] verbatim; only how a revision is
+     * read differs, and that is the argument threaded through them.
+     */
+    fun parseContract(): ContractExpr {
+        val start = peek().span
+        val types = mutableListOf<TypeDef<Revision?>>()
+        val declarations = mutableListOf<Declaration>()
+        var end = start
+        while (peek().kind != EOF) {
+            end =
+                when {
+                    peek().kind == TYPE -> parseTypeDef(::contractRevision).also { types.add(it) }.span
+                    peek().kind == FUN -> parseFunDecl().also { declarations.add(it) }.span
+                    isDestructuringBinding() ->
+                        throw ParseError(definitionInContract(parsePattern().boundNames.firstOrNull()), peek().span)
+                    isBinding() -> parseValDecl().also { declarations.add(it) }.span
+                    else ->
+                        throw ParseError(
+                            "A capability contract has nothing to evaluate; it only declares what the host provides",
+                            peek().span,
+                        )
+                }
+            if (!canEndStatement()) {
+                throw ParseError("Expected newline but got ${peek()}", peek().span)
+            }
+        }
+        return ContractExpr(types, declarations, start + end)
     }
 
     fun parseStmt(allowTypeDef: Boolean = true): Stmt {
@@ -49,7 +82,7 @@ class Parser(
 
         val stmt =
             when {
-                peek().kind == TYPE && allowTypeDef -> parseTypeDef()
+                peek().kind == TYPE && allowTypeDef -> parseTypeDef(::programRevision)
                 isDestructuringBinding() -> parseDestructuringBinding()
                 isBinding() -> parseBinding()
                 else -> parseExpr()
@@ -70,21 +103,76 @@ class Parser(
     private fun parseFunDef(): Stmt {
         val funToken = advance()
         val name = expectName("Expected function name")
-        val revision = parseRevisionSuffix()
+        programRevision(name.text!!)
         expectAndAdvance(LPAREN, message = "Expected '('")
-        val params = parseFunParams()
+        val params = parseFunParams(::programRevision)
         expectAndAdvance(RPAREN, message = "Expected ')'")
-        val returnType = parseOptionalTypeAnnotation()
+        val returnType = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
         if (returnType != null && peek().kind != EQ) {
-            return FunDecl(name.text!!, params, returnType, funToken.span + returnType.span, revision)
+            throw ParseError(declarationWithoutBody(name.text), funToken.span + returnType.span)
         }
-        rejectRevisionOnDefinition(revision)
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
-        return FunDef(name.text!!, params, body, funToken.span + body.span, returnType)
+        return FunDef(name.text, params, body, funToken.span + body.span, returnType)
     }
 
-    private fun parseRevisionSuffix(): Int? {
+    private fun parseFunDecl(): FunDecl {
+        val funToken = advance()
+        val name = expectName("Expected function name")
+        val revision = contractRevision(name.text!!)
+        expectAndAdvance(LPAREN, message = "Expected '('")
+        val params = parseFunParams(::contractRevision)
+        expectAndAdvance(RPAREN, message = "Expected ')'")
+        val returnType =
+            parseOptionalTypeAnnotation { parseTypeExpr(::contractRevision) }
+                ?: throw ParseError("Expected ':' and a return type, got ${peek()}", peek().span)
+        if (peek().kind == EQ) {
+            throw ParseError(definitionInContract(name.text), peek().span)
+        }
+        return FunDecl(name.text, params, returnType, funToken.span + returnType.span, revision)
+    }
+
+    private fun parseValDecl(): ValDecl {
+        val name = expectName("Expected identifier")
+        val revision = contractRevision(name.text!!)
+        val type =
+            parseOptionalTypeAnnotation { parseTypeExpr(::contractRevision) }
+                ?: throw ParseError(definitionInContract(name.text), peek().span)
+        if (peek().kind == EQ) {
+            throw ParseError(definitionInContract(name.text), peek().span)
+        }
+        return ValDecl(name.text, type, name.span + type.span, revision)
+    }
+
+    private fun declarationWithoutBody(name: String): String =
+        "'$name' has no body; declarations without a body are only allowed in a capability contract"
+
+    private fun definitionInContract(name: String?): String =
+        if (name == null) {
+            "A capability contract only declares what the host provides; it defines nothing itself"
+        } else {
+            "'$name' is defined here; a capability contract only declares what the host provides"
+        }
+
+    /** How a contract reads a revision: `/N` where one is written, absent otherwise. */
+    private fun contractRevision(name: String): Revision? = parseRevisionSuffix()
+
+    /**
+     * How a rule reads a revision: it does not. `Nothing?` has one inhabitant, so every type
+     * expression the rule parser builds is provably unrevisioned; writing one is refused here, at
+     * the position it was written.
+     */
+    private fun programRevision(name: String): Nothing? {
+        if (peek().kind == SLASH && peekAt(1).kind == INT) {
+            throw ParseError(
+                "'$name/${peekAt(1).text}' names a revision; revision syntax is only allowed in a capability contract",
+                peek().span + peekAt(1).span,
+            )
+        }
+        return null
+    }
+
+    private fun parseRevisionSuffix(): Revision? {
         if (peek().kind != SLASH) return null
         val slash = advance()
         val number = peek()
@@ -96,35 +184,29 @@ class Parser(
         if (revision == null || revision < 1) {
             throw ParseError("Revision must be a positive integer, got '${number.text}'", number.span)
         }
-        return revision
+        return Revision(revision)
     }
 
-    private fun rejectRevisionOnDefinition(revision: Int?) {
-        if (revision != null && peek().kind == EQ) {
-            throw ParseError("A revision marks a declaration, which has no '='", peek().span)
-        }
-    }
-
-    private fun parseTypeDef(): TypeDef {
+    private fun <R : Revision?> parseTypeDef(revision: (name: String) -> R): TypeDef<R> {
         val typeToken = advance()
         val typeDefIndent = lineIndentOf(typeToken)
 
         val nameToken = expectUpperIdent("Expected type name")
         validateNotReserved(nameToken)
 
-        val revision = parseRevisionSuffix()
+        val typeRevision = revision(nameToken.text!!)
         val typeParams = if (peek().kind == LT) parseTypeParams() else emptyList()
 
         val constructors =
             if (peek().kind == EQ && !peek().startsLineBefore(typeDefIndent)) {
                 advance()
-                parseConstructors(typeDefIndent)
+                parseConstructors(typeDefIndent, revision)
             } else {
                 emptyList()
             }
 
         val endSpan = constructors.lastOrNull()?.span ?: typeParams.lastOrNull()?.let { nameToken.span } ?: nameToken.span
-        return TypeDef(nameToken.text!!, typeParams, constructors, typeToken.span + endSpan, revision)
+        return TypeDef(nameToken.text, typeParams, constructors, typeToken.span + endSpan, typeRevision)
     }
 
     private fun parseTypeParams(): List<String> {
@@ -163,21 +245,27 @@ class Parser(
         return params
     }
 
-    private fun parseConstructors(typeDefIndent: Int): List<Constructor> {
-        val constructors = mutableListOf<Constructor>()
+    private fun <R : Revision?> parseConstructors(
+        typeDefIndent: Int,
+        revision: (name: String) -> R,
+    ): List<Constructor<R>> {
+        val constructors = mutableListOf<Constructor<R>>()
         val seenNames = mutableSetOf<String>()
 
-        constructors.add(parseConstructor(seenNames))
+        constructors.add(parseConstructor(seenNames, revision))
 
         while (peek().kind == PIPE && !peek().startsLineAtOrBefore(typeDefIndent)) {
             advance()
-            constructors.add(parseConstructor(seenNames))
+            constructors.add(parseConstructor(seenNames, revision))
         }
 
         return constructors
     }
 
-    private fun parseConstructor(seenNames: MutableSet<String>): Constructor {
+    private fun <R : Revision?> parseConstructor(
+        seenNames: MutableSet<String>,
+        revision: (name: String) -> R,
+    ): Constructor<R> {
         val nameToken = expectUpperIdent("Expected constructor name")
         validateNotReserved(nameToken)
 
@@ -187,7 +275,7 @@ class Parser(
 
         val fields =
             if (peek().kind == LBRACE) {
-                parseConstructorFields()
+                parseConstructorFields(revision)
             } else {
                 emptyList()
             }
@@ -196,17 +284,17 @@ class Parser(
         return Constructor(nameToken.text, fields, nameToken.span + endSpan)
     }
 
-    private fun parseConstructorFields(): List<FieldDecl> {
+    private fun <R : Revision?> parseConstructorFields(revision: (name: String) -> R): List<FieldDecl<R>> {
         advance()
         if (peek().kind == RBRACE) {
             throw ParseError("Constructor fields cannot be empty", peek().span)
         }
 
-        val fields = mutableListOf<FieldDecl>()
+        val fields = mutableListOf<FieldDecl<R>>()
         val seenFields = mutableSetOf<String>()
 
         while (true) {
-            val field = parseFieldDecl(seenFields)
+            val field = parseFieldDecl(seenFields, revision)
             fields.add(field)
 
             when (peek().kind) {
@@ -228,7 +316,10 @@ class Parser(
         return fields
     }
 
-    private fun parseFieldDecl(seenFields: MutableSet<String>): FieldDecl {
+    private fun <R : Revision?> parseFieldDecl(
+        seenFields: MutableSet<String>,
+        revision: (name: String) -> R,
+    ): FieldDecl<R> {
         val nameToken = expectName("Expected field name")
 
         if (!seenFields.add(nameToken.text!!)) {
@@ -236,18 +327,18 @@ class Parser(
         }
 
         expectAndAdvance(COLON, message = "Expected ':'")
-        val type = parseTypeExpr()
+        val type = parseTypeExpr(revision)
 
         return FieldDecl(nameToken.text, type, nameToken.span + type.span)
     }
 
-    private fun parseTypeExpr(): TypeExpr {
-        val left = parseTypePostfix()
+    private fun <R : Revision?> parseTypeExpr(revision: (name: String) -> R): TypeExpr<R> {
+        val left = parseTypePostfix(revision)
 
         if (peek().kind == ARROW) {
             advance()
-            val right = parseTypeExpr()
-            val paramTypes = if (left is TupleTypeExpr) left.elements else listOf(left)
+            val right = parseTypeExpr(revision)
+            val paramTypes = if (left is TupleTypeExpr<R>) left.elements else listOf(left)
             return FunctionTypeExpr(paramTypes, right, left.span + right.span)
         }
 
@@ -257,8 +348,8 @@ class Parser(
     /** Postfix `?` (nullable) binds tighter than `->`: `Num -> Num?` is a function returning `Num?`,
      *  while `(Num -> Num)?` is an optional function. Repeated `?` parse and are collapsed to a
      *  single optional during type resolution (`T?? = T?`). */
-    private fun parseTypePostfix(): TypeExpr {
-        var type = parseTypeAtom()
+    private fun <R : Revision?> parseTypePostfix(revision: (name: String) -> R): TypeExpr<R> {
+        var type = parseTypeAtom(revision)
         while (peek().kind == QUESTION) {
             val question = advance()
             type = OptionalTypeExpr(type, type.span + question.span)
@@ -266,29 +357,29 @@ class Parser(
         return type
     }
 
-    private fun parseTypeArgs(): List<TypeExpr> {
+    private fun <R : Revision?> parseTypeArgs(revision: (name: String) -> R): List<TypeExpr<R>> {
         advance()
-        val args = mutableListOf<TypeExpr>()
-        args.add(parseTypeExpr())
+        val args = mutableListOf<TypeExpr<R>>()
+        args.add(parseTypeExpr(revision))
         while (peek().kind == COMMA) {
             advance()
-            args.add(parseTypeExpr())
+            args.add(parseTypeExpr(revision))
         }
         expectAndAdvance(GT, message = "Expected '>'")
         return args
     }
 
-    private fun parseTypeAtom(): TypeExpr {
+    private fun <R : Revision?> parseTypeAtom(revision: (name: String) -> R): TypeExpr<R> {
         val token = peek()
         return when (token.kind) {
             UPPER_IDENT -> {
                 advance()
-                val revision = parseRevisionSuffix()
+                val typeRevision = revision(token.text!!)
                 if (peek().kind == LT) {
-                    val args = parseTypeArgs()
-                    AppliedTypeExpr(token.text!!, args, token.span + args.last().span, revision)
+                    val args = parseTypeArgs(revision)
+                    AppliedTypeExpr(token.text, args, token.span + args.last().span, typeRevision)
                 } else {
-                    TypeName(token.text!!, token.span, revision)
+                    TypeName(token.text, token.span, typeRevision)
                 }
             }
 
@@ -303,12 +394,12 @@ class Parser(
                     val close = advance()
                     TupleTypeExpr(emptyList(), token.span + close.span)
                 } else {
-                    val innerType = parseTypeExpr()
+                    val innerType = parseTypeExpr(revision)
                     if (peek().kind == COMMA) {
                         val elements = mutableListOf(innerType)
                         while (peek().kind == COMMA) {
                             advance()
-                            elements.add(parseTypeExpr())
+                            elements.add(parseTypeExpr(revision))
                         }
                         val close = expectAndAdvance(RPAREN, message = "Expected ')'")
                         TupleTypeExpr(elements, token.span + close.span)
@@ -321,11 +412,11 @@ class Parser(
 
             LBRACE -> {
                 advance()
-                val fields = mutableListOf<Pair<String, TypeExpr>>()
+                val fields = mutableListOf<Pair<String, TypeExpr<R>>>()
                 while (peek().kind != RBRACE && peek().kind != EOF) {
                     val fieldName = expectName("Expected field name")
                     expectAndAdvance(COLON, message = "Expected ':'")
-                    val fieldType = parseTypeExpr()
+                    val fieldType = parseTypeExpr(revision)
                     fields.add(fieldName.text!! to fieldType)
                     if (peek().kind == COMMA) {
                         advance()
@@ -373,21 +464,21 @@ class Parser(
         return token
     }
 
-    private fun parseFunParams(): List<Param> {
+    private fun <R : Revision?> parseFunParams(revision: (name: String) -> R): List<Param<R>> {
         if (peek().kind == RPAREN) return emptyList()
 
-        val params = mutableListOf<Param>()
-        params.add(parseAnnotatedParam())
+        val params = mutableListOf<Param<R>>()
+        params.add(parseAnnotatedParam(revision))
 
         while (peek().kind == COMMA) {
             advance()
-            params.add(parseAnnotatedParam())
+            params.add(parseAnnotatedParam(revision))
         }
 
         return params
     }
 
-    private fun parseOptionalTypeAnnotation(typeParser: () -> TypeExpr = ::parseTypeExpr): TypeExpr? =
+    private fun <T> parseOptionalTypeAnnotation(typeParser: () -> T): T? =
         if (peek().kind == COLON) {
             advance()
             typeParser()
@@ -395,24 +486,23 @@ class Parser(
             null
         }
 
-    private fun parseAnnotatedParam(): Param {
+    private fun <R : Revision?> parseAnnotatedParam(revision: (name: String) -> R): Param<R> {
         val name = expectIdentifier("Expected parameter name")
-        val typeAnnotation = parseOptionalTypeAnnotation()
+        val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(revision) }
         val span = name.span + (typeAnnotation?.span ?: name.span)
         return Param(name.text!!, typeAnnotation, span)
     }
 
     private fun parseBinding(): Stmt {
         val name = expectName("Expected identifier")
-        val revision = parseRevisionSuffix()
-        val typeAnnotation = parseOptionalTypeAnnotation()
+        programRevision(name.text!!)
+        val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
         if (typeAnnotation != null && peek().kind != EQ) {
-            return ValDecl(name.text!!, typeAnnotation, name.span + typeAnnotation.span, revision)
+            throw ParseError(declarationWithoutBody(name.text), name.span + typeAnnotation.span)
         }
-        rejectRevisionOnDefinition(revision)
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
-        return Val(name.text!!, value, name.span + value.span, typeAnnotation)
+        return Val(name.text, value, name.span + value.span, typeAnnotation)
     }
 
     private fun parseBlockOrExpr(): Expr = if (isBlockStart()) parseBlock() else parseExpr()
@@ -550,7 +640,7 @@ class Parser(
                 val expr = parseExpr()
                 if (peek().kind == COLON) {
                     advance()
-                    val type = parseTypeExpr()
+                    val type = parseTypeExpr(::programRevision)
                     val close = expectAndAdvance(RPAREN, message = "Expected ')'")
                     Ascription(expr, type, token.span + close.span)
                 } else {
@@ -768,7 +858,7 @@ class Parser(
         return Lambda(params, body, open.span + close.span)
     }
 
-    private fun parseLambdaParams(): List<Param> {
+    private fun parseLambdaParams(): List<Param<Nothing?>> {
         val token = peek()
 
         // Check if a keyword is being used as a parameter name
@@ -784,12 +874,12 @@ class Parser(
         val next = peekAt(1)
         if (next.kind != ARROW && next.kind != COMMA && next.kind != COLON) return emptyList()
 
-        val params = mutableListOf<Param>()
+        val params = mutableListOf<Param<Nothing?>>()
         while (peek().kind == IDENT) {
             val ident = advance()
             // Parse an atom plus any postfix `?`, but not a `->` function type — the arrow belongs to
             // the lambda (`|x: Num? -> x|`), so a nullable param annotation must still work here.
-            val typeAnnotation = parseOptionalTypeAnnotation(::parseTypePostfix)
+            val typeAnnotation = parseOptionalTypeAnnotation { parseTypePostfix(::programRevision) }
             val span = ident.span + (typeAnnotation?.span ?: ident.span)
             params.add(Param(ident.text!!, typeAnnotation, span))
 
@@ -820,7 +910,7 @@ class Parser(
             val nameToken = expectName("Expected field name")
             val name = nameToken.text!!
 
-            val typeAnnotation = parseOptionalTypeAnnotation()
+            val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
             val value =
                 if (peek().kind == EQ) {
                     advance()
@@ -931,8 +1021,7 @@ class Parser(
             is Val -> endsWithBlockExpr(stmt.value)
             is PatternVal -> endsWithBlockExpr(stmt.value)
             is FunDef -> endsWithBlockExpr(stmt.body)
-            is FunDecl, is ValDecl -> false
-            is TypeDef -> false
+            is TypeDef<*> -> false
             is Expr -> endsWithBlockExpr(stmt)
         }
 

@@ -88,47 +88,12 @@ sealed class TypeError : KleinError {
         override val message = "'$name' is already defined"
     }
 
-    data class RevisionInProgram(
-        val name: String,
-        val revision: Int,
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message =
-            "'$name/$revision' names a revision; revision syntax is only allowed in a capability contract"
-    }
-
-    data class DeclarationWithoutBody(
-        val name: String,
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message =
-            "'$name' has no body; declarations without a body are only allowed in a capability contract"
-    }
-
-    data class DefinitionInContract(
-        val name: String?,
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message =
-            if (name == null) {
-                "A capability contract only declares what the host provides; it defines nothing itself"
-            } else {
-                "'$name' is defined here; a capability contract only declares what the host provides"
-            }
-    }
-
     data class FunctionTypeInCapability(
         val name: String,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =
             "'$name' has a function in its type; a host cannot call a Klein function, so capabilities cannot pass one"
-    }
-
-    data class ExpressionInContract(
-        override val span: SourceSpan,
-    ) : TypeError() {
-        override val message = "A capability contract has nothing to evaluate; it only declares what the host provides"
     }
 
     data class RecursiveVal(

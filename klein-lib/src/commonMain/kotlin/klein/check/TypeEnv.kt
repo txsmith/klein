@@ -1,5 +1,7 @@
 package klein.check
 
+import klein.Revision
+
 
 sealed class ImplicitParamContext {
     data object None : ImplicitParamContext()
@@ -34,7 +36,7 @@ class TypeEnv private constructor(
 
     fun bind(
         name: String,
-        revision: Int,
+        revision: Revision,
         type: Type,
     ) {
         bindings[key(name, revision)] = type
@@ -44,7 +46,7 @@ class TypeEnv private constructor(
 
     fun lookup(
         name: String,
-        revision: Int,
+        revision: Revision,
     ): Type? = lookup(key(name, revision))
 
     fun bindTypeVar(
@@ -70,12 +72,12 @@ class TypeEnv private constructor(
 
     fun lookupTypeDef(
         name: String,
-        revision: Int,
+        revision: Revision,
     ): TypeDefInfo? = typeDefs[key(name, revision)]
 
     fun getTypeDef(
         name: String,
-        revision: Int,
+        revision: Revision,
     ): TypeDefInfo = typeDefs.getValue(key(name, revision))
 
     fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
@@ -86,7 +88,7 @@ class TypeEnv private constructor(
 
     fun lookupConstructor(
         name: String,
-        revision: Int,
+        revision: Revision,
     ): ConstructorInfo? = constructors[key(name, revision)]
 
     fun allConstructors(): Collection<ConstructorInfo> = constructors.values
@@ -114,7 +116,7 @@ class TypeEnv private constructor(
 
         private fun key(
             name: String,
-            revision: Int,
-        ): String = if (revision == 1) name else "$name/$revision"
+            revision: Revision,
+        ): String = if (revision.value == 1) name else "$name/${revision.value}"
     }
 }

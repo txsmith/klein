@@ -27,10 +27,8 @@ class Lowering {
             when (stmt) {
                 is Val -> sequentialNames.add(stmt.name)
                 is FunDef -> hoistedNames.add(stmt.name)
-                is TypeDef -> stmt.constructors.forEach { hoistedNames.add(it.name) }
+                is TypeDef<*> -> stmt.constructors.forEach { hoistedNames.add(it.name) }
                 is PatternVal -> sequentialNames.addAll(patternValNames(stmt, i))
-                is FunDecl -> throw declarationReachedLowering(stmt.name, stmt.span)
-                is ValDecl -> throw declarationReachedLowering(stmt.name, stmt.span)
                 is Expr -> {}
             }
         }
@@ -46,7 +44,7 @@ class Lowering {
                 }
                 is FunDef ->
                     hoisted.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
-                is TypeDef ->
+                is TypeDef<*> ->
                     stmt.constructors.forEach { ctor ->
                         hoisted.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
                     }
@@ -54,19 +52,12 @@ class Lowering {
                     ordered.addAll(lowerPatternVal(stmt, env, i))
                     env = env.reveal(patternValNames(stmt, i))
                 }
-                is FunDecl -> throw declarationReachedLowering(stmt.name, stmt.span)
-                is ValDecl -> throw declarationReachedLowering(stmt.name, stmt.span)
                 is Expr -> ordered.add(Run(lowerExpr(stmt, env), stmt.span))
             }
         }
         val result = if (trailing != null) lowerExpr(trailing, env) else Literal(Constant.CUnit, span)
         return EnterScope(hoisted + ordered, result, span)
     }
-
-    private fun declarationReachedLowering(
-        name: String,
-        span: SourceSpan,
-    ) = InvariantViolation("declaration '$name' has no body to lower", span)
 
     private fun slotOf(
         name: String,
@@ -98,7 +89,7 @@ class Lowering {
         return Lambda(paramNames.size, lowerExpr(expr.body, env.child(paramNames)), name, expr.span)
     }
 
-    private fun lowerConstructor(ctor: Constructor): CoreExpr {
+    private fun lowerConstructor(ctor: Constructor<*>): CoreExpr {
         val fieldNames = ctor.fields.map { it.name }
         if (fieldNames.isEmpty()) return MakeData(ctor.name, emptyList(), emptyList(), ctor.span)
         val body =

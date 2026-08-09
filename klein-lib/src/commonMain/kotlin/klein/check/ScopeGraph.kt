@@ -215,7 +215,6 @@ data class ScopeGraph(
                         classify(stmt.name, refs)
                         nodes.add(Node(stmt.name, stmt, graphs))
                     }
-                    is FunDecl, is ValDecl -> {}
                     is PatternVal -> {
                         val fresh = mutableListOf<String>()
                         stmt.pattern.boundNames.forEach { binder ->

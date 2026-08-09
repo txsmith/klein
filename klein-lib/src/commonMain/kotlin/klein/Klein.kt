@@ -4,6 +4,7 @@ import klein.surface.*
 import klein.check.Checker
 import klein.check.Type
 import klein.check.TypeEnv
+import klein.check.contract.ContractChecker
 import klein.core.CoreExpr
 import klein.core.Lowering
 import klein.interp.Execution
@@ -44,6 +45,18 @@ object Klein {
         }
 
     /**
+     * Parse [tokens] as a capability contract rather than as a rule. A contract and a rule are two
+     * languages with the same lexer, so which one a file is read as is a choice made here, at the
+     * entry point, rather than something the parser discovers.
+     */
+    fun parseContract(tokens: List<Token>): StageResult<ContractExpr> =
+        try {
+            StageResult.success(Parser(tokens).parseContract())
+        } catch (e: ParseError) {
+            StageResult.failure(e)
+        }
+
+    /**
      * The checker synthesizes a type even for ill-typed programs, so the result can carry
      * both an output and errors; [StageResult.andThen] still refuses to continue past
      * errors. [env] is mutated with the program's bindings — pass your own to inspect
@@ -58,22 +71,21 @@ object Klein {
     }
 
     /**
-     * Check a parsed [Program] as a capability contract instead of as a program: type definitions
-     * and declarations only. The output is the environment the contract declares, so a program can
-     * be checked against a contract by composition:
+     * Check a parsed [ContractExpr]. The output is the environment the contract declares, so a
+     * program can be checked against a contract by composition:
      *
      * ```
-     * Klein.checkContract(contract).andThen { env -> Klein.check(program, env) }
+     * Klein.parseContract(tokens).andThen(Klein::checkContract).andThen { env -> Klein.check(program, env) }
      * ```
      *
      * Which capabilities a host actually implements, and how a contract is located, versioned, or
      * bound to an implementation, are all the host's business — this stage only reads the source.
      */
     fun checkContract(
-        program: Program,
+        contract: ContractExpr,
         env: TypeEnv = TypeEnv.empty(),
     ): StageResult<TypeEnv> {
-        val checked = Checker().checkContract(program, env)
+        val checked = ContractChecker().check(contract, env)
         return StageResult(checked.env, checked.errors)
     }
 
