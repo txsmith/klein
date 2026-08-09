@@ -8,3 +8,6 @@ kls_database.db
 
 # Offline build cache (extracted from local-repo.zip)
 gradle/local-repo/
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/

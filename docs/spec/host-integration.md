@@ -47,7 +47,7 @@ that matters below, "a host" means one running instance.
 A single injection point in the host application where Klein rules can run. It is defined by a
 contract file and an implementation of that contract. A contract file is a Klein file listing the
 types, function declarations and value declarations that rules can access. Each declaration is
-versioned, and each version is exposed as a tag.
+versioned, and the contract's releases decide which version each name means.
 
 Environments are separate worlds. Every mechanism in this doc operates within a single
 environment. Two environments may declare the same capability name, and no machinery ever
@@ -77,42 +77,52 @@ fun creditScore/2(c: Customer/2): Num
 ```
 
 Absent means revision 1. Revisions are permanent, never recycled and are contract-only syntax.
-`/N` never appears in a rule; what rules see is governed entirely by `expose`, so revision
-markers never reach a rule author's screen or vocabulary.
+`/N` never appears in a rule; what rules see is governed entirely by releases, so revision markers
+never reach a rule author's screen or vocabulary.
 
-### Tag
+### Release
 
-A rule-facing name, aimed at a declared revision by an `expose` line in the contract. A
-declaration may only change in place when the change is compatible. An `expose` line is a
-pointer, and re-aiming it is routine. Moving a tag is how an environment migrates:
+A numbered set of pointers in the contract, each aiming a name rules may write at one declared
+revision. A rule is compiled against exactly one release, and inside it every name means exactly
+one revision — so rules write plain names and never see a revision marker:
 
 ```klein
 type Customer = Customer { id: Num }
 type Customer/2 = Customer { id: Num, tier: String }
 
-fun creditScore(c: Customer): Num
+fun creditScore(c: Customer/1): Num
 fun creditScore/2(c: Customer/2): Num
 
-expose Customer/2 as Customer
-expose creditScore/2 as creditScore
-expose Customer/1 as Customer@legacy
+release 1
+  Customer
+  creditScore
+
+release 2
+  Customer/2
+  creditScore/2
 ```
 
-Rules mention tags only. A tag is spelled as a bare name (`Customer`) or with a qualifier
-(`Customer@legacy`). Both forms are ordinary tags. A name with a single declared revision is
-implicitly exposed bare, so a contract that never versions anything never mentions exposure.
-Declaring a second revision cancels the implicit tag for the initial revision. From then on its
-exposure must be written out, and a contract that declares `Customer/2` with no `expose` line for
-`Customer` fails to check. Leaving an *old* revision unexposed is deliberate and legal and is
-what retires it from being used in rules.
+The language side — delta blocks, the implicit first release, `remove`, self-containment, and the
+fold that retires one — is specified in [contracts.md](./contracts.md). What matters here is that
+a release is the unit an environment migrates in, and that there are exactly two ways to change
+what rules can see:
 
-Tags and declarations are two namespaces that never share a context. Tags are only mentioned in
-rules, never in capability signatures. `expose` is the one statement where both tags and
-revisions appear. A bare declaration reference in a signature means revision 1. This is permitted
-only while the name has a single revision. Declaring a second revision forces the older
-references to be spelled `/1`.
+**Editing a release** changes what the rules already on it will compile against. Nobody moves;
+each rule picks the change up at its next recompile, still on the same release. This is how a
+mechanical change travels — a shape that moved while the meaning behind it did not, or a repair to
+a capability that was wrong. An edit also reaches every later release that did not name that
+capability itself.
 
-A tag may only point at a revision the same file declares. Anything else is a check error.
+**Appending a release** creates something nobody is on. Rules stay where they are until an author
+selects the new release for them. This is how a change the checker cannot see is declared — a
+different credit bureau behind an unchanged signature.
+
+That difference is the whole migration vocabulary. Nothing marks a release as needing review,
+because the act already says it: an edit carries rules along, a new release waits for a person.
+
+Tags, the earlier design this replaces, were per-name pointers a rule could mix freely, spelled
+`Customer@legacy` in rule source. They are gone: a rule now takes its entire vocabulary from one
+release.
 
 ### Rule
 
@@ -122,10 +132,15 @@ contract.
 ### Edition
 
 A compiled artifact of one version of a rule. A version is what an author creates by editing rule
-source. An edition is that version compiled: the program lowered to Klein Core, plus a map
-recording, for each capability and type the rule uses, the tag it wrote, the revision the tag
-pointed at, and a hash of the declared signature it was compiled against. Each entry of that map
-is a **pin**.
+source. An edition is that version compiled: the program lowered to Klein Core, the release it was
+compiled against, plus a map recording, for each capability and type the rule uses, the name it
+wrote, the revision that release pointed at, and a hash of the declared signature. Each entry of
+that map is a **pin**.
+
+The release is not written in the rule. It travels with the compile request — in the shipped
+editor, a dropdown beside the rule — so it is chosen once, per rule, by a person. Recompiling
+reuses the release the previous edition recorded. Selecting a different one is the deliberate act
+that moves a rule forward, and the only thing that ever does.
 
 One version accrues editions as capability contracts evolve. Recompiling the same source against
 a changed contract makes a new edition next to the old ones. Editions are never edited and only
@@ -167,10 +182,13 @@ run on a *different* edition waits on that decision. See open questions.
 
 ### Reconciliation
 
-The act of recompiling rules against an evolved set of declarations and tags. When a signature is
-edited in place or a tag is re-aimed, each affected rule's unchanged source is compiled again. A
-clean check is the new edition. A failed check produces a report with the diagnostics, and the
-rule keeps running on its existing editions. How that report reaches the author is the org's
+The act of recompiling rules against an evolved contract. When a signature is edited in place or a
+release is re-pointed, each affected rule's unchanged source is compiled again, against the same
+release it recorded. A clean check is the new edition. A failed check produces a report with the
+diagnostics, and the rule keeps running on its existing editions.
+
+Reconciliation never changes a rule's release. It recompiles rules where they stand, so an
+appended release affects nobody until an author selects it. How that report reaches the author is the org's
 choice: an email, a chat message, a warning in the rule editor.
 
 Reconciliation is incremental. Comparing each edition's pins against the current contract finds
@@ -183,9 +201,9 @@ after a rollback, migrating back is a lookup, because the old editions still exi
 pin comparison skips the finished work. In practice it happens when the fleet has converged on a
 new contract.
 
-A failed recompile has two urgencies. Under a re-aimed tag the rule waits safely, because the old
-revision is still declared and served. Under an in-place signature change there is no old
-revision to stay on once the fleet flips, so that failure gates the deployment.
+A failed recompile has two urgencies. Under a re-pointed release the rule waits safely, because
+the old revision is still declared and served. Under an in-place signature change there is no old
+revision to stay on once the fleet flips. A CI check can detect this, or the host can choose to handle it as a runtime error.
 
 The hash also enforces the revision discipline. An incompatible in-place edit, or any edit to a
 type definition at an unchanged revision, appears as a hash mismatch and is reported as a
@@ -193,11 +211,23 @@ contract error.
 
 ### Drain
 
-The countdown to removing a capability revision. Two counts fall toward zero: rules whose newest
+The countdown to deleting a capability revision. Two counts fall toward zero: rules whose newest
 edition still pins the revision, and parked runs pinned to it. The first count falls through
 reconciliation and author edits. The second falls as parked runs finish. A run records its
-edition and the edition carries the pins, so both counts are one join over data the host already
-stores.
+edition, and the edition carries both its release and its pins, so both counts are one join over
+data the host already stores.
+
+Retiring a release is not gated by any of this. Deleting a block is always allowed: it stops new
+compiles against that release and nothing else, since everything already running dispatches
+through pinned revisions. Retiring is what *begins* a drain rather than what waits for one — from
+that moment, rules recorded on the retired release cannot be recompiled, and hold their editions
+until someone moves them.
+
+So the release count is a decision aid, not a permission check. Watching it fall to zero as
+authors migrate is the patient path; retiring earlier is the blunt one, and it strands nobody —
+it only means the remaining authors must move before their rules can change again. Either way,
+the revisions that release was the last to reach become deletable once the counts above reach
+zero.
 
 Nothing bars fresh runs during a drain. On a stable fleet the births stop by themselves: every
 host serves the new editions, and a fresh event always starts the newest edition its host can
@@ -216,22 +246,26 @@ revision, and none exists. Stranding loses no work. The alert on "parked runs pi
 revisions no instance implements" names the run, restoring the revision lets it finish, and
 removal ships again later. Revision numbers are permanent, so restoring one is well-defined.
 
-The revision number is not recycled. Deleting `creditScore` once it drains leaves `creditScore/2`
-as `/2` forever, and the next breaking change is `/3`.
+Neither number is recycled. Deleting `creditScore` once it drains leaves `creditScore/2` as `/2`
+forever, and the next breaking change is `/3`. Retiring release 1 leaves release 2 as release 2,
+and the next release is 3.
 
 ## How the pieces relate
 
 - Each **host** instance implements a set of capability revisions.
 - **Environments** each declare their own contract and register implementations behind it; every
   other mechanism in this doc operates inside one environment.
-- **Rules** are written against an environment; **compiling** one produces an **edition** whose
-  **pins** freeze exactly which capability/type versions it touches.
+- **Rules** are written against an environment and compiled against one of its **releases**, which
+  is chosen per rule and travels with the compile request; **compiling** produces an **edition**
+  that records that release and whose **pins** freeze exactly which capability/type versions it
+  touches.
 - An **event** at an environment's invocation site targets a *rule*; the serving host runs the
   newest edition whose pins it implements, which is what makes a heterogeneous mid-deploy
   fleet safe.
 - A **run** executes against exactly its pins; a **parked run** holds them until done.
-- When the host evolves, **reconciliation** grows the corpus with new editions; **drain** counts
-  old revisions down to removal; failed recompiles become reports for their authors.
+- When the host evolves, **reconciliation** grows the corpus with new editions, always against the
+  release each rule already recorded; **drain** counts old releases down to retirement and old
+  revisions down to deletion; failed recompiles become reports for their authors.
 
 ## Evolution, concretely
 
@@ -240,14 +274,20 @@ Each kind of contract change asks something different of the host.
 | Change | What the host writes | What happens to rules |
 |---|---|---|
 | Compatible signature change, types unmoved | edit the declaration in place | affected rules are recompiled; green is the new edition |
-| Type change, or incompatible signature change, meaning preserved | new revision(s), move the tag | rules recompile against the new revision with zero source edits; red waits safely on the old revision |
-| Meaning changed | new revision, tag not moved | humans migrate each rule to a new tag or after review; the old revision drains as they do |
-| A revision retires from rule vocabulary | remove its tag | no new rule can name it; rules still writing the tag go red on recompile and wait on their old editions |
+| Type change, or incompatible signature change, meaning preserved | new revision(s), re-point the release | rules recompile against the new revision with zero source edits, staying on their release; red waits safely on the old revision |
+| A capability was wrong and needs repairing | re-point the release the affected rules are on | the repair reaches them where they are, without a migration |
+| Meaning changed | new revision, new release | nobody is on the new release until an author selects it for a rule; the old release keeps serving meanwhile |
+| A capability retires from rule vocabulary | `remove` it in a new release | rules on earlier releases carry on; no rule compiled against the new release can name it |
 
-Moving a tag is the claim that meaning was preserved. The claim is made by the act itself, in a
-diff, reviewed when it happens. This polarity fails safe. Forgetting to move a tag leaves rules
-on the old revision, which keeps being served and shows up as staleness. Nothing silently changes
+Editing a release is the claim that meaning was preserved. The claim is made by the act itself, in
+a diff, reviewed when it happens. This polarity fails safe. Forgetting to edit leaves rules on
+what they had, which keeps being served and shows up as staleness. Nothing silently changes
 meaning.
+
+The two acts also decide who is disturbed. An edit reaches everyone on that release, and every
+later release that did not name the capability itself — which is what makes a repair land on the
+rules that need it rather than on whoever has already migrated. A new release reaches nobody until
+chosen.
 
 Type definitions are invariant. Any edit to a `type` requires a new revision. Only a capability's
 own signature, over unmoved types, may change in place. A changed type definition admits no
@@ -281,7 +321,8 @@ references a new capability yet, so a half-deployed fleet is harmless and no edi
 ### 2. The meaning changes
 
 The host switches credit bureaus. The types do not move, so no checker can see the change. The
-host declares it by adding a revision and not moving the tag. The whole contract now reads:
+host declares it by adding a revision and putting that revision in a new release. The whole
+contract now reads:
 
 ```klein
 type Customer = Customer { id: Num, name: String }
@@ -290,40 +331,46 @@ customer: Customer
 fun creditScore(c: Customer): Num
 fun creditScore/2(c: Customer): Num
 
-expose creditScore/1 as creditScore
-expose creditScore/2 as creditScore@experian
+release 1
+  Customer
+  customer
+  creditScore
+
+release 2
+  creditScore/2
 ```
 
-The day-one declaration is untouched. A bare declaration is revision 1, and `creditScore/1` in
-the expose line is its explicit spelling. Declaring `/2` cancels the implicit exposure, so the
-`/1` line is now written out.
+The day-one declarations are untouched. Release 1 is written out here for the first time: it was
+implicit while nothing was versioned, and versioning something is what makes it worth stating.
+Release 2 says only what it changes.
 
 ```
 $ klein reconcile plan eligibility.klein
-3 rules checked by their newest edition's pins, 0 affected
+3 rules checked against the release each recorded, 0 affected
 ```
 
-Nothing migrates, and that is the point. Every rule stays on the old bureau until its author
-decides otherwise. The author of `eligibility-standard` edits the rule to
-`creditScore@experian(customer) >= 640`, reconsidering the threshold against the new bureau's
-scale. That is the judgment no machine could make. The edit is a new version of the rule, and its
-first edition pins `creditScore/2`.
+Nothing migrates, and that is the point. Every rule is on release 1, and stays on the old bureau
+until its author decides otherwise. The author of `eligibility-standard` selects release 2 and
+saves `creditScore(customer) >= 640`, reconsidering the threshold against the new bureau's scale.
+That is the judgment no machine could make. The rule source barely changed; what changed is which
+release it is compiled against. Its first edition records release 2 and pins `creditScore/2`.
 
 ```
-$ klein drain creditScore/1
-editions: 1 rule still newest-pins /1 (eligibility-premium)
+$ klein drain release 1
+rules: 2 (eligibility-premium, eligibility-student)
 parked runs: 7
-not removable
 ```
 
-Both bureaus serve until the count reaches zero.
+The host could retire release 1 today — nothing forbids it — but that would leave both authors
+unable to change their rules until they moved. So it waits, and both bureaus serve while the
+count falls.
 
 ### 3. The shape changes
 
 `Customer` drops `name` for privacy and gains `tier`. A type edit requires a new revision, and
 the revision cascades: every declaration whose signature mentions `Customer` needs a revision
-that mentions `Customer/2`. The bureau behind `@experian` is unchanged, so the meaning is
-preserved and the tags move:
+that mentions `Customer/2`. The bureau behind release 2 is unchanged, so the meaning is preserved
+and release 2 is re-pointed rather than superseded:
 
 ```klein
 type Customer = Customer { id: Num, name: String }
@@ -335,42 +382,45 @@ fun creditScore(c: Customer/1): Num
 fun creditScore/2(c: Customer/1): Num
 fun creditScore/3(c: Customer/2): Num
 
-expose Customer/2 as Customer
-expose customer/2 as customer
-expose creditScore/3 as creditScore@experian
+release 1
+  Customer
+  customer
+  creditScore
+
+release 2
+  Customer/2
+  customer/2
+  creditScore/3
 ```
 
 Declaring `Customer/2` also forced the older bare references to be spelled `Customer/1`. The new
-declarations, their implementations, and the moved tags travel in one deploy, so a tag can never
-take effect before its target is served.
+declarations, their implementations, and the re-pointed release travel in one deploy, so a
+pointer can never take effect before its target is served.
 
-The bare `creditScore` tag is gone, and it had to go. Its target takes a `Customer/1`, and no
-tag reaches `Customer/1` anymore. An exposed signature may only mention revisions some tag
-reaches, so keeping the tag would fail the contract check. The host's real choice was to drop it
-or to expose the legacy world alongside (`Customer/1` and `customer/1` under `@legacy` tags).
-Dropping the exposure removes the old bureau from rule vocabulary and nothing else: the `/1`
-declarations stay, their implementations stay, and editions pinned to them keep serving fresh
-runs and parked runs until removal.
+Release 1 is left alone, and that is a choice rather than a constraint. Moving it to `Customer/2`
+would mean declaring an old-bureau capability that takes a `Customer/2`, which the host has no
+reason to build. So release 1 keeps the whole old world coherently — old shape, old bureau — and
+the rules on it carry on untouched.
 
 ```
 $ klein reconcile plan eligibility.klein
-3 rules checked by their newest edition's pins, 2 affected
-  eligibility-standard   recompile ok   would pin Customer/2, customer/2, creditScore/3
-  eligibility-student    recompile ok   would pin Customer/2, customer/2, creditScore/3
-  eligibility-premium    FAILED         creditScore is no longer exposed
+3 rules checked against the release each recorded, 1 affected
+  eligibility-standard   release 2   recompile ok   would pin Customer/2, customer/2, creditScore/3
+2 rules untouched: release 1 did not change
 $ klein reconcile apply eligibility.klein
-2 editions created, 1 report filed
+1 edition created
 ```
 
-The two green rules migrated with zero source edits. `eligibility-premium` never migrated off the
-old bureau: it still writes `creditScore`, which no longer names anything, and it also reads
-`customer.name`, which `Customer/2` dropped. It cannot follow the tags forward. It waits safely:
-its old editions keep serving, revision 1 of everything it pins stays declared, and its author
-has a report. The two populations move at
-two speeds. Green rules migrate in bulk, in seconds. Red rules wait for a human, which may take
-weeks, and that is fine.
+`eligibility-standard` picked up the new shape with zero source edits, still on release 2.
+`eligibility-premium` reads `customer.name`, which `Customer/2` dropped — and it is entirely
+unaffected, because it sits on release 1 where `Customer` still has a `name`. It is not red, not
+waiting, and not stale in any way that needs attention yet.
 
-If the fleet rolls back mid-deploy, the tags roll back with it, because they live in the
+Its reckoning comes when someone selects release 2 for it. At that moment its author faces both
+changes at once: the dropped field and the new bureau's scale. That is the right time for a person
+to look, and until then nothing forced the question.
+
+If the fleet rolls back mid-deploy, the releases roll back with it, because they live in the
 contract. Fresh events fall back to the old editions, which still exist. Runs already parked on
 new pins are stranded, not broken. They wait, and resume when the fleet rolls forward again.
 
@@ -386,32 +436,42 @@ fun creditScore/3(c: { id: Num, tier: String }): Num
 
 ```
 $ klein reconcile plan eligibility.klein
-3 rules checked by their newest edition's pins, 2 affected
-  eligibility-standard   recompile ok
-  eligibility-student    recompile ok
-1 rule untouched: eligibility-premium pins creditScore/1, which did not change
+3 rules checked against the release each recorded, 1 affected
+  eligibility-standard   release 2   recompile ok
+2 rules untouched: they pin creditScore/1, which did not change
 ```
 
-The pinned hash of `creditScore/3` no longer matches, so its followers recompile.
-`eligibility-premium` never pinned `/3`, so it is not even checked further. Had a recompile
-failed here, the change was not compatible after all, and the report gates the deployment: unlike
-a revision bump, an in-place change leaves no old world to wait on once the fleet flips.
+The pinned hash of `creditScore/3` no longer matches, so whoever pinned it recompiles. The two
+rules on release 1 never pinned `/3`, so they are not checked further. Had a recompile failed
+here, the change was not compatible after all, and the report gates the deployment: unlike a
+revision bump, an in-place change leaves no old world to wait on once the fleet flips.
 
 ### 5. Removal
 
-Months later, `eligibility-premium`'s author has rewritten it and the last parked run on the old
-bureau has finished.
+Months later, the authors of `eligibility-premium` and `eligibility-student` have rewritten their
+rules onto release 2, and the last parked run on the old bureau has finished.
 
 ```
-$ klein drain creditScore/1
-editions: 0
+$ klein drain release 1
+rules: 0
 parked runs: 0
-removable
 ```
 
-The host deletes the `creditScore/1` declaration, its expose line, and its implementation. The
-next deploy drops them. `creditScore` has now had revisions 1 through 3, and the next one is
-`/4`. The number never resets.
+Nobody is left on it, so retiring costs nothing. Retiring release 1 means folding it into release
+2 and deleting its block. Release 2 already
+stated all three names, so the fold adds nothing and the file simply loses its first block:
+
+```klein
+release 2
+  Customer/2
+  customer/2
+  creditScore/3
+```
+
+Now no release reaches the revision-1 declarations, and nothing pins them, so the host deletes
+`Customer/1`, `customer/1`, `creditScore/1`, `creditScore/2` and their implementations. The next
+deploy drops them. `creditScore` has now had revisions 1 through 3, and the next one is `/4`.
+Release 2 stays release 2, and the next release is 3. Neither number ever resets.
 
 Removal can guess wrong: a host that still carried revision 1 may have parked one last run just
 before the fleet finished upgrading. The run strands, the alert on unservable parked runs names
@@ -469,6 +529,11 @@ reports at every seam.
 
 ## Decision history
 
-The rejected alternatives — snapshot files, semantic version numbers, `review`/`mechanical`
-markers, subtyping as the compatibility verdict, a retire flag, and the rest — are recorded in
+Two ADRs. The revision substrate — permanent `/N`, invariant type definitions, recompilation as
+the verdict, optimistic removal — and its rejected alternatives (snapshot files, semantic version
+numbers, `review`/`mechanical` markers, subtyping as the verdict, a retire flag) are in
 [decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md](../decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md).
+
+Releases replaced the tags that ADR proposed; that decision, and what was rejected on the way to
+it, is in
+[decisions/2026-08-08-rule-vocabulary-through-linear-releases.md](../decisions/2026-08-08-rule-vocabulary-through-linear-releases.md).

@@ -65,24 +65,32 @@ rather than replacing it.
 - [x] **Revision syntax in contracts** — `/N` on declared names and type references
       (`fun creditScore/2(c: Customer/2): Num`), absent meaning 1; duplicate key is
       (name, revision); a revised type revises its constructors. grammar.md and
-      spec/contracts.md updated. (Landed with a `review` marker that the tag design
-      then obsoleted — removal below.)
-- [ ] **Remove the `review` marker** — the expose map replaced trailing markers
-      (moving a tag is the meaning-preserved attestation; not moving it is the
-      semantic-change treatment). Strip the keyword from parser, AST, tests, and its
-      grammar.md/contracts.md sections. Small and mechanical.
-- [ ] **Expose/tag syntax** — per the settled design in host-integration.md:
-      - Contract: `expose <Name/N> as <tag>` (`expose Customer/2 as Customer`,
-        `expose Customer/1 as Customer@legacy`); target must be declared in the same
-        file. A name with a single revision is implicitly exposed bare; declaring a
-        second revision cancels that, and missing exposure becomes a check error.
-      - Signatures reference declarations only, never tags; bare references mean `/1`
-        and are rejected once the name has a second revision (forced
-        disambiguation; hash-neutral).
-      - Rule side: `@` token, `Name@tag` in type/expression/constructor positions;
-        rule TypeEnv seeded from the expose map under tag names; `/N` rejected in
-        program mode. Payoff: revision-aware mismatch diagnostics ("different versions
-        of the same type").
+      spec/contracts.md updated.
+- [x] **Remove the `review` marker** — done at `3584a31`, which stripped it from the
+      parser, AST, grammar.md and tests. The release design has no marker at all: an
+      edited release carries rules along, a new release waits for a person.
+- [x] **Release design and documentation** — tags replaced by numbered releases.
+      spec/contracts.md §Releases rewritten, spec/host-integration.md retermed
+      throughout (including the worked example), grammar.md given the release
+      productions, and ADR 2026-08-08 records the decision plus what was rejected.
+- [ ] **Release test suites** — exhaustive, spec-driven, written before the
+      implementation:
+      - Parser: block syntax, header forms, entry shapes, indentation, `remove`,
+        `release` still usable as an ordinary identifier, rejected shapes.
+      - Contract checking: the implicit first release, delta blocks and inheritance,
+        self-containment, `remove`, the fold on retirement, declarations no release
+        reaches (legal — staged or draining), duplicate entries, numbering rules,
+        pointing at an undeclared revision, a release in a program.
+      - Rule checking: a rule checked against one release sees plain names only,
+        constructors arrive with their type, and no `/N` reaches any diagnostic —
+        sweep every leak channel.
+- [ ] **Release implementation** — `release` recognized contextually at statement head;
+      one AST node; contract checking builds each release and hands the checker a plain
+      name environment; the release travels with the compile request and is recorded on
+      the edition.
+      Nothing is undecided: releases are freely editable (the reconciler's failures are
+      the only feedback, by design), and the check rules are written out in
+      spec/contracts.md §Releases.
 
 ## After that
 

@@ -7,11 +7,14 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ## Expression Grammar
 
 ```
-prog        = (type_def | fun_def | fun_decl | stmt)*
+prog        = (type_def | fun_def | fun_decl | release | stmt)*
 
 type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
 
 revision    = '/' INT                              # positive; absent means 1. Contracts only
+
+release     = 'release' INT NEWLINE release_entry+ # contracts only; 'release' is contextual
+release_entry = 'remove'? UPPER_IDENT_or_IDENT revision?   # one per line, indented
 
 type_params = '<' TYPE_VAR (',' TYPE_VAR)* '>'
 
@@ -189,6 +192,36 @@ can put a `/` where a revision goes, because a type is never an operand of an ar
 and a declared name is never an expression. The one lookahead the parser needs is for `val_decl`,
 where a statement may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
 declaration, and anything else is the division it has always been (`total / 2` is unchanged).
+
+## Releases
+
+A block naming which revision each rule-facing name means. What it means is specified in
+[spec/contracts.md](./spec/contracts.md); the syntax is a header line and one indented entry per
+line:
+
+```klein
+release 3
+  Customer/2
+  creditScore/3
+  remove maxRetries
+```
+
+The header is the word `release` and a positive integer. Each entry names one declaration, with an
+optional revision suffix under the usual rule that absent means 1, and may be preceded by `remove`
+to take that name out of the release. Entries are separated by newlines and belong to the block by
+indentation, like any other indented group.
+
+### `release` is not a reserved word
+
+It is recognized only at the start of a statement and only when directly followed by an `INT`,
+which is not a legal statement otherwise. Everywhere else it is an ordinary identifier, so
+`release = 3`, `release: Num` and `release + 1` all keep their meaning. This is the same
+positional recognition used for revisions, and for the same reason: the surface stays free for
+rule authors.
+
+Like every other contract-only form, a release block parses in both kinds of file. A release in a
+program is a type error rather than a parse error, so checking continues and the rest of the file
+is still diagnosed.
 
 ## Indentation Model
 

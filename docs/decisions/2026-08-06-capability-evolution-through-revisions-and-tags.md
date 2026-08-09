@@ -1,7 +1,12 @@
 # Capability Evolution Through Revisions and Tags
 
-**Status**: Accepted, 2026-08-06. The living rules are in
-[spec/host-integration.md](../spec/host-integration.md) and
+**Status**: Accepted, 2026-08-06. **Partly superseded, 2026-08-08**: tags and `expose` were
+replaced by numbered releases — see
+[2026-08-08-rule-vocabulary-through-linear-releases.md](./2026-08-08-rule-vocabulary-through-linear-releases.md).
+The rest of this ADR stands: permanent `/N` revisions, invariant type definitions, recompilation
+as the compatibility verdict, and optimistic removal. Everything below is preserved as written.
+
+The living rules are in [spec/host-integration.md](../spec/host-integration.md) and
 [spec/contracts.md](../spec/contracts.md); this ADR records the decision and what was rejected on
 the way to it.
 
