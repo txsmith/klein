@@ -1,5 +1,6 @@
 package klein.surface
 
+import klein.ReleaseNumber
 import klein.Revision
 import klein.SourceSpan
 
@@ -14,12 +15,13 @@ import klein.SourceSpan
  */
 data class ContractExpr(
     val types: List<TypeDef<*>>,
-    val declarations: List<Declaration>,
+    val declarations: List<CapabilityDeclaration>,
+    val releases: List<ReleaseBlock>,
     val span: SourceSpan,
 )
 
 /** A capability: a name, a signature, and the revision that — with the name — identifies it. */
-sealed class Declaration {
+sealed class CapabilityDeclaration {
     abstract val name: String
     abstract val revision: Revision?
     abstract val span: SourceSpan
@@ -31,11 +33,24 @@ data class FunDecl(
     val returnType: TypeExpr<*>,
     override val span: SourceSpan,
     override val revision: Revision? = null,
-) : Declaration()
+) : CapabilityDeclaration()
 
 data class ValDecl(
     override val name: String,
     val type: TypeExpr<*>,
     override val span: SourceSpan,
     override val revision: Revision? = null,
-) : Declaration()
+) : CapabilityDeclaration()
+
+data class ReleaseBlock(
+    val number: ReleaseNumber,
+    val entries: List<ReleaseEntry>,
+    val span: SourceSpan,
+)
+
+data class ReleaseEntry(
+    val name: String,
+    val revision: Revision?,
+    val remove: Boolean,
+    val span: SourceSpan,
+)

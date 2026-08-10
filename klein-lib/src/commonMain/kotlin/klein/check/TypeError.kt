@@ -1,6 +1,7 @@
 package klein.check
 
 import klein.KleinError
+import klein.ReleaseNumber
 import klein.Revision
 import klein.SourceSpan
 
@@ -142,6 +143,27 @@ sealed class TypeError : KleinError {
     ) : TypeError() {
         override val message =
             "'$typeName' is a built-in type and has no revisions; write '$typeName' without '/${revision.value}'"
+    }
+
+    /**
+     * A release entry that names nothing the contract declares. Entries resolve against the
+     * declaration lists rather than the environment, so a constructor lands here too: constructors
+     * travel with their type and are never pointed at individually.
+     */
+    data class UnknownReleaseTarget(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Release ${release.value} points at '$name', which this contract does not declare"
+    }
+
+    data class DuplicateReleaseEntry(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "'$name' is named twice in release ${release.value}; a name means one revision per release"
     }
 
     data class ImplicitParamOutsideLambda(

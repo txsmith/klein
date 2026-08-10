@@ -1,6 +1,7 @@
 package klein.surface
 
 import klein.KleinError
+import klein.ReleaseNumber
 import klein.Revision
 import klein.SourceSpan
 
@@ -30,6 +31,9 @@ class Parser(
         val start = peek().span
         val stmts = mutableListOf<Stmt>()
         while (peek().kind != EOF) {
+            if (isReleaseHeader()) {
+                throw ParseError("A release block belongs in a capability contract; a rule has none", peek().span)
+            }
             val stmt =
                 when (peek().kind) {
                     FUN -> parseFunDef()
@@ -50,13 +54,15 @@ class Parser(
     fun parseContract(): ContractExpr {
         val start = peek().span
         val types = mutableListOf<TypeDef<*>>()
-        val declarations = mutableListOf<Declaration>()
+        val declarations = mutableListOf<CapabilityDeclaration>()
+        val releases = mutableListOf<ReleaseBlock>()
         var end = start
         while (peek().kind != EOF) {
             end =
                 when {
                     peek().kind == TYPE -> parseTypeDef(::contractRevision).also { types.add(it) }.span
                     peek().kind == FUN -> parseFunDecl().also { declarations.add(it) }.span
+                    isReleaseHeader() -> parseReleaseBlock().also { releases.add(it) }.span
                     isDestructuringBinding() ->
                         throw ParseError(definitionInContract(parsePattern().boundNames.firstOrNull()), peek().span)
                     isBinding() -> parseValDecl().also { declarations.add(it) }.span
@@ -70,8 +76,56 @@ class Parser(
                 throw ParseError("Expected newline but got ${peek()}", peek().span)
             }
         }
-        return ContractExpr(types, declarations, start + end)
+        return ContractExpr(types, declarations, releases, start + end)
     }
+
+    /**
+     * `release` is recognised by position and never reserved: the word followed by an `INT` on the
+     * same line is not a legal statement any other way, so `release = 3`, `release: Num`,
+     * `release + 1` and a bare `release` with a number on the next line all keep their meanings.
+     */
+    private fun isReleaseHeader(): Boolean =
+        peek().kind == IDENT && peek().text == "release" && peekAt(1).kind == INT && peekAt(1).indent == null
+
+    private fun parseReleaseBlock(): ReleaseBlock {
+        val header = advance()
+        val headerIndent = lineIndentOf(header)
+        val numberToken = advance()
+        val number = numberToken.text!!.toIntOrNull()
+        if (number == null || number < 1) {
+            throw ParseError("A release number must be a positive integer, got '${numberToken.text}'", numberToken.span)
+        }
+
+        val entries = mutableListOf<ReleaseEntry>()
+        var end = numberToken.span
+        while (peek().startsLineAfter(headerIndent)) {
+            val entry = parseReleaseEntry()
+            entries.add(entry)
+            end = entry.span
+        }
+        return ReleaseBlock(ReleaseNumber(number), entries, header.span + end)
+    }
+
+    /** `remove` is contextual the same way `release` is, so an entry may itself be named `remove`. */
+    private fun parseReleaseEntry(): ReleaseEntry {
+        val start = peek()
+        val remove = start.kind == IDENT && start.text == "remove" && isEntryName(peekAt(1)) && peekAt(1).indent == null
+        if (remove) advance()
+
+        val nameToken = peek()
+        if (!isEntryName(nameToken)) {
+            throw ParseError("A release entry names one declaration, got $nameToken", nameToken.span)
+        }
+        advance()
+        val revision = parseRevisionSuffix()
+        if (!canEndStatement()) {
+            throw ParseError("A release entry names one declaration and nothing else, got ${peek()}", peek().span)
+        }
+        val lastConsumed = tokens[pos - 1]
+        return ReleaseEntry(nameToken.text!!, revision, remove, start.span + lastConsumed.span)
+    }
+
+    private fun isEntryName(token: Token): Boolean = token.kind == IDENT || token.kind == UPPER_IDENT
 
     fun parseStmt(allowTypeDef: Boolean = true): Stmt {
         // Check for keyword used as variable name in binding

@@ -93,6 +93,10 @@ class TypeEnv<R : Revision?> private constructor(
         constructors[key(info.name, info.revision)] = info
     }
 
+    fun updateConstructor(info: ConstructorInfo<R>) {
+        constructors[key(info.name, info.revision)] = info
+    }
+
     fun lookupConstructor(
         name: String,
         revision: R,

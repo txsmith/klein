@@ -147,15 +147,11 @@ one line that moved the obvious thing to review in a diff.
 Reading a release means starting at the oldest block and applying each one in turn. That stays
 short because retiring a release folds it into its successor — see below.
 
-### The first release is implicit
+### A contract's releases are exactly its written blocks
 
-A contract that has never versioned anything has one release, numbered 1, in which every declared
-name means its only revision. Such a contract never writes the word `release` at all.
-
-The word first appears when something is versioned for the first time, and then two blocks are
-written together: `release 1`, stating in full what was until then implicit, and `release 2`,
-stating what changed. A newly declared revision cannot be reached by any rule until a release
-points at it.
+There is no implicit release. A contract that writes no block has no release: it is a perfectly
+good contract, and it simply has nothing a rule can be checked against. A newly declared revision
+likewise cannot be reached by any rule until a block points at it.
 
 ### Adding and removing names
 

@@ -2,11 +2,11 @@ package klein
 
 import klein.surface.*
 import klein.check.Checker
-import klein.check.ContractEnv
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.TypeEnv
 import klein.check.contract.ContractChecker
+import klein.check.contract.EnvironmentContract
 import klein.core.CoreExpr
 import klein.core.Lowering
 import klein.interp.Execution
@@ -47,18 +47,6 @@ object Klein {
         }
 
     /**
-     * Parse [tokens] as a capability contract rather than as a rule. A contract and a rule are two
-     * languages with the same lexer, so which one a file is read as is a choice made here, at the
-     * entry point, rather than something the parser discovers.
-     */
-    fun parseContract(tokens: List<Token>): StageResult<ContractExpr> =
-        try {
-            StageResult.success(Parser(tokens).parseContract())
-        } catch (e: ParseError) {
-            StageResult.failure(e)
-        }
-
-    /**
      * The checker synthesizes a type even for ill-typed programs, so the result can carry
      * both an output and errors; [StageResult.andThen] still refuses to continue past
      * errors. [env] is mutated with the program's bindings — pass your own to inspect
@@ -73,14 +61,30 @@ object Klein {
     }
 
     /**
-     * Check a parsed [ContractExpr]. The output is the [ContractEnv] the contract declares.
+     * Read and check a capability contract, and answer the artifact rules are checked against:
+     * `contract.check(ruleSource, ReleaseNumber(2))`, and `contract.implement { … }` when the host
+     * also needs to run them.
      *
-     * The ContractEnv needs to be turned into a RuleEnv by selecting a release, using [environmentFor(release, contractEnv)].
-     * The RuleEnv can be used to type-check and compile rules.
-     * */
-    fun checkContract(contract: ContractExpr): StageResult<ContractEnv> {
+     * Throws [KleinException] carrying every diagnostic. There is no [StageResult] here because
+     * there is no partial answer worth having: holding an [EnvironmentContract] means the contract
+     * checked.
+     */
+    fun checkContract(contractSource: String): EnvironmentContract {
+        val tokens =
+            try {
+                Lexer(contractSource).tokenize().toList()
+            } catch (e: LexerError) {
+                throw KleinException(listOf(e))
+            }
+        val contract =
+            try {
+                Parser(tokens).parseContract()
+            } catch (e: ParseError) {
+                throw KleinException(listOf(e))
+            }
         val checked = ContractChecker().check(contract)
-        return StageResult(checked.env, checked.errors)
+        if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
+        return checked.contract
     }
 
     /**

@@ -54,9 +54,18 @@ fun TypeDef<*>.prettyPrint(indent: Int = 0): String {
 }
 
 fun ContractExpr.prettyPrint(): String =
-    (types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() }).joinToString("\n")
+    (types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() } + releases.map { it.prettyPrint() })
+        .joinToString("\n")
 
-fun Declaration.prettyPrint(indent: Int = 0): String {
+fun ReleaseBlock.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    val entriesStr = entries.joinToString("") { "\n$pad  ${it.prettyPrint()}" }
+    return "${pad}Release ${number.value}$entriesStr"
+}
+
+fun ReleaseEntry.prettyPrint(): String = "${if (remove) "remove " else ""}$name${revisionSuffix(revision)}"
+
+fun CapabilityDeclaration.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
     return when (this) {
         is FunDecl -> {

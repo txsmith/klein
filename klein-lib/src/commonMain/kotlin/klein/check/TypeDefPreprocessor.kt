@@ -8,6 +8,10 @@ class TypeDefPreprocessor<R : Revision?>(
     private val resolver: TypeResolver<R>,
     private val subtyping: Subtyping,
 ) {
+    /** The surface fields of every registered constructor. Variance runs before resolution and still
+     *  wants them, but the environment must not hold parser nodes, so they stay here. */
+    private val surfaceFields = mutableMapOf<Pair<String, R>, List<FieldDecl<*>>>()
+
     fun process(
         typeDefs: List<TypeDef<*>>,
         env: TypeEnv<R>,
@@ -63,8 +67,9 @@ class TypeDefPreprocessor<R : Revision?>(
                 }
                 val ctorTypeParams = typeParams.filter { it.skolem.name in usedTypeVars }
 
+                surfaceFields[ctor.name to revision] = ctor.fields
                 env.registerConstructor(
-                    ConstructorInfo(ctor.name, revision, ctorTypeParams.map { it.skolem.name }, ctor.fields, typeDef.name, ctor.span),
+                    ConstructorInfo(ctor.name, revision, ctorTypeParams.map { it.skolem.name }, emptyMap(), typeDef.name, ctor.span),
                 )
                 if (ctor.name != typeDef.name) {
                     env.registerTypeDef(TypeDefInfo(ctor.name, revision, ctorTypeParams, Type.TRecord(emptyMap()), ctor.span))
@@ -152,7 +157,7 @@ class TypeDefPreprocessor<R : Revision?>(
         while (changed) {
             changed = false
             for (ctor in allConstructors) {
-                for (field in ctor.fields) changed = update(field.type, ctor.name to ctor.revision, Variance.Covariant) || changed
+                for (field in fieldsOf(ctor)) changed = update(field.type, ctor.name to ctor.revision, Variance.Covariant) || changed
             }
         }
 
@@ -177,13 +182,16 @@ class TypeDefPreprocessor<R : Revision?>(
         }
     }
 
+    /** Resolve each constructor's fields once, into both its interface and its own entry — after
+     *  which nothing in the environment is a parser node. */
     private fun buildIfaces(env: TypeEnv<R>) {
-        for (ctor in env.allConstructors()) {
+        for (ctor in env.allConstructors().toList()) {
             val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val ctorEnv = env.child()
             ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.skolem.name, it.skolem) }
-            val fields = ctor.fields.associate { it.name to resolver.resolve(it.type, ctorEnv) }
+            val fields = fieldsOf(ctor).associate { it.name to resolver.resolve(it.type, ctorEnv) }
             env.updateTypeDef(ctorTypeDef.copy(iface = Type.TRecord(fields)))
+            env.updateConstructor(ctor.copy(fields = fields))
         }
     }
 
@@ -214,7 +222,7 @@ class TypeDefPreprocessor<R : Revision?>(
 
 
     private fun bindConstructors(env: TypeEnv<R>) {
-        for (ctor in env.allConstructors()) {
+        for (ctor in env.allConstructors().toList()) {
             val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val skolems = ctorTypeDef.typeParams.map { it.skolem }
             val resultType = Type.TRef(ctor.name, skolems, ctor.revision)
@@ -222,13 +230,14 @@ class TypeDefPreprocessor<R : Revision?>(
                 if (ctor.fields.isEmpty()) {
                     resultType
                 } else {
-                    val fieldTypes = ctor.fields.map { ctorTypeDef.iface.fields.getValue(it.name) }
-                    Type.TFun(fieldTypes, resultType, ctor.fields.map { it.name })
+                    Type.TFun(ctor.fields.values.toList(), resultType, ctor.fields.keys.toList())
                 }
             val scheme = if (skolems.isEmpty()) ctorType else Type.TForall(skolems.toSet(), ctorType)
             env.bind(ctor.name, ctor.revision, scheme)
         }
     }
+
+    private fun fieldsOf(ctor: ConstructorInfo<R>): List<FieldDecl<*>> = surfaceFields[ctor.name to ctor.revision].orEmpty()
 
     companion object {
         val PRIMITIVE_TYPE_NAMES = setOf("Num", "String", "Bool", "Unit", "Any", "Nothing")

@@ -32,14 +32,14 @@ import klein.check.TypeEnv
  */
 
 /** Rewrite a contract-side type as a rule-side one: the same tree, with every revision dropped. */
-fun strip(type: ContractType): RuleType =
-    when (type) {
-        is TRef -> TRef<Nothing?>(type.name, type.typeArgs.map(::strip), null)
-        is TFun -> TFun(type.params.map(::strip), strip(type.result), type.paramNames)
-        is TRecord -> stripRecord(type)
-        is TOptional -> TOptional(strip(type.type))
-        is TForall -> TForall(type.params, strip(type.body))
-        is TSkolem -> type
+internal fun ContractType.strip(): RuleType =
+    when (this) {
+        is TRef -> TRef<Nothing?>(name, typeArgs.map { it.strip() }, null)
+        is TFun -> TFun(params.map { it.strip() }, result.strip(), paramNames)
+        is TRecord -> stripRecord()
+        is TOptional -> TOptional(type.strip())
+        is TForall -> TForall(params, body.strip())
+        is TSkolem -> this
         // Written out rather than cast: a data object is already at the bottom of the lattice, and
         // a cast here would be the invariant leaking back out as a runtime concern.
         TNum -> TNum
@@ -52,51 +52,52 @@ fun strip(type: ContractType): RuleType =
     }
 
 /** [strip] at a record, keeping the result's shape in the signature so no caller has to cast. */
-private fun stripRecord(rec: TRecord<Revision>): TRecord<Nothing?> = TRecord(rec.fields.mapValues { strip(it.value) })
+internal fun TRecord<Revision>.stripRecord(): TRecord<Nothing?> = TRecord(fields.mapValues { it.value.strip() })
 
 /**
- * Build the environment [release] exposes: every name it names, copied out of [env] under its plain
- * name with its type stripped.
+ * Build the environment [release] exposes: every name it names, copied out of this contract
+ * environment under its plain name with its type stripped.
  *
  * A name the release does not expose is *absent* rather than merely unrevisioned — visibility is a
  * decision the release makes, not an accident of which keys a rule can spell. Constructors are
  * never pointed at individually: they travel with their type, so exposing `Shape/2` carries
  * `Circle` and `Square` along with it.
  *
- * [strip] never follows a name into [env], so a recursive type stays a reference rather than an
- * expansion and the walk cannot cycle.
+ * [strip] never follows a name into the environment, so a recursive type stays a reference rather
+ * than an expansion and the walk cannot cycle.
  */
-fun environmentFor(
-    release: Release,
-    env: ContractEnv,
-): RuleEnv {
+internal fun ContractEnv.environmentFor(release: Release): RuleEnv {
     val projected = TypeEnv.empty<Nothing?>()
     for ((name, revision) in release.surface) {
-        expose(name, revision, env, projected)
-        env.allConstructors()
+        expose(name, revision, projected)
+        allConstructors()
             .filter { it.parentType == name && it.revision == revision }
-            .forEach { expose(it.name, revision, env, projected) }
+            .forEach { expose(it.name, revision, projected) }
     }
     return projected
 }
 
 /** Copy everything stored under `(name, revision)` — a value binding, a type definition, a
  *  constructor — into [projected] under the plain [name]. */
-private fun expose(
+private fun ContractEnv.expose(
     name: String,
     revision: Revision,
-    env: ContractEnv,
     projected: RuleEnv,
 ) {
-    env.lookup(name, revision)?.let { projected.bind(name, strip(it)) }
-    env.lookupTypeDef(name, revision)?.let { def ->
-        projected.registerTypeDef(
-            TypeDefInfo(def.name, null, def.typeParams, stripRecord(def.iface), def.span),
-        )
+    lookup(name, revision)?.let { projected.bind(name, it.strip()) }
+    lookupTypeDef(name, revision)?.let { def ->
+        projected.registerTypeDef(TypeDefInfo(def.name, null, def.typeParams, def.iface.stripRecord(), def.span))
     }
-    env.lookupConstructor(name, revision)?.let { ctor ->
+    lookupConstructor(name, revision)?.let { ctor ->
         projected.registerConstructor(
-            ConstructorInfo(ctor.name, null, ctor.typeParams, ctor.fields, ctor.parentType, ctor.span),
+            ConstructorInfo(
+                ctor.name,
+                null,
+                ctor.typeParams,
+                ctor.fields.mapValues { it.value.strip() },
+                ctor.parentType,
+                ctor.span,
+            ),
         )
     }
 }

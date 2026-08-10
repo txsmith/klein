@@ -1,46 +1,27 @@
 package klein.host
 
+import klein.Klein
+import klein.KleinException
 import klein.ReleaseNumber
 import klein.Revision
-import klein.check.RuleType
 import klein.check.Type
 import klein.check.TypeError
 import klein.check.contract.DeclarationKind
-import klein.check.contract.Release
-import klein.check.contract.environmentFor
 import klein.interp.Value
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 private fun registerAll(registry: Registry) =
     registry.declarations.forEach { registry.immediate(it.name, it.revision) { Value.VUnit } }
 
-/**
- * Check [src] against everything [env]'s contract declares at revision 1.
- *
- * An `Environment` holds a contract environment, which a rule cannot be checked against: its keys
- * carry revisions and so do its types. Projection through a release is the only way across, so this
- * builds the release by hand — every capability and every type at revision 1 — until a contract can
- * write one for itself.
- */
-private fun checkRule(
-    src: String,
-    env: Environment,
-): RuleType {
-    val release =
-        Release(
-            ReleaseNumber(1),
-            (env.capabilities.map { it.name } + env.typeEnv.allTypeDefs().map { it.name }).associateWith { Revision(1) },
-        )
-    val tokens = klein.surface.Lexer(src).tokenize().toList()
-    val program = klein.surface.Parser(tokens).parseProgram()
-    val checked = klein.check.Checker().checkProgram(program, environmentFor(release, env.typeEnv))
-    assertTrue(checked.errors.isEmpty(), "unexpected errors: ${checked.errors}")
-    return checked.type
-}
+private fun load(
+    source: String,
+    register: Registry.() -> Unit = {},
+): Environment = Klein.checkContract(source).implement(register)
 
 private val CONTRACT =
     """
@@ -48,12 +29,17 @@ private val CONTRACT =
 
     fun creditCheck(c: Customer): Num
     maxRetries: Num
+
+    release 1
+      Customer
+      creditCheck
+      maxRetries
     """.trimIndent()
 
 class EnvironmentTest {
     @Test
     fun declarationsBecomeCapabilities() {
-        val env = Environment.load(CONTRACT, ::registerAll)
+        val env = load(CONTRACT, ::registerAll)
         assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
         assertEquals(DeclarationKind.Function, env.capabilities.first { it.name == "creditCheck" }.kind)
         assertEquals(DeclarationKind.Value, env.capabilities.first { it.name == "maxRetries" }.kind)
@@ -61,35 +47,35 @@ class EnvironmentTest {
 
     @Test
     fun everyDeclarationMustBeRegistered() {
-        val error = assertFailsWith<EnvironmentError> { Environment.load(CONTRACT) { immediate("creditCheck") { Value.VNum(1.0) } } }
+        val error = assertFailsWith<KleinException> { load(CONTRACT) { immediate("creditCheck") { Value.VNum(1.0) } } }
         assertTrue(error.message!!.contains("maxRetries"), "message should name what is missing: ${error.message}")
     }
 
     @Test
     fun anEmptyBuilderFailsWhenAnythingIsDeclared() {
-        assertFailsWith<EnvironmentError> { Environment.load(CONTRACT) }
+        assertFailsWith<KleinException> { load(CONTRACT) }
     }
 
     @Test
     fun anEmptyContractNeedsNoRegistrations() {
-        assertEquals(emptyList(), Environment.load("type Customer = Customer { id: Num }").capabilities)
+        assertEquals(emptyList(), load("type Customer = Customer { id: Num }").capabilities)
     }
 
     @Test
     fun registrationsDefaultToRevisionOne() {
-        assertTrue(Environment.load(CONTRACT, ::registerAll).capabilities.all { it.revision == Revision(1) })
+        assertTrue(load(CONTRACT, ::registerAll).capabilities.all { it.revision == Revision(1) })
     }
 
     @Test
     fun registrationAttachesAnImplementation() {
-        val env = Environment.load(CONTRACT, ::registerAll)
+        val env = load(CONTRACT, ::registerAll)
         env.capabilities.forEach { assertTrue(env[it.id] != null, "${it.name} should have an implementation") }
     }
 
     @Test
     fun revisionsComeFromTheDeclaration() {
         val env =
-            Environment.load(
+            load(
                 """
                 type Customer = Customer { id: Num, name: String }
 
@@ -107,7 +93,7 @@ class EnvironmentTest {
     @Test
     fun deferredRegistrationIsAlsoAnImplementation() {
         val env =
-            Environment.load(CONTRACT) {
+            load(CONTRACT) {
                 deferred("creditCheck") { }
                 immediate("maxRetries") { Value.VNum(3.0) }
             }
@@ -116,14 +102,14 @@ class EnvironmentTest {
 
     @Test
     fun registeringAnUndeclaredNameFails() {
-        val error = assertFailsWith<EnvironmentError> { Environment.load(CONTRACT) { immediate("nope") { Value.VUnit } } }
+        val error = assertFailsWith<KleinException> { load(CONTRACT) { immediate("nope") { Value.VUnit } } }
         assertTrue(error.message!!.contains("nope"), "message should name the capability: ${error.message}")
     }
 
     @Test
     fun registeringTheSameNameAndRevisionTwiceFails() {
-        assertFailsWith<EnvironmentError> {
-            Environment.load(CONTRACT) {
+        assertFailsWith<KleinException> {
+            load(CONTRACT) {
                 immediate("creditCheck") { Value.VNum(1.0) }
                 deferred("creditCheck") { }
                 immediate("maxRetries") { Value.VNum(3.0) }
@@ -135,7 +121,7 @@ class EnvironmentTest {
     @Test
     fun aDeclaredRevisionIsACapability() {
         val env =
-            Environment.load("fun creditScore/2(c: Num): Num") {
+            load("fun creditScore/2(c: Num): Num") {
                 immediate("creditScore", revision = Revision(2)) { Value.VNum(1.0) }
             }
         val capability = env.capabilities.single()
@@ -147,7 +133,7 @@ class EnvironmentTest {
     @Test
     fun bothDeclaredRevisionsBecomeCapabilities() {
         val env =
-            Environment.load(
+            load(
                 """
                 fun creditScore(c: Num): Num
                 fun creditScore/2(c: Num): Num
@@ -163,8 +149,8 @@ class EnvironmentTest {
     @Test
     fun registeringAnUndeclaredRevisionFails() {
         val error =
-            assertFailsWith<EnvironmentError> {
-                Environment.load("fun creditScore(c: Num): Num") {
+            assertFailsWith<KleinException> {
+                load("fun creditScore(c: Num): Num") {
                     immediate("creditScore") { Value.VNum(1.0) }
                     immediate("creditScore", revision = Revision(2)) { Value.VNum(2.0) }
                 }
@@ -177,7 +163,7 @@ class EnvironmentTest {
     @Test
     fun revisionsMayCarryDifferentSignatures() {
         val env =
-            Environment.load(
+            load(
                 """
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
@@ -198,8 +184,8 @@ class EnvironmentTest {
     @Test
     fun everyDeclaredRevisionNeedsItsOwnImplementation() {
         val error =
-            assertFailsWith<EnvironmentError> {
-                Environment.load(
+            assertFailsWith<KleinException> {
+                load(
                     """
                     fun creditCheck(c: Num): Num
                     fun creditCheck/2(c: Num): Num
@@ -212,8 +198,8 @@ class EnvironmentTest {
     @Test
     fun aContractThatDoesNotCheckFailsWithEveryError() {
         val error =
-            assertFailsWith<EnvironmentError> {
-                Environment.load(
+            assertFailsWith<KleinException> {
+                load(
                     """
                     fun a(x: Nope): Num
                     fun b(y: AlsoNope): Num
@@ -226,54 +212,90 @@ class EnvironmentTest {
 
     @Test
     fun registrationErrorsAreNotReportedWhenTheContractItselfFailed() {
-        val error = assertFailsWith<EnvironmentError> { Environment.load("fun a(x: Nope): Num") { immediate("ghost") { Value.VUnit } } }
+        val error = assertFailsWith<KleinException> { load("fun a(x: Nope): Num") { immediate("ghost") { Value.VUnit } } }
         assertEquals(1, error.errors.size, "contract errors should short-circuit: ${error.errors}")
     }
 
     @Test
     fun declarationsAreVisibleToTheBuilderForTableDrivenRegistration() {
         val seen = mutableListOf<String>()
-        Environment.load(CONTRACT) {
+        load(CONTRACT) {
             declarations.forEach { seen.add(it.name) }
             registerAll(this)
         }
         assertEquals(listOf("creditCheck", "maxRetries"), seen)
     }
 
+    // The split the API exists for: a CI job checks contracts and rules with no handlers anywhere.
     @Test
-    fun theTypeEnvironmentChecksARuleAgainstTheContract() {
-        val env = Environment.load(CONTRACT, ::registerAll)
-        assertEquals(Type.TNum, checkRule("creditCheck(Customer(1, \"ada\")) + maxRetries", env))
+    fun checkingARuleNeedsNoImplementations() {
+        val contract = Klein.checkContract(CONTRACT)
+        assertEquals(
+            Type.TNum,
+            contract.check("""creditCheck(Customer(1, "ada")) + maxRetries""", ReleaseNumber(1)),
+        )
+    }
+
+    // --- what a release exposes and what a host implements are independent ---
+
+    private val PARTLY_EXPOSED =
+        """
+        type Customer = Customer { id: Num }
+
+        fun creditCheck(c: Customer): Num
+        maxRetries: Num
+
+        release 1
+          Customer
+          creditCheck
+        """.trimIndent()
+
+    // Staged before its release, or draining after it: either way the host still answers for it.
+    @Test
+    fun aDeclarationNoReleaseExposesStillNeedsAnImplementation() {
+        val error = assertFailsWith<KleinException> { load(PARTLY_EXPOSED) { immediate("creditCheck") { Value.VUnit } } }
+        assertTrue(error.message!!.contains("maxRetries"), "message should name what is missing: ${error.message}")
+    }
+
+    @Test
+    fun capabilitiesComeFromDeclarationsNotFromTheReleaseSurface() {
+        val env = load(PARTLY_EXPOSED, ::registerAll)
+        assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
+
+        // The same contract, from a rule's side: `maxRetries` is not vocabulary release 1 gave it.
+        val unbound =
+            assertFailsWith<KleinException> { Klein.checkContract(PARTLY_EXPOSED).check("maxRetries", ReleaseNumber(1)) }
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.errors.single()).name)
     }
 
     // --- identity ---
 
     @Test
     fun identityIsStableForTheSameDeclarationAndRevision() {
-        val a = Environment.load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
-        val b = Environment.load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
+        val a = load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
+        val b = load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
         assertEquals(a, b)
     }
 
     @Test
     fun identityChangesWithTheRevision() {
-        val one = Environment.load("fun creditCheck(c: Num): Num", ::registerAll).capabilities.single().id
-        val two = Environment.load("fun creditCheck/2(c: Num): Num", ::registerAll).capabilities.single().id
+        val one = load("fun creditCheck(c: Num): Num", ::registerAll).capabilities.single().id
+        val two = load("fun creditCheck/2(c: Num): Num", ::registerAll).capabilities.single().id
         assertNotEquals(one, two)
     }
 
     // The property `name@rev` identity would lose: a signature change that skips a revision bump.
     @Test
     fun identityChangesWithTheSignatureEvenAtTheSameRevision() {
-        val num = Environment.load("fun f(x: Num): Num", ::registerAll).capabilities.single().id
-        val str = Environment.load("fun f(x: String): Num", ::registerAll).capabilities.single().id
+        val num = load("fun f(x: Num): Num", ::registerAll).capabilities.single().id
+        val str = load("fun f(x: String): Num", ::registerAll).capabilities.single().id
         assertNotEquals(num, str)
     }
 
     @Test
     fun identityChangesWithTheName() {
-        val f = Environment.load("fun f(x: Num): Num", ::registerAll).capabilities.single().id
-        val g = Environment.load("fun g(x: Num): Num", ::registerAll).capabilities.single().id
+        val f = load("fun f(x: Num): Num", ::registerAll).capabilities.single().id
+        val g = load("fun g(x: Num): Num", ::registerAll).capabilities.single().id
         assertNotEquals(f, g)
     }
 }

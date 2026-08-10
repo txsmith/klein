@@ -102,8 +102,8 @@ release 2
   creditScore/2
 ```
 
-The language side — delta blocks, the implicit first release, `remove`, self-containment, and the
-fold that retires one — is specified in [contracts.md](./contracts.md). What matters here is that
+The language side — delta blocks, `remove`, self-containment, and the fold that retires one — is
+specified in [contracts.md](./contracts.md). What matters here is that
 a release is the unit an environment migrates in, and that there are exactly two ways to change
 what rules can see:
 
@@ -311,6 +311,11 @@ type Customer = Customer { id: Num, name: String }
 
 customer: Customer
 fun creditScore(c: Customer): Num
+
+release 1
+  Customer
+  customer
+  creditScore
 ```
 
 The host implements both capabilities and deploys. Saving `eligibility-standard` compiles it into
@@ -340,9 +345,7 @@ release 2
   creditScore/2
 ```
 
-The day-one declarations are untouched. Release 1 is written out here for the first time: it was
-implicit while nothing was versioned, and versioning something is what makes it worth stating.
-Release 2 says only what it changes.
+The day-one declarations and release 1 are both untouched. Release 2 says only what it changes.
 
 ```
 $ klein reconcile plan eligibility.klein

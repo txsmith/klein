@@ -1,5 +1,6 @@
 package klein.parser
 
+import klein.ReleaseNumber
 import klein.Revision
 import klein.surface.AppliedTypeExpr
 import klein.surface.Apply
@@ -16,7 +17,7 @@ import klein.surface.FieldAccess
 import klein.surface.FieldDecl
 import klein.surface.FieldPattern
 import klein.surface.ContractExpr
-import klein.surface.Declaration
+import klein.surface.CapabilityDeclaration
 import klein.surface.FunDecl
 import klein.surface.FunDef
 import klein.surface.ValDecl
@@ -42,6 +43,8 @@ import klein.surface.Program
 import klein.surface.RecordField
 import klein.surface.RecordLiteral
 import klein.surface.RecordTypeExpr
+import klein.surface.ReleaseBlock
+import klein.surface.ReleaseEntry
 import klein.surface.SafeFieldAccess
 import klein.SourceSpan
 import klein.surface.Stmt
@@ -333,6 +336,17 @@ fun valDecl(
     revision: Revision? = null,
 ) = ValDecl(name, type, noSpan, revision)
 
+fun releaseBlock(
+    number: Int,
+    vararg entries: ReleaseEntry,
+) = ReleaseBlock(ReleaseNumber(number), entries.toList(), noSpan)
+
+fun releaseEntry(
+    name: String,
+    revision: Revision? = null,
+    remove: Boolean = false,
+) = ReleaseEntry(name, revision, remove, noSpan)
+
 fun ascription(
     expr: Expr,
     type: TypeExpr<Nothing?>,
@@ -417,11 +431,14 @@ fun Stmt.stripSpan(): Stmt =
         is Expr -> stripSpans()
     }
 
-fun Declaration.stripSpan(): Declaration =
+fun CapabilityDeclaration.stripSpan(): CapabilityDeclaration =
     when (this) {
         is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan, revision)
         is ValDecl -> ValDecl(name, type.stripSpan(), noSpan, revision)
     }
+
+fun ReleaseBlock.stripSpan(): ReleaseBlock =
+    ReleaseBlock(number, entries.map { ReleaseEntry(it.name, it.revision, it.remove, noSpan) }, noSpan)
 
 fun <R : Revision?> TypeDef<R>.stripSpan(): TypeDef<R> =
     TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan, revision)
@@ -487,10 +504,12 @@ fun parseContract(source: String): ContractExpr {
 fun assertContractEquals(
     actual: ContractExpr,
     types: List<TypeDef<*>> = emptyList(),
-    declarations: List<Declaration> = emptyList(),
+    declarations: List<CapabilityDeclaration> = emptyList(),
+    releases: List<ReleaseBlock> = emptyList(),
 ) {
     assertEqualsPretty(types, actual.types.map { it.stripSpan() })
     assertEqualsPretty(declarations, actual.declarations.map { it.stripSpan() })
+    assertEqualsPretty(releases, actual.releases.map { it.stripSpan() })
 }
 
 private fun <T> assertEqualsPretty(

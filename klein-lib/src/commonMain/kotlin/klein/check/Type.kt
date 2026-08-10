@@ -1,7 +1,6 @@
 package klein.check
 
 import klein.Revision
-import klein.surface.FieldDecl
 import klein.SourceSpan
 import klein.check.Type.*
 
@@ -155,7 +154,7 @@ data class ConstructorInfo<out R : Revision?>(
     val name: String,
     val revision: R,
     val typeParams: List<String>,
-    val fields: List<FieldDecl<*>>,
+    val fields: Map<String, Type<R>>,
     val parentType: String,
     val span: SourceSpan,
 )

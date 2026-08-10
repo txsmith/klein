@@ -1,20 +1,14 @@
 package klein.host
 
 import klein.KleinError
+import klein.KleinException
 import klein.Revision
-import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.Type
-import klein.check.TypeEnv
-import klein.check.contract.ContractChecker
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.DeclarationKind
+import klein.check.contract.EnvironmentContract
 import klein.interp.Value
-import klein.surface.ContractExpr
-import klein.surface.Lexer
-import klein.surface.LexerError
-import klein.surface.ParseError
-import klein.surface.Parser
 
 class CapabilityId(
     private val key: String,
@@ -53,10 +47,6 @@ sealed interface Implementation {
     ) : Implementation
 }
 
-class EnvironmentError(
-    val errors: List<KleinError>,
-) : Exception(errors.joinToString("\n") { "${it.message} at ${it.span}" })
-
 class Registry(
     val declarations: List<ContractDeclaration>,
 ) {
@@ -92,8 +82,44 @@ class Registry(
     }
 }
 
-class Environment internal constructor(
-    val typeEnv: ContractEnv,
+/**
+ * Bind a checked contract to a running host: run [register], require an implementation for every
+ * declared `(name, revision)`, and mint a [Capability] per declaration. Throws [KleinException] if
+ * any declaration is unimplemented, any registration names something undeclared, or anything is
+ * registered twice.
+ *
+ * An extension declared in `klein.host` rather than a member of [EnvironmentContract]: `klein.host`
+ * depends on `klein.check`, so a member returning an [Environment] would point that arrow both
+ * ways. It reads identically at the call site and leaves the checker unaware that hosts exist.
+ */
+fun EnvironmentContract.implement(register: Registry.() -> Unit = {}): Environment {
+    val registry = Registry(declarations).apply(register)
+    declarations
+        .filter { (it.name to it.revision) !in registry.registered }
+        .forEach {
+            registry.errors.add(
+                RegistrationError(
+                    "'${it.name}' revision ${it.revision.value} is declared by the contract " +
+                        "but no implementation is registered",
+                ),
+            )
+        }
+    if (registry.errors.isNotEmpty()) throw KleinException(registry.errors)
+
+    val capabilities =
+        declarations.map { declaration ->
+            Capability(declaration, capabilityId(declaration.name, declaration.type, declaration.revision))
+        }
+    val implementations =
+        capabilities.associate { capability ->
+            capability.id to registry.registered.getValue(capability.name to capability.revision)
+        }
+    return Environment(capabilities, implementations)
+}
+
+/** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
+ *  has it. Checking rules needs none of this — that is [EnvironmentContract]'s job. */
+class Environment(
     val capabilities: List<Capability>,
     private val implementations: Map<CapabilityId, Implementation>,
 ) {
@@ -103,54 +129,6 @@ class Environment internal constructor(
         name: String,
         revision: Revision,
     ): Capability? = capabilities.firstOrNull { it.name == name && it.revision == revision }
-
-    companion object {
-        fun load(
-            contractSource: String,
-            register: Registry.() -> Unit = {},
-        ): Environment {
-            val contract = parseContract(contractSource)
-            val checked = ContractChecker().check(contract)
-            if (checked.errors.isNotEmpty()) throw EnvironmentError(checked.errors)
-            val typeEnv = checked.env
-
-            val declarations = checked.declarations
-            val registry = Registry(declarations).apply(register)
-            declarations
-                .filter { (it.name to it.revision) !in registry.registered }
-                .forEach {
-                    registry.errors.add(
-                        RegistrationError(
-                            "'${it.name}' revision ${it.revision.value} is declared by the contract " +
-                                "but no implementation is registered",
-                        ),
-                    )
-                }
-            if (registry.errors.isNotEmpty()) throw EnvironmentError(registry.errors)
-
-            val capabilities =
-                declarations.map { declaration ->
-                    Capability(
-                        declaration,
-                        capabilityId(declaration.name, declaration.type, declaration.revision),
-                    )
-                }
-            val implementations =
-                capabilities.associate { capability ->
-                    capability.id to registry.registered.getValue(capability.name to capability.revision)
-                }
-            return Environment(typeEnv, capabilities, implementations)
-        }
-
-        private fun parseContract(source: String): ContractExpr =
-            try {
-                Parser(Lexer(source).tokenize().toList()).parseContract()
-            } catch (e: LexerError) {
-                throw EnvironmentError(listOf(e))
-            } catch (e: ParseError) {
-                throw EnvironmentError(listOf(e))
-            }
-    }
 }
 
 class RegistrationError(
