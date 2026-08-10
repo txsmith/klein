@@ -136,10 +136,33 @@ echo "x = 1 + 2" | ./klein check --stdin
 
 `check` has no IR/format flags — the Operation Bidi type is a plain structural tree with nothing to dump.
 
+### Check or run against a capability contract
+
+`--contract <file>` on `check` and `run` checks a rule against a [capability contract](./docs/spec/contracts.md)
+instead of the empty environment. It composes with the plain form: give `check` a contract and
+nothing else to check the contract alone.
+
+```bash
+# Contract alone: prints its declarations and releases, exits non-zero on error
+./klein check --contract examples/lending.contract
+
+# A rule against one release of that contract
+./klein check --contract examples/lending.contract examples/lending-rule.klein --release 2
+
+# --release may be omitted when the contract has exactly one release
+./klein run --contract examples/lending.contract examples/lending-rule.klein --release 2
+```
+
+A rule that calls a capability by its plain name (or constructs a value of a contract-declared type)
+type-checks but cannot execute — nothing wires a capability call to a host handler yet (see
+TODO.md, "Capabilities reachable from Klein source"). `run` reports this plainly and exits non-zero
+rather than crashing; `check` still verifies the rule compiles against the release.
+
 ### Run
 
 Execute a program on the Core machine (parse → check → lower → run) and print the final value.
-Host calls are not reachable from source yet, so programs must be pure.
+Host calls are not reachable from source yet, so programs must be pure (unless checked against a
+contract with no capability calls — see above).
 
 ```bash
 # From a file

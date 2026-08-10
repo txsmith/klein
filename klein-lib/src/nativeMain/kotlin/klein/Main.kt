@@ -4,7 +4,11 @@ import klein.surface.*
 import klein.check.Type
 import klein.check.RuleEnv
 import klein.check.TypeEnv
+import klein.check.contract.DeclarationKind
+import klein.check.contract.EnvironmentContract
+import klein.check.contract.UnknownRelease
 import klein.core.CorePrinter
+import klein.core.InvariantViolation
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -31,7 +35,8 @@ fun main(args: Array<String>) {
     val knownFlags: Set<String>? =
         when (command) {
             "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
-            "check", "c", "run", "r", "core" -> setOf("--stdin", "--raw")
+            "check", "c", "run", "r" -> setOf("--stdin", "--raw", "--contract", "--release")
+            "core" -> setOf("--stdin", "--raw")
             else -> null
         }
     if (knownFlags != null) {
@@ -46,7 +51,13 @@ fun main(args: Array<String>) {
     val rawErrors = "--raw" in args
     val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
-    val fileArg = args.drop(1).firstOrNull { !it.startsWith("-") }
+    val contractIndex = args.indexOf("--contract")
+    val releaseIndex = args.indexOf("--release")
+    val contractPath = if (contractIndex >= 0) args.getOrNull(contractIndex + 1) else null
+    val releaseArg = if (releaseIndex >= 0) args.getOrNull(releaseIndex + 1) else null
+    // Values consumed by --contract/--release must not also be read as the file argument.
+    val consumedValues = setOfNotNull(contractIndex.takeIf { it >= 0 }?.plus(1), releaseIndex.takeIf { it >= 0 }?.plus(1))
+    val fileArg = args.withIndex().drop(1).firstOrNull { (i, a) -> i !in consumedValues && !a.startsWith("-") }?.value
 
     when (command) {
         "tokens", "t" -> {
@@ -57,14 +68,8 @@ fun main(args: Array<String>) {
             val source = getSource(useStdin, fileArg) ?: return
             parse(source, rawErrors, verbose)
         }
-        "check", "c" -> {
-            val source = getSource(useStdin, fileArg) ?: return
-            check(source, rawErrors)
-        }
-        "run", "r" -> {
-            val source = getSource(useStdin, fileArg) ?: return
-            run(source, rawErrors)
-        }
+        "check", "c" -> checkCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
+        "run", "r" -> runCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
         "core" -> {
             val source = getSource(useStdin, fileArg) ?: return
             core(source, rawErrors)
@@ -105,12 +110,169 @@ private fun printUsage() {
           help         Show this help
 
         Options:
-          --stdin      Read from stdin instead of file
-          --raw        Print raw errors with SourceSpan (for tooling)
-          --verbose    Show nesting stack on lexer errors (tokens, parse)
+          --stdin           Read from stdin instead of file
+          --raw             Print raw errors with SourceSpan (for tooling)
+          --verbose         Show nesting stack on lexer errors (tokens, parse)
+          --contract FILE   Check against a capability contract (check, run)
+          --release N       Release to check the rule against (needs --contract)
         """.trimIndent(),
     )
 }
+
+/**
+ * `check` with `--contract`: no rule file means check the contract alone and print its
+ * declarations and releases; a rule file checks it against one release.
+ */
+private fun checkCmd(
+    useStdin: Boolean,
+    fileArg: String?,
+    contractPath: String?,
+    releaseArg: String?,
+    rawErrors: Boolean,
+) {
+    if (contractPath == null) {
+        if (releaseArg != null) {
+            println("Error: --release requires --contract")
+            exitProcess(1)
+        }
+        val source = getSource(useStdin, fileArg) ?: return
+        check(source, rawErrors)
+        return
+    }
+    val contract = loadContract(contractPath, rawErrors)
+    if (fileArg == null && !useStdin) {
+        printContractSummary(contract)
+        return
+    }
+    val ruleSource = getSource(useStdin, fileArg) ?: return
+    val release = resolveRelease(contract, releaseArg)
+    val type = checkRuleAgainstContract(contract, ruleSource, release, rawErrors)
+    println("rule : ${Type.print(type)}")
+    println("✓ Type checks against release ${release.value}")
+}
+
+/**
+ * `run` with `--contract`: check the rule against the release, then lower and execute it. A rule
+ * that references a capability by name cannot be executed yet — nothing wires a capability call to
+ * a handler at runtime (see TODO.md, "Capabilities reachable from Klein source") — so that specific
+ * failure is caught and reported plainly instead of surfacing as an internal lowering error.
+ */
+private fun runCmd(
+    useStdin: Boolean,
+    fileArg: String?,
+    contractPath: String?,
+    releaseArg: String?,
+    rawErrors: Boolean,
+) {
+    if (contractPath == null) {
+        if (releaseArg != null) {
+            println("Error: --release requires --contract")
+            exitProcess(1)
+        }
+        val source = getSource(useStdin, fileArg) ?: return
+        run(source, rawErrors)
+        return
+    }
+    val contract = loadContract(contractPath, rawErrors)
+    val ruleSource = getSource(useStdin, fileArg) ?: return
+    val release = resolveRelease(contract, releaseArg)
+    checkRuleAgainstContract(contract, ruleSource, release, rawErrors)
+
+    val parsed = Klein.tokenize(ruleSource).andThen(Klein::parse)
+    exitOnErrors(parsed, ruleSource, rawErrors)
+    val core =
+        try {
+            Klein.lower(parsed.output!!)
+        } catch (_: InvariantViolation) {
+            println(
+                "Error: this rule calls a capability, and capabilities are not callable at runtime yet " +
+                    "(see TODO.md, \"Capabilities reachable from Klein source\"). Use 'check' to verify " +
+                    "the rule compiles against the release.",
+            )
+            exitProcess(1)
+        }
+    val executed = core.andThen(Klein::execute)
+    exitOnErrors(executed, ruleSource, rawErrors)
+    println(Value.print(executed.output!!))
+}
+
+/** Read and check a contract file, exiting non-zero with every diagnostic on failure. */
+private fun loadContract(
+    path: String,
+    rawErrors: Boolean,
+): EnvironmentContract {
+    val source = readFile(path) ?: exitProcess(1)
+    return try {
+        Klein.checkContract(source)
+    } catch (e: KleinException) {
+        e.errors.forEach { printError(source, it.span, it.message, rawErrors) }
+        exitProcess(1)
+    }
+}
+
+/** [releaseArg] if given; otherwise the contract's one release, or an error if it has none or several. */
+private fun resolveRelease(
+    contract: EnvironmentContract,
+    releaseArg: String?,
+): ReleaseNumber {
+    if (releaseArg != null) {
+        val n = releaseArg.toIntOrNull()
+        if (n == null) {
+            println("Error: --release must be a number, got '$releaseArg'")
+            exitProcess(1)
+        }
+        return ReleaseNumber(n)
+    }
+    return when (contract.releases.size) {
+        1 -> contract.releases.single()
+        0 -> {
+            println("Error: this contract has no releases; there is nothing to check a rule against")
+            exitProcess(1)
+        }
+        else -> {
+            println(
+                "Error: --release required; this contract has releases " +
+                    contract.releases.joinToString(", ") { it.value.toString() },
+            )
+            exitProcess(1)
+        }
+    }
+}
+
+/** Check [ruleSource] against [release], exiting non-zero with every diagnostic on failure. */
+private fun checkRuleAgainstContract(
+    contract: EnvironmentContract,
+    ruleSource: String,
+    release: ReleaseNumber,
+    rawErrors: Boolean,
+) = try {
+    contract.check(ruleSource, release)
+} catch (e: UnknownRelease) {
+    println("Error: ${e.message}")
+    exitProcess(1)
+} catch (e: KleinException) {
+    e.errors.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
+    exitProcess(1)
+}
+
+private fun printContractSummary(contract: EnvironmentContract) {
+    contract.declarations.forEach { d ->
+        val kind = if (d.kind == DeclarationKind.Function) "fun" else "val"
+        println("$kind ${revisioned(d.name, d.revision)} : ${Type.print(d.type)}")
+    }
+    println(
+        if (contract.releases.isEmpty()) {
+            "releases: none"
+        } else {
+            "releases: ${contract.releases.joinToString(", ") { it.value.toString() }}"
+        },
+    )
+}
+
+private fun revisioned(
+    name: String,
+    revision: Revision,
+): String = if (revision.value == 1) name else "$name/${revision.value}"
 
 /**
  * Print every error from a stage result uniformly, plus any verbose stage-specific detail,

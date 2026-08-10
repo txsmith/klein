@@ -20,10 +20,13 @@ rather than replacing it.
       (`DefinitionInContract`, `ExpressionInContract`), duplicate declared names
       caught. Composes as
       `checkContract(contract).andThen { env -> check(program, env) }`.
-- [ ] **CLI surface for contracts** — `checkContract` is library-only today. Decide:
-      a `--contract <file>` flag on `check`/`run` (composes; contract alone when no
-      program given), versus a separate `klein contract` command, versus a
-      file-extension convention.
+- [x] **CLI surface for contracts** — `--contract <file>` on `check`/`run`, composing
+      with the existing file/`--stdin` argument: contract alone (no rule) prints its
+      declarations and releases; with a rule, `--release N` selects which release to
+      check against (omittable when the contract has exactly one). `run` on a rule that
+      calls a capability or constructs a contract type reports a plain error and exits
+      non-zero rather than crashing — nothing links a capability to a handler at
+      runtime yet. Examples: `examples/lending.contract`, `examples/lending-rule.klein`.
 - [x] **`Environment`: contract + implementations** —
       `klein.host.Environment.load(contractSource) { … }`: parse, check the contract,
       register implementations, validate, **throw** `EnvironmentError` carrying every
