@@ -13,7 +13,7 @@ import klein.check.Type.*
  * lives here rather than in the program checker — and why this reads in [ContractType] rather than
  * being polymorphic in the regime: a rule's types never reach it.
  */
-fun carriesFunctionType(
+internal fun carriesFunctionType(
     bound: ContractType,
     env: ContractEnv,
     isCallable: Boolean,

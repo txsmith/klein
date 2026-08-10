@@ -137,13 +137,13 @@ class RegistrationError(
     override val span = klein.SourceSpan.zero
 }
 
-fun capabilityId(
+internal fun capabilityId(
     name: String,
     type: ContractType,
     revision: Revision,
 ): CapabilityId = CapabilityId(fingerprint("$name/${canonicalize(type)}/${revision.value}"))
 
-fun canonicalize(type: Type<*>): String = Type.print(type)
+internal fun canonicalize(type: Type<*>): String = Type.print(type)
 
 private fun fingerprint(input: String): String {
     var hash = -0x340d631b7bdddcdbL

@@ -67,7 +67,7 @@ internal class MachineState internal constructor(
     }
 }
 
-class Machine private constructor(
+internal class Machine private constructor(
     private val state: MachineState,
 ) {
     companion object {
@@ -372,7 +372,11 @@ class Machine private constructor(
         }
 }
 
-sealed class Execution {
+/**
+ * What one turn of the machine produced: a final [Done] value, or a suspension on a host call —
+ * both internal to how [klein.Klein.execute] drives a run; v1 exposes neither to a host directly.
+ */
+internal sealed class Execution {
     data class Done(
         val value: Value,
     ) : Execution()
@@ -398,13 +402,13 @@ sealed class Execution {
     }
 }
 
-data class Frame(
+internal data class Frame(
     val control: Control,
     val operandBase: Int = 0,
     val scope: BindingScope = BindingScope(),
 )
 
-sealed class Stack<out T> {
+internal sealed class Stack<out T> {
     abstract val size: Int
 
     data object Empty : Stack<Nothing>() {
@@ -472,7 +476,7 @@ sealed class Stack<out T> {
         }
 }
 
-class BindingScope(
+internal class BindingScope(
     val slots: IntArray = IntArray(0),
     val parent: BindingScope? = null,
 ) {
@@ -492,4 +496,4 @@ class BindingScope(
         }
 }
 
-fun <T> Stack<T>.push(value: T): Stack.Cons<T> = Stack.Cons(value, this)
+internal fun <T> Stack<T>.push(value: T): Stack.Cons<T> = Stack.Cons(value, this)

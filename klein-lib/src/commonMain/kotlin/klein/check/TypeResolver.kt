@@ -20,7 +20,7 @@ import klein.surface.*
  * Diagnostics accumulate into the [errors] list the owning checker passes in, so a resolver and its
  * checker report into one place.
  */
-class TypeResolver<R : Revision?>(
+internal class TypeResolver<R : Revision?>(
     private val errors: MutableList<TypeError>,
     val revisionOf: (Revision?) -> R,
 ) {

@@ -4,30 +4,35 @@ import klein.SourceSpan
 
 sealed interface Control
 
+/**
+ * The compiled program a host holds between [klein.Klein.lower] and [klein.Klein.execute]: opaque
+ * by design, so only its shape (this sealed spine) is public — the node kinds beneath it are
+ * lowering/machine internals.
+ */
 sealed class CoreExpr : Control {
     abstract val span: SourceSpan
 }
 
-data class Literal(
+internal data class Literal(
     val value: Constant,
     override val span: SourceSpan,
 ) : CoreExpr()
 
-data class Var(
+internal data class Var(
     val depth: Int,
     val slot: Int,
     val name: String,
     override val span: SourceSpan,
 ) : CoreExpr()
 
-data class Lambda(
+internal data class Lambda(
     val arity: Int,
     val body: CoreExpr,
     val name: String?,
     override val span: SourceSpan,
 ) : CoreExpr()
 
-data class Apply(
+internal data class Apply(
     val callee: CoreExpr,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
@@ -36,7 +41,7 @@ data class Apply(
     val arity: Int = args.size
 }
 
-data class PrimApp(
+internal data class PrimApp(
     val prim: PrimOp,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
@@ -44,7 +49,7 @@ data class PrimApp(
     override val operands get() = args
 }
 
-enum class PrimOp {
+internal enum class PrimOp {
     Add,
     Sub,
     Mul,
@@ -60,7 +65,7 @@ enum class PrimOp {
     Not,
 }
 
-data class MakeData(
+internal data class MakeData(
     val tag: String?,
     val fieldNames: List<String>,
     val args: List<CoreExpr>,
@@ -69,7 +74,7 @@ data class MakeData(
     override val operands get() = args
 }
 
-data class FieldGet(
+internal data class FieldGet(
     val target: CoreExpr,
     val field: String,
     override val span: SourceSpan,
@@ -77,7 +82,7 @@ data class FieldGet(
     override val operands = listOf(target)
 }
 
-data class HostCall(
+internal data class HostCall(
     val name: String,
     val args: List<CoreExpr>,
     override val span: SourceSpan,
@@ -85,7 +90,7 @@ data class HostCall(
     override val operands get() = args
 }
 
-data class EnterScope(
+internal data class EnterScope(
     val stmts: List<ScopeStmt>,
     val result: CoreExpr,
     override val span: SourceSpan,
@@ -93,24 +98,24 @@ data class EnterScope(
     val bindingCount: Int = stmts.count { it is Bind }
 }
 
-sealed class ScopeStmt {
+internal sealed class ScopeStmt {
     abstract val body: CoreExpr
     abstract val span: SourceSpan
 }
 
-data class Bind(
+internal data class Bind(
     val slotIdx: Int,
     val name: String,
     override val body: CoreExpr,
     override val span: SourceSpan,
 ) : ScopeStmt()
 
-data class Run(
+internal data class Run(
     override val body: CoreExpr,
     override val span: SourceSpan,
 ) : ScopeStmt()
 
-data class Match(
+internal data class Match(
     val scrutinee: CoreExpr,
     val arms: List<Match.Arm>,
     override val span: SourceSpan,
@@ -145,7 +150,7 @@ data class Match(
     ) : Arm()
 }
 
-sealed class Constant {
+internal sealed class Constant {
     // IEEE for now until we settle on a plan for rationals
     data class CNum(
         val value: Double,
@@ -164,6 +169,6 @@ sealed class Constant {
 
 }
 
-interface HasOperands {
+internal interface HasOperands {
     val operands: List<CoreExpr>
 }

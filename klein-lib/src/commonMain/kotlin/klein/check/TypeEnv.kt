@@ -3,7 +3,7 @@ package klein.check
 import klein.Revision
 
 
-sealed class ImplicitParamContext {
+internal sealed class ImplicitParamContext {
     data object None : ImplicitParamContext()
 
     data object NoExpectedType : ImplicitParamContext()
@@ -32,8 +32,10 @@ class TypeEnv<R : Revision?> private constructor(
     private val typeVars: MutableMap<String, Type.TSkolem> = mutableMapOf(),
     private val typeDefs: MutableMap<String, TypeDefInfo<R>> = mutableMapOf(),
     private val constructors: MutableMap<String, ConstructorInfo<R>> = mutableMapOf(),
-    val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
+    internal val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
 ) {
+    /** Bind a plain name to a type — how a host pre-binds capability vocabulary or reads back an
+     *  inferred one; see [klein.Klein.check]. */
     fun bind(
         name: String,
         type: Type<R>,
@@ -41,7 +43,7 @@ class TypeEnv<R : Revision?> private constructor(
         bindings[name] = type
     }
 
-    fun bind(
+    internal fun bind(
         name: String,
         revision: R,
         type: Type<R>,
@@ -49,65 +51,66 @@ class TypeEnv<R : Revision?> private constructor(
         bindings[key(name, revision)] = type
     }
 
+    /** Look up a plain name — how a host reads back what [klein.Klein.check] bound. */
     fun lookup(name: String): Type<R>? = bindings[name] ?: parent?.lookup(name)
 
-    fun lookup(
+    internal fun lookup(
         name: String,
         revision: R,
     ): Type<R>? = lookup(key(name, revision))
 
-    fun bindTypeVar(
+    internal fun bindTypeVar(
         name: String,
         skolem: Type.TSkolem,
     ) {
         typeVars[name] = skolem
     }
 
-    fun lookupTypeVar(name: String): Type.TSkolem? = typeVars[name] ?: parent?.lookupTypeVar(name)
+    internal fun lookupTypeVar(name: String): Type.TSkolem? = typeVars[name] ?: parent?.lookupTypeVar(name)
 
-    fun localTypeVars(): Set<Type.TSkolem> = typeVars.values.toSet()
+    internal fun localTypeVars(): Set<Type.TSkolem> = typeVars.values.toSet()
 
-    fun registerTypeDef(info: TypeDefInfo<R>) {
+    internal fun registerTypeDef(info: TypeDefInfo<R>) {
         typeDefs[key(info.name, info.revision)] = info
     }
 
-    fun updateTypeDef(info: TypeDefInfo<R>) {
+    internal fun updateTypeDef(info: TypeDefInfo<R>) {
         typeDefs[key(info.name, info.revision)] = info
     }
 
-    fun lookupTypeDef(name: String): TypeDefInfo<R>? = typeDefs[name]
+    internal fun lookupTypeDef(name: String): TypeDefInfo<R>? = typeDefs[name]
 
-    fun lookupTypeDef(
+    internal fun lookupTypeDef(
         name: String,
         revision: R,
     ): TypeDefInfo<R>? = typeDefs[key(name, revision)]
 
-    fun getTypeDef(
+    internal fun getTypeDef(
         name: String,
         revision: R,
     ): TypeDefInfo<R> = typeDefs.getValue(key(name, revision))
 
-    fun allTypeDefs(): Collection<TypeDefInfo<R>> = typeDefs.values
+    internal fun allTypeDefs(): Collection<TypeDefInfo<R>> = typeDefs.values
 
-    fun registerConstructor(info: ConstructorInfo<R>) {
+    internal fun registerConstructor(info: ConstructorInfo<R>) {
         constructors[key(info.name, info.revision)] = info
     }
 
-    fun updateConstructor(info: ConstructorInfo<R>) {
+    internal fun updateConstructor(info: ConstructorInfo<R>) {
         constructors[key(info.name, info.revision)] = info
     }
 
-    fun lookupConstructor(
+    internal fun lookupConstructor(
         name: String,
         revision: R,
     ): ConstructorInfo<R>? = constructors[key(name, revision)]
 
-    fun allConstructors(): Collection<ConstructorInfo<R>> = constructors.values
+    internal fun allConstructors(): Collection<ConstructorInfo<R>> = constructors.values
 
-    fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv<R> =
+    internal fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv<R> =
         TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors, implicitParam = implicitParam)
 
-    fun copy(): TypeEnv<R> =
+    internal fun copy(): TypeEnv<R> =
         TypeEnv(
             parent = parent,
             bindings = bindings.toMutableMap(),
@@ -119,7 +122,7 @@ class TypeEnv<R : Revision?> private constructor(
 
     /** The nearest enclosing binder's implicit-param context: a bare lambda makes `.` available, an
      *  explicit-param lambda or named function blocks it, and nothing at all leaves it unbound. */
-    fun implicitParamContext(): ImplicitParamContext =
+    internal fun implicitParamContext(): ImplicitParamContext =
         if (implicitParam != ImplicitParamContext.None) implicitParam else parent?.implicitParamContext() ?: ImplicitParamContext.None
 
     /**

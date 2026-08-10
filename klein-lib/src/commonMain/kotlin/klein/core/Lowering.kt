@@ -8,7 +8,7 @@ import klein.surface.Match as SurfaceMatch
 
 private const val IMPLICIT_PARAM = "."
 
-class Lowering {
+internal class Lowering {
     fun lower(program: Program): CoreExpr = lowerScope(program.stmts, LowerEnv.empty, program.span)
 
     private fun lowerScope(
@@ -368,7 +368,7 @@ class Lowering {
         }
 }
 
-class LowerEnv private constructor(
+internal class LowerEnv private constructor(
     private val names: List<String>,
     private val visible: Int,
     private val aliases: Map<String, Resolved>,

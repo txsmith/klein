@@ -7,7 +7,7 @@ package klein.core
  * order follows the node's own lists (never a Map), so output is stable. Blocks (`scope`,
  * `match`) render multi-line at two-space indent; every other node is inline.
  */
-object CorePrinter {
+internal object CorePrinter {
     fun print(expr: CoreExpr): String = render(expr, 0)
 
     private fun indent(n: Int): String = "  ".repeat(n)

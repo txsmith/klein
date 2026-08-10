@@ -3,7 +3,7 @@ package klein.check
 import klein.Revision
 import klein.check.Type.*
 
-class Subtyping {
+internal class Subtyping {
 
     fun <R : Revision?> isSubtype(
         lower: Type<R>,

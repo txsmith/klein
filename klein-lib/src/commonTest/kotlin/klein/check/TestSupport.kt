@@ -9,7 +9,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** Parse [src] and run the bidirectional checker over it. Shared by all `klein.check` test suites. */
-fun infer(
+internal fun infer(
     src: String,
     env: RuleEnv = TypeEnv.empty(),
 ): ProgramCheck {

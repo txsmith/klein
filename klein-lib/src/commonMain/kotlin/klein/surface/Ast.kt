@@ -68,7 +68,7 @@ data class TypeDefStmt(
     override val span: SourceSpan get() = typeDef.span
 }
 
-fun revisionedName(
+internal fun revisionedName(
     name: String,
     revision: Revision?,
 ): String = if (revision == null || revision.value == 1) name else "$name/${revision.value}"
@@ -228,7 +228,7 @@ sealed class Pattern {
     abstract val span: SourceSpan
 }
 
-val Pattern.boundNames: List<String>
+internal val Pattern.boundNames: List<String>
     get() =
         when (this) {
             is DataPattern -> listOfNotNull(binder) + fields.mapNotNull { it.binder }
@@ -294,7 +294,7 @@ data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
 
-val Expr.usesImplicitParam: Boolean
+internal val Expr.usesImplicitParam: Boolean
     get() =
         when (this) {
             is ImplicitParam -> true
@@ -327,7 +327,7 @@ val Expr.usesImplicitParam: Boolean
                 }
         }
 
-val Expr.children: List<Expr>
+internal val Expr.children: List<Expr>
     get() =
         when (this) {
             is Block -> emptyList()

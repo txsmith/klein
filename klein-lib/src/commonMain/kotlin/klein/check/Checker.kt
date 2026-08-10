@@ -4,7 +4,7 @@ import klein.SourceSpan
 import klein.surface.*
 import klein.check.Type.*
 
-data class TypeCheckResult(
+internal data class TypeCheckResult(
     val program: Program,
     val type: RuleType,
     val errors: List<TypeError>,
@@ -12,17 +12,17 @@ data class TypeCheckResult(
     val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
-data class ProgramCheck(
+internal data class ProgramCheck(
     val type: RuleType,
     val errors: List<TypeError>,
 )
 
-data class ExpectedType(
+internal data class ExpectedType(
     val type: RuleType,
     val source: ExpectedTypeSource,
 )
 
-sealed class ExpectedTypeSource {
+internal sealed class ExpectedTypeSource {
     data class Param(
         val fn: String?,
         val name: String?,
@@ -54,7 +54,7 @@ sealed class ExpectedTypeSource {
  * a different language with a different root, and is checked by
  * [klein.check.contract.ContractChecker]; the two share [TypeResolver] and nothing else.
  */
-class Checker {
+internal class Checker {
     private val errors = mutableListOf<TypeError>()
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)

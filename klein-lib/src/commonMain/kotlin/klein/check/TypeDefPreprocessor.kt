@@ -3,7 +3,7 @@ package klein.check
 import klein.Revision
 import klein.surface.*
 
-class TypeDefPreprocessor<R : Revision?>(
+internal class TypeDefPreprocessor<R : Revision?>(
     private val errors: MutableList<TypeError>,
     private val resolver: TypeResolver<R>,
     private val subtyping: Subtyping,

@@ -3,7 +3,7 @@ package klein.check
 import klein.SourceSpan
 import klein.surface.*
 
-data class ScopeGraph(
+internal data class ScopeGraph(
     val nodes: List<Node>,
     val edges: Set<Pair<String, String>>,
     val children: List<ScopeGraph>,

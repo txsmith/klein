@@ -24,7 +24,9 @@ sealed class Value {
 
     data object VUnit : Value()
 
-    class VClos(
+    /** A closure: never in a public [Value] a host constructs or inspects — contracts.md §"No
+     *  functions cross the boundary" means a capability never carries one either way. */
+    internal class VClos(
         val arity: Int,
         val body: klein.core.CoreExpr,
         val scope: BindingScope,

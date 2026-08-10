@@ -1,6 +1,6 @@
 package klein.check
 
-enum class Variance {
+internal enum class Variance {
     Covariant,
     Contravariant,
     Invariant,

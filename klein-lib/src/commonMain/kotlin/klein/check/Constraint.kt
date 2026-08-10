@@ -3,7 +3,7 @@ package klein.check
 import klein.surface.*
 import klein.check.Type.*
 
-data class ConstraintInterval(
+internal data class ConstraintInterval(
     val lowerBound: RuleType,
     val upperBound: RuleType,
 ) {
@@ -14,24 +14,24 @@ data class ConstraintInterval(
     }
 }
 
-typealias ConstraintSet = Map<TSkolem, ConstraintInterval>
+internal typealias ConstraintSet = Map<TSkolem, ConstraintInterval>
 
-data class Failure(
+internal data class Failure(
     val lower: Type<*>,
     val upper: Type<*>,
 )
 
 /** A solver result: the produced [type], plus any constraint [errors] (empty on success). */
-data class Solved(
+internal data class Solved(
     val type: RuleType,
     val errors: List<Failure>,
 )
 
 /** Which end of each variable's interval to pick against the target: [Minimize] it (most precise
  *  result) or [Maximize] it (ground to the demand's bound). */
-enum class Objective { Minimize, Maximize }
+internal enum class Objective { Minimize, Maximize }
 
-class ConstraintGenerator(
+internal class ConstraintGenerator(
     private val subtyping: Subtyping,
 ) {
     private fun eliminateViaPromotion(

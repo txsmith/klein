@@ -20,7 +20,7 @@ import klein.surface.revisionedName
 
 /** What checking a contract produced: the artifact, and the diagnostics that decide whether it is
  *  handed out. */
-data class ContractResult(
+internal data class ContractResult(
     val contract: EnvironmentContract,
     val errors: List<TypeError>,
 )
@@ -32,7 +32,7 @@ data class ContractResult(
  * release a name means exactly one revision, which is what makes dropping the revision on the way
  * to a rule lossless.
  */
-data class Release(
+internal data class Release(
     val number: ReleaseNumber,
     val surface: Map<String, Revision>,
     val span: SourceSpan = SourceSpan.zero,
@@ -46,7 +46,7 @@ data class Release(
  * The two share type resolution and nothing else. There is no mode flag between them, because
  * there is no longer one function serving both.
  */
-class ContractChecker {
+internal class ContractChecker {
     private val errors = mutableListOf<TypeError>()
     private val resolver = TypeResolver<Revision>(errors, { it ?: Revision(1) })
     private val subtyping = Subtyping()

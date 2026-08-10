@@ -137,12 +137,12 @@ typealias ContractEnv = TypeEnv<Revision>
 /** The environment a rule checks against: plain names, no revisions. See [ContractType]. */
 typealias RuleEnv = TypeEnv<Nothing?>
 
-data class TypeParamInfo(
+internal data class TypeParamInfo(
     val variance: Variance,
     val skolem: Type.TSkolem,
 )
 
-data class TypeDefInfo<out R : Revision?>(
+internal data class TypeDefInfo<out R : Revision?>(
     val name: String,
     val revision: R,
     val typeParams: List<TypeParamInfo>,
@@ -150,7 +150,7 @@ data class TypeDefInfo<out R : Revision?>(
     val span: SourceSpan,
 )
 
-data class ConstructorInfo<out R : Revision?>(
+internal data class ConstructorInfo<out R : Revision?>(
     val name: String,
     val revision: R,
     val typeParams: List<String>,

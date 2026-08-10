@@ -42,7 +42,7 @@ data class ContractDeclaration(
  *
  * [releases] comes from the written blocks only; there is no implicit release 1.
  */
-class EnvironmentContract(
+class EnvironmentContract internal constructor(
     val declarations: List<ContractDeclaration>,
     val releases: List<ReleaseNumber>,
     private val env: ContractEnv,

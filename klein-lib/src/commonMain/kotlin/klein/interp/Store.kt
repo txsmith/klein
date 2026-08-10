@@ -2,8 +2,8 @@ package klein.interp
 
 import klein.SourceSpan
 
-typealias StoreAddr = Int
-class Store {
+internal typealias StoreAddr = Int
+internal class Store {
 
     private val cells = ArrayList<Value?>()
 
