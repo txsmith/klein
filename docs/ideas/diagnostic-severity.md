@@ -39,6 +39,9 @@ accumulate silently. Hence: warning, reported to the author.
   an arm that can never fire, a comparison that is always false. Error when authoring,
   warning on evolution re-check.
 
+The classification below is per-diagnostic, which is an approximation. See the footnote:
+the criterion is really per-*situation*, and at least one situation crosses the line.
+
 ## The second face of degeneracy
 
 Dead arms are not the only diagnostic that flips meaning under a tightening:
@@ -115,3 +118,38 @@ compatible-looking change means a bug in the compatibility reasoning, not in the
 
 Caveat: "joins survive narrowing" is an argument about the current lattice, not a proof.
 First-class unions (committed but deferred) could disturb it; revisit when they land.
+
+## Footnote: the criterion is per-situation, not per-diagnostic
+
+`NonExhaustiveMatch` is listed as soundness, and generally it is. But consider a *widening*
+— a sum type gaining a constructor — where that type occurs only in input positions:
+
+```klein
+# capability: fun area(s: Shape): Num       # Shape appears in no return type
+
+s: Shape = Circle(1)
+match s
+  Circle(r) -> r
+  Square(x) -> x
+```
+
+Add `Triangle` to `Shape` and this stops compiling. But the rule constructs every `Shape`
+it matches on, and it constructs no `Triangle`, so no arm can fail to match at runtime.
+Sound, and diagnosed as unsound.
+
+This is `UnreachableMatchArm` mirrored: narrowing makes a present arm unreachable,
+widening makes an absent one unreachable.
+
+Two reasons it is not simply a reclassification:
+
+- **The condition is a polarity property of the whole exposed surface**, not of the
+  capability at hand. `Shape` must appear in no reachable output — no return type, and
+  not nested inside one, transitively through constructor fields. Otherwise a `Triangle`
+  arrives by another route. That is the self-containment walk with polarity tracked.
+- **The re-check must know the change was a widening**, which means comparing revision N
+  to N+1 structurally. Nothing does that today.
+
+Both are beyond what an emission site can see, and the classification is required to be
+decided at the emission site. So the split as designed cannot express this case, and it is
+open whether the situations can be told apart at all — the per-diagnostic table is a
+tractable approximation of a per-situation truth, not the truth itself.
