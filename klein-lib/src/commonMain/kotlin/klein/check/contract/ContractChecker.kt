@@ -2,6 +2,8 @@ package klein.check.contract
 
 import klein.Revision
 import klein.SourceSpan
+import klein.check.ContractEnv
+import klein.check.ContractType
 import klein.check.Subtyping
 import klein.check.Type
 import klein.check.TypeDefPreprocessor
@@ -16,17 +18,9 @@ import klein.surface.revisionedName
 
 enum class DeclarationKind { Function, Value }
 
-/** One accepted declaration: what the host must implement, and what a release may point at. */
-data class ContractDeclaration(
-    val name: String,
-    val revision: Revision,
-    val kind: DeclarationKind,
-    val type: Type,
-)
-
 data class ContractResult(
     val declarations: List<ContractDeclaration>,
-    val env: TypeEnv,
+    val env: ContractEnv,
     val errors: List<TypeError>,
 )
 
@@ -40,16 +34,14 @@ data class ContractResult(
  */
 class ContractChecker {
     private val errors = mutableListOf<TypeError>()
-    private val resolver = TypeResolver(errors)
+    private val resolver = TypeResolver<Revision>(errors, { it ?: Revision(1) })
     private val subtyping = Subtyping()
-    private val preprocessor = TypeDefPreprocessor(errors, resolver::freshSkolem, resolver::resolve, subtyping)
+    private val preprocessor =
+        TypeDefPreprocessor(errors, resolver, subtyping)
 
-    fun check(
-        contract: ContractExpr,
-        env: TypeEnv = TypeEnv.empty(),
-    ): ContractResult {
+    fun check(contract: ContractExpr): ContractResult {
         errors.clear()
-        val scope = env.copy()
+        val scope: ContractEnv = TypeEnv.empty()
         preprocessor.process(contract.types, scope)
         val declarations = bindDeclarations(contract, scope)
         return ContractResult(declarations, scope, errors.toList())
@@ -57,7 +49,7 @@ class ContractChecker {
 
     private fun bindDeclarations(
         contract: ContractExpr,
-        env: TypeEnv,
+        env: ContractEnv,
     ): List<ContractDeclaration> {
         val declared = mutableSetOf<Pair<String, Revision>>()
         fun declare(
@@ -94,8 +86,8 @@ class ContractChecker {
     private fun bindFunDecl(
         declaration: FunDecl,
         revision: Revision,
-        env: TypeEnv,
-    ): Type {
+        env: ContractEnv,
+    ): ContractType {
         val (sigEnv, paramTypes) = resolver.openSignature(declaration.params, declaration.returnType, env)
         val returnType = resolver.resolve(declaration.returnType, sigEnv)
         val type =
@@ -110,8 +102,8 @@ class ContractChecker {
     private fun bindValDecl(
         declaration: ValDecl,
         revision: Revision,
-        env: TypeEnv,
-    ): Type {
+        env: ContractEnv,
+    ): ContractType {
         val sigEnv = env.child()
         resolver.introduceTypeVars(listOf(declaration.type), sigEnv)
         val type = quantify(sigEnv.localTypeVars(), resolver.resolve(declaration.type, sigEnv))
@@ -121,9 +113,9 @@ class ContractChecker {
 
     private fun rejectCarriedFunctions(
         name: String,
-        bound: Type,
+        bound: ContractType,
         span: SourceSpan,
-        env: TypeEnv,
+        env: ContractEnv,
         isCallable: Boolean,
     ) {
         if (carriesFunctionType(bound, env, isCallable)) {

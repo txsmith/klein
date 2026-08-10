@@ -33,7 +33,7 @@ class Parser(
             val stmt =
                 when (peek().kind) {
                     FUN -> parseFunDef()
-                    TYPE -> parseTypeDef(::programRevision)
+                    TYPE -> TypeDefStmt(parseTypeDef(::expectNoRevision))
                     else -> parseStmt()
                 }
             stmts.add(stmt)
@@ -49,7 +49,7 @@ class Parser(
      */
     fun parseContract(): ContractExpr {
         val start = peek().span
-        val types = mutableListOf<TypeDef<Revision?>>()
+        val types = mutableListOf<TypeDef<*>>()
         val declarations = mutableListOf<Declaration>()
         var end = start
         while (peek().kind != EOF) {
@@ -82,7 +82,7 @@ class Parser(
 
         val stmt =
             when {
-                peek().kind == TYPE && allowTypeDef -> parseTypeDef(::programRevision)
+                peek().kind == TYPE && allowTypeDef -> TypeDefStmt(parseTypeDef(::expectNoRevision))
                 isDestructuringBinding() -> parseDestructuringBinding()
                 isBinding() -> parseBinding()
                 else -> parseExpr()
@@ -103,11 +103,11 @@ class Parser(
     private fun parseFunDef(): Stmt {
         val funToken = advance()
         val name = expectName("Expected function name")
-        programRevision(name.text!!)
+        expectNoRevision(name.text!!)
         expectAndAdvance(LPAREN, message = "Expected '('")
-        val params = parseFunParams(::programRevision)
+        val params = parseFunParams(::expectNoRevision)
         expectAndAdvance(RPAREN, message = "Expected ')'")
-        val returnType = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
+        val returnType = parseOptionalTypeAnnotation { parseTypeExpr(::expectNoRevision) }
         if (returnType != null && peek().kind != EQ) {
             throw ParseError(declarationWithoutBody(name.text), funToken.span + returnType.span)
         }
@@ -162,7 +162,7 @@ class Parser(
      * expression the rule parser builds is provably unrevisioned; writing one is refused here, at
      * the position it was written.
      */
-    private fun programRevision(name: String): Nothing? {
+    private fun expectNoRevision(name: String): Nothing? {
         if (peek().kind == SLASH && peekAt(1).kind == INT) {
             throw ParseError(
                 "'$name/${peekAt(1).text}' names a revision; revision syntax is only allowed in a capability contract",
@@ -495,8 +495,8 @@ class Parser(
 
     private fun parseBinding(): Stmt {
         val name = expectName("Expected identifier")
-        programRevision(name.text!!)
-        val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
+        expectNoRevision(name.text!!)
+        val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::expectNoRevision) }
         if (typeAnnotation != null && peek().kind != EQ) {
             throw ParseError(declarationWithoutBody(name.text), name.span + typeAnnotation.span)
         }
@@ -640,7 +640,7 @@ class Parser(
                 val expr = parseExpr()
                 if (peek().kind == COLON) {
                     advance()
-                    val type = parseTypeExpr(::programRevision)
+                    val type = parseTypeExpr(::expectNoRevision)
                     val close = expectAndAdvance(RPAREN, message = "Expected ')'")
                     Ascription(expr, type, token.span + close.span)
                 } else {
@@ -879,7 +879,7 @@ class Parser(
             val ident = advance()
             // Parse an atom plus any postfix `?`, but not a `->` function type — the arrow belongs to
             // the lambda (`|x: Num? -> x|`), so a nullable param annotation must still work here.
-            val typeAnnotation = parseOptionalTypeAnnotation { parseTypePostfix(::programRevision) }
+            val typeAnnotation = parseOptionalTypeAnnotation { parseTypePostfix(::expectNoRevision) }
             val span = ident.span + (typeAnnotation?.span ?: ident.span)
             params.add(Param(ident.text!!, typeAnnotation, span))
 
@@ -910,7 +910,7 @@ class Parser(
             val nameToken = expectName("Expected field name")
             val name = nameToken.text!!
 
-            val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::programRevision) }
+            val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::expectNoRevision) }
             val value =
                 if (peek().kind == EQ) {
                     advance()
@@ -1021,7 +1021,7 @@ class Parser(
             is Val -> endsWithBlockExpr(stmt.value)
             is PatternVal -> endsWithBlockExpr(stmt.value)
             is FunDef -> endsWithBlockExpr(stmt.body)
-            is TypeDef<*> -> false
+            is TypeDefStmt -> false
             is Expr -> endsWithBlockExpr(stmt)
         }
 

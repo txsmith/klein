@@ -768,7 +768,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Bool",
                     constructors =
                         arrayOf(
@@ -791,7 +791,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Color",
                     constructors =
                         arrayOf(
@@ -814,7 +814,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Option",
                     listOf("A"),
                     constructor("None"),
@@ -837,7 +837,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Person",
                     constructors =
                         arrayOf(
@@ -866,7 +866,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Either",
                     listOf("A", "B"),
                     constructor("Left", field("value", typeVar("A"))),
@@ -892,7 +892,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Result",
                     listOf("T", "E"),
                     constructor("Ok", field("value", typeVar("T"))),
@@ -917,7 +917,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef("Unit", constructors = arrayOf(constructor("Unit"))),
+                typeDefStmt("Unit", constructors = arrayOf(constructor("Unit"))),
                 valStmt("x", int(42)),
             ),
         )
@@ -938,7 +938,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Bool",
                     constructors =
                         arrayOf(
@@ -946,13 +946,13 @@ class TypeDefTest {
                             constructor("False"),
                         ),
                 ),
-                typeDef(
+                typeDefStmt(
                     "Option",
                     listOf("A"),
                     constructor("None"),
                     constructor("Some", field("value", typeVar("A"))),
                 ),
-                typeDef("Unit", constructors = arrayOf(constructor("Unit"))),
+                typeDefStmt("Unit", constructors = arrayOf(constructor("Unit"))),
             ),
         )
     }
@@ -968,7 +968,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Box",
                     listOf("A"),
                     constructor("Box", field("value", typeVar("A"))),
@@ -1221,7 +1221,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Color",
                     constructors =
                         arrayOf(
@@ -1249,7 +1249,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Option",
                     listOf("A"),
                     constructor("None"),
@@ -1276,7 +1276,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Person",
                     constructors =
                         arrayOf(
@@ -1306,7 +1306,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Container",
                     listOf("A"),
                     constructor(
@@ -1332,7 +1332,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Wrapper",
                     constructors =
                         arrayOf(
@@ -1364,7 +1364,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Handler",
                     listOf("A", "B"),
                     constructor(
@@ -1820,11 +1820,11 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef("A", constructors = arrayOf(constructor("A"))),
+                typeDefStmt("A", constructors = arrayOf(constructor("A"))),
                 valStmt("x", int(1)),
-                typeDef("B", listOf("T"), constructor("B", field("value", typeVar("T")))),
+                typeDefStmt("B", listOf("T"), constructor("B", field("value", typeVar("T")))),
                 valStmt("y", int(2)),
-                typeDef("C", constructors = arrayOf(constructor("C1"), constructor("C2"))),
+                typeDefStmt("C", constructors = arrayOf(constructor("C1"), constructor("C2"))),
             ),
         )
     }
@@ -1840,7 +1840,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Option",
                     listOf("A"),
                     constructor("None"),
@@ -1922,7 +1922,7 @@ class TypeDefTest {
                 """.trimIndent(),
             ),
             listOf(
-                typeDef(
+                typeDefStmt(
                     "Config",
                     constructors =
                         arrayOf(

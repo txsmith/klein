@@ -33,21 +33,24 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val retStr = if (returnType != null) ": ${returnType.prettyPrint()}" else ""
             "${pad}Fun $name($paramsStr)$retStr =\n${body.prettyPrint(indent + 1)}"
         }
-        is TypeDef<*> -> {
-            val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
-            val constructorsStr =
-                constructors.joinToString(" | ") { c ->
-                    if (c.fields.isEmpty()) {
-                        c.name
-                    } else {
-                        "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
-                    }
-                }
-            "${pad}type $name${revisionSuffix(revision)}$typeParamsStr = $constructorsStr"
-        }
+        is TypeDefStmt -> typeDef.prettyPrint(indent)
         is PatternVal -> "${pad}PatternVal(${pattern.prettyPrint()}) =\n${value.prettyPrint(indent + 1)}"
         is Expr -> prettyPrint(indent)
     }
+}
+
+fun TypeDef<*>.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
+    val constructorsStr =
+        constructors.joinToString(" | ") { c ->
+            if (c.fields.isEmpty()) {
+                c.name
+            } else {
+                "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
+            }
+        }
+    return "${pad}type $name${revisionSuffix(revision)}$typeParamsStr = $constructorsStr"
 }
 
 fun ContractExpr.prettyPrint(): String =

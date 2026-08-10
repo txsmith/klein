@@ -4,26 +4,26 @@ import klein.surface.*
 import klein.check.Type.*
 
 data class ConstraintInterval(
-    val lowerBound: Type,
-    val upperBound: Type,
+    val lowerBound: RuleType,
+    val upperBound: RuleType,
 ) {
     companion object {
-        fun lower(type: Type): ConstraintInterval = ConstraintInterval(type, TTop)
+        fun lower(type: RuleType): ConstraintInterval = ConstraintInterval(type, TTop)
 
-        fun upper(type: Type): ConstraintInterval = ConstraintInterval(TBottom, type)
+        fun upper(type: RuleType): ConstraintInterval = ConstraintInterval(TBottom, type)
     }
 }
 
 typealias ConstraintSet = Map<TSkolem, ConstraintInterval>
 
 data class Failure(
-    val lower: Type,
-    val upper: Type,
+    val lower: Type<*>,
+    val upper: Type<*>,
 )
 
 /** A solver result: the produced [type], plus any constraint [errors] (empty on success). */
 data class Solved(
-    val type: Type,
+    val type: RuleType,
     val errors: List<Failure>,
 )
 
@@ -35,21 +35,21 @@ class ConstraintGenerator(
     private val subtyping: Subtyping,
 ) {
     private fun eliminateViaPromotion(
-        type: Type,
+        type: RuleType,
         quantified: Set<TSkolem>,
-    ): Type = type
+    ): RuleType = type
 
     private fun eliminateViaDemotion(
-        type: Type,
+        type: RuleType,
         quantified: Set<TSkolem>,
-    ): Type = type
+    ): RuleType = type
 
     fun generate(
         quantified: Set<TSkolem>,
         unknowns: Set<TSkolem>,
-        lower: Type,
-        upper: Type,
-        env: TypeEnv,
+        lower: RuleType,
+        upper: RuleType,
+        env: RuleEnv,
     ): Pair<ConstraintSet, List<Failure>> {
         require(lower !is TForall && upper !is TForall) {
             "generate received a polymorphic type — it must be instantiated at a demand first: $lower <: $upper"
@@ -91,11 +91,8 @@ class ConstraintGenerator(
                 val lowerDef = env.lookupTypeDef(lower.name, lower.revision)
                 val upperDef = env.lookupTypeDef(upper.name, upper.revision)
                 val related =
-                    lower.revision == upper.revision &&
-                        (
-                            lower.name == upper.name ||
-                                env.lookupConstructor(lower.name, lower.revision)?.parentType == upper.name
-                        )
+                    lower.name == upper.name ||
+                        env.lookupConstructor(lower.name, lower.revision)?.parentType == upper.name
                 if (lowerDef == null || upperDef == null || !related) {
                     emptyMap<TSkolem, ConstraintInterval>() to listOf(Failure(lower, upper))
                 } else {
@@ -138,7 +135,7 @@ class ConstraintGenerator(
     private fun mergeInterval(
         a: ConstraintInterval,
         b: ConstraintInterval,
-        env: TypeEnv,
+        env: RuleEnv,
     ): Pair<ConstraintInterval, List<Failure>> {
         val (lowerBound, lowerFailures) = subtyping.lub(a.lowerBound, b.lowerBound, env)
         val (upperBound, upperFailures) = subtyping.glb(a.upperBound, b.upperBound, env)
@@ -148,7 +145,7 @@ class ConstraintGenerator(
     private fun merge(
         a: ConstraintSet,
         b: ConstraintSet,
-        env: TypeEnv,
+        env: RuleEnv,
     ): Pair<ConstraintSet, List<Failure>> {
         if (a.isEmpty()) return b to emptyList()
         if (b.isEmpty()) return a to emptyList()
@@ -167,7 +164,7 @@ class ConstraintGenerator(
 
     private fun mergeAll(
         parts: List<Pair<ConstraintSet, List<Failure>>>,
-        env: TypeEnv,
+        env: RuleEnv,
     ): Pair<ConstraintSet, List<Failure>> =
         parts.fold(emptyConstraints()) { (accConstraints, accFailures), (constraints, partFailures) ->
             val (merged, mergeFailures) = merge(accConstraints, constraints, env)
@@ -177,11 +174,11 @@ class ConstraintGenerator(
     fun solve(
         constraints: ConstraintSet,
         unknowns: Set<TSkolem>,
-        target: Type,
+        target: RuleType,
         objective: Objective,
-        env: TypeEnv,
-    ): Pair<Map<TSkolem, Type>, List<Failure>> {
-        val subst = mutableMapOf<TSkolem, Type>()
+        env: RuleEnv,
+    ): Pair<Map<TSkolem, RuleType>, List<Failure>> {
+        val subst = mutableMapOf<TSkolem, RuleType>()
         val failures = mutableListOf<Failure>()
         for (x in unknowns) {
             val interval = constraints[x] ?: ConstraintInterval(TBottom, TTop)
@@ -212,10 +209,10 @@ class ConstraintGenerator(
      * escapes; the caller records the failures.
      */
     fun solveQuantified(
-        lowerBound: TForall,
-        upperBound: Type,
-        target: Type,
-        env: TypeEnv,
+        lowerBound: TForall<Nothing?>,
+        upperBound: RuleType,
+        target: RuleType,
+        env: RuleEnv,
     ): Solved {
         val (constraints, genFailures) = generate(emptySet(), lowerBound.params, lowerBound.body, upperBound, env)
         val (subst, solveFailures) = solve(constraints, lowerBound.params, target, Objective.Minimize, env)
@@ -229,10 +226,10 @@ class ConstraintGenerator(
      */
     fun solveFromResult(
         unknowns: Set<TSkolem>,
-        result: Type,
-        demand: Type,
-        env: TypeEnv,
-    ): Pair<Map<TSkolem, Type>, List<Failure>> {
+        result: RuleType,
+        demand: RuleType,
+        env: RuleEnv,
+    ): Pair<Map<TSkolem, RuleType>, List<Failure>> {
         val (constraints, genFailures) = generate(emptySet(), unknowns, result, demand, env)
         val (subst, solveFailures) = solve(constraints, constraints.keys, result, Objective.Maximize, env)
         val determined = subst.filterValues { it != TBottom && it != TTop }
@@ -241,19 +238,19 @@ class ConstraintGenerator(
 
     /** Substitute solved [subst] into [type]; quantifiers shadow their own variables. */
     fun applySubst(
-        type: Type,
-        subst: Map<TSkolem, Type>,
-    ): Type = substitute(type, subst)
+        type: RuleType,
+        subst: Map<TSkolem, RuleType>,
+    ): RuleType = substitute(type, subst)
 
     /** Where [x] occurs in [type]: nowhere (constant), only positively (covariant), only negatively, or both. */
     private fun varianceOf(
         x: TSkolem,
-        type: Type,
-        env: TypeEnv,
+        type: RuleType,
+        env: RuleEnv,
     ): Variance {
         val polarities = mutableSetOf<Boolean>()
         fun walk(
-            t: Type,
+            t: RuleType,
             positive: Boolean,
         ) {
             when (t) {

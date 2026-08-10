@@ -11,7 +11,7 @@ data class Program(
 )
 
 /**
- * A statement of the *rule* language: something that can run. Declarations without bodies belong to
+ * A statement of the rule language: something that can run. Declarations without bodies belong to
  * the contract language and live in [ContractExpr], so no pass that walks statements carries a
  * branch for a form that never executes.
  */
@@ -56,9 +56,17 @@ data class TypeDef<out R : Revision?>(
     val name: String,
     val typeParams: List<String>,
     val constructors: List<Constructor<R>>,
-    override val span: SourceSpan,
+    val span: SourceSpan,
     val revision: R,
-) : Stmt()
+)
+
+/** A type definition as it appears in a rule: unrevisioned, because [TypeDef]`<Nothing?>` is all
+ *  this can hold. Unparameterised itself, so `filterIsInstance<TypeDefStmt>()` is erasure-safe. */
+data class TypeDefStmt(
+    val typeDef: TypeDef<Nothing?>,
+) : Stmt() {
+    override val span: SourceSpan get() = typeDef.span
+}
 
 fun revisionedName(
     name: String,
@@ -79,9 +87,8 @@ data class FieldDecl<out R : Revision?>(
 
 /**
  * A type expression, carrying a witness for whether a revision could have been written in it.
- * `TypeExpr<Revision?>` is a contract's type; `TypeExpr<Nothing?>` is a rule's, and `Nothing?` has
- * exactly one inhabitant — `null`. So "a rule wrote a revision" is not a rule the checker enforces
- * but a state that cannot be constructed.
+ * `TypeExpr<Nothing?>` is a rule's type, and `Nothing?` has exactly one inhabitant — `null`. So "a
+ * rule wrote a revision" is not a rule the checker enforces but a state that cannot be constructed.
  */
 sealed class TypeExpr<out R : Revision?> {
     abstract val span: SourceSpan
@@ -315,7 +322,7 @@ val Expr.usesImplicitParam: Boolean
                         is Val -> stmt.value.usesImplicitParam
                         is PatternVal -> stmt.value.usesImplicitParam
                         is FunDef -> false
-                        is TypeDef<*> -> false
+                        is TypeDefStmt -> false
                     }
                 }
         }

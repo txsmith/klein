@@ -27,7 +27,7 @@ class Lowering {
             when (stmt) {
                 is Val -> sequentialNames.add(stmt.name)
                 is FunDef -> hoistedNames.add(stmt.name)
-                is TypeDef<*> -> stmt.constructors.forEach { hoistedNames.add(it.name) }
+                is TypeDefStmt -> stmt.typeDef.constructors.forEach { hoistedNames.add(it.name) }
                 is PatternVal -> sequentialNames.addAll(patternValNames(stmt, i))
                 is Expr -> {}
             }
@@ -44,8 +44,8 @@ class Lowering {
                 }
                 is FunDef ->
                     hoisted.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
-                is TypeDef<*> ->
-                    stmt.constructors.forEach { ctor ->
+                is TypeDefStmt ->
+                    stmt.typeDef.constructors.forEach { ctor ->
                         hoisted.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
                     }
                 is PatternVal -> {

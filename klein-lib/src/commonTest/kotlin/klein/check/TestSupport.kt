@@ -1,5 +1,6 @@
 package klein.check
 
+import klein.Revision
 import klein.surface.Lexer
 import klein.surface.Parser
 import klein.check.Type.*
@@ -12,7 +13,7 @@ import kotlin.test.assertTrue
 /** Parse [src] and run the bidirectional checker over it. Shared by all `klein.check` test suites. */
 fun infer(
     src: String,
-    env: TypeEnv = TypeEnv.empty(),
+    env: RuleEnv = TypeEnv.empty(),
 ): ProgramCheck {
     val tokens = Lexer(src).tokenize().toList()
     val program = Parser(tokens).parseProgram()
@@ -20,23 +21,25 @@ fun infer(
 }
 
 /** Parse [src] as a capability contract and check it. */
-fun checkContract(
-    src: String,
-    env: TypeEnv = TypeEnv.empty(),
-): ContractResult {
+fun checkContract(src: String): ContractResult {
     val tokens = Lexer(src).tokenize().toList()
     val contract = Parser(tokens).parseContract()
-    return ContractChecker().check(contract, env)
+    return ContractChecker().check(contract)
 }
 
 /** A type variable for expected types; alpha-equality compares skolems by name, ignoring the id. */
 fun tv(name: String): TSkolem = TSkolem(name, 0)
 
+fun TRef(
+    name: String,
+    typeArgs: List<RuleType> = emptyList(),
+): RuleType = Type.TRef(name, typeArgs, revision = null)
+
 /**
  * Structural type equality up to skolem renaming: skolems match by name (ignoring their id), a
  * `TForall` is compared through its body, and value-level `paramNames` are ignored.
  */
-fun Type.alphaEquals(other: Type): Boolean {
+fun <R : Revision?> Type<R>.alphaEquals(other: Type<R>): Boolean {
     val a = if (this is TForall) body else this
     val b = if (other is TForall) other.body else other
     return when {
@@ -71,7 +74,7 @@ fun assertMismatch(
 
 /** Assert [src] checks cleanly and its type is [expected], up to skolem renaming. */
 fun assertInfersType(
-    expected: Type,
+    expected: RuleType,
     src: String,
 ) {
     val r = infer(src)

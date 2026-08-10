@@ -6,19 +6,19 @@ import klein.check.Type.*
 
 data class TypeCheckResult(
     val program: Program,
-    val type: Type,
+    val type: RuleType,
     val errors: List<TypeError>,
 ) {
     val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
 data class ProgramCheck(
-    val type: Type,
+    val type: RuleType,
     val errors: List<TypeError>,
 )
 
 data class ExpectedType(
-    val type: Type,
+    val type: RuleType,
     val source: ExpectedTypeSource,
 )
 
@@ -58,14 +58,13 @@ class Checker {
     private val errors = mutableListOf<TypeError>()
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)
-    private val resolver = TypeResolver(errors)
-    private val preprocessor = TypeDefPreprocessor(errors, resolver::freshSkolem, resolver::resolve, subtyping)
-
-    private fun freshSkolem(name: String): TSkolem = resolver.freshSkolem(name)
+    private val resolver = TypeResolver<Nothing?>(errors) { null }
+    private val preprocessor =
+        TypeDefPreprocessor(errors, resolver, subtyping)
 
     fun checkProgram(
         program: Program,
-        env: TypeEnv = TypeEnv.empty(),
+        env: RuleEnv = TypeEnv.empty(),
     ): ProgramCheck {
         errors.clear()
         val scope = env.copy()
@@ -75,8 +74,8 @@ class Checker {
 
     fun synth(
         expr: Expr,
-        env: TypeEnv,
-    ): Type =
+        env: RuleEnv,
+    ): RuleType =
         when (expr) {
             is IntLiteral -> TNum
             is DoubleLiteral -> TNum
@@ -109,8 +108,8 @@ class Checker {
      */
     fun check(
         expr: Expr,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
         expectedSource: List<ExpectedType> = emptyList(),
     ) {
         when (expr) {
@@ -126,9 +125,9 @@ class Checker {
 
     private fun synthBlockStmts(
         stmts: List<Stmt>,
-        env: TypeEnv,
-    ): Type {
-        preprocessor.process(stmts.filterIsInstance<TypeDef<*>>(), env)
+        env: RuleEnv,
+    ): RuleType {
+        preprocessor.process(stmts.filterIsInstance<TypeDefStmt>().map { it.typeDef }, env)
 
         val scope = ScopeGraph.constructGraph(stmts)
         scope.duplicates.forEach { (name, span) -> recordError(TypeError.DuplicateBinding(name, span)) }
@@ -153,7 +152,7 @@ class Checker {
             if (stmt is PatternVal && processedPatternVals.add(stmt)) checkPatternVal(stmt, env)
         }
 
-        var last: Type = TUnit
+        var last: RuleType = TUnit
         for (stmt in stmts) {
             if (stmt is Expr) last = synth(stmt, env)
         }
@@ -162,7 +161,7 @@ class Checker {
 
     private fun checkPatternVal(
         stmt: PatternVal,
-        env: TypeEnv,
+        env: RuleEnv,
     ) {
         val rhsType = synth(stmt.value, env)
         val coverage = if (rhsType is TBottom) null else MatchCoverage.of(rhsType, env)
@@ -190,18 +189,18 @@ class Checker {
     private fun bindFunGroup(
         funDefs: List<FunDef>,
         isRecursive: Boolean,
-        env: TypeEnv,
+        env: RuleEnv,
     ) {
         // Pass 1: bind every function signature.
         // Yields a list of all functions that have a declared signature for checking in pass 2.
         // If no signature is declared, and the function is not recursive, synth & bind the type immediately.
-        val pendingChecks: List<Triple<FunDef, TypeEnv, Type>> =
+        val pendingChecks: List<Triple<FunDef, RuleEnv, RuleType>> =
             funDefs.mapNotNull { funDef ->
-                val (fnEnv, paramTypes) = openSignature(funDef.params, funDef.returnType, env)
+                val (fnEnv, paramTypes) = resolver.openSignature(funDef.params, funDef.returnType, env)
                 funDef.params.zip(paramTypes).forEach { (param, type) -> if (!param.isDiscard) fnEnv.bind(param.name, type) }
                 val returnType =
                     when {
-                        funDef.returnType != null -> resolveType(funDef.returnType, fnEnv)
+                        funDef.returnType != null -> resolver.resolve(funDef.returnType, fnEnv)
                         isRecursive ->
                             recordError(TypeError.RecursiveFunctionNeedsReturnType(funDef.name, funDef.span))
                         else -> synth(funDef.body, fnEnv) // non-recursive: infer straight from the body
@@ -223,26 +222,18 @@ class Checker {
 
     private fun synthAndBindVal(
         stmt: Val,
-        env: TypeEnv,
+        env: RuleEnv,
     ) {
         if (stmt.typeAnnotation != null) {
             val sigEnv = env.child()
-            introduceTypeVars(listOf(stmt.typeAnnotation), sigEnv)
-            val t = resolveType(stmt.typeAnnotation, sigEnv)
+            resolver.introduceTypeVars(listOf(stmt.typeAnnotation), sigEnv)
+            val t = resolver.resolve(stmt.typeAnnotation, sigEnv)
             check(stmt.value, t, sigEnv, listOf(ExpectedType(t, ExpectedTypeSource.Binding(stmt.name, stmt.span))))
             env.bind(stmt.name, quantify(sigEnv.localTypeVars(), t))
         } else {
             env.bind(stmt.name, synth(stmt.value, env))
         }
     }
-
-    private fun openSignature(
-        params: List<Param<*>>,
-        returnType: TypeExpr<*>?,
-        env: TypeEnv,
-    ): Pair<TypeEnv, List<Type>> = resolver.openSignature(params, returnType, env)
-
-    private fun reportDuplicateParams(params: List<Param<*>>) = resolver.reportDuplicateParams(params)
 
     private fun usesImplicitParam(expr: Expr): Boolean =
         when (expr) {
@@ -253,9 +244,9 @@ class Checker {
 
     private fun synthLambda(
         expr: Lambda,
-        env: TypeEnv,
-    ): Type {
-        reportDuplicateParams(expr.params)
+        env: RuleEnv,
+    ): RuleType {
+        resolver.reportDuplicateParams(expr.params)
         val bodyEnv =
             if (expr.params.isEmpty()) {
                 env.child(ImplicitParamContext.NoExpectedType)
@@ -266,7 +257,7 @@ class Checker {
             expr.params.map { param ->
                 val type =
                     if (param.typeAnnotation != null) {
-                        resolveType(param.typeAnnotation, bodyEnv)
+                        resolver.resolve(param.typeAnnotation, bodyEnv)
                     } else {
                         recordError(TypeError.MissingParamAnnotation(param.name, param.span))
                     }
@@ -279,15 +270,15 @@ class Checker {
 
     private fun checkLambda(
         expr: Lambda,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
     ) {
         if (expected !is TFun) {
             // No inward rule for a lambda against a non-function — fall back to subsumption.
             synthAndCheckSubtype(expr, expected, env)
             return
         }
-        reportDuplicateParams(expr.params)
+        resolver.reportDuplicateParams(expr.params)
         val implicit = expr.params.isEmpty() && usesImplicitParam(expr.body)
         val arity = if (implicit) 1 else expr.params.size
         if (arity != expected.params.size) {
@@ -303,7 +294,7 @@ class Checker {
         expr.params.zip(expected.params).forEach { (param, expectedParamType) ->
             val paramType =
                 if (param.typeAnnotation != null) {
-                    val annotated = resolveType(param.typeAnnotation, bodyEnv)
+                    val annotated = resolver.resolve(param.typeAnnotation, bodyEnv)
                     if (!subtyping.isSubtype(expectedParamType, annotated, env)) {
                         recordError(
                             TypeError.TypeMismatch(expectedParamType, annotated, param.span),
@@ -320,13 +311,13 @@ class Checker {
 
     private fun synthApply(
         expr: Apply,
-        env: TypeEnv,
-    ): Type = inferApply(expr, null, env) // null = synth mode: no result demand, minimize R
+        env: RuleEnv,
+    ): RuleType = inferApply(expr, null, env) // null = synth mode: no result demand, minimize R
 
     private fun checkApply(
         expr: Apply,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
     ) {
         inferApply(expr, expected, env)
     }
@@ -351,9 +342,9 @@ class Checker {
      */
     private fun inferApply(
         expr: Apply,
-        expected: Type?,
-        env: TypeEnv,
-    ): Type {
+        expected: RuleType?,
+        env: RuleEnv,
+    ): RuleType {
         // A safe method call `r?.m(args)` on an optional receiver short-circuits: apply the unwrapped
         // method and lift the result back to optional. Its demand, likewise, is against the optional
         // result. On a non-optional receiver `?.` is redundant, so it behaves as a plain call.
@@ -361,7 +352,7 @@ class Checker {
         val isNullableApply = expr.callee is SafeFieldAccess && rawCallee is TOptional
         val callee = if (isNullableApply) (rawCallee as TOptional).type else rawCallee
         val demand = if (isNullableApply) expected?.let { if (it is TOptional) it.type else it } else expected
-        val scheme = callee as? TForall ?: TForall(emptySet(), callee)
+        val scheme = callee as? TForall<Nothing?> ?: TForall(emptySet(), callee)
         val body = scheme.body
         val result = when {
             body is TBottom -> { // S-App-Bot and C-App-Bot
@@ -377,7 +368,7 @@ class Checker {
                     if (demand != null) {
                         constraints.solveFromResult(scheme.params, body.result, demand, env)
                     } else {
-                        emptyMap<TSkolem, Type>() to emptyList()
+                        emptyMap<TSkolem, RuleType>() to emptyList()
                     }
                 demandFailures.forEach { recordError(TypeError.TypeMismatch(it.lower, it.upper, expr.span)) }
                 val fn = if (demandSubst.isEmpty()) body else substitute(body, demandSubst) as TFun
@@ -422,10 +413,10 @@ class Checker {
      *  other (monomorphic) branch. Null when it can't be grounded — both branches polymorphic, or no
      *  instantiation of this branch fits the other. */
     private fun groundPolyBranch(
-        branch: Type,
-        other: Type,
-        env: TypeEnv,
-    ): Type? {
+        branch: RuleType,
+        other: RuleType,
+        env: RuleEnv,
+    ): RuleType? {
         if (branch !is TForall) return branch
         // Fit against the other branch — or, when it is itself polymorphic, a rigid skolemization of
         // it, so success means "fits every instantiation" (i.e. `branch <: other`).
@@ -434,13 +425,13 @@ class Checker {
         return if (solved.errors.isEmpty()) solved.type else null
     }
 
-    private fun skolemize(forall: TForall): Type =
-        substitute(forall.body, forall.params.associateWith { freshSkolem(it.name) })
+    private fun skolemize(forall: TForall<Nothing?>): RuleType =
+        substitute(forall.body, forall.params.associateWith { resolver.freshSkolem(it.name) })
 
     private fun synthIfThenElse(
         expr: IfThenElse,
-        env: TypeEnv,
-    ): Type {
+        env: RuleEnv,
+    ): RuleType {
         check(expr.condition, TBool, env)
         val thenBranchType = synth(expr.thenBranch, env)
 
@@ -455,8 +446,8 @@ class Checker {
 
     private fun checkIfThenElse(
         expr: IfThenElse,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
         expectedSource: List<ExpectedType>,
     ) {
         if (expr.elseBranch != null) {
@@ -472,17 +463,17 @@ class Checker {
 
     private fun inferMatch(
         expr: Match,
-        expected: Type?,
-        env: TypeEnv,
+        expected: RuleType?,
+        env: RuleEnv,
         expectedSource: List<ExpectedType>,
-    ): Type {
+    ): RuleType {
         val scrutineeType = synth(expr.scrutinee, env)
         if (scrutineeType is TBottom) return TBottom
         val coverage =
             MatchCoverage.of(scrutineeType, env)
                 ?: return recordError(TypeError.CannotMatchOn(scrutineeType, expr.scrutinee.span))
 
-        val armTypes = mutableListOf<Type>()
+        val armTypes = mutableListOf<RuleType>()
         for (arm in expr.arms) {
             if (!coverage.reaches(arm.pattern)) recordError(TypeError.UnreachableMatchArm(arm.pattern.span))
             val armEnv = env.child()
@@ -507,8 +498,8 @@ class Checker {
     private fun checkPattern(
         pattern: Pattern,
         coverage: MatchCoverage,
-        armEnv: TypeEnv,
-        env: TypeEnv,
+        armEnv: RuleEnv,
+        env: RuleEnv,
     ) {
         when (pattern) {
             is WildcardPattern -> {}
@@ -521,8 +512,8 @@ class Checker {
     private fun checkLiteralPattern(
         pattern: LiteralPattern,
         coverage: MatchCoverage,
-        armEnv: TypeEnv,
-        env: TypeEnv,
+        armEnv: RuleEnv,
+        env: RuleEnv,
     ) {
         if (pattern.literal is NullLiteral) {
             if (!coverage.isOptional) recordError(TypeError.NullNotAllowed(coverage.scrutinee, pattern.span))
@@ -536,11 +527,11 @@ class Checker {
 
     private fun checkDataPattern(
         pattern: DataPattern,
-        core: Type,
-        armEnv: TypeEnv,
-        env: TypeEnv,
+        core: RuleType,
+        armEnv: RuleEnv,
+        env: RuleEnv,
     ) {
-        val valueType: Type =
+        val valueType: RuleType =
             if (pattern.tag != null) {
                 val ctor = if (core is TRef) env.lookupConstructor(pattern.tag, core.revision) else null
                 if (core !is TRef || ctor == null || (core.name != pattern.tag && ctor.parentType != core.name)) {
@@ -560,10 +551,10 @@ class Checker {
 
     private fun constructorInstance(
         name: String,
-        ctor: ConstructorInfo,
-        core: TRef,
-        env: TypeEnv,
-    ): TRef {
+        ctor: ConstructorInfo<Nothing?>,
+        core: TRef<Nothing?>,
+        env: RuleEnv,
+    ): TRef<Nothing?> {
         if (core.name == name) return core
         val parentDef = env.getTypeDef(core.name, core.revision)
         val argByName = parentDef.typeParams.map { it.skolem.name }.zip(core.typeArgs).toMap()
@@ -571,10 +562,10 @@ class Checker {
     }
 
     private fun joinArmTypes(
-        armTypes: List<Type>,
+        armTypes: List<RuleType>,
         span: SourceSpan,
-        env: TypeEnv,
-    ): Type {
+        env: RuleEnv,
+    ): RuleType {
         var joined = armTypes.first()
         for (armType in armTypes.drop(1)) {
             joined = joinBranches(joined, armType, env) { a, b ->
@@ -585,11 +576,11 @@ class Checker {
     }
 
     private fun joinBranches(
-        a: Type,
-        b: Type,
-        env: TypeEnv,
-        error: (Type, Type) -> TypeError,
-    ): Type? {
+        a: RuleType,
+        b: RuleType,
+        env: RuleEnv,
+        error: (RuleType, RuleType) -> TypeError,
+    ): RuleType? {
         if (a is TForall && b is TForall) {
             return when {
                 groundPolyBranch(a, b, env) != null -> b
@@ -616,20 +607,20 @@ class Checker {
 
     private fun synthIdent(
         expr: Ident,
-        env: TypeEnv,
-    ): Type = env.lookup(expr.name) ?: recordError(TypeError.UnboundVariable(expr.name, expr.span))
+        env: RuleEnv,
+    ): RuleType = env.lookup(expr.name) ?: recordError(TypeError.UnboundVariable(expr.name, expr.span))
 
     private fun synthRecordLiteral(
         expr: RecordLiteral,
-        env: TypeEnv,
-    ): Type {
-        val fields = mutableMapOf<String, Type>()
+        env: RuleEnv,
+    ): RuleType {
+        val fields = mutableMapOf<String, RuleType>()
         for (field in expr.fields) {
             if (field.name in fields) {
                 errors.add(TypeError.DuplicateField(field.name, expr.span))
             }
             if (field.typeAnnotation != null) {
-                val fieldType = resolveType(field.typeAnnotation, env)
+                val fieldType = resolver.resolve(field.typeAnnotation, env)
                 check(
                     field.value,
                     fieldType,
@@ -646,8 +637,8 @@ class Checker {
 
     private fun checkRecordLiteral(
         expr: RecordLiteral,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
         expectedSource: List<ExpectedType>,
     ) {
         if (expected !is TRecord) {
@@ -677,8 +668,8 @@ class Checker {
 
     private fun synthFieldAccess(
         expr: FieldAccess,
-        env: TypeEnv,
-    ): Type {
+        env: RuleEnv,
+    ): RuleType {
         val target = synth(expr.target, env)
         return projectFieldType(target, expr.field, expr.span, env)
     }
@@ -688,8 +679,8 @@ class Checker {
 
     private fun synthSafeFieldAccess(
         expr: SafeFieldAccess,
-        env: TypeEnv,
-    ): Type {
+        env: RuleEnv,
+    ): RuleType {
         val target = synth(expr.target, env)
         // A non-optional receiver can never be null, so `?.` is redundant and yields the bare field.
         if (target !is TOptional) return projectFieldType(target, expr.field, expr.span, env)
@@ -697,11 +688,11 @@ class Checker {
     }
 
     private fun projectFieldType(
-        rec: Type,
+        rec: RuleType,
         field: String,
         span: SourceSpan,
-        env: TypeEnv,
-    ): Type =
+        env: RuleEnv,
+    ): RuleType =
         when (rec) {
             // The receiver already errored (⊥); don't cascade a second error, just stay ⊥.
             TBottom -> TBottom
@@ -729,8 +720,8 @@ class Checker {
 
     private fun synthImplicitParam(
         expr: ImplicitParam,
-        env: TypeEnv,
-    ): Type =
+        env: RuleEnv,
+    ): RuleType =
         when (val ctx = env.implicitParamContext()) {
             is ImplicitParamContext.Available -> ctx.type
             is ImplicitParamContext.BlockedByNamedFunction -> {
@@ -749,17 +740,17 @@ class Checker {
 
     private fun synthAscription(
         expr: Ascription,
-        env: TypeEnv,
-    ): Type {
-        val type = resolveType(expr.type, env)
+        env: RuleEnv,
+    ): RuleType {
+        val type = resolver.resolve(expr.type, env)
         check(expr.expr, type, env)
         return type
     }
 
     private fun synthBinaryOp(
         expr: BinaryOp,
-        env: TypeEnv,
-    ): Type =
+        env: RuleEnv,
+    ): RuleType =
         when (expr.op) {
             Operator.Add, Operator.Sub, Operator.Mul, Operator.Div, Operator.Mod -> {
                 check(expr.left, TNum, env)
@@ -784,8 +775,8 @@ class Checker {
 
     private fun synthUnaryOp(
         expr: UnaryOp,
-        env: TypeEnv,
-    ): Type =
+        env: RuleEnv,
+    ): RuleType =
         when (expr.op) {
             UnaryOperator.Neg -> {
                 check(expr.operand, TNum, env)
@@ -799,8 +790,8 @@ class Checker {
 
     private fun synthAndCheckSubtype(
         expr: Expr,
-        expected: Type,
-        env: TypeEnv,
+        expected: RuleType,
+        env: RuleEnv,
     ) {
         val synthesized = synth(expr, env)
         if (synthesized is TForall) {
@@ -818,19 +809,9 @@ class Checker {
         }
     }
 
-    private fun resolveType(
-        typeExpr: TypeExpr<*>,
-        env: TypeEnv,
-    ): Type = resolver.resolve(typeExpr, env)
-
-    private fun introduceTypeVars(
-        annotations: List<TypeExpr<*>>,
-        sigEnv: TypeEnv,
-    ) = resolver.introduceTypeVars(annotations, sigEnv)
-
     /** Whether [type] mentions none of the [unknowns] — concrete enough to check an argument against. */
     private fun isGround(
-        type: Type,
+        type: RuleType,
         unknowns: Set<TSkolem>,
     ): Boolean =
         when (type) {
@@ -843,7 +824,7 @@ class Checker {
             TNum, TStr, TBool, TUnit, TNull, TTop, TBottom -> true
         }
 
-    private fun recordError(err: TypeError): Type {
+    private fun recordError(err: TypeError): RuleType {
         errors.add(err)
         return TBottom
     }

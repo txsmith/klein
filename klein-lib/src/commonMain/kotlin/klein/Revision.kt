@@ -20,3 +20,18 @@ value class Revision(
 ) {
     override fun toString(): String = value.toString()
 }
+
+/**
+ * The number of a release — the unit a person migrates rules by. A release decides which [Revision]
+ * each plain name means for the rules checked against it.
+ *
+ * A release number orders migrations; a revision identifies a declaration. They are different types
+ * so that one can never be passed where the other is wanted, which as bare `Int`s nothing would
+ * have stopped.
+ */
+@JvmInline
+value class ReleaseNumber(
+    val value: Int,
+) {
+    override fun toString(): String = value.toString()
+}

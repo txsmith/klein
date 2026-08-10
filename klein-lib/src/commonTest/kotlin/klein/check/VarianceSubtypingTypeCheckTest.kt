@@ -31,7 +31,7 @@ class VarianceSubtypingTypeCheckTest {
     }
 
     private fun assertChecks(
-        expected: Type,
+        expected: RuleType,
         src: String,
     ) {
         val result = infer(src)

@@ -2,9 +2,12 @@ package klein.host
 
 import klein.KleinError
 import klein.Revision
+import klein.check.ContractEnv
+import klein.check.ContractType
 import klein.check.Type
 import klein.check.TypeEnv
 import klein.check.contract.ContractChecker
+import klein.check.contract.ContractDeclaration
 import klein.check.contract.DeclarationKind
 import klein.interp.Value
 import klein.surface.ContractExpr
@@ -12,8 +15,6 @@ import klein.surface.Lexer
 import klein.surface.LexerError
 import klein.surface.ParseError
 import klein.surface.Parser
-
-enum class CapabilityKind { Function, Value }
 
 class CapabilityId(
     private val key: String,
@@ -25,20 +26,15 @@ class CapabilityId(
     override fun toString() = key
 }
 
-data class Declaration(
-    val name: String,
-    val revision: Revision,
-    val kind: CapabilityKind,
-    val type: Type,
-)
-
 data class Capability(
-    val name: String,
-    val revision: Revision,
+    val declaration: ContractDeclaration,
     val id: CapabilityId,
-    val kind: CapabilityKind,
-    val type: Type,
-)
+) {
+    val name: String get() = declaration.name
+    val revision: Revision get() = declaration.revision
+    val kind: DeclarationKind get() = declaration.kind
+    val type: ContractType get() = declaration.type
+}
 
 interface HostCall {
     val capability: Capability
@@ -62,7 +58,7 @@ class EnvironmentError(
 ) : Exception(errors.joinToString("\n") { "${it.message} at ${it.span}" })
 
 class Registry(
-    val declarations: List<Declaration>,
+    val declarations: List<ContractDeclaration>,
 ) {
     val registered = mutableMapOf<Pair<String, Revision>, Implementation>()
     val errors = mutableListOf<RegistrationError>()
@@ -97,7 +93,7 @@ class Registry(
 }
 
 class Environment internal constructor(
-    val typeEnv: TypeEnv,
+    val typeEnv: ContractEnv,
     val capabilities: List<Capability>,
     private val implementations: Map<CapabilityId, Implementation>,
 ) {
@@ -118,18 +114,7 @@ class Environment internal constructor(
             if (checked.errors.isNotEmpty()) throw EnvironmentError(checked.errors)
             val typeEnv = checked.env
 
-            val declarations =
-                checked.declarations.map { decl ->
-                    Declaration(
-                        decl.name,
-                        decl.revision,
-                        when (decl.kind) {
-                            DeclarationKind.Function -> CapabilityKind.Function
-                            DeclarationKind.Value -> CapabilityKind.Value
-                        },
-                        decl.type,
-                    )
-                }
+            val declarations = checked.declarations
             val registry = Registry(declarations).apply(register)
             declarations
                 .filter { (it.name to it.revision) !in registry.registered }
@@ -146,11 +131,8 @@ class Environment internal constructor(
             val capabilities =
                 declarations.map { declaration ->
                     Capability(
-                        declaration.name,
-                        declaration.revision,
+                        declaration,
                         capabilityId(declaration.name, declaration.type, declaration.revision),
-                        declaration.kind,
-                        declaration.type,
                     )
                 }
             val implementations =
@@ -179,11 +161,11 @@ class RegistrationError(
 
 fun capabilityId(
     name: String,
-    type: Type,
+    type: ContractType,
     revision: Revision,
 ): CapabilityId = CapabilityId(fingerprint("$name/${canonicalize(type)}/${revision.value}"))
 
-fun canonicalize(type: Type): String = Type.print(type)
+fun canonicalize(type: Type<*>): String = Type.print(type)
 
 private fun fingerprint(input: String): String {
     var hash = -0x340d631b7bdddcdbL

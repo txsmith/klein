@@ -1,8 +1,13 @@
 package klein.host
 
+import klein.ReleaseNumber
 import klein.Revision
+import klein.check.RuleType
 import klein.check.Type
 import klein.check.TypeError
+import klein.check.contract.DeclarationKind
+import klein.check.contract.Release
+import klein.check.contract.environmentFor
 import klein.interp.Value
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,13 +18,26 @@ import kotlin.test.assertTrue
 private fun registerAll(registry: Registry) =
     registry.declarations.forEach { registry.immediate(it.name, it.revision) { Value.VUnit } }
 
+/**
+ * Check [src] against everything [env]'s contract declares at revision 1.
+ *
+ * An `Environment` holds a contract environment, which a rule cannot be checked against: its keys
+ * carry revisions and so do its types. Projection through a release is the only way across, so this
+ * builds the release by hand — every capability and every type at revision 1 — until a contract can
+ * write one for itself.
+ */
 private fun checkRule(
     src: String,
     env: Environment,
-): Type {
+): RuleType {
+    val release =
+        Release(
+            ReleaseNumber(1),
+            (env.capabilities.map { it.name } + env.typeEnv.allTypeDefs().map { it.name }).associateWith { Revision(1) },
+        )
     val tokens = klein.surface.Lexer(src).tokenize().toList()
     val program = klein.surface.Parser(tokens).parseProgram()
-    val checked = klein.check.Checker().checkProgram(program, env.typeEnv)
+    val checked = klein.check.Checker().checkProgram(program, environmentFor(release, env.typeEnv))
     assertTrue(checked.errors.isEmpty(), "unexpected errors: ${checked.errors}")
     return checked.type
 }
@@ -37,8 +55,8 @@ class EnvironmentTest {
     fun declarationsBecomeCapabilities() {
         val env = Environment.load(CONTRACT, ::registerAll)
         assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
-        assertEquals(CapabilityKind.Function, env.capabilities.first { it.name == "creditCheck" }.kind)
-        assertEquals(CapabilityKind.Value, env.capabilities.first { it.name == "maxRetries" }.kind)
+        assertEquals(DeclarationKind.Function, env.capabilities.first { it.name == "creditCheck" }.kind)
+        assertEquals(DeclarationKind.Value, env.capabilities.first { it.name == "maxRetries" }.kind)
     }
 
     @Test

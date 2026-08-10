@@ -1,9 +1,9 @@
 package klein.check.contract
 
 import klein.Revision
-import klein.check.Type
+import klein.check.ContractEnv
+import klein.check.ContractType
 import klein.check.Type.*
-import klein.check.TypeEnv
 
 /**
  * `contracts.md` §"No functions cross the boundary": a capability may not carry a Klein function,
@@ -11,11 +11,12 @@ import klein.check.TypeEnv
  *
  * A Klein function's only meaning is that the interpreter can run it, and whatever answers a
  * capability is not the interpreter. The restriction was always contract-only, which is why it
- * lives here rather than in the program checker.
+ * lives here rather than in the program checker — and why this reads in [ContractType] rather than
+ * being polymorphic in the regime: a rule's types never reach it.
  */
 fun carriesFunctionType(
-    bound: Type,
-    env: TypeEnv,
+    bound: ContractType,
+    env: ContractEnv,
     isCallable: Boolean,
 ): Boolean {
     val body = if (bound is TForall) bound.body else bound
@@ -30,8 +31,8 @@ fun carriesFunctionType(
 /** Follows type references into their constructors' fields, so hiding a function one level down
  *  does not evade the check; the `(name, revision)` visited set terminates recursive types. */
 private fun carriesFunction(
-    type: Type,
-    env: TypeEnv,
+    type: ContractType,
+    env: ContractEnv,
     seen: MutableSet<Pair<String, Revision>>,
 ): Boolean =
     when (type) {

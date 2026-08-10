@@ -2,6 +2,7 @@ package klein
 
 import klein.surface.*
 import klein.check.Type
+import klein.check.RuleEnv
 import klein.check.TypeEnv
 import klein.core.CorePrinter
 import klein.interp.Value
@@ -161,7 +162,7 @@ private fun parse(
 }
 
 /**
- * Run the Operation Bidi bidirectional checker: print the type of each top-level binding (and the trailing
+ * Run the type checker: print the type of each top-level binding (and the trailing
  * expression), then a pass/fail verdict. Exits non-zero when the program has type errors, so `check`
  * is usable as a gate in scripts.
  */
@@ -173,7 +174,7 @@ private fun check(
     exitOnErrors(parsed, source, rawErrors)
     val program = parsed.output!!
 
-    val env = TypeEnv.empty()
+    val env: RuleEnv = TypeEnv.empty()
     val checked = Klein.check(program, env)
 
     for (stmt in program.stmts) {
@@ -184,7 +185,7 @@ private fun check(
                     env.lookup(name)?.let { println("$name : ${Type.print(it)}") }
                 }
             is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
-            is TypeDef<*> -> println("type ${stmt.name}")
+            is TypeDefStmt -> println("type ${stmt.typeDef.name}")
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
         }
     }

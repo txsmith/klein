@@ -48,6 +48,7 @@ import klein.surface.Stmt
 import klein.surface.StringLiteral
 import klein.surface.TupleTypeExpr
 import klein.surface.TypeDef
+import klein.surface.TypeDefStmt
 import klein.surface.TypeExpr
 import klein.surface.TypeName
 import klein.surface.TypeVar
@@ -321,14 +322,14 @@ fun funDef(
 
 fun funDecl(
     name: String,
-    params: List<Param<Revision?>>,
-    returnType: TypeExpr<Revision?>,
+    params: List<Param<*>>,
+    returnType: TypeExpr<*>,
     revision: Revision? = null,
 ) = FunDecl(name, params, returnType, noSpan, revision)
 
 fun valDecl(
     name: String,
-    type: TypeExpr<Revision?>,
+    type: TypeExpr<*>,
     revision: Revision? = null,
 ) = ValDecl(name, type, noSpan, revision)
 
@@ -344,6 +345,14 @@ fun <R : Revision?> typeDef(
     vararg constructors: Constructor<R>,
     revision: Revision? = null,
 ): TypeDef<R> = TypeDef(name, typeParams, constructors.toList(), noSpan, revision as R)
+
+/** A type definition as a rule writes it: wrapped, and unrevisioned because [TypeDefStmt] holds
+ *  nothing else. */
+fun typeDefStmt(
+    name: String,
+    typeParams: List<String> = emptyList(),
+    vararg constructors: Constructor<Nothing?>,
+) = TypeDefStmt(TypeDef(name, typeParams, constructors.toList(), noSpan, null))
 
 fun <R : Revision?> constructor(
     name: String,
@@ -404,7 +413,7 @@ fun Stmt.stripSpan(): Stmt =
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
         is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
-        is TypeDef<*> -> stripSpan()
+        is TypeDefStmt -> TypeDefStmt(typeDef.stripSpan())
         is Expr -> stripSpans()
     }
 
@@ -438,11 +447,10 @@ fun <R : Revision?> TypeExpr<R>.stripSpan(): TypeExpr<R> =
 fun parseTypeDef(source: String): TypeDef<Nothing?> {
     val tokens = Lexer(source).tokenize().toList()
     val stmt = Parser(tokens).parseStmt()
-    if (stmt !is TypeDef<*>) {
+    if (stmt !is TypeDefStmt) {
         throw ParseError("Expected type definition", stmt.span)
     }
-    @Suppress("UNCHECKED_CAST")
-    return stmt as TypeDef<Nothing?>
+    return stmt.typeDef
 }
 
 fun assertTypeDefEquals(
@@ -478,7 +486,7 @@ fun parseContract(source: String): ContractExpr {
 
 fun assertContractEquals(
     actual: ContractExpr,
-    types: List<TypeDef<Revision?>> = emptyList(),
+    types: List<TypeDef<*>> = emptyList(),
     declarations: List<Declaration> = emptyList(),
 ) {
     assertEqualsPretty(types, actual.types.map { it.stripSpan() })

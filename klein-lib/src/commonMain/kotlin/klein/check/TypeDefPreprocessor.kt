@@ -3,15 +3,14 @@ package klein.check
 import klein.Revision
 import klein.surface.*
 
-class TypeDefPreprocessor(
+class TypeDefPreprocessor<R : Revision?>(
     private val errors: MutableList<TypeError>,
-    private val freshSkolem: (String) -> Type.TSkolem,
-    private val resolveType: (TypeExpr<*>, TypeEnv) -> Type,
+    private val resolver: TypeResolver<R>,
     private val subtyping: Subtyping,
 ) {
     fun process(
         typeDefs: List<TypeDef<*>>,
-        env: TypeEnv,
+        env: TypeEnv<R>,
     ) {
         if (typeDefs.isEmpty()) return
         val valid = registerPlaceholders(typeDefs, env)
@@ -23,11 +22,11 @@ class TypeDefPreprocessor(
 
     private fun registerPlaceholders(
         typeDefs: List<TypeDef<*>>,
-        env: TypeEnv,
+        env: TypeEnv<R>,
     ): List<TypeDef<*>> {
         val valid = mutableListOf<TypeDef<*>>()
         for (typeDef in typeDefs) {
-            val revision = typeDef.revision ?: Revision(1)
+            val revision = resolver.revisionOf(typeDef.revision)
             val typeDisplay = revisionedName(typeDef.name, revision)
             if (typeDef.name in PRIMITIVE_TYPE_NAMES) {
                 errors.add(TypeError.ShadowsBuiltinType(typeDisplay, typeDef.span))
@@ -39,7 +38,7 @@ class TypeDefPreprocessor(
             }
 
             valid.add(typeDef)
-            val typeParams = typeDef.typeParams.map { TypeParamInfo(Variance.Bivariant, freshSkolem(it)) }
+            val typeParams = typeDef.typeParams.map { TypeParamInfo(Variance.Bivariant, resolver.freshSkolem(it)) }
             env.registerTypeDef(TypeDefInfo(typeDef.name, revision, typeParams, Type.TRecord(emptyMap()), typeDef.span))
 
             for (ctor in typeDef.constructors) {
@@ -77,13 +76,13 @@ class TypeDefPreprocessor(
 
     private fun computeVariance(
         typeDefs: List<TypeDef<*>>,
-        env: TypeEnv,
+        env: TypeEnv<R>,
     ) {
         if (typeDefs.isEmpty()) return
 
         val allTypeDefs = env.allTypeDefs()
         val allConstructors = env.allConstructors()
-        val variances = mutableMapOf<Triple<String, Revision, String>, Variance>()
+        val variances = mutableMapOf<Triple<String, R, String>, Variance>()
 
         for (info in allTypeDefs) {
             for (param in info.typeParams) variances[Triple(info.name, info.revision, param.skolem.name)] = Variance.Bivariant
@@ -91,7 +90,7 @@ class TypeDefPreprocessor(
 
         fun update(
             typeExpr: TypeExpr<*>,
-            owner: Pair<String, Revision>,
+            owner: Pair<String, R>,
             polarity: Variance,
         ): Boolean =
             when (typeExpr) {
@@ -110,7 +109,7 @@ class TypeDefPreprocessor(
                 is TypeName -> false
 
                 is AppliedTypeExpr -> {
-                    val refRevision = typeExpr.revision ?: Revision(1)
+                    val refRevision = resolver.revisionOf(typeExpr.revision)
                     val refInfo = env.lookupTypeDef(typeExpr.name, refRevision) ?: return false
                     var changed = false
                     for ((i, arg) in typeExpr.args.withIndex()) {
@@ -178,17 +177,17 @@ class TypeDefPreprocessor(
         }
     }
 
-    private fun buildIfaces(env: TypeEnv) {
+    private fun buildIfaces(env: TypeEnv<R>) {
         for (ctor in env.allConstructors()) {
             val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val ctorEnv = env.child()
             ctorTypeDef.typeParams.forEach { ctorEnv.bindTypeVar(it.skolem.name, it.skolem) }
-            val fields = ctor.fields.associate { it.name to resolveType(it.type, ctorEnv) }
+            val fields = ctor.fields.associate { it.name to resolver.resolve(it.type, ctorEnv) }
             env.updateTypeDef(ctorTypeDef.copy(iface = Type.TRecord(fields)))
         }
     }
 
-    private fun buildParentIfaces(env: TypeEnv) {
+    private fun buildParentIfaces(env: TypeEnv<R>) {
         for ((parent, ctors) in env.allConstructors().groupBy { it.parentType to it.revision }) {
             val (parentName, revision) = parent
             if (ctors.size == 1 && ctors[0].name == parentName) continue
@@ -214,7 +213,7 @@ class TypeDefPreprocessor(
     }
 
 
-    private fun bindConstructors(env: TypeEnv) {
+    private fun bindConstructors(env: TypeEnv<R>) {
         for (ctor in env.allConstructors()) {
             val ctorTypeDef = env.getTypeDef(ctor.name, ctor.revision)
             val skolems = ctorTypeDef.typeParams.map { it.skolem }

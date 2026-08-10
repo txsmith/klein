@@ -15,39 +15,46 @@ sealed class ImplicitParamContext {
     ) : ImplicitParamContext()
 
     data class Available(
-        val type: Type,
+        val type: RuleType,
     ) : ImplicitParamContext()
 }
 
-class TypeEnv private constructor(
-    private val parent: TypeEnv?,
-    private val bindings: MutableMap<String, Type> = mutableMapOf(),
+/**
+ * The name environment, carrying the same revision witness its types do.
+ *
+ * The type parameter R is used (invariantly) to distinguish RuleEnv from ContractEnv:
+ * - the RuleEnv is guaranteed to not hold revision numbers, and can only be used to check rules
+ * - the ContractEnv does mention revision numbers, and must be projected into a RuleEnv by constructing a Release
+ */
+class TypeEnv<R : Revision?> private constructor(
+    private val parent: TypeEnv<R>?,
+    private val bindings: MutableMap<String, Type<R>> = mutableMapOf(),
     private val typeVars: MutableMap<String, Type.TSkolem> = mutableMapOf(),
-    private val typeDefs: MutableMap<String, TypeDefInfo> = mutableMapOf(),
-    private val constructors: MutableMap<String, ConstructorInfo> = mutableMapOf(),
+    private val typeDefs: MutableMap<String, TypeDefInfo<R>> = mutableMapOf(),
+    private val constructors: MutableMap<String, ConstructorInfo<R>> = mutableMapOf(),
     val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
 ) {
     fun bind(
         name: String,
-        type: Type,
+        type: Type<R>,
     ) {
         bindings[name] = type
     }
 
     fun bind(
         name: String,
-        revision: Revision,
-        type: Type,
+        revision: R,
+        type: Type<R>,
     ) {
         bindings[key(name, revision)] = type
     }
 
-    fun lookup(name: String): Type? = bindings[name] ?: parent?.lookup(name)
+    fun lookup(name: String): Type<R>? = bindings[name] ?: parent?.lookup(name)
 
     fun lookup(
         name: String,
-        revision: Revision,
-    ): Type? = lookup(key(name, revision))
+        revision: R,
+    ): Type<R>? = lookup(key(name, revision))
 
     fun bindTypeVar(
         name: String,
@@ -60,43 +67,43 @@ class TypeEnv private constructor(
 
     fun localTypeVars(): Set<Type.TSkolem> = typeVars.values.toSet()
 
-    fun registerTypeDef(info: TypeDefInfo) {
+    fun registerTypeDef(info: TypeDefInfo<R>) {
         typeDefs[key(info.name, info.revision)] = info
     }
 
-    fun updateTypeDef(info: TypeDefInfo) {
+    fun updateTypeDef(info: TypeDefInfo<R>) {
         typeDefs[key(info.name, info.revision)] = info
     }
 
-    fun lookupTypeDef(name: String): TypeDefInfo? = typeDefs[name]
+    fun lookupTypeDef(name: String): TypeDefInfo<R>? = typeDefs[name]
 
     fun lookupTypeDef(
         name: String,
-        revision: Revision,
-    ): TypeDefInfo? = typeDefs[key(name, revision)]
+        revision: R,
+    ): TypeDefInfo<R>? = typeDefs[key(name, revision)]
 
     fun getTypeDef(
         name: String,
-        revision: Revision,
-    ): TypeDefInfo = typeDefs.getValue(key(name, revision))
+        revision: R,
+    ): TypeDefInfo<R> = typeDefs.getValue(key(name, revision))
 
-    fun allTypeDefs(): Collection<TypeDefInfo> = typeDefs.values
+    fun allTypeDefs(): Collection<TypeDefInfo<R>> = typeDefs.values
 
-    fun registerConstructor(info: ConstructorInfo) {
+    fun registerConstructor(info: ConstructorInfo<R>) {
         constructors[key(info.name, info.revision)] = info
     }
 
     fun lookupConstructor(
         name: String,
-        revision: Revision,
-    ): ConstructorInfo? = constructors[key(name, revision)]
+        revision: R,
+    ): ConstructorInfo<R>? = constructors[key(name, revision)]
 
-    fun allConstructors(): Collection<ConstructorInfo> = constructors.values
+    fun allConstructors(): Collection<ConstructorInfo<R>> = constructors.values
 
-    fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv =
+    fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv<R> =
         TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors, implicitParam = implicitParam)
 
-    fun copy(): TypeEnv =
+    fun copy(): TypeEnv<R> =
         TypeEnv(
             parent = parent,
             bindings = bindings.toMutableMap(),
@@ -111,12 +118,19 @@ class TypeEnv private constructor(
     fun implicitParamContext(): ImplicitParamContext =
         if (implicitParam != ImplicitParamContext.None) implicitParam else parent?.implicitParamContext() ?: ImplicitParamContext.None
 
-    companion object {
-        fun empty(): TypeEnv = TypeEnv(parent = null)
+    /**
+     * The key an entry is stored under. A method rather than a companion function so it can read
+     * [R]: at [RuleEnv] the revision is necessarily absent and the key *is* the plain name, which
+     * retires the conflation that made bare-name visibility an accident of the key space. On the
+     * contract side revision 1 still shares the bare name's slot, because a bare declaration *is*
+     * revision 1.
+     */
+    private fun key(
+        name: String,
+        revision: R,
+    ): String = if (revision == null || revision.value == 1) name else "$name/${revision.value}"
 
-        private fun key(
-            name: String,
-            revision: Revision,
-        ): String = if (revision.value == 1) name else "$name/${revision.value}"
+    companion object {
+        fun <R : Revision?> empty(): TypeEnv<R> = TypeEnv(parent = null)
     }
 }

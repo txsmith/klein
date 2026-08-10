@@ -8,11 +8,12 @@ import klein.SourceSpan
  *
  * A contract and a rule share a lexer and a type grammar and nothing else, so they share no root:
  * a [Declaration] is not a [Stmt], and a contract holds no expressions because it has nothing to
- * evaluate. [TypeDef] appears here *and* stays a [Stmt], because a rule may define its own types —
- * that one is shared for real.
+ * evaluate. [TypeDef] is shared for real, because a rule may define its own types — but it is a
+ * [Stmt] in neither language: a rule reaches it through [TypeDefStmt], which admits `Nothing?`
+ * alone, and a contract holds it here, where a revision is allowed.
  */
 data class ContractExpr(
-    val types: List<TypeDef<Revision?>>,
+    val types: List<TypeDef<*>>,
     val declarations: List<Declaration>,
     val span: SourceSpan,
 )
@@ -26,15 +27,15 @@ sealed class Declaration {
 
 data class FunDecl(
     override val name: String,
-    val params: List<Param<Revision?>>,
-    val returnType: TypeExpr<Revision?>,
+    val params: List<Param<*>>,
+    val returnType: TypeExpr<*>,
     override val span: SourceSpan,
     override val revision: Revision? = null,
 ) : Declaration()
 
 data class ValDecl(
     override val name: String,
-    val type: TypeExpr<Revision?>,
+    val type: TypeExpr<*>,
     override val span: SourceSpan,
     override val revision: Revision? = null,
 ) : Declaration()

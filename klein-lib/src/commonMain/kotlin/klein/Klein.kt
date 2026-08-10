@@ -2,7 +2,9 @@ package klein
 
 import klein.surface.*
 import klein.check.Checker
-import klein.check.Type
+import klein.check.ContractEnv
+import klein.check.RuleEnv
+import klein.check.RuleType
 import klein.check.TypeEnv
 import klein.check.contract.ContractChecker
 import klein.core.CoreExpr
@@ -64,28 +66,20 @@ object Klein {
      */
     fun check(
         program: Program,
-        env: TypeEnv = TypeEnv.empty(),
-    ): StageResult<Type> {
+        env: RuleEnv = TypeEnv.empty(),
+    ): StageResult<RuleType> {
         val checked = Checker().checkProgram(program, env)
         return StageResult(checked.type, checked.errors)
     }
 
     /**
-     * Check a parsed [ContractExpr]. The output is the environment the contract declares, so a
-     * program can be checked against a contract by composition:
+     * Check a parsed [ContractExpr]. The output is the [ContractEnv] the contract declares.
      *
-     * ```
-     * Klein.parseContract(tokens).andThen(Klein::checkContract).andThen { env -> Klein.check(program, env) }
-     * ```
-     *
-     * Which capabilities a host actually implements, and how a contract is located, versioned, or
-     * bound to an implementation, are all the host's business — this stage only reads the source.
-     */
-    fun checkContract(
-        contract: ContractExpr,
-        env: TypeEnv = TypeEnv.empty(),
-    ): StageResult<TypeEnv> {
-        val checked = ContractChecker().check(contract, env)
+     * The ContractEnv needs to be turned into a RuleEnv by selecting a release, using [environmentFor(release, contractEnv)].
+     * The RuleEnv can be used to type-check and compile rules.
+     * */
+    fun checkContract(contract: ContractExpr): StageResult<ContractEnv> {
+        val checked = ContractChecker().check(contract)
         return StageResult(checked.env, checked.errors)
     }
 

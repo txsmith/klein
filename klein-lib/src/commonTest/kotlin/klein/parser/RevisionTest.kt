@@ -3,7 +3,7 @@ package klein.parser
 import klein.Revision
 import klein.surface.FunDecl
 import klein.surface.ParseError
-import klein.surface.TypeDef
+import klein.surface.TypeDefStmt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -338,7 +338,7 @@ class RevisionTest {
     // The rule language has no revision slot at all: what the parser builds is unrevisionable.
     @Test
     fun aProgramsTypeExpressionsCarryNoRevision() {
-        val typeDef = assertIs<TypeDef<*>>(parseProgram("type Customer = Customer { id: Num }").stmts.single())
+        val typeDef = assertIs<TypeDefStmt>(parseProgram("type Customer = Customer { id: Num }").stmts.single()).typeDef
         assertNull(typeDef.revision)
         assertNull(assertIs<klein.surface.TypeName<*>>(typeDef.constructors.single().fields.single().type).revision)
     }

@@ -16,8 +16,8 @@ sealed class TypeError : KleinError {
     }
 
     data class TypeMismatch(
-        val subtype: Type,
-        val supertype: Type,
+        val subtype: Type<*>,
+        val supertype: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =
@@ -25,8 +25,8 @@ sealed class TypeError : KleinError {
     }
 
     data class CannotJoinBranches(
-        val thenType: Type,
-        val elseType: Type,
+        val thenType: Type<*>,
+        val elseType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =
@@ -35,7 +35,7 @@ sealed class TypeError : KleinError {
 
     data class MissingField(
         val field: String,
-        val recordType: Type,
+        val recordType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type error: ${Type.print(recordType)} has no field '$field'"
@@ -46,7 +46,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NotARecord(
-        val actual: Type,
+        val actual: Type<*>,
         val field: String,
         override val span: SourceSpan,
     ) : TypeError() {
@@ -54,7 +54,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NotAFunction(
-        val actual: Type,
+        val actual: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type error: '${Type.print(actual)}' is not a function"
@@ -174,7 +174,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NullNotAllowed(
-        val expected: Type,
+        val expected: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Null is not allowed here: expected ${Type.print(expected)}"
@@ -227,22 +227,22 @@ sealed class TypeError : KleinError {
 
     data class NotAConstructorOf(
         val constructorName: String,
-        val scrutinee: Type,
+        val scrutinee: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "'$constructorName' is not a constructor of '${Type.print(scrutinee)}'"
     }
 
     data class CannotMatchOn(
-        val scrutinee: Type,
+        val scrutinee: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Cannot match on a value of type '${Type.print(scrutinee)}'"
     }
 
     data class CannotJoinMatchArms(
-        val armType: Type,
-        val otherType: Type,
+        val armType: Type<*>,
+        val otherType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =

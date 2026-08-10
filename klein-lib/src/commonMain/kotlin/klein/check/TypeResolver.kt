@@ -10,11 +10,19 @@ import klein.surface.*
  * share, and the reason `contractMode` is gone. There is no mode to consult: an unrevisioned
  * `TypeExpr<Nothing?>` has nothing to reject, and a revision could only have come from a contract.
  *
+ * This is the seam where the parser's proof becomes the checker's. The surface and the checked tree
+ * carry *different* witnesses: a contract's surface may have written a revision or not, so it is
+ * taken at `TypeExpr<*>`, while its checked form is [ContractType], because resolution defaults an
+ * absent revision to revision 1. So the resolver takes a [revisionOf] normalizer — the same shape
+ * the parser already uses for `contractRevision` / `programRevision` — rather than assuming the two
+ * witnesses coincide.
+ *
  * Diagnostics accumulate into the [errors] list the owning checker passes in, so a resolver and its
  * checker report into one place.
  */
-class TypeResolver(
+class TypeResolver<R : Revision?>(
     private val errors: MutableList<TypeError>,
+    val revisionOf: (Revision?) -> R,
 ) {
     private var skolemCounter = 0
 
@@ -22,11 +30,11 @@ class TypeResolver(
 
     fun resolve(
         typeExpr: TypeExpr<*>,
-        env: TypeEnv,
-    ): Type =
+        env: TypeEnv<R>,
+    ): Type<R> =
         when (typeExpr) {
             is TypeName -> {
-                val revision = typeExpr.revision ?: Revision(1)
+                val revision = revisionOf(typeExpr.revision)
                 val primitive = primitiveType(typeExpr.name)
                 val display = revisionedName(typeExpr.name, typeExpr.revision)
                 val def = if (primitive == null) env.lookupTypeDef(typeExpr.name, revision) else null
@@ -57,7 +65,7 @@ class TypeResolver(
                 env.lookupTypeVar(typeExpr.name)
                     ?: recordError(TypeError.UnboundVariable(typeExpr.name, typeExpr.span))
             is AppliedTypeExpr -> {
-                val revision = typeExpr.revision ?: Revision(1)
+                val revision = revisionOf(typeExpr.revision)
                 val display = revisionedName(typeExpr.name, typeExpr.revision)
                 val info = env.lookupTypeDef(typeExpr.name, revision)
                 val args = typeExpr.args.map { resolve(it, env) }
@@ -78,7 +86,7 @@ class TypeResolver(
      *  the binder owns where its `'T`s are quantified; [resolve] only ever *references* them. */
     fun introduceTypeVars(
         annotations: List<TypeExpr<*>>,
-        sigEnv: TypeEnv,
+        sigEnv: TypeEnv<R>,
     ) {
         annotations.forEach { annotation ->
             collectTypeVarNames(annotation).forEach { name ->
@@ -98,15 +106,16 @@ class TypeResolver(
     fun openSignature(
         params: List<Param<*>>,
         returnType: TypeExpr<*>?,
-        env: TypeEnv,
-    ): Pair<TypeEnv, List<Type>> {
+        env: TypeEnv<R>,
+    ): Pair<TypeEnv<R>, List<Type<R>>> {
         val sigEnv = env.child(ImplicitParamContext.BlockedByNamedFunction)
         reportDuplicateParams(params)
         introduceTypeVars(params.mapNotNull { it.typeAnnotation } + listOfNotNull(returnType), sigEnv)
         val paramTypes =
             params.map { param ->
-                if (param.typeAnnotation != null) {
-                    resolve(param.typeAnnotation, sigEnv)
+                val annotation = param.typeAnnotation
+                if (annotation != null) {
+                    resolve(annotation, sigEnv)
                 } else {
                     recordError(TypeError.MissingParamAnnotation(param.name, param.span))
                 }
@@ -123,14 +132,14 @@ class TypeResolver(
         name: String,
         revision: Revision?,
         span: SourceSpan,
-    ): Type? =
+    ): Type<R>? =
         if (revision != null && primitiveType(name) != null) {
             recordError(TypeError.RevisionOnPrimitive(name, revision, span))
         } else {
             null
         }
 
-    private fun primitiveType(name: String): Type? =
+    private fun primitiveType(name: String): Type<R>? =
         when (name) {
             "Num" -> TNum
             "String" -> TStr
@@ -141,14 +150,14 @@ class TypeResolver(
             else -> null
         }
 
-    private fun recordError(err: TypeError): Type {
+    private fun recordError(err: TypeError): Type<R> {
         errors.add(err)
         return TBottom
     }
 }
 
 /** `∀params. body`, or just `body` when there's nothing to quantify. */
-internal fun quantify(
+internal fun <R : Revision?> quantify(
     params: Set<TSkolem>,
-    body: Type,
-): Type = if (params.isEmpty()) body else TForall(params, body)
+    body: Type<R>,
+): Type<R> = if (params.isEmpty()) body else TForall(params, body)
