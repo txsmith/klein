@@ -160,6 +160,260 @@ class ReleaseTypeCheckTest {
         assertEquals("Circle/2", assertIs<TypeError.UnknownReleaseTarget>(errors.single()).name)
     }
 
+    // ── Each release states only what changed ────────────────────────────────
+
+    @Test
+    fun aNameALaterBlockDoesNotMentionKeepsItsRevision() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+                      creditScore
+                      maxRetries
+
+                    release 2
+                      Customer/2
+                      creditScore/2
+                    """,
+                ),
+            )
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)))
+    }
+
+    @Test
+    fun aLaterBlockOverridesTheRevisionItNames() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+                      creditScore
+
+                    release 2
+                      Customer/2
+                      creditScore/2
+                    """,
+                ),
+            )
+        val rule = "fun tier(c: Customer): String = c.tier"
+        assertEquals(Type.TStr, contract.check("$rule\ntier(Customer(1, \"gold\"))", ReleaseNumber(2)))
+        assertIs<TypeError.MissingField>(
+            assertFailsWith<KleinException> { contract.check(rule, ReleaseNumber(1)) }.errors.single(),
+        )
+    }
+
+    /** An empty block anywhere but first states a release identical to the one before it. */
+    @Test
+    fun aLaterEmptyBlockRepeatsTheReleaseBeforeIt() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+                      maxRetries
+
+                    release 2
+                    """,
+                ),
+            )
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)))
+    }
+
+    // ── Adding and removing names ────────────────────────────────────────────
+
+    @Test
+    fun removeTakesTheNameOutOfLaterReleases() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+                      maxRetries
+
+                    release 2
+                      remove maxRetries
+                    """,
+                ),
+            )
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)))
+        val error = assertFailsWith<KleinException> { contract.check("maxRetries", ReleaseNumber(2)) }
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(error.errors.single()).name)
+    }
+
+    @Test
+    fun aRevisionedRemoveTakesTheNameOutToo() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer/2
+
+                    release 2
+                      remove Customer/2
+                    """,
+                ),
+            )
+        val error = assertFailsWith<KleinException> { contract.check("fun f(c: Customer): Num = c.id", ReleaseNumber(2)) }
+        assertEquals("Customer", assertIs<TypeError.UnboundVariable>(error.errors.first()).name)
+    }
+
+    @Test
+    fun aLaterReleaseMayNameSomethingAnEarlierOneRemoved() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      maxRetries
+
+                    release 2
+                      remove maxRetries
+
+                    release 3
+                      maxRetries
+                    """,
+                ),
+            )
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(3)))
+    }
+
+    @Test
+    fun removingANameTheReleaseDoesNotExposeIsRejected() {
+        val errors =
+            contractErrors(
+                contractWith(
+                    """
+                    release 1
+                      remove maxRetries
+                    """,
+                ),
+            )
+        val error = assertIs<TypeError.RemoveOfUnexposedName>(errors.single())
+        assertEquals("maxRetries", error.name)
+        assertEquals(ReleaseNumber(1), error.release)
+    }
+
+    @Test
+    fun removingANameAnEarlierReleaseAlreadyRemovedIsRejected() {
+        val errors =
+            contractErrors(
+                contractWith(
+                    """
+                    release 1
+                      maxRetries
+
+                    release 2
+                      remove maxRetries
+
+                    release 3
+                      remove maxRetries
+                    """,
+                ),
+            )
+        assertEquals(ReleaseNumber(3), assertIs<TypeError.RemoveOfUnexposedName>(errors.single()).release)
+    }
+
+    // ── Numbering ────────────────────────────────────────────────────────────
+
+    @Test
+    fun aRepeatedReleaseNumberIsRejected() {
+        val errors =
+            contractErrors(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+
+                    release 1
+                      maxRetries
+                    """,
+                ),
+            )
+        val error = assertIs<TypeError.ReleaseOutOfOrder>(errors.single())
+        assertEquals(ReleaseNumber(1), error.release)
+        assertEquals(ReleaseNumber(1), error.previous)
+    }
+
+    @Test
+    fun aDecreasingReleaseNumberIsRejected() {
+        val errors =
+            contractErrors(
+                contractWith(
+                    """
+                    release 2
+                      Customer
+
+                    release 1
+                      maxRetries
+                    """,
+                ),
+            )
+        val error = assertIs<TypeError.ReleaseOutOfOrder>(errors.single())
+        assertEquals(ReleaseNumber(1), error.release)
+        assertEquals(ReleaseNumber(2), error.previous)
+    }
+
+    /** A gap is a release that has been retired. */
+    @Test
+    fun aGapInTheNumbersIsLegal() {
+        val contract =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+
+                    release 4
+                      Customer/2
+                    """,
+                ),
+            )
+        assertEquals(listOf(ReleaseNumber(1), ReleaseNumber(4)), contract.releases)
+    }
+
+    // ── Retiring a release ───────────────────────────────────────────────────
+
+    /** Folding the oldest block into its successor restates that release rather than changing it. */
+    @Test
+    fun foldingAReleaseIntoItsSuccessorLeavesItMeaningTheSame() {
+        val before =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 1
+                      Customer
+                      creditScore
+                      maxRetries
+
+                    release 2
+                      Customer/2
+                      creditScore/2
+                    """,
+                ),
+            )
+        val after =
+            Klein.checkContract(
+                contractWith(
+                    """
+                    release 2
+                      Customer/2
+                      creditScore/2
+                      maxRetries
+                    """,
+                ),
+            )
+        val rule = """fun tier(c: Customer): String = c.tier
+creditScore(Customer(1, "gold")) + maxRetries"""
+        assertEquals(before.check(rule, ReleaseNumber(2)), after.check(rule, ReleaseNumber(2)))
+        assertEquals(listOf(ReleaseNumber(2)), after.releases)
+    }
+
     @Test
     fun theSameNameTwiceInOneBlockIsRejected() {
         val errors =

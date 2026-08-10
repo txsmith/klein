@@ -57,7 +57,7 @@ class ContractChecker {
         val scope: ContractEnv = TypeEnv.empty()
         preprocessor.process(contract.types, scope)
         val declarations = bindDeclarations(contract, scope)
-        val releases = resolveReleases(contract)
+        val releases = resolveReleases(contract, scope)
         return ContractResult(
             EnvironmentContract(declarations, releases.map { it.number }, scope, releases.associateBy { it.number }),
             errors.toList(),
@@ -65,26 +65,46 @@ class ContractChecker {
     }
 
     /**
-     * Resolve every written block into a [Release].
+     * Fold every written block, in file order, into a [Release].
+     *
+     * A block states only what its release changes and inherits the rest from the block before it,
+     * so reading a release means starting at the oldest and applying each in turn. Numbers must
+     * increase down the file; gaps are legal, a gap being a release that has been retired.
      *
      * Entries resolve against the contract's type and declaration lists rather than against the
      * checked environment, which is what makes `Circle/2` an [TypeError.UnknownReleaseTarget]
      * instead of a resolvable pointer at a constructor.
-     *
-     * Each block stands alone here; inheritance between blocks arrives with the rest of the fold.
      */
-    private fun resolveReleases(contract: ContractExpr): List<Release> {
+    private fun resolveReleases(
+        contract: ContractExpr,
+        env: ContractEnv,
+    ): List<Release> {
         val declared =
             contract.types.mapTo(mutableSetOf()) { it.name to (it.revision ?: Revision(1)) } +
                 contract.declarations.map { it.name to (it.revision ?: Revision(1)) }
-        return contract.releases.map { block -> resolveRelease(block, declared) }
+
+        var inherited = emptyMap<String, Revision>()
+        var previous: ReleaseNumber? = null
+        val releases = mutableListOf<Release>()
+        for (block in contract.releases) {
+            if (previous != null && block.number.value <= previous.value) {
+                errors.add(TypeError.ReleaseOutOfOrder(block.number, previous, block.span))
+            }
+            previous = block.number
+            inherited = applyEntries(block, inherited, declared)
+            releases.add(Release(block.number, inherited, block.span))
+        }
+        releases.forEach { checkSelfContained(it, env) }
+        return releases
     }
 
-    private fun resolveRelease(
+    /** [block]'s entries applied to the surface it inherits. */
+    private fun applyEntries(
         block: ReleaseBlock,
+        inherited: Map<String, Revision>,
         declared: Set<Pair<String, Revision>>,
-    ): Release {
-        val surface = mutableMapOf<String, Revision>()
+    ): Map<String, Revision> {
+        val surface = inherited.toMutableMap()
         val seen = mutableSetOf<String>()
         for (entry in block.entries) {
             if (!seen.add(entry.name)) {
@@ -92,7 +112,10 @@ class ContractChecker {
                 continue
             }
             if (entry.remove) {
-                surface.remove(entry.name)
+                // By name: inside a release a name means one revision, so naming it is unambiguous.
+                if (surface.remove(entry.name) == null) {
+                    errors.add(TypeError.RemoveOfUnexposedName(entry.name, block.number, entry.span))
+                }
                 continue
             }
             val revision = entry.revision ?: Revision(1)
@@ -104,7 +127,38 @@ class ContractChecker {
             }
             surface[entry.name] = revision
         }
-        return Release(block.number, surface, block.span)
+        return surface
+    }
+
+    /**
+     * `contracts.md` §"A release must be self-contained": every type reachable from anything the
+     * release exposes must itself be exposed at that same revision.
+     *
+     * Rooted at everything exposed rather than at capabilities alone, because an exposed type is
+     * vocabulary in its own right — a rule can annotate with it whether or not a capability
+     * mentions it. This is the proof [strip] stands on: dropping a revision is lossless only when
+     * the set it walks is closed.
+     */
+    private fun checkSelfContained(
+        release: Release,
+        env: ContractEnv,
+    ) {
+        val exposed = mutableSetOf<Pair<String, Revision>>()
+        val reachable = mutableSetOf<Pair<String, Revision>>()
+        for ((name, revision) in release.surface) {
+            exposed.add(name to revision)
+            env.constructorsOf(name, revision).forEach { exposed.add(it.name to revision) }
+
+            env.lookup(name, revision)?.let { reachable += it.referencedTypes(env) }
+            // A reference to the type itself, for the sum types whose name has no value binding to
+            // reach their constructors' fields through.
+            if (env.lookupTypeDef(name, revision) != null) {
+                reachable += Type.TRef(name, emptyList(), revision).referencedTypes(env)
+            }
+        }
+        for ((name, revision) in reachable - exposed) {
+            errors.add(TypeError.ReleaseNotSelfContained("$name/${revision.value}", release.number, release.span))
+        }
     }
 
     private fun bindDeclarations(

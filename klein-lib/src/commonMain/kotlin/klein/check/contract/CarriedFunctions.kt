@@ -1,6 +1,5 @@
 package klein.check.contract
 
-import klein.Revision
 import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.Type.*
@@ -21,33 +20,29 @@ fun carriesFunctionType(
 ): Boolean {
     val body = if (bound is TForall) bound.body else bound
     return if (isCallable && body is TFun) {
-        body.params.any { carriesFunction(it, env, mutableSetOf()) } ||
-            carriesFunction(body.result, env, mutableSetOf())
+        body.params.any { carriesFunction(it, env) } || carriesFunction(body.result, env)
     } else {
-        carriesFunction(body, env, mutableSetOf())
+        carriesFunction(body, env)
     }
 }
 
-/** Follows type references into their constructors' fields, so hiding a function one level down
- *  does not evade the check; the `(name, revision)` visited set terminates recursive types. */
+/** [referencedTypes] does the following; this is the predicate over what it reaches, so hiding a
+ *  function one level down does not evade the check. */
 private fun carriesFunction(
     type: ContractType,
     env: ContractEnv,
-    seen: MutableSet<Pair<String, Revision>>,
 ): Boolean =
-    when (type) {
+    type.holdsAFunction() ||
+        type.referencedTypes(env).any { (name, revision) -> env.membersOf(name, revision).any { it.holdsAFunction() } }
+
+/** A function in this type's own structure. Type references are not followed here — that is
+ *  [referencedTypes]'s job, and following them twice is what would fail to terminate. */
+private fun ContractType.holdsAFunction(): Boolean =
+    when (this) {
         is TFun -> true
-        is TOptional -> carriesFunction(type.type, env, seen)
-        is TRecord -> type.fields.values.any { carriesFunction(it, env, seen) }
-        is TForall -> carriesFunction(type.body, env, seen)
-        is TRef ->
-            if (!seen.add(type.name to type.revision)) {
-                false
-            } else {
-                type.typeArgs.any { carriesFunction(it, env, seen) } ||
-                    env.lookupTypeDef(type.name, type.revision)?.iface?.fields?.values.orEmpty().any {
-                        carriesFunction(it, env, seen)
-                    }
-            }
+        is TOptional -> type.holdsAFunction()
+        is TRecord -> fields.values.any { it.holdsAFunction() }
+        is TForall -> body.holdsAFunction()
+        is TRef -> typeArgs.any { it.holdsAFunction() }
         else -> false
     }

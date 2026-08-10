@@ -182,6 +182,21 @@ class ContractTypeCheckTest {
         )
     }
 
+    /** The walk follows a type into its constructors' fields, so a sum hiding a function in one arm
+     *  does not evade it — the parent's interface holds only what every arm shares. */
+    @Test
+    fun functionTypeInOneConstructorOfASumIsRejected() {
+        assertIs<TypeError.FunctionTypeInCapability>(
+            contractErrors(
+                """
+                type Handler = Direct { run: (Num) -> Num } | Named { name: String }
+
+                fun register(h: Handler): Num
+                """.trimIndent(),
+            ).single(),
+        )
+    }
+
     @Test
     fun valueCapabilityOfFunctionTypeIsRejected() {
         assertIs<TypeError.FunctionTypeInCapability>(contractErrors("callback: (Num) -> Num").single())

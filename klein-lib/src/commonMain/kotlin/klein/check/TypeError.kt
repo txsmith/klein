@@ -166,6 +166,40 @@ sealed class TypeError : KleinError {
         override val message = "'$name' is named twice in release ${release.value}; a name means one revision per release"
     }
 
+    /** Blocks are read in file order and each builds on the last, so the numbers must increase.
+     *  Gaps are legal: a gap is a release that has been retired. */
+    data class ReleaseOutOfOrder(
+        val release: ReleaseNumber,
+        val previous: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Release ${release.value} follows release ${previous.value}; release numbers must increase down the file"
+    }
+
+    data class RemoveOfUnexposedName(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Release ${release.value} removes '$name', which it does not expose; " +
+                "either it was never there or an earlier release already removed it"
+    }
+
+    /**
+     * A release exposes something reaching a type it does not expose, so a rule could meet a value
+     * whose type it has no way to write down. [unreachable] always spells its revision, including
+     * `/1`: which revision is reached is the whole of what went wrong.
+     */
+    data class ReleaseNotSelfContained(
+        val unreachable: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Release ${release.value} reaches '$unreachable', which it does not expose"
+    }
+
     data class ImplicitParamOutsideLambda(
         override val span: SourceSpan,
     ) : TypeError() {

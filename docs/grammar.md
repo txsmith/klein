@@ -14,7 +14,7 @@ type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
 
 revision    = '/' INT                              # positive; absent means 1. Contracts only
 
-release     = 'release' INT NEWLINE release_entry+ # contracts only; 'release' is contextual
+release     = 'release' INT NEWLINE release_entry* # contracts only; 'release' is contextual
 release_entry = 'remove'? UPPER_IDENT_or_IDENT revision?   # one per line, indented
 
 type_params = '<' TYPE_VAR (',' TYPE_VAR)* '>'
@@ -155,8 +155,8 @@ line, even when that line opens an indented block.
 
 `prog` and `contract` are separate productions with separate entry points, so the parser always
 knows which kind of file it is reading. A form written into the wrong one is a **parse error at the
-place it is written**: a bodiless `fun` or a `val_decl` in a program, and a definition, a bare
-expression or a `release` block in a contract. What a contract is *for* is still checker semantics:
+place it is written**: a bodiless `fun`, a `val_decl` or a `release` block in a program, and a
+definition or a bare expression in a contract. What a contract is *for* is still checker semantics:
 see [spec/contracts.md](./spec/contracts.md).
 
 ## Revisions

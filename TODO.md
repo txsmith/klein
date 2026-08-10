@@ -73,24 +73,29 @@ rather than replacing it.
       spec/contracts.md §Releases rewritten, spec/host-integration.md retermed
       throughout (including the worked example), grammar.md given the release
       productions, and ADR 2026-08-08 records the decision plus what was rejected.
-- [ ] **Release test suites** — exhaustive, spec-driven, written before the
+- [x] **Release test suites** — exhaustive, spec-driven, written before the
       implementation:
-      - Parser: block syntax, header forms, entry shapes, indentation, `remove`,
-        `release` still usable as an ordinary identifier, rejected shapes.
-      - Contract checking: the implicit first release, delta blocks and inheritance,
-        self-containment, `remove`, the fold on retirement, declarations no release
-        reaches (legal — staged or draining), duplicate entries, numbering rules,
-        pointing at an undeclared revision, a release in a program.
-      - Rule checking: a rule checked against one release sees plain names only,
-        constructors arrive with their type, and no `/N` reaches any diagnostic —
-        sweep every leak channel.
-- [ ] **Release implementation** — `release` recognized contextually at statement head;
-      one AST node; contract checking builds each release and hands the checker a plain
-      name environment; the release travels with the compile request and is recorded on
-      the edition.
-      Nothing is undecided: releases are freely editable (the reconciler's failures are
-      the only feedback, by design), and the check rules are written out in
-      spec/contracts.md §Releases.
+      - Parser: `klein/parser/ReleaseTest.kt`.
+      - Contract checking: `klein/check/contract/` — `ReleaseTypeCheckTest` (entries,
+        inheritance, `remove`, numbering, the fold on retirement),
+        `SelfContainmentTest`, `ContractTypeCheckTest`, and `LendingExampleTest`, which
+        walks host-integration.md's worked example end to end.
+      - Rule checking: `klein/check/contract/RuleAgainstReleaseTest.kt`, including the
+        leak sweep over every diagnostic channel.
+
+      One spec ruling changed on the way in: there is **no implicit first release**. A
+      contract's releases are exactly its written blocks, so one that writes none simply
+      has nothing a rule can be checked against.
+- [x] **Release implementation** — `release` recognized contextually at statement head;
+      `ReleaseBlock`/`ReleaseEntry` on `ContractExpr`; contract checking folds the blocks
+      in file order and projects one into the plain-name `RuleEnv` a rule is checked
+      against, through `EnvironmentContract.check(ruleSource, ReleaseNumber(n))`.
+      Self-containment is what makes that projection lossless, and the revision witness
+      on `Type` (`ContractType` vs `RuleType`, crossed only by `strip`) makes a revision
+      reaching a rule a compile error.
+      Out of scope here, and still open above: execution wiring (nothing makes a
+      capability callable from a rule yet), the CLI surface for contracts, and the
+      release travelling with a compile request to be recorded on an edition.
 
 ## After that
 

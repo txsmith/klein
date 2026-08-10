@@ -31,7 +31,7 @@ library, without a host-language-specific API.
 
 ## Two grammars, one lexer
 
-Status: implemented, except the `release` row (target).
+Status: implemented.
 
 A contract and a rule are disjoint languages. They share a lexer and a type grammar, and nothing
 else — not a root, not an entry point. `Parser.parseProgram` reads the one that runs;
@@ -103,7 +103,7 @@ not the number. What a rule sees is governed entirely by releases, below.
 
 ## Releases
 
-Status: target.
+Status: implemented.
 
 A **release** is a numbered set of pointers. Each pointer aims a name that rules may write at one
 declared revision. Rules never write a revision themselves; the release decides which revision
@@ -174,10 +174,17 @@ them. It removes the name from the vocabulary of new work only.
 
 ### A release must be self-contained
 
-Every type mentioned by a capability the release exposes must itself be reachable in that same
-release, in parameter and result positions alike. Anything else is a check error. This is judged
-on what the release exposes once its block has been applied to the ones before it, not on the
-block alone.
+Every type reachable from anything the release exposes must itself be exposed by that release, at
+that same revision. Anything else is a check error. This is judged on what the release exposes once
+its block has been applied to the ones before it, not on the block alone.
+
+Both halves of "reachable from anything it exposes" are wider than a capability's parameter and
+result types. The root is **anything the release exposes**, capabilities and types alike, because
+an exposed type is vocabulary in its own right: a rule can annotate with it whether or not a
+capability mentions it. And the walk is **transitive through constructor fields**, because a field
+one level down is just as reachable and just as unspellable — a rule holding a `Customer` can read
+`.addr`, and match a `Shape` to reach a `Circle`'s. Constructors travel with their type, so they
+need no entry of their own; a recursive type terminates on a visited set.
 
 ```klein
 type Customer = Customer { id: Num }
