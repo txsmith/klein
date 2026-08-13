@@ -12,6 +12,7 @@ import klein.check.TypeEnv
 import klein.check.TypeError
 import klein.check.TypeResolver
 import klein.check.quantify
+import klein.surface.CapabilityDeclaration
 import klein.surface.ContractExpr
 import klein.surface.FunDecl
 import klein.surface.ReleaseBlock
@@ -144,19 +145,27 @@ internal class ContractChecker {
         env: ContractEnv,
     ) {
         val exposed = mutableSetOf<Pair<String, Revision>>()
-        val reachable = mutableSetOf<Pair<String, Revision>>()
+        val rootTypes = mutableListOf<ContractType>()
         for ((name, revision) in release.surface) {
             exposed.add(name to revision)
             env.constructorsOf(name, revision).forEach { exposed.add(it.name to revision) }
 
-            env.lookup(name, revision)?.let { reachable += it.referencedTypes(env) }
-            // A reference to the type itself, for the sum types whose name has no value binding to
-            // reach their constructors' fields through.
             if (env.lookupTypeDef(name, revision) != null) {
-                reachable += Type.TRef(name, emptyList(), revision).referencedTypes(env)
+                // A type. Tested first: a single-constructor type also has a value binding — its
+                // constructor — which reaches nothing its fields do not.
+                rootTypes += env.declaredFields(name, revision)
+            } else {
+                // A capability. Its declared type crosses whole, `maxRetries: Num` as much as a
+                // function; the arrow is only special to the carried-function rule.
+                env.lookup(name, revision)?.let(rootTypes::add)
             }
         }
-        for ((name, revision) in reachable - exposed) {
+        // One walk per release, so vocabulary shared by several entries expands once.
+        val reachableTRefs =
+            rootTypes.reachableTypes(env).mapNotNullTo(mutableSetOf()) {
+                if (it is Type.TRef) it.name to it.revision else null
+            }
+        for ((name, revision) in reachableTRefs - exposed) {
             errors.add(TypeError.ReleaseNotSelfContained("$name/${revision.value}", release.number, release.span))
         }
     }
@@ -185,13 +194,6 @@ internal class ContractChecker {
                     is FunDecl -> DeclarationKind.Function to bindFunDecl(declaration, revision, env)
                     is ValDecl -> DeclarationKind.Value to bindValDecl(declaration, revision, env)
                 }
-            rejectCarriedFunctions(
-                revisionedName(declaration.name, revision),
-                type,
-                declaration.span,
-                env,
-                isCallable = kind == DeclarationKind.Function,
-            )
             declarations.add(ContractDeclaration(declaration.name, revision, kind, type))
         }
         return declarations
@@ -204,6 +206,9 @@ internal class ContractChecker {
     ): ContractType {
         val (sigEnv, paramTypes) = resolver.openSignature(declaration.params, declaration.returnType, env)
         val returnType = resolver.resolve(declaration.returnType, sigEnv)
+        // A capability is itself a function, so its own arrow is legal; what crosses the boundary
+        // is its parameters and its result.
+        rejectCarriedFunctions(paramTypes + returnType, declaration, revision, env)
         val type =
             quantify(
                 sigEnv.localTypeVars(),
@@ -220,20 +225,78 @@ internal class ContractChecker {
     ): ContractType {
         val sigEnv = env.child()
         resolver.introduceTypeVars(listOf(declaration.type), sigEnv)
-        val type = quantify(sigEnv.localTypeVars(), resolver.resolve(declaration.type, sigEnv))
+        val resolved = resolver.resolve(declaration.type, sigEnv)
+        // A value capability has no arrow of its own, so the whole type crosses.
+        rejectCarriedFunctions(listOf(resolved), declaration, revision, env)
+        val type = quantify(sigEnv.localTypeVars(), resolved)
         env.bind(declaration.name, revision, type)
         return type
     }
 
+    /** `contracts.md` §"No functions cross the boundary", over the types that actually cross. */
     private fun rejectCarriedFunctions(
-        name: String,
-        bound: ContractType,
-        span: SourceSpan,
+        crossing: List<ContractType>,
+        declaration: CapabilityDeclaration,
+        revision: Revision,
         env: ContractEnv,
-        isCallable: Boolean,
     ) {
-        if (carriesFunctionType(bound, env, isCallable)) {
-            errors.add(TypeError.FunctionTypeInCapability(name, span))
+        if (crossing.reachableTypes(env).any { it is Type.TFun }) {
+            errors.add(
+                TypeError.FunctionTypeInCapability(revisionedName(declaration.name, revision), declaration.span),
+            )
         }
     }
 }
+
+/**
+ * Every type reachable from these, the seeds themselves included: their own structure, and
+ * transitively the fields of each named type they reference.
+ *
+ * A name is expanded once across the whole walk, so recursive and mutually recursive types
+ * terminate and appear as references rather than as expansions. Seeds are always types the
+ * environment already holds; nothing here constructs one.
+ */
+private fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractType> {
+    val expanded = mutableSetOf<Pair<String, Revision>>()
+    val reached = mutableListOf<ContractType>()
+
+    fun walk(type: ContractType) {
+        reached.add(type)
+        when (type) {
+            is Type.TFun -> {
+                type.params.forEach(::walk)
+                walk(type.result)
+            }
+            is Type.TOptional -> walk(type.type)
+            is Type.TRecord -> type.fields.values.forEach(::walk)
+            is Type.TForall -> walk(type.body)
+            is Type.TRef -> {
+                // Arguments are walked whatever the expanded set says: `Box<Order/2>` and
+                // `Box<Foo/3>` are one entry under the same key but two references to follow.
+                type.typeArgs.forEach(::walk)
+                if (expanded.add(type.name to type.revision)) {
+                    env.declaredFields(type.name, type.revision).forEach(::walk)
+                }
+            }
+            else -> {}
+        }
+    }
+
+    forEach(::walk)
+    return reached
+}
+
+/**
+ * The field types a named type declares, **one layer deep**: its own fields, and the fields of
+ * every constructor that travels with it. Neither is a subset of the other — a sum's own fields
+ * are only those every arm shares, typed as their join.
+ *
+ * Following what this returns is [reachableTypes]'s job, not this one's. Empty for a name that is
+ * not a type.
+ */
+private fun ContractEnv.declaredFields(
+    name: String,
+    revision: Revision,
+): List<ContractType> =
+    lookupTypeDef(name, revision)?.iface?.fields?.values.orEmpty() +
+        constructorsOf(name, revision).flatMap { it.fields.values }

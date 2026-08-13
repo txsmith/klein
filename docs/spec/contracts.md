@@ -174,10 +174,6 @@ them. It removes the name from the vocabulary of new work only.
 
 ### A release must be self-contained
 
-Every type reachable from anything the release exposes must itself be exposed by that release, at
-that same revision. Anything else is a check error. This is judged on what the release exposes once
-its block has been applied to the ones before it, not on the block alone.
-
 Both halves of "reachable from anything it exposes" are wider than a capability's parameter and
 result types. The root is **anything the release exposes**, capabilities and types alike, because
 an exposed type is vocabulary in its own right: a rule can annotate with it whether or not a
@@ -185,6 +181,23 @@ capability mentions it. And the walk is **transitive through constructor fields*
 one level down is just as reachable and just as unspellable — a rule holding a `Customer` can read
 `.addr`, and match a `Shape` to reach a `Circle`'s. Constructors travel with their type, so they
 need no entry of their own; a recursive type terminates on a visited set.
+
+Every type reachable from anything the release exposes must itself be exposed by that release, at
+that same revision. Anything else is a check error. This is judged on what the release exposes once
+its block has been applied to the ones before it, not on the block alone.
+
+The walk starts at every entry in the release's surface — capability declarations and type
+definitions alike — and follows:
+
+- a capability's parameter and result types;
+- a record's field types, an optional's inner type, and every type argument of a generic;
+- for a named type, the field types readable through the type itself and the field types of each
+  of its constructors.
+
+The walk is transitive, and terminates on a visited set of `(name, revision)`, so a recursive type
+is not an error. A type's constructors are exposed by the entry that exposes the type and take no
+entry of their own. Built-in types need no entry. Each reachable `(name, revision)` the release
+does not expose is reported separately.
 
 ```klein
 type Customer = Customer { id: Num }

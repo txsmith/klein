@@ -197,6 +197,33 @@ class ContractTypeCheckTest {
         )
     }
 
+    /** The walk expands each name once, so a cycle terminates rather than hiding what it holds. */
+    @Test
+    fun aFunctionInsideAMutuallyRecursiveTypeIsRejected() {
+        assertIs<TypeError.FunctionTypeInCapability>(
+            contractErrors(
+                """
+                type Node = Node { edge: Edge? }
+                type Edge = Edge { to: Node, weigh: (Num) -> Num }
+
+                fun walk(n: Node): Num
+                """.trimIndent(),
+            ).single(),
+        )
+    }
+
+    @Test
+    fun aMutuallyRecursiveTypeCarryingNoFunctionIsFine() {
+        Klein.checkContract(
+            """
+            type Node = Node { edge: Edge? }
+            type Edge = Edge { to: Node }
+
+            fun walk(n: Node): Num
+            """.trimIndent(),
+        )
+    }
+
     @Test
     fun valueCapabilityOfFunctionTypeIsRejected() {
         assertIs<TypeError.FunctionTypeInCapability>(contractErrors("callback: (Num) -> Num").single())

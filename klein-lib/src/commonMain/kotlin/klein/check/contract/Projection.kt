@@ -70,9 +70,7 @@ internal fun ContractEnv.environmentFor(release: Release): RuleEnv {
     val projected = TypeEnv.empty<Nothing?>()
     for ((name, revision) in release.surface) {
         expose(name, revision, projected)
-        allConstructors()
-            .filter { it.parentType == name && it.revision == revision }
-            .forEach { expose(it.name, revision, projected) }
+        constructorsOf(name, revision).forEach { expose(it.name, revision, projected) }
     }
     return projected
 }

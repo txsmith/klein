@@ -173,6 +173,25 @@ class SelfContainmentTest {
     }
 
     @Test
+    fun anOptionalsInnerTypeCountsToo() {
+        assertEquals(
+            "Customer/2",
+            notSelfContained(
+                """
+                type Customer = Customer { id: Num }
+                type Customer/2 = Customer { id: Num, tier: String }
+
+                fun latest/2(): Customer/2?
+
+                release 1
+                  Customer
+                  latest/2
+                """,
+            ).unreachable,
+        )
+    }
+
+    @Test
     fun aTypeArgumentCountsToo() {
         assertEquals(
             "Customer/2",
@@ -287,6 +306,42 @@ class SelfContainmentTest {
         assertEquals(
             "Tree?",
             Type.print(contract.check("fun l(t: Tree): Tree? = t.left\nl(Tree(1, null))", ReleaseNumber(2))),
+        )
+    }
+
+    @Test
+    fun mutuallyRecursiveTypesAreSelfContainedWhenBothAreExposed() {
+        val contract =
+            Klein.checkContract(
+                """
+                type Node/2 = Node { edge: Edge/2? }
+                type Edge/2 = Edge { to: Node/2 }
+
+                release 2
+                  Node/2
+                  Edge/2
+                """.trimIndent(),
+            )
+        assertEquals(
+            "Edge?",
+            Type.print(contract.check("fun e(n: Node): Edge? = n.edge\ne(Node(null))", ReleaseNumber(2))),
+        )
+    }
+
+    /** The cycle terminates without hiding the half that escapes. */
+    @Test
+    fun oneHalfOfAMutuallyRecursivePairMustStillBeExposed() {
+        assertEquals(
+            "Edge/2",
+            notSelfContained(
+                """
+                type Node/2 = Node { edge: Edge/2? }
+                type Edge/2 = Edge { to: Node/2 }
+
+                release 2
+                  Node/2
+                """,
+            ).unreachable,
         )
     }
 

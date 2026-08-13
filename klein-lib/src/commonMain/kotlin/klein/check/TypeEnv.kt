@@ -107,6 +107,13 @@ class TypeEnv<R : Revision?> private constructor(
 
     internal fun allConstructors(): Collection<ConstructorInfo<R>> = constructors.values
 
+    /** The constructors belonging to `(name, revision)`. They are never registered against a type
+     *  they do not belong to, so exposing a type carries exactly these. */
+    internal fun constructorsOf(
+        name: String,
+        revision: R,
+    ): List<ConstructorInfo<R>> = constructors.values.filter { it.parentType == name && it.revision == revision }
+
     internal fun child(implicitParam: ImplicitParamContext = ImplicitParamContext.None): TypeEnv<R> =
         TypeEnv(parent = this, typeDefs = typeDefs, constructors = constructors, implicitParam = implicitParam)
 
