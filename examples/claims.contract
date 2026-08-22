@@ -1,0 +1,26 @@
+# A capability contract: what the host provides, never how. Rules are checked
+# against one release, and a release decides which revision each name means.
+#
+#   klein check --contract examples/claims.contract
+
+type Claim = Claim { id: Num, amount: Num }
+
+# Revision 2 of the decision adds a third outcome. Revision 1 stays exactly as
+# it was — the two are unrelated types that happen to share a name.
+type Decision = Approve { paid: Num } | Deny { reason: String }
+type Decision/2 = Approve { paid: Num } | Deny { reason: String } | Refer { queue: String }
+
+fun decide(claim: Claim): Decision
+fun decide/2(claim: Claim): Decision/2
+
+# Release 1 is what rules saw before the third outcome existed.
+release 1
+  Claim
+  Decision
+  decide
+
+# Release 2 repoints both names. A rule is checked against one or the other,
+# never both, so inside a rule `Decision` means exactly one thing.
+release 2
+  Decision/2
+  decide/2

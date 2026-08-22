@@ -24,6 +24,7 @@ Specs are **living contracts** — the current rules, updated in place as the la
 - **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and execution
 - **[performance-debt.md](./docs/performance-debt.md)** - Deliberate performance corners in the execution pipeline, each with its fix
 - **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
+- **[host-integration-roadmap.md](./docs/host-integration-roadmap.md)** - What is left to make the host-integration spec real, and what depends on what
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
 ### Design Decisions
