@@ -148,7 +148,7 @@ deleted if they are not in use anymore. A host instance can serve an edition iff
 every revision the edition pins. An edition no instance can serve is unservable until that
 changes.
 
-Pins link each capability call in the compiled program to a host implementation. When a run
+Pins bind each capability call in the compiled program to a host implementation. When a run
 starts or resumes, every call is dispatched to the implementation of exactly the pinned revision.
 
 Pins have two more jobs. During evolution, comparing pins against the current contract finds the

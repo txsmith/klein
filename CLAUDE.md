@@ -156,7 +156,7 @@ nothing else to check the contract alone.
 
 A rule that calls a capability by its plain name (or constructs a value of a contract-declared type)
 type-checks but cannot execute — nothing wires a capability call to a host handler yet (see
-TODO.md, "Capabilities reachable from Klein source"). `run` reports this plainly and exits non-zero
+docs/host-integration-roadmap.md, "Execution wiring"). `run` reports this plainly and exits non-zero
 rather than crashing; `check` still verifies the rule compiles against the release.
 
 ### Run

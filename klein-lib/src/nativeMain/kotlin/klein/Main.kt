@@ -154,7 +154,7 @@ private fun checkCmd(
 /**
  * `run` with `--contract`: check the rule against the release, then lower and execute it. A rule
  * that references a capability by name cannot be executed yet — nothing wires a capability call to
- * a handler at runtime (see TODO.md, "Capabilities reachable from Klein source") — so that specific
+ * a handler at runtime (see docs/host-integration-roadmap.md, "Execution wiring") — so that specific
  * failure is caught and reported plainly instead of surfacing as an internal lowering error.
  */
 private fun runCmd(
@@ -186,7 +186,7 @@ private fun runCmd(
         } catch (_: InvariantViolation) {
             println(
                 "Error: this rule calls a capability, and capabilities are not callable at runtime yet " +
-                    "(see TODO.md, \"Capabilities reachable from Klein source\"). Use 'check' to verify " +
+                    "(see docs/host-integration-roadmap.md, \"Execution wiring\"). Use 'check' to verify " +
                     "the rule compiles against the release.",
             )
             exitProcess(1)
