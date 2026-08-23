@@ -33,7 +33,7 @@ an interactive host that prompts the user for each answer.
 
 - [ ] Phase 1: Constructor-only rules run — `compileRule`, the edition prelude, and pins
   - [x] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
-  - [ ] 1b: `ResolvedRelease` — the release materialised in two halves
+  - [x] 1b: `ResolvedRelease` — the release materialised in two halves
   - [ ] 1c: The used-capability pass
   - [ ] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
   - [ ] 1e: `compileRule` and the `Edition`
@@ -99,10 +99,9 @@ internal fun ContractEnv.resolveRelease(release: FlattenedReleaseBlock): Resolve
 internal class ResolvedRelease(
     val types: RuleEnv,                          // revision-free: what the checker checks against
     val revisions: Map<String, RevisionNumber>,  // every name the release exposes, incl. constructors
-)
-
-/** How one name binds at runtime, read back off [types]; null for a name lowering erases. */
-internal fun ResolvedRelease.bindingFor(name: String): PreludeBinding?
+) {
+    fun bindingFor(name: String): PreludeBinding?   // null for a name that lowering erases
+}
 ```
 
   `types` is exactly what `environmentFor` builds today, unchanged. `revisions` is the one thing it
@@ -372,8 +371,8 @@ class Environment internal constructor(
 
   The contract reference is what lets `checkPins` classify a pin: `contract.resolved(edition.release)`
   gives the `ResolvedRelease`, and `bindingFor` says whether the name needs an implementation. Phase 4
-  uses the same reference for the release's `RuleEnv`. `EnvironmentContract` gains an internal
-  accessor for `resolved(release)`, which Phase 1 made private.
+  uses the same reference for the release's `RuleEnv`. `resolved(release)` is already `internal` —
+  1b made it so, since `ResolvedReleaseTest` had no other way to reach a `ResolvedRelease`.
 
 - **`klein-lib/src/commonMain/kotlin/klein/host/Runner.kt`** (new): the pin check, the loop, and the
   resume step, all extensions on `Environment` so the dependency arrow stays one-way.

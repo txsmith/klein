@@ -1,10 +1,7 @@
 package klein.check.contract
 
 import klein.RevisionNumber
-import klein.check.ConstructorInfo
-import klein.check.ContractEnv
 import klein.check.ContractType
-import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.Type.TBool
 import klein.check.Type.TBottom
@@ -19,8 +16,6 @@ import klein.check.Type.TSkolem
 import klein.check.Type.TStr
 import klein.check.Type.TTop
 import klein.check.Type.TUnit
-import klein.check.TypeDefInfo
-import klein.check.TypeEnv
 
 /**
  * Projection: the crossing from what a contract declares to what a rule sees.
@@ -53,49 +48,3 @@ internal fun ContractType.strip(): RuleType =
 
 /** [strip] at a record, keeping the result's shape in the signature so no caller has to cast. */
 internal fun TRecord<RevisionNumber>.stripRecord(): TRecord<Nothing?> = TRecord(fields.mapValues { it.value.strip() })
-
-/**
- * Build the environment [release] exposes: every name it names, copied out of this contract
- * environment under its plain name with its type stripped.
- *
- * A name the release does not expose is *absent* rather than merely unrevisioned — visibility is a
- * decision the release makes, not an accident of which keys a rule can spell. Constructors are
- * never pointed at individually: they travel with their type, so exposing `Shape/2` carries
- * `Circle` and `Square` along with it.
- *
- * [strip] never follows a name into the environment, so a recursive type stays a reference rather
- * than an expansion and the walk cannot cycle.
- */
-internal fun ContractEnv.environmentFor(release: FlattenedReleaseBlock): RuleEnv {
-    val projected = TypeEnv.empty<Nothing?>()
-    for ((name, revision) in release.surface) {
-        expose(name, revision, projected)
-        constructorsOf(name, revision).forEach { expose(it.name, revision, projected) }
-    }
-    return projected
-}
-
-/** Copy everything stored under `(name, revision)` — a value binding, a type definition, a
- *  constructor — into [projected] under the plain [name]. */
-private fun ContractEnv.expose(
-    name: String,
-    revision: RevisionNumber,
-    projected: RuleEnv,
-) {
-    lookup(name, revision)?.let { projected.bind(name, it.strip()) }
-    lookupTypeDef(name, revision)?.let { def ->
-        projected.registerTypeDef(TypeDefInfo(def.name, null, def.typeParams, def.iface.stripRecord(), def.span))
-    }
-    lookupConstructor(name, revision)?.let { ctor ->
-        projected.registerConstructor(
-            ConstructorInfo(
-                ctor.name,
-                null,
-                ctor.typeParams,
-                ctor.fields.mapValues { it.value.strip() },
-                ctor.parentType,
-                ctor.span,
-            ),
-        )
-    }
-}

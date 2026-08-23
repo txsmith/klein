@@ -414,3 +414,25 @@ internal class LowerEnv private constructor(
         val empty: LowerEnv = LowerEnv(emptyList(), 0, emptyMap(), null)
     }
 }
+
+/**
+ * Declared here, in lowering's own vocabulary: it says nothing about revisions or contracts, so
+ * the IR stays revision-free and `klein.core` stays ignorant of `klein.check.contract`.
+ */
+internal sealed interface PreludeBinding {
+    val name: String
+
+    data class Ctor(
+        override val name: String,
+        val fieldNames: List<String>,
+    ) : PreludeBinding
+
+    data class Function(
+        override val name: String,
+        val arity: Int,
+    ) : PreludeBinding
+
+    data class Value(
+        override val name: String,
+    ) : PreludeBinding
+}

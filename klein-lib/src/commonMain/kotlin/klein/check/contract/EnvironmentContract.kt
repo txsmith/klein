@@ -6,7 +6,6 @@ import klein.RevisionNumber
 import klein.check.Checker
 import klein.check.ContractEnv
 import klein.check.ContractType
-import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.surface.Lexer
 import klein.surface.LexerError
@@ -48,7 +47,7 @@ class EnvironmentContract internal constructor(
     private val env: ContractEnv,
     private val surfaces: Map<ReleaseNumber, FlattenedReleaseBlock>,
 ) {
-    private val environments = mutableMapOf<ReleaseNumber, RuleEnv>()
+    private val resolved = mutableMapOf<ReleaseNumber, ResolvedRelease>()
 
     /**
      * Type-check [ruleSource] against exactly [release], and answer its type. Throws
@@ -59,7 +58,7 @@ class EnvironmentContract internal constructor(
         ruleSource: String,
         release: ReleaseNumber,
     ): RuleType {
-        val ruleEnv = ruleEnvironment(release)
+        val ruleEnv = resolved(release).types
         val program =
             try {
                 Parser(Lexer(ruleSource).tokenize().toList()).parseProgram()
@@ -73,9 +72,8 @@ class EnvironmentContract internal constructor(
         return checked.type
     }
 
-    /** Memoised per release: a host recompiles many rules against the same one. */
-    private fun ruleEnvironment(release: ReleaseNumber): RuleEnv =
-        environments.getOrPut(release) {
-            env.environmentFor(surfaces[release] ?: throw UnknownRelease(release, releases))
+    internal fun resolved(release: ReleaseNumber): ResolvedRelease =
+        resolved.getOrPut(release) {
+            env.resolveRelease(surfaces[release] ?: throw UnknownRelease(release, releases))
         }
 }
