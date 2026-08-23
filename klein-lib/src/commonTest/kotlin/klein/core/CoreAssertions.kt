@@ -1,6 +1,8 @@
 package klein.core
 
+import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.check.contract.EnvironmentContract
 import klein.surface.Lexer
 import klein.surface.Parser
 import kotlin.test.assertEquals
@@ -112,5 +114,20 @@ internal fun assertLowersTo(
 ) {
     val core = Lowering().lower(parseProgram(source.trimIndent().trim()))
     assertEquals(expected.trimIndent().trim(), CorePrinter.print(core))
+}
+
+/**
+ * The contract-aware twin of [assertLowersTo]: compile [rule] against one release of [contract]
+ * through the whole pipeline (check, used-capability pass, prelude, lowering) and compare the
+ * edition's printed IR to [expected].
+ */
+internal fun assertRuleLowersTo(
+    contract: EnvironmentContract,
+    rule: String,
+    release: ReleaseNumber,
+    expected: String,
+) {
+    val edition = contract.compileRule(rule.trimIndent().trim(), release)
+    assertEquals(expected.trimIndent().trim(), CorePrinter.print(edition.core))
 }
 

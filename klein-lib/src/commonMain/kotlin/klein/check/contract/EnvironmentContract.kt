@@ -7,10 +7,12 @@ import klein.check.Checker
 import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.RuleType
+import klein.core.Lowering
 import klein.surface.Lexer
 import klein.surface.LexerError
 import klein.surface.ParseError
 import klein.surface.Parser
+import klein.surface.Program
 
 enum class DeclarationKind { Function, Value }
 
@@ -57,8 +59,24 @@ class EnvironmentContract internal constructor(
     fun check(
         ruleSource: String,
         release: ReleaseNumber,
-    ): RuleType {
-        val ruleEnv = resolved(release).types
+    ): RuleType = parseAndCheck(ruleSource, resolve(release)).second
+
+    fun compileRule(
+        ruleSource: String,
+        release: ReleaseNumber,
+    ): Edition {
+        val resolvedRelease = resolve(release)
+        val (program, _) = parseAndCheck(ruleSource, resolvedRelease)
+        val used = usedCapabilities(program, resolvedRelease.revisions.keys)
+        val pins = used.associateWith { resolvedRelease.revisions.getValue(it) }
+        val prelude = used.mapNotNull { resolvedRelease.bindingFor(it) }
+        return Edition(Lowering().lowerWithPrelude(program, prelude), release, pins)
+    }
+
+    private fun parseAndCheck(
+        ruleSource: String,
+        release: ResolvedRelease,
+    ): Pair<Program, RuleType> {
         val program =
             try {
                 Parser(Lexer(ruleSource).tokenize().toList()).parseProgram()
@@ -67,12 +85,12 @@ class EnvironmentContract internal constructor(
             } catch (e: ParseError) {
                 throw KleinException(listOf(e))
             }
-        val checked = Checker().checkProgram(program, ruleEnv)
+        val checked = Checker().checkProgram(program, release.types)
         if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
-        return checked.type
+        return program to checked.type
     }
 
-    internal fun resolved(release: ReleaseNumber): ResolvedRelease =
+    internal fun resolve(release: ReleaseNumber): ResolvedRelease =
         resolved.getOrPut(release) {
             env.resolveRelease(surfaces[release] ?: throw UnknownRelease(release, releases))
         }

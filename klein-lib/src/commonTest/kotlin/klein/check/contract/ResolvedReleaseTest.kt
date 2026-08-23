@@ -40,75 +40,75 @@ private val CONTRACT =
 
 private val contract = Klein.checkContract(CONTRACT)
 
-private fun resolved(release: Int = 2): ResolvedRelease = contract.resolved(ReleaseNumber(release))
+private fun resolve(release: Int = 2): ResolvedRelease = contract.resolve(ReleaseNumber(release))
 
 class ResolvedReleaseTest {
     // ── bindingFor, one per kind ─────────────────────────────────────────────
 
     @Test
     fun aConstructorBindsAsCtorWithItsFieldNamesInDeclarationOrder() {
-        val binding = assertIs<PreludeBinding.Ctor>(resolved().bindingFor("Customer"))
+        val binding = assertIs<PreludeBinding.Ctor>(resolve().bindingFor("Customer"))
         assertEquals("Customer", binding.name)
         assertEquals(listOf("id", "name", "tier"), binding.fieldNames)
     }
 
     @Test
     fun aSumTypesConstructorBindsAsCtor() {
-        val binding = assertIs<PreludeBinding.Ctor>(resolved().bindingFor("Circle"))
+        val binding = assertIs<PreludeBinding.Ctor>(resolve().bindingFor("Circle"))
         assertEquals(listOf("radius"), binding.fieldNames)
     }
 
     @Test
     fun aFieldlessConstructorBindsAsCtorWithNoFields() {
-        val binding = assertIs<PreludeBinding.Ctor>(resolved().bindingFor("Off"))
+        val binding = assertIs<PreludeBinding.Ctor>(resolve().bindingFor("Off"))
         assertEquals(emptyList(), binding.fieldNames)
     }
 
     @Test
     fun aCapabilityFunctionBindsAsFunctionWithItsArity() {
-        val binding = assertIs<PreludeBinding.Function>(resolved().bindingFor("riskBand"))
+        val binding = assertIs<PreludeBinding.Function>(resolve().bindingFor("riskBand"))
         assertEquals("riskBand", binding.name)
         assertEquals(2, binding.arity)
-        assertEquals(1, assertIs<PreludeBinding.Function>(resolved().bindingFor("creditScore")).arity)
+        assertEquals(1, assertIs<PreludeBinding.Function>(resolve().bindingFor("creditScore")).arity)
     }
 
     @Test
     fun aCapabilityValueBindsAsValue() {
-        val binding = assertIs<PreludeBinding.Value>(resolved().bindingFor("customer"))
+        val binding = assertIs<PreludeBinding.Value>(resolve().bindingFor("customer"))
         assertEquals("customer", binding.name)
     }
 
     @Test
     fun aTypeOnlyNameBindsNothing() {
-        assertNull(resolved().bindingFor("Shape"))
+        assertNull(resolve().bindingFor("Shape"))
     }
 
     @Test
     fun aNameTheReleaseDoesNotExposeBindsNothing() {
-        assertNull(resolved(1).bindingFor("riskBand"))
-        assertNull(resolved(1).bindingFor("Circle"))
+        assertNull(resolve(1).bindingFor("riskBand"))
+        assertNull(resolve(1).bindingFor("Circle"))
     }
 
     // ── revisions ────────────────────────────────────────────────────────────
 
     @Test
     fun revisionsFollowTheReleaseSurface() {
-        assertEquals(RevisionNumber(1), resolved(1).revisions["creditScore"])
-        assertEquals(RevisionNumber(2), resolved().revisions["creditScore"])
-        assertNull(resolved(1).revisions["riskBand"])
+        assertEquals(RevisionNumber(1), resolve(1).revisions["creditScore"])
+        assertEquals(RevisionNumber(2), resolve().revisions["creditScore"])
+        assertNull(resolve(1).revisions["riskBand"])
     }
 
     @Test
     fun aSumTypesConstructorsHaveRevisionsThoughNoReleaseEntryNamesThem() {
-        val revisions = resolved().revisions
+        val revisions = resolve().revisions
         assertEquals(RevisionNumber(2), revisions["Circle"])
         assertEquals(RevisionNumber(2), revisions["Square"])
-        assertNull(resolved(1).revisions["Circle"])
+        assertNull(resolve(1).revisions["Circle"])
     }
 
     @Test
     fun aTypeOnlyNameHasARevisionThoughItBindsNothing() {
-        assertEquals(RevisionNumber(2), resolved().revisions["Shape"])
+        assertEquals(RevisionNumber(2), resolve().revisions["Shape"])
     }
 
     // ── the two halves agree ─────────────────────────────────────────────────
@@ -116,7 +116,7 @@ class ResolvedReleaseTest {
     @Test
     fun everyNameTypesBindsOrRegistersHasARevision() {
         for (release in contract.releases) {
-            val (types, revisions) = resolved(release.value).let { it.types to it.revisions }
+            val (types, revisions) = resolve(release.value).let { it.types to it.revisions }
             contract.declarations.map { it.name }.distinct().forEach { name ->
                 if (types.lookup(name) != null) assertNotNull(revisions[name], "$name bound without a revision")
             }
