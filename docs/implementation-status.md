@@ -137,7 +137,7 @@ evolution).
 | Machine | Flat-loop two-stack CESK; tail calls run in constant control space; fail-fast `KleinRuntimeError` with spans; malformed IR throws `InvariantViolation` |
 | Values | `VStruct` unifies records and data (nullable tag); structural equality |
 | Match | Tag/literal/default arms, guards with first-match fallthrough, per-arm scopes |
-| Suspension | `Execution.Done \| AwaitingHost` with one-shot `resume` and `clone` — machine-side only; lowering does not yet emit `HostCall` |
+| Suspension | `Execution.Done \| AwaitingHost` with one-shot `resume` and `clone` — `lowerWithPrelude` emits `HostCall` for contract capabilities (eta-lambda for functions, bare nullary call for values); nothing wires the suspension to a host handler yet |
 | CLI | `run`/`r` executes, `core` dumps the lowered IR |
 
 ### Pending

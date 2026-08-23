@@ -35,7 +35,7 @@ an interactive host that prompts the user for each answer.
   - [x] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
   - [x] 1b: `ResolvedRelease` — the release materialised in two halves
   - [x] 1c: The used-capability pass
-  - [ ] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
+  - [x] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
   - [ ] 1e: `compileRule` and the `Edition`
   - [ ] 1f: The CLI compiles and executes
 - [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host

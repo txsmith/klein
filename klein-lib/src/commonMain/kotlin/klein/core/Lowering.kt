@@ -11,6 +11,35 @@ private const val IMPLICIT_PARAM = "."
 internal class Lowering {
     fun lower(program: Program): CoreExpr = lowerScope(program.stmts, LowerEnv.empty, program.span)
 
+    fun lowerWithPrelude(
+        program: Program,
+        prelude: List<PreludeBinding>,
+    ): CoreExpr {
+        val sorted = prelude.sortedBy { it.name }
+        val env = LowerEnv.empty.childScope(sorted.map { it.name }, emptyList())
+        val binds =
+            sorted.map { binding ->
+                Bind(slotOf(binding.name, env), binding.name, lowerPreludeBinding(binding, program.span), program.span)
+            }
+        return EnterScope(binds, lowerScope(program.stmts, env, program.span), program.span)
+    }
+
+    private fun lowerPreludeBinding(
+        binding: PreludeBinding,
+        span: SourceSpan,
+    ): CoreExpr =
+        when (binding) {
+            is PreludeBinding.Ctor -> lowerConstructor(binding.name, binding.fieldNames, span)
+            is PreludeBinding.Function ->
+                Lambda(
+                    binding.arity,
+                    HostCall(binding.name, List(binding.arity) { i -> Var(0, i, "_$i", span) }, span),
+                    binding.name,
+                    span,
+                )
+            is PreludeBinding.Value -> HostCall(binding.name, emptyList(), span)
+        }
+
     private fun lowerScope(
         stmts: List<Stmt>,
         parent: LowerEnv,
@@ -46,7 +75,14 @@ internal class Lowering {
                     hoisted.add(Bind(slotOf(stmt.name, env), stmt.name, lowerFunDef(stmt, env), stmt.span))
                 is TypeDefStmt ->
                     stmt.typeDef.constructors.forEach { ctor ->
-                        hoisted.add(Bind(slotOf(ctor.name, env), ctor.name, lowerConstructor(ctor), ctor.span))
+                        hoisted.add(
+                            Bind(
+                                slotOf(ctor.name, env),
+                                ctor.name,
+                                lowerConstructor(ctor.name, ctor.fields.map { it.name }, ctor.span),
+                                ctor.span,
+                            ),
+                        )
                     }
                 is PatternVal -> {
                     ordered.addAll(lowerPatternVal(stmt, env, i))
@@ -89,12 +125,14 @@ internal class Lowering {
         return Lambda(paramNames.size, lowerExpr(expr.body, env.child(paramNames)), name, expr.span)
     }
 
-    private fun lowerConstructor(ctor: Constructor<*>): CoreExpr {
-        val fieldNames = ctor.fields.map { it.name }
-        if (fieldNames.isEmpty()) return MakeData(ctor.name, emptyList(), emptyList(), ctor.span)
-        val body =
-            MakeData(ctor.name, fieldNames, fieldNames.mapIndexed { i, name -> Var(0, i, name, ctor.span) }, ctor.span)
-        return Lambda(fieldNames.size, body, ctor.name, ctor.span)
+    private fun lowerConstructor(
+        name: String,
+        fieldNames: List<String>,
+        span: SourceSpan,
+    ): CoreExpr {
+        if (fieldNames.isEmpty()) return MakeData(name, emptyList(), emptyList(), span)
+        val body = MakeData(name, fieldNames, fieldNames.mapIndexed { i, field -> Var(0, i, field, span) }, span)
+        return Lambda(fieldNames.size, body, name, span)
     }
 
     private fun patternValNames(
