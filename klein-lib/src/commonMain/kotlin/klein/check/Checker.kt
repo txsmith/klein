@@ -54,7 +54,12 @@ internal sealed class ExpectedTypeSource {
  * a different language with a different root, and is checked by
  * [klein.check.contract.ContractChecker]; the two share [TypeResolver] and nothing else.
  */
-internal class Checker {
+internal fun checkProgram(
+    program: Program,
+    env: RuleEnv = TypeEnv.empty(),
+): ProgramCheck = Checker().checkProgram(program, env)
+
+private class Checker {
     private val errors = mutableListOf<TypeError>()
     private val subtyping = Subtyping()
     private val constraints = ConstraintGenerator(subtyping)

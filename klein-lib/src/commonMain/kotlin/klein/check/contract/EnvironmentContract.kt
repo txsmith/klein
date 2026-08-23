@@ -3,16 +3,16 @@ package klein.check.contract
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
-import klein.check.Checker
 import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.RuleType
-import klein.core.Lowering
+import klein.check.checkProgram
+import klein.core.lowerWithPrelude
 import klein.surface.Lexer
 import klein.surface.LexerError
 import klein.surface.ParseError
-import klein.surface.Parser
 import klein.surface.Program
+import klein.surface.parseProgram
 
 enum class DeclarationKind { Function, Value }
 
@@ -70,7 +70,7 @@ class EnvironmentContract internal constructor(
         val used = usedCapabilities(program, resolvedRelease.revisions.keys)
         val pins = used.associateWith { resolvedRelease.revisions.getValue(it) }
         val prelude = used.mapNotNull { resolvedRelease.bindingFor(it) }
-        return Edition(Lowering().lowerWithPrelude(program, prelude), release, pins)
+        return Edition(lowerWithPrelude(program, prelude), release, pins)
     }
 
     private fun parseAndCheck(
@@ -79,13 +79,13 @@ class EnvironmentContract internal constructor(
     ): Pair<Program, RuleType> {
         val program =
             try {
-                Parser(Lexer(ruleSource).tokenize().toList()).parseProgram()
+                parseProgram(Lexer(ruleSource).tokenize().toList())
             } catch (e: LexerError) {
                 throw KleinException(listOf(e))
             } catch (e: ParseError) {
                 throw KleinException(listOf(e))
             }
-        val checked = Checker().checkProgram(program, release.types)
+        val checked = checkProgram(program, release.types)
         if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
         return program to checked.type
     }

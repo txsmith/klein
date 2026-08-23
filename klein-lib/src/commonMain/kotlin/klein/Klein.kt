@@ -1,14 +1,13 @@
 package klein
 
 import klein.surface.*
-import klein.check.Checker
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.TypeEnv
+import klein.check.checkProgram
 import klein.check.contract.ContractChecker
 import klein.check.contract.EnvironmentContract
 import klein.core.CoreExpr
-import klein.core.Lowering
 import klein.interp.Execution
 import klein.interp.KleinRuntimeError
 import klein.interp.Machine
@@ -28,7 +27,7 @@ import klein.interp.Value
  * ```
  *
  * Exceptions never escape these functions; stage-internal aborts are converted to errors
- * in the result. The underlying throwing implementations ([Lexer], [Parser]) remain
+ * in the result. The underlying throwing implementations ([Lexer], [parseProgram]) remain
  * available for tools that want them raw.
  */
 object Klein {
@@ -41,7 +40,7 @@ object Klein {
 
     fun parse(tokens: List<Token>): StageResult<Program> =
         try {
-            StageResult.success(Parser(tokens).parseProgram())
+            StageResult.success(parseProgram(tokens))
         } catch (e: ParseError) {
             StageResult.failure(e)
         }
@@ -56,7 +55,7 @@ object Klein {
         program: Program,
         env: RuleEnv = TypeEnv.empty(),
     ): StageResult<RuleType> {
-        val checked = Checker().checkProgram(program, env)
+        val checked = checkProgram(program, env)
         return StageResult(checked.type, checked.errors)
     }
 
@@ -78,7 +77,7 @@ object Klein {
             }
         val contract =
             try {
-                Parser(tokens).parseContract()
+                parseContract(tokens)
             } catch (e: ParseError) {
                 throw KleinException(listOf(e))
             }
@@ -92,7 +91,7 @@ object Klein {
      * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
      * stage carries no errors — it either produces IR or throws.
      */
-    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(Lowering().lower(program))
+    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(klein.core.lower(program))
 
     /**
      * Run lowered [CoreExpr] on the [Machine] to completion. v1 has no host seam, so a suspension

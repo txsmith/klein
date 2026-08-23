@@ -2,7 +2,7 @@ package klein.check
 
 import klein.RevisionNumber
 import klein.surface.Lexer
-import klein.surface.Parser
+import klein.surface.parseProgram
 import klein.check.Type.*
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -14,8 +14,8 @@ internal fun infer(
     env: RuleEnv = TypeEnv.empty(),
 ): ProgramCheck {
     val tokens = Lexer(src).tokenize().toList()
-    val program = Parser(tokens).parseProgram()
-    return Checker().checkProgram(program, env)
+    val program = parseProgram(tokens)
+    return checkProgram(program, env)
 }
 
 /** A type variable for expected types; alpha-equality compares skolems by name, ignoring the id. */

@@ -13,7 +13,15 @@ class ParseError(
 ) : Exception(message),
     KleinError
 
-class Parser(
+fun parseProgram(tokens: List<Token>): Program = Parser(tokens).parseProgram()
+
+fun parseContract(tokens: List<Token>): ContractExpr = Parser(tokens).parseContract()
+
+internal fun parseStmt(tokens: List<Token>): Stmt = Parser(tokens).parseStmt()
+
+internal fun parseExpr(tokens: List<Token>): Expr = Parser(tokens).parseExpr()
+
+private class Parser(
     private val tokens: List<Token>,
 ) {
     private var pos: Int = 0

@@ -31,15 +31,18 @@ an interactive host that prompts the user for each answer.
 
 ## Implementation Overview
 
-- [ ] Phase 1: Constructor-only rules run — `compileRule`, the edition prelude, and pins
+- [x] Phase 1: Constructor-only rules run — `compileRule`, the edition prelude, and pins
   - [x] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
   - [x] 1b: `ResolvedRelease` — the release materialised in two halves
   - [x] 1c: The used-capability pass
   - [x] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
   - [x] 1e: `compileRule` and the `Edition`
   - [x] 1f: The CLI compiles and executes
-  - [ ] 1g: Facade functions — one top-level function per atomic operation, workers private
+  - [x] 1g: Facade functions — one top-level function per atomic operation, workers private
 - [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
+  - [ ] 2a: Per-run supply and the contract reference
+  - [ ] 2b: The runner — pre-flight pin check and the loop
+  - [ ] 2c: The example host module
 - [ ] Phase 3: The CLI becomes an interactive host
 - [ ] Phase 4: Handler answers are checked at the resume boundary
 
@@ -368,7 +371,10 @@ invisible to it, so any gap in the public embedding surface stops the build.
 One entry point, `run`, and handlers that answer inline. `Implementation.Deferred` stays undriven —
 see "Not in this outline" at the end.
 
-### File Changes
+Three sub-items, strictly linear: **2a → 2b → 2c**. 2a is groundwork inside the existing
+`Environment`, 2b is the feature, 2c is the module that proves the public surface carries it.
+
+### 2a: Per-run supply and the contract reference
 
 - **`klein-lib/src/commonMain/kotlin/klein/host/Environment.kt`**: per-run supply, and the contract
   reference the runner needs.
@@ -391,6 +397,15 @@ class Environment internal constructor(
   gives the `ResolvedRelease`, and `bindingFor` says whether the name needs an implementation. Phase 4
   uses the same reference for the release's `RuleEnv`. `resolve(release)` is already `internal` —
   1b made it so, since `ResolvedReleaseTest` had no other way to reach a `ResolvedRelease`.
+
+- **`klein-lib/src/commonTest/kotlin/klein/host/EnvironmentTest.kt`**: new cases for the lambda-less
+  marker — it satisfies `implement`'s completeness check and lands as an implementation-less
+  capability entry. (That a run must then supply it is 2b's `MissingImplementation`, tested there.)
+
+**Done when:** the suite is green; the marker registers and completeness still holds. Nothing
+consumes the contract reference yet.
+
+### 2b: The runner — pre-flight pin check and the loop
 
 - **`klein-lib/src/commonMain/kotlin/klein/host/Runner.kt`** (new): the pin check, the loop, and the
   resume step, all extensions on `Environment` so the dependency arrow stays one-way.
@@ -420,6 +435,21 @@ class MissingImplementation(name: String, declared: RevisionNumber) : KleinError
   checkable without running it, and no walk of the Core tree is needed. It over-approximates — a
   capability behind an untaken `if` still needs an implementation — which is the same trade
   `implement` makes.
+- **`klein-lib/src/commonTest/kotlin/klein/host/RunAgainstReleaseTest.kt`** (new): the execution
+  narrative, modelled on `LendingExampleTest.kt` — a rule calling a capability runs; a nullary
+  capability is asked exactly once however many times the rule reads it; a rule calling through
+  `f = creditScore` produces the same answer as the direct call; two editions of the same rule
+  dispatch to the revision their release pinned; an unregistered pin is `UnservedPin` before the
+  machine starts; a run that forgets a supplied capability is `MissingImplementation`; a rule that
+  both constructs a contract type and calls a capability passes `checkPins`, the case that fails if
+  a constructor pin is mistaken for a capability; an edition still runs against an environment built
+  from a contract edited in place at the same revision, per `aCompatibleSignatureEditNeedsNoRevision`.
+
+**Done when:** `RunAgainstReleaseTest` passes — a capability-calling rule runs to a value inside
+`klein-lib`'s own tests.
+
+### 2c: The example host module
+
 - **`settings.gradle.kts`**: `include(":klein-example-host")`.
 - **`build.gradle.kts`** (root): add `kotlin("jvm") version "2.0.21" apply false` to the plugins
   block.
@@ -430,21 +460,13 @@ class MissingImplementation(name: String, declared: RevisionNumber) : KleinError
   Contract path, rule path, and release are runtime arguments.
 - **`klein-example-host/src/test/kotlin/klein/example/LendingHostTest.kt`** (new): a smoke test that
   it runs the lending example and produces the expected value.
-- **`klein-lib/src/commonTest/kotlin/klein/host/RunAgainstReleaseTest.kt`** (new): the execution
-  narrative, modelled on `LendingExampleTest.kt` — a rule calling a capability runs; a nullary
-  capability is asked exactly once however many times the rule reads it; a rule calling through
-  `f = creditScore` produces the same answer as the direct call; two editions of the same rule
-  dispatch to the revision their release pinned; an unregistered pin is `UnservedPin` before the
-  machine starts; a run that forgets a supplied capability is `MissingImplementation`; a rule that
-  both constructs a contract type and calls a capability passes `checkPins`, the case that fails if
-  a constructor pin is mistaken for a capability; an edition still runs against an environment built from a
-  contract edited in place at the same revision, per `aCompatibleSignatureEditNeedsNoRevision`.
-- **`klein-lib/src/commonTest/kotlin/klein/host/EnvironmentTest.kt`**: new cases for the lambda-less
-  marker — it satisfies `implement`'s completeness check, and a run must then supply it.
 - **`docs/host-integration-roadmap.md`**: §Execution wiring moves to Done (the roadmap already
   records the once-open `HostCall`/eta-expansion decisions as settled).
 
-### Validation
+**Done when:** the phase-level validation below passes — `./gradlew build` proves the module
+compiles against the public surface only.
+
+### Validation — phase level
 
 #### Automated Verification
 

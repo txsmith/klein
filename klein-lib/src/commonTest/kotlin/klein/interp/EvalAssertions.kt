@@ -1,7 +1,7 @@
 package klein.interp
 
 import klein.Klein
-import klein.core.Lowering
+import klein.core.lower
 import klein.core.parseProgram
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,7 +17,7 @@ fun runSource(source: String): Value {
     val program = parseProgram(source.trimIndent().trim())
     val checked = Klein.check(program)
     check(!checked.hasErrors) { "type errors in test program: ${checked.errors}" }
-    val exec = Machine.start(Lowering().lower(program))
+    val exec = Machine.start(lower(program))
     assertIs<Execution.Done>(exec)
     return exec.value
 }

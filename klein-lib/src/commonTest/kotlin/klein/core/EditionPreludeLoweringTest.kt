@@ -28,7 +28,7 @@ class EditionPreludeLoweringTest {
         source: String,
         expected: String,
     ) {
-        val core = Lowering().lowerWithPrelude(parseProgram(source.trimIndent().trim()), prelude)
+        val core = lowerWithPrelude(parseProgram(source.trimIndent().trim()), prelude)
         assertEquals(expected.trimIndent().trim(), CorePrinter.print(core))
     }
 

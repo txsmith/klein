@@ -36,7 +36,10 @@ import klein.surface.Operator
 import klein.surface.OptionalTypeExpr
 import klein.surface.Param
 import klein.surface.ParseError
-import klein.surface.Parser
+import klein.surface.parseContract
+import klein.surface.parseExpr
+import klein.surface.parseProgram
+import klein.surface.parseStmt
 import klein.surface.Pattern
 import klein.surface.PatternVal
 import klein.surface.Program
@@ -289,7 +292,7 @@ fun Expr.stripSpans(): Expr =
 
 fun parse(source: String): Expr {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseExpr()
+    return parseExpr(tokens)
 }
 
 fun assertExprEquals(
@@ -414,12 +417,12 @@ fun <R : RevisionNumber?> optionalType(inner: TypeExpr<R>) = OptionalTypeExpr(in
 
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseStmt()
+    return parseStmt(tokens)
 }
 
 fun parseTopLevel(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseProgram().stmts.first()
+    return parseProgram(tokens).stmts.first()
 }
 
 fun Stmt.stripSpan(): Stmt =
@@ -463,7 +466,7 @@ fun <R : RevisionNumber?> TypeExpr<R>.stripSpan(): TypeExpr<R> =
 
 fun parseTypeDef(source: String): TypeDef<Nothing?> {
     val tokens = Lexer(source).tokenize().toList()
-    val stmt = Parser(tokens).parseStmt()
+    val stmt = parseStmt(tokens)
     if (stmt !is TypeDefStmt) {
         throw ParseError("Expected type definition", stmt.span)
     }
@@ -486,7 +489,7 @@ fun assertStmtEquals(
 
 fun parseProgram(source: String): Program {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseProgram()
+    return parseProgram(tokens)
 }
 
 fun assertProgramEquals(
@@ -498,7 +501,7 @@ fun assertProgramEquals(
 
 fun parseContract(source: String): ContractExpr {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseContract()
+    return parseContract(tokens)
 }
 
 fun assertContractEquals(

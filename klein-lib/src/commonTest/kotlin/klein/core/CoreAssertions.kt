@@ -4,7 +4,6 @@ import klein.ReleaseNumber
 import klein.SourceSpan
 import klein.check.contract.EnvironmentContract
 import klein.surface.Lexer
-import klein.surface.Parser
 import kotlin.test.assertEquals
 
 private val Z = SourceSpan.zero
@@ -99,7 +98,7 @@ internal fun default(
 ) = Match.Default(guard, body, Z)
 
 /** Parse Klein [source] to a surface program (lex + parse, no checking). */
-internal fun parseProgram(source: String) = Parser(Lexer(source).tokenize().toList()).parseProgram()
+internal fun parseProgram(source: String) = klein.surface.parseProgram(Lexer(source).tokenize().toList())
 
 /**
  * Golden lowering assertion: lower [source] and compare the printed IR to [expected]. Both
@@ -112,7 +111,7 @@ internal fun assertLowersTo(
     source: String,
     expected: String,
 ) {
-    val core = Lowering().lower(parseProgram(source.trimIndent().trim()))
+    val core = lower(parseProgram(source.trimIndent().trim()))
     assertEquals(expected.trimIndent().trim(), CorePrinter.print(core))
 }
 

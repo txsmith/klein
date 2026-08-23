@@ -1,14 +1,14 @@
 package klein.check.contract
 
 import klein.surface.Lexer
-import klein.surface.Parser
+import klein.surface.parseProgram
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 private val exposed = setOf("creditScore", "taxRate", "Customer", "Invoice", "Money", "Circle", "Person")
 
 private fun used(src: String): Set<String> =
-    usedCapabilities(Parser(Lexer(src.trimIndent()).tokenize().toList()).parseProgram(), exposed)
+    usedCapabilities(parseProgram(Lexer(src.trimIndent()).tokenize().toList()), exposed)
 
 class UsedCapabilitiesTest {
     @Test
