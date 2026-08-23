@@ -40,7 +40,7 @@ an interactive host that prompts the user for each answer.
   - [x] 1f: The CLI compiles and executes
   - [x] 1g: Facade functions — one top-level function per atomic operation, workers private
 - [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
-  - [ ] 2a: Per-run supply and the contract reference
+  - [x] 2a: Per-run supply and the contract reference
   - [ ] 2b: The runner — pre-flight pin check and the loop
   - [ ] 2c: The example host module
 - [ ] Phase 3: The CLI becomes an interactive host

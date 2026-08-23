@@ -268,6 +268,63 @@ class EnvironmentTest {
         assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.errors.single()).name)
     }
 
+    // --- per-run supply: the lambda-less marker (2a; a run supplying it is 2b) ---
+
+    @Test
+    fun aLambdaLessRegistrationSatisfiesCompleteness() {
+        assertFailsWith<KleinException> { load(CONTRACT) { immediate("maxRetries") { Value.VNum(3.0) } } }
+        val env =
+            load(CONTRACT) {
+                immediate("creditCheck")
+                immediate("maxRetries") { Value.VNum(3.0) }
+            }
+        assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
+    }
+
+    @Test
+    fun aPerRunEntryHasNoImplementation() {
+        val env =
+            load(CONTRACT) {
+                immediate("creditCheck")
+                immediate("maxRetries") { Value.VNum(3.0) }
+            }
+        assertEquals(null, env[env.capabilities.first { it.name == "creditCheck" }.id])
+        assertIs<Implementation.Immediate>(env[env.capabilities.first { it.name == "maxRetries" }.id])
+    }
+
+    @Test
+    fun aPerRunMarkerNamesADeclaredRevision() {
+        val env = load("fun creditScore/2(c: Num): Num") { immediate("creditScore", revision = RevisionNumber(2)) }
+        assertEquals(RevisionNumber(2), env.capabilities.single().revision)
+        assertEquals(null, env[env.capabilities.single().id])
+    }
+
+    @Test
+    fun aPerRunMarkerForAnUndeclaredNameFails() {
+        val error = assertFailsWith<KleinException> { load(CONTRACT) { registerAll(this); immediate("nope") } }
+        assertTrue(error.message!!.contains("nope"), "message should name the capability: ${error.message}")
+    }
+
+    @Test
+    fun aPerRunMarkerCountsAsARegistrationForDuplicates() {
+        assertFailsWith<KleinException> {
+            load(CONTRACT) {
+                immediate("creditCheck")
+                immediate("creditCheck") { Value.VNum(1.0) }
+                immediate("maxRetries") { Value.VNum(3.0) }
+            }
+        }
+    }
+
+    // --- the contract reference ---
+
+    @Test
+    fun theEnvironmentKeepsTheContractItImplements() {
+        val contract = Klein.checkContract(CONTRACT)
+        val env = contract.implement(::registerAll)
+        assertTrue(env.contract === contract)
+    }
+
     // --- identity ---
 
     @Test

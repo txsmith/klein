@@ -50,7 +50,7 @@ sealed interface Implementation {
 class Registry(
     val declarations: List<ContractDeclaration>,
 ) {
-    val registered = mutableMapOf<Pair<String, RevisionNumber>, Implementation>()
+    val registered = mutableMapOf<Pair<String, RevisionNumber>, Implementation?>()
     val errors = mutableListOf<RegistrationError>()
 
     fun immediate(
@@ -58,6 +58,11 @@ class Registry(
         revision: RevisionNumber = RevisionNumber(1),
         answer: (List<Value>) -> Value,
     ) = register(name, revision, Implementation.Immediate(answer))
+
+    fun immediate(
+        name: String,
+        revision: RevisionNumber = RevisionNumber(1),
+    ) = register(name, revision, null)
 
     fun deferred(
         name: String,
@@ -68,7 +73,7 @@ class Registry(
     private fun register(
         name: String,
         revision: RevisionNumber,
-        implementation: Implementation,
+        implementation: Implementation?,
     ) {
         if (declarations.none { it.name == name && it.revision == revision }) {
             errors.add(
@@ -76,16 +81,19 @@ class Registry(
             )
             return
         }
-        if (registered.put(name to revision, implementation) != null) {
+        if (name to revision in registered) {
             errors.add(RegistrationError("'$name' revision ${revision.value} is registered more than once"))
+            return
         }
+        registered[name to revision] = implementation
     }
 }
 
 /**
- * Bind a checked contract to a running host: run [register], require an implementation for every
- * declared `(name, revision)`, and mint a [Capability] per declaration. Throws [KleinException] if
- * any declaration is unimplemented, any registration names something undeclared, or anything is
+ * Bind a checked contract to a running host: run [register], require a registration for every
+ * declared `(name, revision)` — an implementation, or the lambda-less marker whose implementation
+ * arrives with each run — and mint a [Capability] per declaration. Throws [KleinException] if any
+ * declaration is unregistered, any registration names something undeclared, or anything is
  * registered twice.
  *
  * An extension declared in `klein.host` rather than a member of [EnvironmentContract]: `klein.host`
@@ -111,16 +119,18 @@ fun EnvironmentContract.implement(register: Registry.() -> Unit = {}): Environme
             Capability(declaration, capabilityId(declaration.name, declaration.type, declaration.revision))
         }
     val implementations =
-        capabilities.associate { capability ->
-            capability.id to registry.registered.getValue(capability.name to capability.revision)
-        }
-    return Environment(capabilities, implementations)
+        capabilities
+            .mapNotNull { capability ->
+                registry.registered.getValue(capability.name to capability.revision)?.let { capability.id to it }
+            }.toMap()
+    return Environment(capabilities, this, implementations)
 }
 
 /** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
  *  has it. Checking rules needs none of this — that is [EnvironmentContract]'s job. */
-class Environment(
+class Environment internal constructor(
     val capabilities: List<Capability>,
+    internal val contract: EnvironmentContract,
     private val implementations: Map<CapabilityId, Implementation>,
 ) {
     operator fun get(id: CapabilityId): Implementation? = implementations[id]
