@@ -34,7 +34,7 @@ an interactive host that prompts the user for each answer.
 - [ ] Phase 1: Constructor-only rules run — `compileRule`, the edition prelude, and pins
   - [x] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
   - [x] 1b: `ResolvedRelease` — the release materialised in two halves
-  - [ ] 1c: The used-capability pass
+  - [x] 1c: The used-capability pass
   - [ ] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
   - [ ] 1e: `compileRule` and the `Edition`
   - [ ] 1f: The CLI compiles and executes
@@ -159,10 +159,13 @@ passes. Nothing consumes `revisions` yet.
 ### 1c: The used-capability pass
 
 - **`klein-lib/src/commonMain/kotlin/klein/check/contract/UsedCapabilities.kt`** (new, internal): one AST
-  walk collecting names the program does not bind itself, in **both** positions — expression
-  identifiers and type references. Type positions are not optional: annotations on `fun` params and
-  returns, on `val`s and lambda params, and inside the rule's own type definitions are all places a
-  contract type is depended on without a constructor ever appearing.
+  walk collecting names the program does not bind itself, in all **three** positions — expression
+  identifiers, type references, and pattern mentions. Type positions are not optional: annotations on
+  `fun` params and returns, on `val`s and lambda params, and inside the rule's own type definitions
+  are all places a contract type is depended on without a constructor ever appearing. Pattern
+  positions are not optional either: `match shape … Circle c -> …` and `Circle c = x` resolve
+  `Circle` against the release without it appearing in any expression or annotation, and pins that
+  miss it would tell reconciliation this rule is unaffected by a `Shape` revision — exactly wrong.
 
 ```kotlin
 internal fun usedCapabilities(program: Program, exposed: Set<String>): Set<String>
