@@ -1,8 +1,8 @@
 # Checked against lending.contract's release 2:
 #   klein check --contract examples/lending.contract examples/lending-rule.klein --release 2
 #
-# Calls a capability by its plain name, so it type-checks but cannot yet be executed — capabilities
-# are not wired up to a runtime handler (see TODO.md, "Capabilities reachable from Klein source"):
+# Calls a capability by its plain name, so it type-checks but cannot yet be executed — nothing
+# answers a host call at runtime (see docs/host-integration-roadmap.md, "Execution wiring"):
 #   klein run --contract examples/lending.contract examples/lending-rule.klein --release 2
 
 creditScore(customer) >= 620 and customer.tier == "gold"

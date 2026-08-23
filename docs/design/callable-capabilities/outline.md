@@ -36,8 +36,9 @@ an interactive host that prompts the user for each answer.
   - [x] 1b: `ResolvedRelease` — the release materialised in two halves
   - [x] 1c: The used-capability pass
   - [x] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`
-  - [ ] 1e: `compileRule` and the `Edition`
-  - [ ] 1f: The CLI compiles and executes
+  - [x] 1e: `compileRule` and the `Edition`
+  - [x] 1f: The CLI compiles and executes
+  - [ ] 1g: Facade functions — one top-level function per atomic operation, workers private
 - [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
 - [ ] Phase 3: The CLI becomes an interactive host
 - [ ] Phase 4: Handler answers are checked at the resume boundary
@@ -138,7 +139,7 @@ internal class ResolvedRelease(
 ```kotlin
 // the memo widens from RuleEnv to both sides; `check` reads .types, `compileRule` (1e) reads both
 private val resolved = mutableMapOf<ReleaseNumber, ResolvedRelease>()
-private fun resolved(release: ReleaseNumber): ResolvedRelease          // was: ruleEnvironment
+internal fun resolve(release: ReleaseNumber): ResolvedRelease          // was: ruleEnvironment
 ```
 
   `ruleEnvironment`'s memo already exists because "a host recompiles many rules against the same
@@ -324,6 +325,20 @@ fun compileRule(ruleSource: String, release: ReleaseNumber): Edition   // new
 
 **Done when:** the manual verification below passes.
 
+### 1g: Facade functions — one top-level function per atomic operation, workers private
+
+Housekeeping after 1f, 1a-shaped: mechanical, suite green throughout. The instantiate-call-inspect
+classes encapsulate algorithms, not state between calls — a parser's cursor and a checker's error
+list live exactly as long as one run. The atomic operations become top-level functions
+(`parseProgram`, `parseContract`, `checkProgram`, `lower`, `lowerWithPrelude`); worker classes go
+private behind them (`Parser`, `Checker`) or dissolve (`Lowering`, already field-free). Not
+extensions: `Program` is inert data crossing layers, and pipeline stages compose as functions
+through `StageResult.andThen`. Tests migrate to the facades — the atomic operation is what gets
+tested, not the worker. The errors-in-result vs throw split is settled and untouched.
+
+**Done when:** the suite is green with zero behaviour change; no public call site constructs a
+worker.
+
 ### Validation — phase level
 
 #### Automated Verification
@@ -372,9 +387,9 @@ class Environment internal constructor(
   names every declaration at boot — while marking an entry as "an implementation arrives with the
   run". `customer` is the case: per-request data an environment built once cannot hold.
 
-  The contract reference is what lets `checkPins` classify a pin: `contract.resolved(edition.release)`
+  The contract reference is what lets `checkPins` classify a pin: `contract.resolve(edition.release)`
   gives the `ResolvedRelease`, and `bindingFor` says whether the name needs an implementation. Phase 4
-  uses the same reference for the release's `RuleEnv`. `resolved(release)` is already `internal` —
+  uses the same reference for the release's `RuleEnv`. `resolve(release)` is already `internal` —
   1b made it so, since `ResolvedReleaseTest` had no other way to reach a `ResolvedRelease`.
 
 - **`klein-lib/src/commonMain/kotlin/klein/host/Runner.kt`** (new): the pin check, the loop, and the

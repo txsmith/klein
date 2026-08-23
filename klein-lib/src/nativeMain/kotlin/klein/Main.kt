@@ -8,7 +8,6 @@ import klein.check.contract.DeclarationKind
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.UnknownRelease
 import klein.core.CorePrinter
-import klein.core.InvariantViolation
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -145,18 +144,16 @@ private fun checkCmd(
         return
     }
     val ruleSource = getSource(useStdin, fileArg) ?: return
-    val release = resolveRelease(contract, releaseArg)
-    val type = checkRuleAgainstContract(contract, ruleSource, release, rawErrors)
+    val release = parseReleaseNumber(contract, releaseArg)
+    val type = withRuleDiagnostics(ruleSource, rawErrors) { contract.check(ruleSource, release) }
     println("rule : ${Type.print(type)}")
     println("✓ Type checks against release ${release.value}")
 }
 
 /**
- * `run` with `--contract`: check the rule against the release, then lower and execute it. A rule
- * that references a capability by name cannot be executed yet — nothing wires a capability call to
- * a handler at runtime (see docs/host-integration-roadmap.md, "Execution wiring") — so that specific
- * failure is caught and reported plainly instead of surfacing as an internal lowering error.
- */
+ * `run` with `--contract`: compile the rule against the release into an edition, then execute its
+ * core.
+ **/
 private fun runCmd(
     useStdin: Boolean,
     fileArg: String?,
@@ -175,23 +172,9 @@ private fun runCmd(
     }
     val contract = loadContract(contractPath, rawErrors)
     val ruleSource = getSource(useStdin, fileArg) ?: return
-    val release = resolveRelease(contract, releaseArg)
-    checkRuleAgainstContract(contract, ruleSource, release, rawErrors)
-
-    val parsed = Klein.tokenize(ruleSource).andThen(Klein::parse)
-    exitOnErrors(parsed, ruleSource, rawErrors)
-    val core =
-        try {
-            Klein.lower(parsed.output!!)
-        } catch (_: InvariantViolation) {
-            println(
-                "Error: this rule calls a capability, and capabilities are not callable at runtime yet " +
-                    "(see docs/host-integration-roadmap.md, \"Execution wiring\"). Use 'check' to verify " +
-                    "the rule compiles against the release.",
-            )
-            exitProcess(1)
-        }
-    val executed = core.andThen(Klein::execute)
+    val release = parseReleaseNumber(contract, releaseArg)
+    val edition = withRuleDiagnostics(ruleSource, rawErrors) { contract.compileRule(ruleSource, release) }
+    val executed = Klein.execute(edition.core)
     exitOnErrors(executed, ruleSource, rawErrors)
     println(Value.print(executed.output!!))
 }
@@ -211,7 +194,7 @@ private fun loadContract(
 }
 
 /** [releaseArg] if given; otherwise the contract's one release, or an error if it has none or several. */
-private fun resolveRelease(
+private fun parseReleaseNumber(
     contract: EnvironmentContract,
     releaseArg: String?,
 ): ReleaseNumber {
@@ -239,14 +222,13 @@ private fun resolveRelease(
     }
 }
 
-/** Check [ruleSource] against [release], exiting non-zero with every diagnostic on failure. */
-private fun checkRuleAgainstContract(
-    contract: EnvironmentContract,
+/** Run a contract operation on [ruleSource], exiting non-zero with every diagnostic on failure. */
+private fun <T> withRuleDiagnostics(
     ruleSource: String,
-    release: ReleaseNumber,
     rawErrors: Boolean,
-) = try {
-    contract.check(ruleSource, release)
+    operation: () -> T,
+): T = try {
+    operation()
 } catch (e: UnknownRelease) {
     println("Error: ${e.message}")
     exitProcess(1)
