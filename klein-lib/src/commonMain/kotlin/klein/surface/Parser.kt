@@ -2,7 +2,7 @@ package klein.surface
 
 import klein.KleinError
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 
 import klein.surface.TokenKind.*
@@ -209,7 +209,7 @@ class Parser(
         }
 
     /** How a contract reads a revision: `/N` where one is written, absent otherwise. */
-    private fun contractRevision(name: String): Revision? = parseRevisionSuffix()
+    private fun contractRevision(name: String): RevisionNumber? = parseRevisionSuffix()
 
     /**
      * How a rule reads a revision: it does not. `Nothing?` has one inhabitant, so every type
@@ -226,7 +226,7 @@ class Parser(
         return null
     }
 
-    private fun parseRevisionSuffix(): Revision? {
+    private fun parseRevisionSuffix(): RevisionNumber? {
         if (peek().kind != SLASH) return null
         val slash = advance()
         val number = peek()
@@ -238,10 +238,10 @@ class Parser(
         if (revision == null || revision < 1) {
             throw ParseError("Revision must be a positive integer, got '${number.text}'", number.span)
         }
-        return Revision(revision)
+        return RevisionNumber(revision)
     }
 
-    private fun <R : Revision?> parseTypeDef(revision: (name: String) -> R): TypeDef<R> {
+    private fun <R : RevisionNumber?> parseTypeDef(revision: (name: String) -> R): TypeDef<R> {
         val typeToken = advance()
         val typeDefIndent = lineIndentOf(typeToken)
 
@@ -299,7 +299,7 @@ class Parser(
         return params
     }
 
-    private fun <R : Revision?> parseConstructors(
+    private fun <R : RevisionNumber?> parseConstructors(
         typeDefIndent: Int,
         revision: (name: String) -> R,
     ): List<Constructor<R>> {
@@ -316,7 +316,7 @@ class Parser(
         return constructors
     }
 
-    private fun <R : Revision?> parseConstructor(
+    private fun <R : RevisionNumber?> parseConstructor(
         seenNames: MutableSet<String>,
         revision: (name: String) -> R,
     ): Constructor<R> {
@@ -338,7 +338,7 @@ class Parser(
         return Constructor(nameToken.text, fields, nameToken.span + endSpan)
     }
 
-    private fun <R : Revision?> parseConstructorFields(revision: (name: String) -> R): List<FieldDecl<R>> {
+    private fun <R : RevisionNumber?> parseConstructorFields(revision: (name: String) -> R): List<FieldDecl<R>> {
         advance()
         if (peek().kind == RBRACE) {
             throw ParseError("Constructor fields cannot be empty", peek().span)
@@ -370,7 +370,7 @@ class Parser(
         return fields
     }
 
-    private fun <R : Revision?> parseFieldDecl(
+    private fun <R : RevisionNumber?> parseFieldDecl(
         seenFields: MutableSet<String>,
         revision: (name: String) -> R,
     ): FieldDecl<R> {
@@ -386,7 +386,7 @@ class Parser(
         return FieldDecl(nameToken.text, type, nameToken.span + type.span)
     }
 
-    private fun <R : Revision?> parseTypeExpr(revision: (name: String) -> R): TypeExpr<R> {
+    private fun <R : RevisionNumber?> parseTypeExpr(revision: (name: String) -> R): TypeExpr<R> {
         val left = parseTypePostfix(revision)
 
         if (peek().kind == ARROW) {
@@ -402,7 +402,7 @@ class Parser(
     /** Postfix `?` (nullable) binds tighter than `->`: `Num -> Num?` is a function returning `Num?`,
      *  while `(Num -> Num)?` is an optional function. Repeated `?` parse and are collapsed to a
      *  single optional during type resolution (`T?? = T?`). */
-    private fun <R : Revision?> parseTypePostfix(revision: (name: String) -> R): TypeExpr<R> {
+    private fun <R : RevisionNumber?> parseTypePostfix(revision: (name: String) -> R): TypeExpr<R> {
         var type = parseTypeAtom(revision)
         while (peek().kind == QUESTION) {
             val question = advance()
@@ -411,7 +411,7 @@ class Parser(
         return type
     }
 
-    private fun <R : Revision?> parseTypeArgs(revision: (name: String) -> R): List<TypeExpr<R>> {
+    private fun <R : RevisionNumber?> parseTypeArgs(revision: (name: String) -> R): List<TypeExpr<R>> {
         advance()
         val args = mutableListOf<TypeExpr<R>>()
         args.add(parseTypeExpr(revision))
@@ -423,7 +423,7 @@ class Parser(
         return args
     }
 
-    private fun <R : Revision?> parseTypeAtom(revision: (name: String) -> R): TypeExpr<R> {
+    private fun <R : RevisionNumber?> parseTypeAtom(revision: (name: String) -> R): TypeExpr<R> {
         val token = peek()
         return when (token.kind) {
             UPPER_IDENT -> {
@@ -518,7 +518,7 @@ class Parser(
         return token
     }
 
-    private fun <R : Revision?> parseFunParams(revision: (name: String) -> R): List<Param<R>> {
+    private fun <R : RevisionNumber?> parseFunParams(revision: (name: String) -> R): List<Param<R>> {
         if (peek().kind == RPAREN) return emptyList()
 
         val params = mutableListOf<Param<R>>()
@@ -540,7 +540,7 @@ class Parser(
             null
         }
 
-    private fun <R : Revision?> parseAnnotatedParam(revision: (name: String) -> R): Param<R> {
+    private fun <R : RevisionNumber?> parseAnnotatedParam(revision: (name: String) -> R): Param<R> {
         val name = expectIdentifier("Expected parameter name")
         val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(revision) }
         val span = name.span + (typeAnnotation?.span ?: name.span)

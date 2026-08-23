@@ -1,6 +1,6 @@
 package klein.check.contract
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.ContractType
 import klein.check.TRef
 import klein.check.Type
@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
  * [strip], the one function whose signature changes the revision witness.
  *
  * The witness already proves no revision survives and that the recursion is total — a
- * `Type<Revision>` child cannot sit inside a `Type<Nothing?>` parent, so a missed branch would not
+ * `Type<RevisionNumber>` child cannot sit inside a `Type<Nothing?>` parent, so a missed branch would not
  * compile. It says nothing about whether the rewrite *preserves* the type, which is what these are
  * for. What a release exposes is asserted through rules, in `RuleAgainstReleaseTest`.
  */
@@ -21,7 +21,7 @@ class ProjectionTest {
         name: String,
         revision: Int,
         vararg args: ContractType,
-    ): ContractType = TRef(name, args.toList(), Revision(revision))
+    ): ContractType = TRef(name, args.toList(), RevisionNumber(revision))
 
     // ── every constructor round-trips, minus the revision ────────────────────
 

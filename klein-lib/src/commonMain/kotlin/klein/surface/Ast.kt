@@ -1,6 +1,6 @@
 package klein.surface
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 
 import kotlinx.serialization.Serializable
@@ -32,7 +32,7 @@ data class PatternVal(
     override val span: SourceSpan,
 ) : Stmt()
 
-data class Param<out R : Revision?>(
+data class Param<out R : RevisionNumber?>(
     val name: String,
     val typeAnnotation: TypeExpr<R>? = null,
     val span: SourceSpan = SourceSpan.zero,
@@ -52,7 +52,7 @@ data class FunDef(
  * A type definition. Shared for real rather than incidentally: a rule may define its own types, and
  * a contract may too — only the contract parser ever fills [revision] in.
  */
-data class TypeDef<out R : Revision?>(
+data class TypeDef<out R : RevisionNumber?>(
     val name: String,
     val typeParams: List<String>,
     val constructors: List<Constructor<R>>,
@@ -70,16 +70,16 @@ data class TypeDefStmt(
 
 internal fun revisionedName(
     name: String,
-    revision: Revision?,
+    revision: RevisionNumber?,
 ): String = if (revision == null || revision.value == 1) name else "$name/${revision.value}"
 
-data class Constructor<out R : Revision?>(
+data class Constructor<out R : RevisionNumber?>(
     val name: String,
     val fields: List<FieldDecl<R>>,
     val span: SourceSpan,
 )
 
-data class FieldDecl<out R : Revision?>(
+data class FieldDecl<out R : RevisionNumber?>(
     val name: String,
     val type: TypeExpr<R>,
     val span: SourceSpan,
@@ -90,17 +90,17 @@ data class FieldDecl<out R : Revision?>(
  * `TypeExpr<Nothing?>` is a rule's type, and `Nothing?` has exactly one inhabitant — `null`. So "a
  * rule wrote a revision" is not a rule the checker enforces but a state that cannot be constructed.
  */
-sealed class TypeExpr<out R : Revision?> {
+sealed class TypeExpr<out R : RevisionNumber?> {
     abstract val span: SourceSpan
 }
 
-data class TypeName<out R : Revision?>(
+data class TypeName<out R : RevisionNumber?>(
     val name: String,
     override val span: SourceSpan,
     val revision: R,
 ) : TypeExpr<R>()
 
-data class AppliedTypeExpr<out R : Revision?>(
+data class AppliedTypeExpr<out R : RevisionNumber?>(
     val name: String,
     val args: List<TypeExpr<R>>,
     override val span: SourceSpan,
@@ -114,23 +114,23 @@ data class TypeVar(
     override val span: SourceSpan,
 ) : TypeExpr<Nothing>()
 
-data class FunctionTypeExpr<out R : Revision?>(
+data class FunctionTypeExpr<out R : RevisionNumber?>(
     val paramTypes: List<TypeExpr<R>>,
     val returnType: TypeExpr<R>,
     override val span: SourceSpan,
 ) : TypeExpr<R>()
 
-data class TupleTypeExpr<out R : Revision?>(
+data class TupleTypeExpr<out R : RevisionNumber?>(
     val elements: List<TypeExpr<R>>,
     override val span: SourceSpan,
 ) : TypeExpr<R>()
 
-data class RecordTypeExpr<out R : Revision?>(
+data class RecordTypeExpr<out R : RevisionNumber?>(
     val fields: List<Pair<String, TypeExpr<R>>>,
     override val span: SourceSpan,
 ) : TypeExpr<R>()
 
-data class OptionalTypeExpr<out R : Revision?>(
+data class OptionalTypeExpr<out R : RevisionNumber?>(
     val inner: TypeExpr<R>,
     override val span: SourceSpan,
 ) : TypeExpr<R>()

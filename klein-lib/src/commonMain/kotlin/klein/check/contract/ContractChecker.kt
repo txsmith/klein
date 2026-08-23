@@ -1,7 +1,7 @@
 package klein.check.contract
 
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 import klein.check.ContractEnv
 import klein.check.ContractType
@@ -33,9 +33,9 @@ internal data class ContractResult(
  * release a name means exactly one revision, which is what makes dropping the revision on the way
  * to a rule lossless.
  */
-internal data class Release(
+internal data class FlattenedReleaseBlock(
     val number: ReleaseNumber,
-    val surface: Map<String, Revision>,
+    val surface: Map<String, RevisionNumber>,
     val span: SourceSpan = SourceSpan.zero,
 )
 
@@ -49,7 +49,7 @@ internal data class Release(
  */
 internal class ContractChecker {
     private val errors = mutableListOf<TypeError>()
-    private val resolver = TypeResolver<Revision>(errors, { it ?: Revision(1) })
+    private val resolver = TypeResolver<RevisionNumber>(errors, { it ?: RevisionNumber(1) })
     private val subtyping = Subtyping()
     private val preprocessor = TypeDefPreprocessor(errors, resolver, subtyping)
 
@@ -58,7 +58,7 @@ internal class ContractChecker {
         val scope: ContractEnv = TypeEnv.empty()
         preprocessor.process(contract.types, scope)
         val declarations = bindDeclarations(contract, scope)
-        val releases = resolveReleases(contract, scope)
+        val releases = flattenReleaseBlocks(contract, scope)
         return ContractResult(
             EnvironmentContract(declarations, releases.map { it.number }, scope, releases.associateBy { it.number }),
             errors.toList(),
@@ -66,7 +66,7 @@ internal class ContractChecker {
     }
 
     /**
-     * Fold every written block, in file order, into a [Release].
+     * Fold every written block, in file order, into a [FlattenedReleaseBlock].
      *
      * A block states only what its release changes and inherits the rest from the block before it,
      * so reading a release means starting at the oldest and applying each in turn. Numbers must
@@ -76,24 +76,24 @@ internal class ContractChecker {
      * checked environment, which is what makes `Circle/2` an [TypeError.UnknownReleaseTarget]
      * instead of a resolvable pointer at a constructor.
      */
-    private fun resolveReleases(
+    private fun flattenReleaseBlocks(
         contract: ContractExpr,
         env: ContractEnv,
-    ): List<Release> {
+    ): List<FlattenedReleaseBlock> {
         val declared =
-            contract.types.mapTo(mutableSetOf()) { it.name to (it.revision ?: Revision(1)) } +
-                contract.declarations.map { it.name to (it.revision ?: Revision(1)) }
+            contract.types.mapTo(mutableSetOf()) { it.name to (it.revision ?: RevisionNumber(1)) } +
+                contract.declarations.map { it.name to (it.revision ?: RevisionNumber(1)) }
 
-        var inherited = emptyMap<String, Revision>()
+        var inherited = emptyMap<String, RevisionNumber>()
         var previous: ReleaseNumber? = null
-        val releases = mutableListOf<Release>()
+        val releases = mutableListOf<FlattenedReleaseBlock>()
         for (block in contract.releases) {
             if (previous != null && block.number.value <= previous.value) {
                 errors.add(TypeError.ReleaseOutOfOrder(block.number, previous, block.span))
             }
             previous = block.number
             inherited = applyEntries(block, inherited, declared)
-            releases.add(Release(block.number, inherited, block.span))
+            releases.add(FlattenedReleaseBlock(block.number, inherited, block.span))
         }
         releases.forEach { checkSelfContained(it, env) }
         return releases
@@ -102,9 +102,9 @@ internal class ContractChecker {
     /** [block]'s entries applied to the surface it inherits. */
     private fun applyEntries(
         block: ReleaseBlock,
-        inherited: Map<String, Revision>,
-        declared: Set<Pair<String, Revision>>,
-    ): Map<String, Revision> {
+        inherited: Map<String, RevisionNumber>,
+        declared: Set<Pair<String, RevisionNumber>>,
+    ): Map<String, RevisionNumber> {
         val surface = inherited.toMutableMap()
         val seen = mutableSetOf<String>()
         for (entry in block.entries) {
@@ -119,7 +119,7 @@ internal class ContractChecker {
                 }
                 continue
             }
-            val revision = entry.revision ?: Revision(1)
+            val revision = entry.revision ?: RevisionNumber(1)
             if ((entry.name to revision) !in declared) {
                 errors.add(
                     TypeError.UnknownReleaseTarget(revisionedName(entry.name, revision), block.number, entry.span),
@@ -141,10 +141,10 @@ internal class ContractChecker {
      * the set it walks is closed.
      */
     private fun checkSelfContained(
-        release: Release,
+        release: FlattenedReleaseBlock,
         env: ContractEnv,
     ) {
-        val exposed = mutableSetOf<Pair<String, Revision>>()
+        val exposed = mutableSetOf<Pair<String, RevisionNumber>>()
         val rootTypes = mutableListOf<ContractType>()
         for ((name, revision) in release.surface) {
             exposed.add(name to revision)
@@ -174,10 +174,10 @@ internal class ContractChecker {
         contract: ContractExpr,
         env: ContractEnv,
     ): List<ContractDeclaration> {
-        val declared = mutableSetOf<Pair<String, Revision>>()
+        val declared = mutableSetOf<Pair<String, RevisionNumber>>()
         fun declare(
             name: String,
-            revision: Revision,
+            revision: RevisionNumber,
             span: SourceSpan,
         ): Boolean {
             if (declared.add(name to revision)) return true
@@ -187,7 +187,7 @@ internal class ContractChecker {
 
         val declarations = mutableListOf<ContractDeclaration>()
         contract.declarations.forEach { declaration ->
-            val revision = declaration.revision ?: Revision(1)
+            val revision = declaration.revision ?: RevisionNumber(1)
             if (!declare(declaration.name, revision, declaration.span)) return@forEach
             val (kind, type) =
                 when (declaration) {
@@ -201,7 +201,7 @@ internal class ContractChecker {
 
     private fun bindFunDecl(
         declaration: FunDecl,
-        revision: Revision,
+        revision: RevisionNumber,
         env: ContractEnv,
     ): ContractType {
         val (sigEnv, paramTypes) = resolver.openSignature(declaration.params, declaration.returnType, env)
@@ -220,7 +220,7 @@ internal class ContractChecker {
 
     private fun bindValDecl(
         declaration: ValDecl,
-        revision: Revision,
+        revision: RevisionNumber,
         env: ContractEnv,
     ): ContractType {
         val sigEnv = env.child()
@@ -237,7 +237,7 @@ internal class ContractChecker {
     private fun rejectCarriedFunctions(
         crossing: List<ContractType>,
         declaration: CapabilityDeclaration,
-        revision: Revision,
+        revision: RevisionNumber,
         env: ContractEnv,
     ) {
         if (crossing.reachableTypes(env).any { it is Type.TFun }) {
@@ -257,7 +257,7 @@ internal class ContractChecker {
  * environment already holds; nothing here constructs one.
  */
 private fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractType> {
-    val expanded = mutableSetOf<Pair<String, Revision>>()
+    val expanded = mutableSetOf<Pair<String, RevisionNumber>>()
     val reached = mutableListOf<ContractType>()
 
     fun walk(type: ContractType) {
@@ -296,7 +296,7 @@ private fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractTy
  */
 private fun ContractEnv.declaredFields(
     name: String,
-    revision: Revision,
+    revision: RevisionNumber,
 ): List<ContractType> =
     lookupTypeDef(name, revision)?.iface?.fields?.values.orEmpty() +
         constructorsOf(name, revision).flatMap { it.fields.values }

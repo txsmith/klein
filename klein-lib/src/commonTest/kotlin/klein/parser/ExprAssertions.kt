@@ -1,7 +1,7 @@
 package klein.parser
 
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.surface.AppliedTypeExpr
 import klein.surface.Apply
 import klein.surface.Ascription
@@ -90,7 +90,7 @@ fun neg(operand: Expr) = UnaryOp(UnaryOperator.Neg, operand, noSpan)
 
 fun not(operand: Expr) = UnaryOp(UnaryOperator.Not, operand, noSpan)
 
-fun <R : Revision?> param(name: String, type: TypeExpr<R>) = Param(name, type)
+fun <R : RevisionNumber?> param(name: String, type: TypeExpr<R>) = Param(name, type)
 
 fun param(name: String) = Param<Nothing?>(name, null)
 
@@ -327,13 +327,13 @@ fun funDecl(
     name: String,
     params: List<Param<*>>,
     returnType: TypeExpr<*>,
-    revision: Revision? = null,
+    revision: RevisionNumber? = null,
 ) = FunDecl(name, params, returnType, noSpan, revision)
 
 fun valDecl(
     name: String,
     type: TypeExpr<*>,
-    revision: Revision? = null,
+    revision: RevisionNumber? = null,
 ) = ValDecl(name, type, noSpan, revision)
 
 fun releaseBlock(
@@ -343,7 +343,7 @@ fun releaseBlock(
 
 fun releaseEntry(
     name: String,
-    revision: Revision? = null,
+    revision: RevisionNumber? = null,
     remove: Boolean = false,
 ) = ReleaseEntry(name, revision, remove, noSpan)
 
@@ -353,11 +353,11 @@ fun ascription(
 ) = Ascription(expr, type, noSpan)
 
 @Suppress("UNCHECKED_CAST")
-fun <R : Revision?> typeDef(
+fun <R : RevisionNumber?> typeDef(
     name: String,
     typeParams: List<String> = emptyList(),
     vararg constructors: Constructor<R>,
-    revision: Revision? = null,
+    revision: RevisionNumber? = null,
 ): TypeDef<R> = TypeDef(name, typeParams, constructors.toList(), noSpan, revision as R)
 
 /** A type definition as a rule writes it: wrapped, and unrevisioned because [TypeDefStmt] holds
@@ -368,12 +368,12 @@ fun typeDefStmt(
     vararg constructors: Constructor<Nothing?>,
 ) = TypeDefStmt(TypeDef(name, typeParams, constructors.toList(), noSpan, null))
 
-fun <R : Revision?> constructor(
+fun <R : RevisionNumber?> constructor(
     name: String,
     vararg fields: FieldDecl<R>,
 ) = Constructor(name, fields.toList(), noSpan)
 
-fun <R : Revision?> field(
+fun <R : RevisionNumber?> field(
     name: String,
     type: TypeExpr<R>,
 ) = FieldDecl(name, type, noSpan)
@@ -382,35 +382,35 @@ fun typeName(name: String) = TypeName<Nothing?>(name, noSpan, null)
 
 fun typeName(
     name: String,
-    revision: Revision?,
+    revision: RevisionNumber?,
 ) = TypeName(name, noSpan, revision)
 
 fun typeVar(name: String) = TypeVar(name, noSpan)
 
 @Suppress("UNCHECKED_CAST")
-fun <R : Revision?> appliedType(
+fun <R : RevisionNumber?> appliedType(
     name: String,
     vararg args: TypeExpr<R>,
-    revision: Revision? = null,
+    revision: RevisionNumber? = null,
 ): AppliedTypeExpr<R> = AppliedTypeExpr(name, args.toList(), noSpan, revision as R)
 
-fun <R : Revision?> functionType(
+fun <R : RevisionNumber?> functionType(
     paramType: TypeExpr<R>,
     returnType: TypeExpr<R>,
 ) = FunctionTypeExpr(listOf(paramType), returnType, noSpan)
 
-fun <R : Revision?> functionType(
+fun <R : RevisionNumber?> functionType(
     paramTypes: List<TypeExpr<R>>,
     returnType: TypeExpr<R>,
 ) = FunctionTypeExpr(paramTypes, returnType, noSpan)
 
-fun <R : Revision?> functionType(returnType: TypeExpr<R>) = FunctionTypeExpr(emptyList(), returnType, noSpan)
+fun <R : RevisionNumber?> functionType(returnType: TypeExpr<R>) = FunctionTypeExpr(emptyList(), returnType, noSpan)
 
-fun <R : Revision?> tupleType(vararg elements: TypeExpr<R>) = TupleTypeExpr(elements.toList(), noSpan)
+fun <R : RevisionNumber?> tupleType(vararg elements: TypeExpr<R>) = TupleTypeExpr(elements.toList(), noSpan)
 
-fun <R : Revision?> recordType(vararg fields: Pair<String, TypeExpr<R>>) = RecordTypeExpr(fields.toList(), noSpan)
+fun <R : RevisionNumber?> recordType(vararg fields: Pair<String, TypeExpr<R>>) = RecordTypeExpr(fields.toList(), noSpan)
 
-fun <R : Revision?> optionalType(inner: TypeExpr<R>) = OptionalTypeExpr(inner, noSpan)
+fun <R : RevisionNumber?> optionalType(inner: TypeExpr<R>) = OptionalTypeExpr(inner, noSpan)
 
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
@@ -440,17 +440,17 @@ fun CapabilityDeclaration.stripSpan(): CapabilityDeclaration =
 fun ReleaseBlock.stripSpan(): ReleaseBlock =
     ReleaseBlock(number, entries.map { ReleaseEntry(it.name, it.revision, it.remove, noSpan) }, noSpan)
 
-fun <R : Revision?> TypeDef<R>.stripSpan(): TypeDef<R> =
+fun <R : RevisionNumber?> TypeDef<R>.stripSpan(): TypeDef<R> =
     TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan, revision)
 
-fun <R : Revision?> Param<R>.stripSpan(): Param<R> = Param(name, typeAnnotation?.stripSpan())
+fun <R : RevisionNumber?> Param<R>.stripSpan(): Param<R> = Param(name, typeAnnotation?.stripSpan())
 
-fun <R : Revision?> Constructor<R>.stripSpan(): Constructor<R> = Constructor(name, fields.map { it.stripSpan() }, noSpan)
+fun <R : RevisionNumber?> Constructor<R>.stripSpan(): Constructor<R> = Constructor(name, fields.map { it.stripSpan() }, noSpan)
 
-fun <R : Revision?> FieldDecl<R>.stripSpan(): FieldDecl<R> = FieldDecl(name, type.stripSpan(), noSpan)
+fun <R : RevisionNumber?> FieldDecl<R>.stripSpan(): FieldDecl<R> = FieldDecl(name, type.stripSpan(), noSpan)
 
 @Suppress("UNCHECKED_CAST")
-fun <R : Revision?> TypeExpr<R>.stripSpan(): TypeExpr<R> =
+fun <R : RevisionNumber?> TypeExpr<R>.stripSpan(): TypeExpr<R> =
     when (this) {
         is TypeName -> TypeName(name, noSpan, revision)
         is TypeVar -> TypeVar(name, noSpan) as TypeExpr<R>

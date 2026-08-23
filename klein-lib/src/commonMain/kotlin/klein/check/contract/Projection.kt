@@ -1,6 +1,6 @@
 package klein.check.contract
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.ConstructorInfo
 import klein.check.ContractEnv
 import klein.check.ContractType
@@ -52,7 +52,7 @@ internal fun ContractType.strip(): RuleType =
     }
 
 /** [strip] at a record, keeping the result's shape in the signature so no caller has to cast. */
-internal fun TRecord<Revision>.stripRecord(): TRecord<Nothing?> = TRecord(fields.mapValues { it.value.strip() })
+internal fun TRecord<RevisionNumber>.stripRecord(): TRecord<Nothing?> = TRecord(fields.mapValues { it.value.strip() })
 
 /**
  * Build the environment [release] exposes: every name it names, copied out of this contract
@@ -66,7 +66,7 @@ internal fun TRecord<Revision>.stripRecord(): TRecord<Nothing?> = TRecord(fields
  * [strip] never follows a name into the environment, so a recursive type stays a reference rather
  * than an expansion and the walk cannot cycle.
  */
-internal fun ContractEnv.environmentFor(release: Release): RuleEnv {
+internal fun ContractEnv.environmentFor(release: FlattenedReleaseBlock): RuleEnv {
     val projected = TypeEnv.empty<Nothing?>()
     for ((name, revision) in release.surface) {
         expose(name, revision, projected)
@@ -79,7 +79,7 @@ internal fun ContractEnv.environmentFor(release: Release): RuleEnv {
  *  constructor — into [projected] under the plain [name]. */
 private fun ContractEnv.expose(
     name: String,
-    revision: Revision,
+    revision: RevisionNumber,
     projected: RuleEnv,
 ) {
     lookup(name, revision)?.let { projected.bind(name, it.strip()) }

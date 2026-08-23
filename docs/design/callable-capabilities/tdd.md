@@ -31,7 +31,7 @@ fun compileRule(ruleSource: String, release: ReleaseNumber): Edition // new
 class Edition(
     val core: CoreExpr,               // revision-free IR — a HostCall carries a plain name
     val release: ReleaseNumber,
-    val pins: Map<String, Revision>,  // every contract name the rule used, at the revision it got
+    val pins: Map<String, RevisionNumber>,  // every contract name the rule used, at the revision it got
 )
 ```
 
@@ -237,7 +237,7 @@ if (!isSubtype(infer(answer, releaseEnv), declared))
 ```
 
 The judgement lives on the **rule** side of the phantom-parameter wall, not the contract side: a
-runtime value carries no revision, so there is nothing to infer a `Revision` from, and `strip()` —
+runtime value carries no revision, so there is nothing to infer a `RevisionNumber` from, and `strip()` —
 the existing single crossing point — brings the declared type across to meet it. Within one release
 each name means exactly one revision, so the stripped type is unambiguous.
 

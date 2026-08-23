@@ -2,7 +2,7 @@ package klein.check.contract
 
 import klein.KleinException
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.Checker
 import klein.check.ContractEnv
 import klein.check.ContractType
@@ -30,7 +30,7 @@ class UnknownRelease(
 /** One accepted declaration: what the host must implement, and what a release may point at. */
 data class ContractDeclaration(
     val name: String,
-    val revision: Revision,
+    val revision: RevisionNumber,
     val kind: DeclarationKind,
     val type: ContractType,
 )
@@ -46,7 +46,7 @@ class EnvironmentContract internal constructor(
     val declarations: List<ContractDeclaration>,
     val releases: List<ReleaseNumber>,
     private val env: ContractEnv,
-    private val surfaces: Map<ReleaseNumber, Release>,
+    private val surfaces: Map<ReleaseNumber, FlattenedReleaseBlock>,
 ) {
     private val environments = mutableMapOf<ReleaseNumber, RuleEnv>()
 

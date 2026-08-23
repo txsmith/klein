@@ -32,7 +32,7 @@ an interactive host that prompts the user for each answer.
 ## Implementation Overview
 
 - [ ] Phase 1: Constructor-only rules run — `compileRule`, the edition prelude, and pins
-  - [ ] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
+  - [x] 1a: Mechanical renames — `RevisionNumber`, `FlattenedReleaseBlock`
   - [ ] 1b: `ResolvedRelease` — the release materialised in two halves
   - [ ] 1c: The used-capability pass
   - [ ] 1d: Prelude lowering — `PreludeBinding` and `lowerWithPrelude`

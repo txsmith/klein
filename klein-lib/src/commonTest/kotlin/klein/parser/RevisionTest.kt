@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.surface.FunDecl
 import klein.surface.ParseError
 import klein.surface.TypeDefStmt
@@ -20,14 +20,14 @@ class RevisionTest {
     // --- the three declaration positions ---
 
     @Test
-    fun typeDefTakesARevision() {
+    fun typeDefTakesARevisionNumber() {
         assertContractEquals(
             parseContract("type Customer/2 = Customer { id: Num, tier: String }"),
             types =
                 listOf(
                     typeDef(
                         "Customer",
-                        revision = Revision(2),
+                        revision = RevisionNumber(2),
                         constructors =
                             arrayOf(
                                 constructor("Customer", field("id", typeName("Num")), field("tier", typeName("String"))),
@@ -44,7 +44,7 @@ class RevisionTest {
 
     @Test
     fun revisionOneWrittenOutIsRecorded() {
-        assertEquals(Revision(1), parseContract("type Customer/1 = Customer { id: Num }").types.single().revision)
+        assertEquals(RevisionNumber(1), parseContract("type Customer/1 = Customer { id: Num }").types.single().revision)
     }
 
     @Test
@@ -56,7 +56,7 @@ class RevisionTest {
                     typeDef(
                         "Box",
                         typeParams = listOf("A"),
-                        revision = Revision(2),
+                        revision = RevisionNumber(2),
                         constructors = arrayOf(constructor("Box", field("value", typeVar("A")))),
                     ),
                 ),
@@ -64,26 +64,26 @@ class RevisionTest {
     }
 
     @Test
-    fun funDeclarationTakesARevision() {
+    fun funDeclarationTakesARevisionNumber() {
         assertContractEquals(
             parseContract("fun creditScore/2(c: Customer/2): Num"),
             declarations =
                 listOf(
                     funDecl(
                         "creditScore",
-                        listOf(param("c", typeName("Customer", revision = Revision(2)))),
+                        listOf(param("c", typeName("Customer", revision = RevisionNumber(2)))),
                         typeName("Num"),
-                        revision = Revision(2),
+                        revision = RevisionNumber(2),
                     ),
                 ),
         )
     }
 
     @Test
-    fun valDeclarationTakesARevision() {
+    fun valDeclarationTakesARevisionNumber() {
         assertContractEquals(
             parseContract("maxRetries/2: Num"),
-            declarations = listOf(valDecl("maxRetries", typeName("Num"), revision = Revision(2))),
+            declarations = listOf(valDecl("maxRetries", typeName("Num"), revision = RevisionNumber(2))),
         )
     }
 
@@ -98,7 +98,7 @@ class RevisionTest {
             parseContract(source),
             declarations =
                 listOf(
-                    valDecl("maxRetries", typeName("Num"), revision = Revision(2)),
+                    valDecl("maxRetries", typeName("Num"), revision = RevisionNumber(2)),
                     valDecl("limit", typeName("Num")),
                 ),
         )
@@ -115,39 +115,39 @@ class RevisionTest {
             fun creditScore/2(c: Customer/2): Num
             """.trimIndent()
         val contract = parseContract(source)
-        assertEquals(listOf(null, Revision(2)), contract.types.map { it.revision })
-        assertEquals(listOf(null, Revision(2)), contract.declarations.map { it.revision })
+        assertEquals(listOf(null, RevisionNumber(2)), contract.types.map { it.revision })
+        assertEquals(listOf(null, RevisionNumber(2)), contract.declarations.map { it.revision })
     }
 
     // --- type references ---
 
     @Test
-    fun aReturnTypeTakesARevision() {
+    fun aReturnTypeTakesARevisionNumber() {
         assertContractEquals(
             parseContract("fun latest(): Customer/2"),
-            declarations = listOf(funDecl("latest", emptyList(), typeName("Customer", revision = Revision(2)))),
+            declarations = listOf(funDecl("latest", emptyList(), typeName("Customer", revision = RevisionNumber(2)))),
         )
     }
 
     @Test
-    fun aConstructorFieldTypeTakesARevision() {
+    fun aConstructorFieldTypeTakesARevisionNumber() {
         assertContractEquals(
             parseContract("type Order = Order { buyer: Customer/2 }"),
             types =
                 listOf(
                     typeDef(
                         "Order",
-                        constructors = arrayOf(constructor("Order", field("buyer", typeName("Customer", revision = Revision(2))))),
+                        constructors = arrayOf(constructor("Order", field("buyer", typeName("Customer", revision = RevisionNumber(2))))),
                     ),
                 ),
         )
     }
 
     @Test
-    fun aTypeArgumentTakesARevision() {
+    fun aTypeArgumentTakesARevisionNumber() {
         assertContractEquals(
             parseContract("fun all(): List<Customer/2>"),
-            declarations = listOf(funDecl("all", emptyList(), appliedType("List", typeName("Customer", revision = Revision(2))))),
+            declarations = listOf(funDecl("all", emptyList(), appliedType("List", typeName("Customer", revision = RevisionNumber(2))))),
         )
     }
 
@@ -155,7 +155,7 @@ class RevisionTest {
     fun aRevisedTypeIsStillApplicable() {
         assertContractEquals(
             parseContract("fun boxed(): Box/2<Num>"),
-            declarations = listOf(funDecl("boxed", emptyList(), appliedType("Box", typeName("Num"), revision = Revision(2)))),
+            declarations = listOf(funDecl("boxed", emptyList(), appliedType("Box", typeName("Num"), revision = RevisionNumber(2)))),
         )
     }
 
@@ -163,7 +163,7 @@ class RevisionTest {
     fun aRevisedTypeMayBeOptional() {
         assertContractEquals(
             parseContract("lookup: Customer/2?"),
-            declarations = listOf(valDecl("lookup", optionalType(typeName("Customer", revision = Revision(2))))),
+            declarations = listOf(valDecl("lookup", optionalType(typeName("Customer", revision = RevisionNumber(2))))),
         )
     }
 
@@ -176,7 +176,7 @@ class RevisionTest {
                     funDecl(
                         "pick",
                         emptyList(),
-                        functionType(typeName("Customer", revision = Revision(2)), typeName("Num")),
+                        functionType(typeName("Customer", revision = RevisionNumber(2)), typeName("Num")),
                     ),
                 ),
         )
@@ -186,7 +186,7 @@ class RevisionTest {
     fun aRevisedTypeMayAppearInARecordType() {
         assertContractEquals(
             parseContract("order: { buyer: Customer/2 }"),
-            declarations = listOf(valDecl("order", recordType("buyer" to typeName("Customer", revision = Revision(2))))),
+            declarations = listOf(valDecl("order", recordType("buyer" to typeName("Customer", revision = RevisionNumber(2))))),
         )
     }
 
@@ -337,7 +337,7 @@ class RevisionTest {
 
     // The rule language has no revision slot at all: what the parser builds is unrevisionable.
     @Test
-    fun aProgramsTypeExpressionsCarryNoRevision() {
+    fun aProgramsTypeExpressionsCarryNoRevisionNumber() {
         val typeDef = assertIs<TypeDefStmt>(parseProgram("type Customer = Customer { id: Num }").stmts.single()).typeDef
         assertNull(typeDef.revision)
         assertNull(assertIs<klein.surface.TypeName<*>>(typeDef.constructors.single().fields.single().type).revision)

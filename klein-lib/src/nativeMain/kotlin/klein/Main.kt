@@ -271,7 +271,7 @@ private fun printContractSummary(contract: EnvironmentContract) {
 
 private fun revisioned(
     name: String,
-    revision: Revision,
+    revision: RevisionNumber,
 ): String = if (revision.value == 1) name else "$name/${revision.value}"
 
 /**

@@ -1,7 +1,7 @@
 package klein.parser
 
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.surface.ParseError
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,8 +30,8 @@ class ReleaseTest {
                 listOf(
                     releaseBlock(
                         2,
-                        releaseEntry("Customer", Revision(2)),
-                        releaseEntry("creditScore", Revision(2)),
+                        releaseEntry("Customer", RevisionNumber(2)),
+                        releaseEntry("creditScore", RevisionNumber(2)),
                     ),
                 ),
         )
@@ -59,7 +59,7 @@ class ReleaseTest {
             releases =
                 listOf(
                     releaseBlock(1, releaseEntry("Customer")),
-                    releaseBlock(2, releaseEntry("Customer", Revision(2))),
+                    releaseBlock(2, releaseEntry("Customer", RevisionNumber(2))),
                 ),
         )
     }
@@ -95,7 +95,7 @@ class ReleaseTest {
     fun aLowercaseNameIsAnEntry() {
         assertContractEquals(
             parseContract("release 1\n  maxRetries/2"),
-            releases = listOf(releaseBlock(1, releaseEntry("maxRetries", Revision(2)))),
+            releases = listOf(releaseBlock(1, releaseEntry("maxRetries", RevisionNumber(2)))),
         )
     }
 
@@ -113,7 +113,7 @@ class ReleaseTest {
                 listOf(
                     releaseBlock(
                         4,
-                        releaseEntry("Customer", Revision(3)),
+                        releaseEntry("Customer", RevisionNumber(3)),
                         releaseEntry("creditScore", remove = true),
                     ),
                 ),
@@ -124,7 +124,7 @@ class ReleaseTest {
     fun removeTakesARevisionedNameToo() {
         assertContractEquals(
             parseContract("release 4\n  remove Customer/2"),
-            releases = listOf(releaseBlock(4, releaseEntry("Customer", Revision(2), remove = true))),
+            releases = listOf(releaseBlock(4, releaseEntry("Customer", RevisionNumber(2), remove = true))),
         )
     }
 

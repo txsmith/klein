@@ -1,11 +1,11 @@
 package klein.check
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.Type.*
 
 internal class Subtyping {
 
-    fun <R : Revision?> isSubtype(
+    fun <R : RevisionNumber?> isSubtype(
         lower: Type<R>,
         upper: Type<R>,
         env: TypeEnv<R>,
@@ -66,7 +66,7 @@ internal class Subtyping {
         }
     }
 
-    fun <R : Revision?> lub(
+    fun <R : RevisionNumber?> lub(
         a: Type<R>,
         b: Type<R>,
         env: TypeEnv<R>,
@@ -99,7 +99,7 @@ internal class Subtyping {
         }
     }
 
-    fun <R : Revision?> glb(
+    fun <R : RevisionNumber?> glb(
         a: Type<R>,
         b: Type<R>,
         env: TypeEnv<R>,
@@ -132,7 +132,7 @@ internal class Subtyping {
         }
     }
 
-    private fun <R : Revision?> lubNominal(
+    private fun <R : RevisionNumber?> lubNominal(
         a: Type<R>,
         b: Type<R>,
         env: TypeEnv<R>,
@@ -150,7 +150,7 @@ internal class Subtyping {
         return lub(unfoldedA, unfoldedB, env)
     }
 
-    private fun <R : Revision?> mergeArgs(
+    private fun <R : RevisionNumber?> mergeArgs(
         a: TRef<R>,
         b: TRef<R>,
         join: Boolean,
@@ -170,7 +170,7 @@ internal class Subtyping {
         return TRef(a.name, merged.map { it.first }, a.revision) to merged.flatMap { it.second }
     }
 
-    private fun <R : Revision?> promoteToParent(
+    private fun <R : RevisionNumber?> promoteToParent(
         ref: TRef<R>,
         env: TypeEnv<R>,
     ): TRef<R> {
@@ -188,7 +188,7 @@ internal class Subtyping {
         return TRef(ctor.parentType, parentArgs, ref.revision)
     }
 
-    internal fun <R : Revision?> ifaceOf(
+    internal fun <R : RevisionNumber?> ifaceOf(
         ref: TRef<R>,
         env: TypeEnv<R>,
     ): Type<R> {

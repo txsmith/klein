@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.Revision
+import klein.RevisionNumber
 
 
 internal sealed class ImplicitParamContext {
@@ -24,9 +24,9 @@ internal sealed class ImplicitParamContext {
  *
  * The type parameter R is used (invariantly) to distinguish RuleEnv from ContractEnv:
  * - the RuleEnv is guaranteed to not hold revision numbers, and can only be used to check rules
- * - the ContractEnv does mention revision numbers, and must be projected into a RuleEnv by constructing a Release
+ * - the ContractEnv does mention revision numbers, and must be projected into a RuleEnv by constructing a FlattenedReleaseBlock
  */
-class TypeEnv<R : Revision?> private constructor(
+class TypeEnv<R : RevisionNumber?> private constructor(
     private val parent: TypeEnv<R>?,
     private val bindings: MutableMap<String, Type<R>> = mutableMapOf(),
     private val typeVars: MutableMap<String, Type.TSkolem> = mutableMapOf(),
@@ -145,6 +145,6 @@ class TypeEnv<R : Revision?> private constructor(
     ): String = if (revision == null || revision.value == 1) name else "$name/${revision.value}"
 
     companion object {
-        fun <R : Revision?> empty(): TypeEnv<R> = TypeEnv(parent = null)
+        fun <R : RevisionNumber?> empty(): TypeEnv<R> = TypeEnv(parent = null)
     }
 }

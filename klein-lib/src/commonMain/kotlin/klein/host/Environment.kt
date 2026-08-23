@@ -2,7 +2,7 @@ package klein.host
 
 import klein.KleinError
 import klein.KleinException
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.ContractType
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
@@ -25,7 +25,7 @@ data class Capability(
     val id: CapabilityId,
 ) {
     val name: String get() = declaration.name
-    val revision: Revision get() = declaration.revision
+    val revision: RevisionNumber get() = declaration.revision
     val kind: DeclarationKind get() = declaration.kind
     val type: ContractType get() = declaration.type
 }
@@ -50,24 +50,24 @@ sealed interface Implementation {
 class Registry(
     val declarations: List<ContractDeclaration>,
 ) {
-    val registered = mutableMapOf<Pair<String, Revision>, Implementation>()
+    val registered = mutableMapOf<Pair<String, RevisionNumber>, Implementation>()
     val errors = mutableListOf<RegistrationError>()
 
     fun immediate(
         name: String,
-        revision: Revision = Revision(1),
+        revision: RevisionNumber = RevisionNumber(1),
         answer: (List<Value>) -> Value,
     ) = register(name, revision, Implementation.Immediate(answer))
 
     fun deferred(
         name: String,
-        revision: Revision = Revision(1),
+        revision: RevisionNumber = RevisionNumber(1),
         take: (HostCall) -> Unit,
     ) = register(name, revision, Implementation.Deferred(take))
 
     private fun register(
         name: String,
-        revision: Revision,
+        revision: RevisionNumber,
         implementation: Implementation,
     ) {
         if (declarations.none { it.name == name && it.revision == revision }) {
@@ -127,7 +127,7 @@ class Environment(
 
     fun capability(
         name: String,
-        revision: Revision,
+        revision: RevisionNumber,
     ): Capability? = capabilities.firstOrNull { it.name == name && it.revision == revision }
 }
 
@@ -140,7 +140,7 @@ class RegistrationError(
 internal fun capabilityId(
     name: String,
     type: ContractType,
-    revision: Revision,
+    revision: RevisionNumber,
 ): CapabilityId = CapabilityId(fingerprint("$name/${canonicalize(type)}/${revision.value}"))
 
 internal fun canonicalize(type: Type<*>): String = Type.print(type)

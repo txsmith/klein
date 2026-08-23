@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 import klein.check.Type.*
 import klein.surface.*
@@ -20,9 +20,9 @@ import klein.surface.*
  * Diagnostics accumulate into the [errors] list the owning checker passes in, so a resolver and its
  * checker report into one place.
  */
-internal class TypeResolver<R : Revision?>(
+internal class TypeResolver<R : RevisionNumber?>(
     private val errors: MutableList<TypeError>,
-    val revisionOf: (Revision?) -> R,
+    val revisionOf: (RevisionNumber?) -> R,
 ) {
     private var skolemCounter = 0
 
@@ -130,7 +130,7 @@ internal class TypeResolver<R : Revision?>(
      */
     private fun rejectRevisionOnPrimitive(
         name: String,
-        revision: Revision?,
+        revision: RevisionNumber?,
         span: SourceSpan,
     ): Type<R>? =
         if (revision != null && primitiveType(name) != null) {
@@ -157,7 +157,7 @@ internal class TypeResolver<R : Revision?>(
 }
 
 /** `∀params. body`, or just `body` when there's nothing to quantify. */
-internal fun <R : Revision?> quantify(
+internal fun <R : RevisionNumber?> quantify(
     params: Set<TSkolem>,
     body: Type<R>,
 ): Type<R> = if (params.isEmpty()) body else TForall(params, body)

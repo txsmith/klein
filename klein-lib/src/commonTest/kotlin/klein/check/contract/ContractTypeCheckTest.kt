@@ -4,7 +4,7 @@ import klein.Klein
 import klein.KleinError
 import klein.KleinException
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.RuleEnv
 import klein.check.Type
 import klein.check.Type.*
@@ -106,9 +106,9 @@ class ContractTypeCheckTest {
             )
         assertEquals(
             listOf(
-                Triple("creditScore", Revision(1), DeclarationKind.Function),
-                Triple("creditScore", Revision(2), DeclarationKind.Function),
-                Triple("maxRetries", Revision(1), DeclarationKind.Value),
+                Triple("creditScore", RevisionNumber(1), DeclarationKind.Function),
+                Triple("creditScore", RevisionNumber(2), DeclarationKind.Function),
+                Triple("maxRetries", RevisionNumber(1), DeclarationKind.Value),
             ),
             contract.declarations.map { Triple(it.name, it.revision, it.kind) },
         )
@@ -520,13 +520,13 @@ tier(Customer(1, "gold"))""", release = 2),
     fun aRevisionOnABuiltinTypeIsRejected() {
         val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors("maxRetries: Num/2").single())
         assertEquals("Num", error.typeName)
-        assertEquals(Revision(2), error.revision)
+        assertEquals(RevisionNumber(2), error.revision)
     }
 
     @Test
     fun revisionOneOnABuiltinTypeIsAlsoRejected() {
         val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors("maxRetries: Num/1").single())
-        assertEquals(Revision(1), error.revision)
+        assertEquals(RevisionNumber(1), error.revision)
     }
 
     @Test
@@ -535,7 +535,7 @@ tier(Customer(1, "gold"))""", release = 2),
     }
 
     @Test
-    fun everyBuiltinTypeNameRejectsARevision() {
+    fun everyBuiltinTypeNameRejectsARevisionNumber() {
         for (name in listOf("Num", "String", "Bool", "Unit", "Any", "Nothing")) {
             val error =
                 assertIs<TypeError.RevisionOnPrimitive>(

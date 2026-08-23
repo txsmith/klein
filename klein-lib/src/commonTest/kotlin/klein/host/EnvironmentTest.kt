@@ -3,7 +3,7 @@ package klein.host
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.check.Type
 import klein.check.TypeError
 import klein.check.contract.DeclarationKind
@@ -63,7 +63,7 @@ class EnvironmentTest {
 
     @Test
     fun registrationsDefaultToRevisionOne() {
-        assertTrue(load(CONTRACT, ::registerAll).capabilities.all { it.revision == Revision(1) })
+        assertTrue(load(CONTRACT, ::registerAll).capabilities.all { it.revision == RevisionNumber(1) })
     }
 
     @Test
@@ -83,11 +83,11 @@ class EnvironmentTest {
                 maxRetries: Num
                 """.trimIndent(),
             ) {
-                immediate("creditCheck", revision = Revision(3)) { Value.VNum(1.0) }
+                immediate("creditCheck", revision = RevisionNumber(3)) { Value.VNum(1.0) }
                 immediate("maxRetries") { Value.VNum(3.0) }
             }
-        assertEquals(Revision(3), env.capabilities.first { it.name == "creditCheck" }.revision)
-        assertEquals(Revision(1), env.capabilities.first { it.name == "maxRetries" }.revision)
+        assertEquals(RevisionNumber(3), env.capabilities.first { it.name == "creditCheck" }.revision)
+        assertEquals(RevisionNumber(1), env.capabilities.first { it.name == "maxRetries" }.revision)
     }
 
     @Test
@@ -122,11 +122,11 @@ class EnvironmentTest {
     fun aDeclaredRevisionIsACapability() {
         val env =
             load("fun creditScore/2(c: Num): Num") {
-                immediate("creditScore", revision = Revision(2)) { Value.VNum(1.0) }
+                immediate("creditScore", revision = RevisionNumber(2)) { Value.VNum(1.0) }
             }
         val capability = env.capabilities.single()
         assertEquals("creditScore", capability.name)
-        assertEquals(Revision(2), capability.revision)
+        assertEquals(RevisionNumber(2), capability.revision)
         assertTrue(env[capability.id] != null)
     }
 
@@ -140,9 +140,9 @@ class EnvironmentTest {
                 """.trimIndent(),
             ) {
                 immediate("creditScore") { Value.VNum(1.0) }
-                immediate("creditScore", revision = Revision(2)) { Value.VNum(2.0) }
+                immediate("creditScore", revision = RevisionNumber(2)) { Value.VNum(2.0) }
             }
-        assertEquals(listOf(Revision(1), Revision(2)), env.capabilities.map { it.revision })
+        assertEquals(listOf(RevisionNumber(1), RevisionNumber(2)), env.capabilities.map { it.revision })
         assertNotEquals(env.capabilities[0].id, env.capabilities[1].id)
     }
 
@@ -152,7 +152,7 @@ class EnvironmentTest {
             assertFailsWith<KleinException> {
                 load("fun creditScore(c: Num): Num") {
                     immediate("creditScore") { Value.VNum(1.0) }
-                    immediate("creditScore", revision = Revision(2)) { Value.VNum(2.0) }
+                    immediate("creditScore", revision = RevisionNumber(2)) { Value.VNum(2.0) }
                 }
             }
         assertTrue(error.message!!.contains("revision 2"), "message should name the revision: ${error.message}")
@@ -173,10 +173,10 @@ class EnvironmentTest {
                 """.trimIndent(),
             ) {
                 immediate("creditCheck") { Value.VNum(1.0) }
-                immediate("creditCheck", revision = Revision(2)) { Value.VNum(2.0) }
+                immediate("creditCheck", revision = RevisionNumber(2)) { Value.VNum(2.0) }
             }
         val both = env.capabilities.filter { it.name == "creditCheck" }
-        assertEquals(listOf(Revision(1), Revision(2)), both.map { it.revision })
+        assertEquals(listOf(RevisionNumber(1), RevisionNumber(2)), both.map { it.revision })
         assertNotEquals(both[0].type, both[1].type)
         both.forEach { assertTrue(env[it.id] != null, "revision ${it.revision} should be implemented") }
     }
@@ -271,14 +271,14 @@ class EnvironmentTest {
     // --- identity ---
 
     @Test
-    fun identityIsStableForTheSameDeclarationAndRevision() {
+    fun identityIsStableForTheSameDeclarationAndRevisionNumber() {
         val a = load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
         val b = load(CONTRACT, ::registerAll).capabilities.first { it.name == "creditCheck" }.id
         assertEquals(a, b)
     }
 
     @Test
-    fun identityChangesWithTheRevision() {
+    fun identityChangesWithTheRevisionNumber() {
         val one = load("fun creditCheck(c: Num): Num", ::registerAll).capabilities.single().id
         val two = load("fun creditCheck/2(c: Num): Num", ::registerAll).capabilities.single().id
         assertNotEquals(one, two)
@@ -286,7 +286,7 @@ class EnvironmentTest {
 
     // The property `name@rev` identity would lose: a signature change that skips a revision bump.
     @Test
-    fun identityChangesWithTheSignatureEvenAtTheSameRevision() {
+    fun identityChangesWithTheSignatureEvenAtTheSameRevisionNumber() {
         val num = load("fun f(x: Num): Num", ::registerAll).capabilities.single().id
         val str = load("fun f(x: String): Num", ::registerAll).capabilities.single().id
         assertNotEquals(num, str)

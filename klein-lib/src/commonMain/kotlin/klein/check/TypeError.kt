@@ -2,7 +2,7 @@ package klein.check
 
 import klein.KleinError
 import klein.ReleaseNumber
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 
 sealed class TypeError : KleinError {
@@ -138,7 +138,7 @@ sealed class TypeError : KleinError {
      */
     data class RevisionOnPrimitive(
         val typeName: String,
-        val revision: Revision,
+        val revision: RevisionNumber,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =

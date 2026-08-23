@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.SourceSpan
 import klein.check.Type.*
 
@@ -21,7 +21,7 @@ import klein.check.Type.*
  * on an object but not a fixed argument on its supertype, and `Nothing` is the bottom of the
  * lattice, so it fits every instantiation with no cast.
  */
-sealed class Type<out R : Revision?> {
+sealed class Type<out R : RevisionNumber?> {
     data object TNum : Type<Nothing>()
 
     data object TStr : Type<Nothing>()
@@ -35,26 +35,26 @@ sealed class Type<out R : Revision?> {
     data object TTop : Type<Nothing>()
     data object TBottom : Type<Nothing>()
 
-    data class TFun<out R : Revision?>(
+    data class TFun<out R : RevisionNumber?>(
         val params: List<Type<R>>,
         val result: Type<R>,
         val paramNames: List<String> = emptyList(),
     ) : Type<R>()
 
-    data class TRecord<out R : Revision?>(
+    data class TRecord<out R : RevisionNumber?>(
         val fields: Map<String, Type<R>>,
     ) : Type<R>()
 
-    data class TOptional<out R : Revision?>(
+    data class TOptional<out R : RevisionNumber?>(
         val type: Type<R>,
     ) : Type<R>()
 
     /**
      * A reference to a declared nominal type. [revision] is the witness in person: at
-     * `R = Revision` it is the `/N` half of the declaration's key, and at `R = Nothing?` there is
+     * `R = RevisionNumber` it is the `/N` half of the declaration's key, and at `R = Nothing?` there is
      * no value to carry, so a projected reference cannot name one.
      */
-    data class TRef<out R : Revision?>(
+    data class TRef<out R : RevisionNumber?>(
         val name: String,
         val typeArgs: List<Type<R>> = emptyList(),
         val revision: R,
@@ -71,7 +71,7 @@ sealed class Type<out R : Revision?> {
      * another type) by discipline: annotations can't express a nested `∀`, and every demand point
      * instantiates it away before it could nest — that's what keeps the system rank-1.
      */
-    data class TForall<out R : Revision?>(
+    data class TForall<out R : RevisionNumber?>(
         val params: Set<TSkolem>,
         val body: Type<R>,
     ) : Type<R>()
@@ -126,13 +126,13 @@ sealed class Type<out R : Revision?> {
  * of the enforcement. Code that is genuinely polymorphic in the regime keeps writing `Type<R>`, so
  * the raw parameter marks exactly the code that works on both sides of the boundary.
  */
-typealias ContractType = Type<Revision>
+typealias ContractType = Type<RevisionNumber>
 
 /** A type as a rule sees it: revisions cannot exist here. See [ContractType]. */
 typealias RuleType = Type<Nothing?>
 
 /** The environment a contract checks into: entries keyed `(name, revision)`. See [ContractType]. */
-typealias ContractEnv = TypeEnv<Revision>
+typealias ContractEnv = TypeEnv<RevisionNumber>
 
 /** The environment a rule checks against: plain names, no revisions. See [ContractType]. */
 typealias RuleEnv = TypeEnv<Nothing?>
@@ -142,7 +142,7 @@ internal data class TypeParamInfo(
     val skolem: Type.TSkolem,
 )
 
-internal data class TypeDefInfo<out R : Revision?>(
+internal data class TypeDefInfo<out R : RevisionNumber?>(
     val name: String,
     val revision: R,
     val typeParams: List<TypeParamInfo>,
@@ -150,7 +150,7 @@ internal data class TypeDefInfo<out R : Revision?>(
     val span: SourceSpan,
 )
 
-internal data class ConstructorInfo<out R : Revision?>(
+internal data class ConstructorInfo<out R : RevisionNumber?>(
     val name: String,
     val revision: R,
     val typeParams: List<String>,
@@ -160,10 +160,10 @@ internal data class ConstructorInfo<out R : Revision?>(
 )
 
 /** A record type with no fields demands nothing, so it is the top; never observe an empty record as a type. */
-internal fun <R : Revision?> recordOf(fields: Map<String, Type<R>>): Type<R> = if (fields.isEmpty()) TTop else TRecord(fields)
+internal fun <R : RevisionNumber?> recordOf(fields: Map<String, Type<R>>): Type<R> = if (fields.isEmpty()) TTop else TRecord(fields)
 
 /** Wrap [t] in one optional layer, idempotently (`T?` stays `T?`); `Top` absorbs null, `Bottom` becomes `Null`. */
-internal fun <R : Revision?> optionalOf(t: Type<R>): Type<R> =
+internal fun <R : RevisionNumber?> optionalOf(t: Type<R>): Type<R> =
     when (t) {
         TTop -> TTop
         TBottom -> TNull
@@ -172,14 +172,14 @@ internal fun <R : Revision?> optionalOf(t: Type<R>): Type<R> =
     }
 
 /** Strip one optional layer: `T?` → `T`, `Null` → `Bottom`, anything else unchanged. */
-internal fun <R : Revision?> nonNullCore(t: Type<R>): Type<R> =
+internal fun <R : RevisionNumber?> nonNullCore(t: Type<R>): Type<R> =
     when (t) {
         is TOptional -> t.type
         TNull -> TBottom
         else -> t
     }
 
-internal fun <R : Revision?> substitute(
+internal fun <R : RevisionNumber?> substitute(
     type: Type<R>,
     subst: Map<TSkolem, Type<R>>,
 ): Type<R> =

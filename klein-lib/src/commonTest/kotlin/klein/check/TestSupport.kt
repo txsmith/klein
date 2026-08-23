@@ -1,6 +1,6 @@
 package klein.check
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.surface.Lexer
 import klein.surface.Parser
 import klein.check.Type.*
@@ -30,7 +30,7 @@ fun TRef(
  * Structural type equality up to skolem renaming: skolems match by name (ignoring their id), a
  * `TForall` is compared through its body, and value-level `paramNames` are ignored.
  */
-fun <R : Revision?> Type<R>.alphaEquals(other: Type<R>): Boolean {
+fun <R : RevisionNumber?> Type<R>.alphaEquals(other: Type<R>): Boolean {
     val a = if (this is TForall) body else this
     val b = if (other is TForall) other.body else other
     return when {

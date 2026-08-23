@@ -15,14 +15,14 @@ import kotlin.jvm.JvmInline
  * `host` all need it, and none of them may depend on another.
  */
 @JvmInline
-value class Revision(
+value class RevisionNumber(
     val value: Int,
 ) {
     override fun toString(): String = value.toString()
 }
 
 /**
- * The number of a release — the unit a person migrates rules by. A release decides which [Revision]
+ * The number of a release — the unit a person migrates rules by. A release decides which [RevisionNumber]
  * each plain name means for the rules checked against it.
  *
  * A release number orders migrations; a revision identifies a declaration. They are different types

@@ -1,9 +1,9 @@
 package klein.surface
 
-import klein.Revision
+import klein.RevisionNumber
 import klein.surface.TokenKind.*
 
-private fun revisionSuffix(revision: Revision?): String = if (revision == null) "" else "/${revision.value}"
+private fun revisionSuffix(revision: RevisionNumber?): String = if (revision == null) "" else "/${revision.value}"
 
 internal fun Token.prettyPrint(): String {
     val base =
