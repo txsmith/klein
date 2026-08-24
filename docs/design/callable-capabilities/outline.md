@@ -39,10 +39,10 @@ an interactive host that prompts the user for each answer.
   - [x] 1e: `compileRule` and the `Edition`
   - [x] 1f: The CLI compiles and executes
   - [x] 1g: Facade functions — one top-level function per atomic operation, workers private
-- [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
+- [x] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
   - [x] 2a: Per-run supply and the contract reference
   - [x] 2b: The runner — pre-flight pin check and the loop
-  - [ ] 2c: The example host module
+  - [x] 2c: The example host module
 - [x] Phase 3: The CLI becomes an interactive host
 - [ ] Phase 4: Handler answers are checked at the resume boundary
 
@@ -470,14 +470,14 @@ compiles against the public surface only.
 
 #### Automated Verification
 
-- [ ] `./gradlew :klein-lib:jvmTest`
-- [ ] `./gradlew :klein-example-host:test`
-- [ ] `./gradlew build` — the example host compiles against the public surface only
-- [ ] `./gradlew :klein-example-host:run --args="examples/lending.contract examples/lending-rule.klein 2"`
+- [x] `./gradlew :klein-lib:jvmTest`
+- [x] `./gradlew :klein-example-host:test`
+- [x] `./gradlew build` — the example host compiles against the public surface only
+- [x] `./gradlew :klein-example-host:run --args="examples/lending.contract examples/lending-rule.klein 2"`
 
 #### Manual Verification
 
-- [ ] Delete one `immediate(...)` registration from `LendingHost` and confirm the failure names the
+- [x] Delete one `immediate(...)` registration from `LendingHost` and confirm the failure names the
       missing declaration at boot, before any rule is compiled.
 
 ---
