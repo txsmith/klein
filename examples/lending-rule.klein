@@ -1,8 +1,8 @@
 # Checked against lending.contract's release 2:
 #   klein check --contract examples/lending.contract examples/lending-rule.klein --release 2
 #
-# Calls a capability by its plain name, so it type-checks but cannot yet be executed — nothing
-# answers a host call at runtime (see docs/host-integration-roadmap.md, "Execution wiring"):
+# Run interactively — the CLI prompts for each capability call (`customer = ?`,
+# `creditScore(...) = ?`) and each answer is a Klein expression of the declared type:
 #   klein run --contract examples/lending.contract examples/lending-rule.klein --release 2
 
 creditScore(customer) >= 620 and customer.tier == "gold"

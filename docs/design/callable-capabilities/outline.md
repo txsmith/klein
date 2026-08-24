@@ -43,7 +43,7 @@ an interactive host that prompts the user for each answer.
   - [x] 2a: Per-run supply and the contract reference
   - [x] 2b: The runner — pre-flight pin check and the loop
   - [ ] 2c: The example host module
-- [ ] Phase 3: The CLI becomes an interactive host
+- [x] Phase 3: The CLI becomes an interactive host
 - [ ] Phase 4: Handler answers are checked at the resume boundary
 
 The result sink (formerly Phase 5) is extracted to its own roadmap item — see

@@ -1,6 +1,19 @@
 package klein.check.contract
 
+import klein.KleinError
+import klein.SourceSpan
 import klein.surface.*
+
+/**
+ * An answer that names a capability of the release it was asked under. Answers may use the
+ * release's types, so answering a prompt never triggers more prompts.
+ */
+class CapabilityInAnswer(
+    val name: String,
+) : KleinError {
+    override val message = "'$name' is a capability; an answer may use the release's types but not its capabilities"
+    override val span = SourceSpan.zero
+}
 
 internal fun usedCapabilities(
     program: Program,

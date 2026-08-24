@@ -154,16 +154,20 @@ nothing else to check the contract alone.
 ./klein run --contract examples/lending.contract examples/lending-rule.klein --release 2
 ```
 
-A rule that calls a capability by its plain name (or constructs a value of a contract-declared type)
-type-checks but cannot execute — nothing wires a capability call to a host handler yet (see
-docs/host-integration-roadmap.md, "Execution wiring"). `run` reports this plainly and exits non-zero
-rather than crashing; `check` still verifies the rule compiles against the release.
+`run` with a contract is interactive: the CLI is the host, and you answer its capability calls.
+Each suspension prints the call — `creditScore(Customer(1, "Acme", "gold")) = ?` — and reads one
+Klein expression, compiled against the capability's declared answer type (a fun's result type; a
+value's whole type). A wrong-typed answer re-prompts with the checker's message; an answer may use
+the release's types (`Customer(1, "Acme", "gold")` works) but not its capabilities, so answering
+never triggers more prompts. A distinct question is asked once. Prompting needs a terminal: with
+piped input, or with `--stdin` consumed by the rule source, a suspension is an error naming the
+capability, so scripts fail loudly instead of hanging.
 
 ### Run
 
 Execute a program on the Core machine (parse → check → lower → run) and print the final value.
-Host calls are not reachable from source yet, so programs must be pure (unless checked against a
-contract with no capability calls — see above).
+Without a contract there are no capabilities to call, so programs must be pure; with `--contract`,
+capability calls are answered interactively — see above.
 
 ```bash
 # From a file

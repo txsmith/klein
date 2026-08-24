@@ -57,7 +57,8 @@ internal sealed class ExpectedTypeSource {
 internal fun checkProgram(
     program: Program,
     env: RuleEnv = TypeEnv.empty(),
-): ProgramCheck = Checker().checkProgram(program, env)
+    expected: RuleType? = null,
+): ProgramCheck = Checker().checkProgram(program, env, expected)
 
 private class Checker {
     private val errors = mutableListOf<TypeError>()
@@ -70,10 +71,11 @@ private class Checker {
     fun checkProgram(
         program: Program,
         env: RuleEnv = TypeEnv.empty(),
+        expected: RuleType? = null,
     ): ProgramCheck {
         errors.clear()
         val scope = env.copy()
-        val type = synthBlockStmts(program.stmts, scope)
+        val type = synthBlockStmts(program.stmts, scope, expected)
         return ProgramCheck(type, errors.toList())
     }
 
@@ -131,6 +133,7 @@ private class Checker {
     private fun synthBlockStmts(
         stmts: List<Stmt>,
         env: RuleEnv,
+        expected: RuleType? = null,
     ): RuleType {
         preprocessor.process(stmts.filterIsInstance<TypeDefStmt>().map { it.typeDef }, env)
 
@@ -158,8 +161,20 @@ private class Checker {
         }
 
         var last: RuleType = TUnit
+        val trailing = if (expected == null) null else stmts.lastOrNull() as? Expr
         for (stmt in stmts) {
-            if (stmt is Expr) last = synth(stmt, env)
+            if (stmt is Expr) {
+                last =
+                    if (stmt === trailing) {
+                        check(stmt, expected!!, env)
+                        expected
+                    } else {
+                        synth(stmt, env)
+                    }
+            }
+        }
+        if (expected != null && trailing == null) {
+            recordError(TypeError.TypeMismatch(TUnit, expected, stmts.lastOrNull()?.span ?: SourceSpan.zero))
         }
         return last
     }

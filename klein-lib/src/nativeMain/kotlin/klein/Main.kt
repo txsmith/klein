@@ -4,22 +4,29 @@ import klein.surface.*
 import klein.check.Type
 import klein.check.RuleEnv
 import klein.check.TypeEnv
+import klein.check.contract.ContractDeclaration
 import klein.check.contract.DeclarationKind
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.UnknownRelease
 import klein.core.CorePrinter
+import klein.host.implement
+import klein.host.run
+import klein.interp.KleinRuntimeError
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.toKString
 import platform.posix.SEEK_END
+import platform.posix.STDIN_FILENO
 import platform.posix.fclose
+import platform.posix.fflush
 import platform.posix.fgets
 import platform.posix.fopen
 import platform.posix.fread
 import platform.posix.fseek
 import platform.posix.ftell
+import platform.posix.isatty
 import platform.posix.rewind
 import platform.posix.stdin
 
@@ -151,8 +158,11 @@ private fun checkCmd(
 }
 
 /**
- * `run` with `--contract`: compile the rule against the release into an edition, then execute its
- * core.
+ * `run` with `--contract`: compile the rule against the release into an edition, then run it with
+ * the CLI itself as the host — every capability is answered by prompting the person at the
+ * terminal for a Klein expression of the declared type. Without a terminal (piped input, or
+ * `--stdin` consumed by the rule source), a suspension is an error naming the capability, so
+ * scripts fail loudly instead of hanging on a read.
  **/
 private fun runCmd(
     useStdin: Boolean,
@@ -174,9 +184,66 @@ private fun runCmd(
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
     val edition = withRuleDiagnostics(ruleSource, rawErrors) { contract.compileRule(ruleSource, release) }
-    val executed = Klein.execute(edition.core)
-    exitOnErrors(executed, ruleSource, rawErrors)
-    println(Value.print(executed.output!!))
+    val canPrompt = !useStdin && isatty(STDIN_FILENO) == 1
+    val answers = mutableMapOf<String, Value>()
+    val environment =
+        contract.implement {
+            declarations.forEach { d ->
+                immediate(d.name, d.revision) { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
+            }
+        }
+    val result = withRuleDiagnostics(ruleSource, rawErrors) { environment.run(edition) }
+    println(Value.print(result))
+}
+
+private class UnanswerableCapability(
+    call: String,
+) : KleinError {
+    override val message = "cannot answer '$call': interactive run needs a terminal, and stdin is not one"
+    override val span = SourceSpan.zero
+}
+
+/**
+ * Ask the person at the terminal to be the host for one capability call: print the call, read a
+ * Klein expression, compile it against the declared answer type, evaluate it, and re-prompt with
+ * the diagnostics on anything wrong. Answers are remembered per printed call, so a distinct
+ * question is asked once.
+ */
+@OptIn(ExperimentalForeignApi::class)
+private fun prompt(
+    contract: EnvironmentContract,
+    release: ReleaseNumber,
+    declaration: ContractDeclaration,
+    args: List<Value>,
+    answers: MutableMap<String, Value>,
+    canPrompt: Boolean,
+    rawErrors: Boolean,
+): Value {
+    val call =
+        if (declaration.kind == DeclarationKind.Function) {
+            "${declaration.name}(${args.joinToString(", ") { Value.print(it) }})"
+        } else {
+            declaration.name
+        }
+    answers[call]?.let { return it }
+    if (!canPrompt) throw KleinException(listOf(UnanswerableCapability(call)))
+    while (true) {
+        print("$call = ? ")
+        fflush(null)
+        val line = readLine() ?: throw KleinException(listOf(UnanswerableCapability(call)))
+        try {
+            val executed = Klein.execute(contract.compileValue(line, release, declaration.answerType))
+            if (executed.hasErrors) {
+                executed.errors.forEach { printError(line, it.span, it.message, rawErrors) }
+                continue
+            }
+            val value = executed.output!!
+            answers[call] = value
+            return value
+        } catch (e: KleinException) {
+            e.errors.forEach { printError(line, it.span, it.message, rawErrors) }
+        }
+    }
 }
 
 /** Read and check a contract file, exiting non-zero with every diagnostic on failure. */
@@ -234,6 +301,9 @@ private fun <T> withRuleDiagnostics(
     exitProcess(1)
 } catch (e: KleinException) {
     e.errors.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
+    exitProcess(1)
+} catch (e: KleinRuntimeError) {
+    printError(ruleSource, e.span, e.message, rawErrors)
     exitProcess(1)
 }
 
@@ -386,6 +456,8 @@ private fun printError(
 ) {
     if (rawOutput) {
         println("Error: $message at $span")
+    } else if (span == SourceSpan.zero) {
+        println("Error: $message")
     } else {
         print(span.formatInSource(source, contextLines = 5, message = message))
     }

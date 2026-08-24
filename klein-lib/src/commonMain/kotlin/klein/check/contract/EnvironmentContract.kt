@@ -6,7 +6,11 @@ import klein.RevisionNumber
 import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.RuleType
+import klein.check.Type.TForall
+import klein.check.Type.TFun
 import klein.check.checkProgram
+import klein.core.CoreExpr
+import klein.core.PreludeBinding
 import klein.core.lowerWithPrelude
 import klein.surface.Lexer
 import klein.surface.LexerError
@@ -34,7 +38,16 @@ data class ContractDeclaration(
     val revision: RevisionNumber,
     val kind: DeclarationKind,
     val type: ContractType,
-)
+) {
+    /** What an answer to this capability must be: a fun's result, a value's whole type. */
+    val answerType: RuleType
+        get() {
+            if (kind == DeclarationKind.Value) return type.strip()
+            val stripped = type.strip()
+            val fn = if (stripped is TForall) stripped.body else stripped
+            return (fn as TFun).result
+        }
+}
 
 /**
  * A checked capability contract: the compile-time artifact a rule is checked against, needing no
@@ -73,9 +86,36 @@ class EnvironmentContract internal constructor(
         return Edition(lowerWithPrelude(program, prelude), release, pins)
     }
 
+    /**
+     * Compile [source] as a pure expression of type [expected] against [release] — a host answering
+     * a capability call in Klein rather than in its own language. Unlike an [Edition], the result
+     * needs no pins and no environment: an answer may use the release's types but not its
+     * capabilities, so `Klein.execute` is enough to evaluate it. Throws [KleinException] carrying
+     * the checker's diagnostics for a mismatch, and [CapabilityInAnswer] for each capability named.
+     */
+    fun compileValue(
+        source: String,
+        release: ReleaseNumber,
+        expected: RuleType,
+    ): CoreExpr {
+        val resolvedRelease = resolve(release)
+        val (program, _) = parseAndCheck(source, resolvedRelease, expected)
+        val used = usedCapabilities(program, resolvedRelease.revisions.keys)
+        val capabilities =
+            used.sorted().filter {
+                when (resolvedRelease.bindingFor(it)) {
+                    is PreludeBinding.Function, is PreludeBinding.Value -> true
+                    is PreludeBinding.Ctor, null -> false
+                }
+            }
+        if (capabilities.isNotEmpty()) throw KleinException(capabilities.map { CapabilityInAnswer(it) })
+        return lowerWithPrelude(program, used.mapNotNull { resolvedRelease.bindingFor(it) })
+    }
+
     private fun parseAndCheck(
         ruleSource: String,
         release: ResolvedRelease,
+        expected: RuleType? = null,
     ): Pair<Program, RuleType> {
         val program =
             try {
@@ -85,7 +125,7 @@ class EnvironmentContract internal constructor(
             } catch (e: ParseError) {
                 throw KleinException(listOf(e))
             }
-        val checked = checkProgram(program, release.types)
+        val checked = checkProgram(program, release.types, expected)
         if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
         return program to checked.type
     }
