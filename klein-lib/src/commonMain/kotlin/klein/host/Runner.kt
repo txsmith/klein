@@ -4,7 +4,12 @@ import klein.KleinError
 import klein.KleinException
 import klein.RevisionNumber
 import klein.SourceSpan
+import klein.check.RuleType
+import klein.check.Subtyping
+import klein.check.Type
 import klein.check.contract.Edition
+import klein.check.contract.ResolvedRelease
+import klein.check.infer
 import klein.core.PreludeBinding
 import klein.interp.Execution
 import klein.interp.Machine
@@ -15,7 +20,7 @@ class UnservedPin(
     val revision: RevisionNumber,
 ) : KleinError {
     override val message = "the edition pins '$name' revision ${revision.value}, which this environment does not declare"
-    override val span = SourceSpan.zero
+    override val span: SourceSpan? = null
 }
 
 class MissingImplementation(
@@ -24,14 +29,27 @@ class MissingImplementation(
 ) : KleinError {
     override val message =
         "'$name' revision ${declared.value} has no implementation: register one at boot or supply one with the run"
-    override val span = SourceSpan.zero
+    override val span: SourceSpan? = null
+}
+
+class HandlerTypeMismatch(
+    val call: String,
+    val got: String,
+    val declared: RuleType,
+    override val span: SourceSpan?,
+) : KleinError {
+    constructor(call: String, got: RuleType, declared: RuleType, span: SourceSpan?) :
+        this(call, Type.print(got), declared, span)
+
+    override val message = "'$call' answered with $got where the contract declares ${Type.print(declared)}"
 }
 
 /**
  * Run an [Edition] to its final [Value], answering each suspension from [supply] first and the
  * boot registrations second. [checkPins] rejects the run before the machine starts if any pinned
  * capability could go unanswered, so a rule never performs half its effects and then hits a
- * missing handler. Throws [KleinException] carrying every [UnservedPin] and [MissingImplementation].
+ * missing handler. Throws [KleinException] carrying every [UnservedPin] and [MissingImplementation],
+ * or a [HandlerTypeMismatch] when an answer does not fit the capability's declared type.
  */
 fun Environment.run(
     edition: Edition,
@@ -40,11 +58,32 @@ fun Environment.run(
     val supplied = Registry(contract.declarations).apply(supply)
     if (supplied.errors.isNotEmpty()) throw KleinException(supplied.errors)
     checkPins(edition, supplied)
+    val release = contract.resolve(edition.release)
     var execution = Machine.start(edition.core)
     while (execution is Execution.AwaitingHost) {
-        execution = execution.resume(answer(execution, edition.pins, supplied))
+        val answer = answer(execution, edition.pins, supplied)
+        execution = execution.resume(checked(execution, edition.pins, release, answer))
     }
     return (execution as Execution.Done).value
+}
+
+private val subtyping = Subtyping()
+
+private fun Environment.checked(
+    suspension: Execution.AwaitingHost,
+    pins: Map<String, RevisionNumber>,
+    release: ResolvedRelease,
+    answer: Value,
+): Value {
+    val declared = capability(suspension.call, pins.getValue(suspension.call))!!.declaration.answerType
+    if (answer is Value.VClos) {
+        throw KleinException(listOf(HandlerTypeMismatch(suspension.call, "a function", declared, suspension.span)))
+    }
+    val got = infer(answer, release.types)
+    if (!subtyping.isSubtype(got, declared, release.types)) {
+        throw KleinException(listOf(HandlerTypeMismatch(suspension.call, got, declared, suspension.span)))
+    }
+    return answer
 }
 
 internal fun Environment.checkPins(

@@ -10,4 +10,4 @@ package klein
  */
 class KleinException(
     val errors: List<KleinError>,
-) : Exception(errors.joinToString("\n") { "${it.message} at ${it.span}" })
+) : Exception(errors.joinToString("\n") { it.span?.let { span -> "${it.message} at $span" } ?: it.message })

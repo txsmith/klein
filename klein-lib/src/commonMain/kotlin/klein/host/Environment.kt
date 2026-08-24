@@ -148,7 +148,7 @@ class Environment internal constructor(
 class RegistrationError(
     override val message: String,
 ) : KleinError {
-    override val span = klein.SourceSpan.zero
+    override val span: klein.SourceSpan? = null
 }
 
 internal fun capabilityId(

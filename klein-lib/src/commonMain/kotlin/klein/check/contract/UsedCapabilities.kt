@@ -12,7 +12,7 @@ class CapabilityInAnswer(
     val name: String,
 ) : KleinError {
     override val message = "'$name' is a capability; an answer may use the release's types but not its capabilities"
-    override val span = SourceSpan.zero
+    override val span: SourceSpan? = null
 }
 
 internal fun usedCapabilities(

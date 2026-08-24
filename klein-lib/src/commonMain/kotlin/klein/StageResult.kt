@@ -1,14 +1,15 @@
 package klein
 
 /**
- * The uniform error surface of every pipeline stage: something went wrong at a source
+ * The uniform error surface of every pipeline stage: something went wrong, usually at a source
  * location. Implemented by [LexerError], [ParseError], [klein.check.TypeError], and
  * [klein.interp.KleinRuntimeError] — so callers report diagnostics from any stage the
- * same way.
+ * same way. [span] is null for errors about the environment rather than the source — a
+ * registration, a pin, a handler — which have no place in a rule to point at.
  */
 interface KleinError {
     val message: String
-    val span: SourceSpan
+    val span: SourceSpan?
 }
 
 /**

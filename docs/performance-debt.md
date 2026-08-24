@@ -165,6 +165,17 @@ host for data the host had in hand before it started the machine.
 - *Fix:* store pre-fill — the runner fills the value's store cell before `Machine.start`, and
   the bind emits no `HostCall` at all; the slot is just a pre-populated cell the rule reads.
 
+**Every handler answer is typed and subsumed at resume.** `Environment.run` passes each answer
+through `checked` before resuming: `infer` walks the whole answer value to build a type, and
+`isSubtype` then walks that type and the declared one, so the cost grows with the answer's
+size and is paid on every suspension — to catch something a correct handler never does.
+- *Why:* a wrong-typed answer otherwise fails wherever something unboxes it, at the span of the
+  operation that consumed the value rather than the capability call that produced it; the check
+  is what makes `HandlerTypeMismatch` name the call.
+- *Fix:* the loop calls the check in one place rather than spreading the logic around, so a
+  host that trusts its handlers can switch it off — a run option that skips `checked`, or a
+  per-capability opt-out for handlers the host has verified itself.
+
 **Hoisting cheap/trivial receivers, scrutinees, and destructure RHSs.** Three lowerings bind a
 value to a temp so it is evaluated once, more aggressively than needed:
 - Scrutinee and `?.`-receiver hoisting wraps a fresh `scope` and allocates a cell even when the

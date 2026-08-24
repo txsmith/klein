@@ -200,7 +200,7 @@ private class UnanswerableCapability(
     call: String,
 ) : KleinError {
     override val message = "cannot answer '$call': interactive run needs a terminal, and stdin is not one"
-    override val span = SourceSpan.zero
+    override val span: SourceSpan? = null
 }
 
 /**
@@ -450,14 +450,14 @@ private fun run(
 
 private fun printError(
     source: String,
-    span: SourceSpan,
+    span: SourceSpan?,
     message: String,
     rawOutput: Boolean,
 ) {
-    if (rawOutput) {
-        println("Error: $message at $span")
-    } else if (span == SourceSpan.zero) {
+    if (span == null) {
         println("Error: $message")
+    } else if (rawOutput) {
+        println("Error: $message at $span")
     } else {
         print(span.formatInSource(source, contextLines = 5, message = message))
     }

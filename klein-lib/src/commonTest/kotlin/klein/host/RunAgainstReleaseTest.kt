@@ -181,6 +181,74 @@ class RunAgainstReleaseTest {
     }
 
     @Test
+    fun aHandlerAnsweringTheWrongTypeIsCaughtAtTheCallSite() {
+        val contract = Klein.checkContract(LENDING)
+        val env =
+            contract.implement {
+                immediate("customer") { gold }
+                immediate("creditScore") { Value.VStr("hi") }
+            }
+        val error = assertFailsWith<KleinException> { env.run(contract.compileRule("1 + $STANDARD", ReleaseNumber(1))) }
+        val mismatch = assertIs<HandlerTypeMismatch>(error.errors.single())
+        assertEquals("creditScore", mismatch.call)
+        assertEquals("'creditScore' answered with String where the contract declares Num", mismatch.message)
+    }
+
+    @Test
+    fun aCustomerWithAWrongFieldTypeIsCaughtAtTheBoundary() {
+        val contract = Klein.checkContract(LENDING)
+        val env =
+            contract.implement {
+                immediate("customer") { Value.VStruct("Customer", mapOf("id" to Value.VStr("one"), "tier" to Value.VStr("gold"))) }
+                immediate("creditScore") { scoreByTier(it) }
+            }
+        val error = assertFailsWith<KleinException> { env.run(contract.compileRule(STANDARD, ReleaseNumber(1))) }
+        val mismatch = assertIs<HandlerTypeMismatch>(error.errors.single())
+        assertEquals("customer", mismatch.call)
+        assertEquals("'customer' answered with { id: String, tier: String } where the contract declares Customer", mismatch.message)
+    }
+
+    @Test
+    fun aRecordAnswerWithExtraFieldsPasses() {
+        val contract =
+            Klein.checkContract(
+                """
+                customer: { id: Num, tier: String }
+
+                release 1
+                  customer
+                """.trimIndent(),
+            )
+        val env =
+            contract.implement {
+                immediate("customer") {
+                    Value.VStruct(null, mapOf("id" to Value.VNum(1.0), "tier" to Value.VStr("gold"), "region" to Value.VStr("EU")))
+                }
+            }
+        assertEquals(Value.VStr("gold"), env.run(contract.compileRule("customer.tier", ReleaseNumber(1))))
+    }
+
+    @Test
+    fun aHandlerAnsweringAClosureIsRejectedAsAFunction() {
+        val closure =
+            Klein
+                .tokenize("|x -> x|")
+                .andThen(Klein::parse)
+                .andThen(Klein::lower)
+                .andThen(Klein::execute)
+                .output!!
+        val contract = Klein.checkContract(LENDING)
+        val env =
+            contract.implement {
+                immediate("customer") { gold }
+                immediate("creditScore") { closure }
+            }
+        val error = assertFailsWith<KleinException> { env.run(contract.compileRule(STANDARD, ReleaseNumber(1))) }
+        val mismatch = assertIs<HandlerTypeMismatch>(error.errors.single())
+        assertEquals("'creditScore' answered with a function where the contract declares Num", mismatch.message)
+    }
+
+    @Test
     fun anEditionRunsAgainstAContractEditedInPlaceAtTheSameRevision() {
         val edition = Klein.checkContract(LENDING).compileRule(STANDARD, ReleaseNumber(1))
         val widened =
