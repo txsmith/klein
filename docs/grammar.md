@@ -7,9 +7,15 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 ## Expression Grammar
 
 ```
-prog        = (type_def | fun_def | stmt)*
+prog        = (type_def | fun_def | stmt)*         # a rule; Parser.parseProgram()
+contract    = (type_def | fun_decl | val_decl | release)*   # Parser.parseContract()
 
-type_def    = 'type' UPPER_IDENT type_params? '=' constructors
+type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
+
+revision    = '/' INT                              # positive; absent means 1. Contracts only
+
+release     = 'release' INT NEWLINE release_entry* # contracts only; 'release' is contextual
+release_entry = 'remove'? UPPER_IDENT_or_IDENT revision?   # one per line, indented
 
 type_params = '<' TYPE_VAR (',' TYPE_VAR)* '>'
 
@@ -23,11 +29,15 @@ field_decl  = IDENT ':' type
 
 fun_def     = 'fun' IDENT '(' params? ')' (':' type)? '=' block_or_expr
 
+fun_decl    = 'fun' IDENT revision? '(' params? ')' ':' type   # declared, not defined — no body
+
 stmt        = binding
             | expr
 
 binding     = IDENT (':' type)? '=' block_or_expr
             | record_pattern '=' block_or_expr     # destructuring; must be irrefutable
+
+val_decl    = IDENT revision? ':' type   # declared, not defined — no value
 
 block_or_expr = block
               | expr
@@ -96,12 +106,15 @@ binop       = '+' | '-' | '*' | '/' | '%'
 |----------------|-----------------------|
 | prog           | `parseProgram()`      |
 | type_def       | `parseTypeDef()` (TODO) |
+| revision       | `parseRevisionSuffix()` |
 | type_params    | `parseTypeParams()` (TODO) |
 | constructors   | `parseConstructors()` (TODO) |
 | constructor    | `parseConstructor()` (TODO) |
 | fun_def        | `parseFunDef()`       |
+| fun_decl       | `parseFunDef()`       |
 | stmt           | `parseStmt()`         |
 | binding        | `parseBinding()`      |
+| val_decl       | `parseBinding()`      |
 | block_or_expr  | `parseBlockOrExpr()`  |
 | block          | `parseBlock()`        |
 | lambda         | `parseLambda()`       |
@@ -118,6 +131,103 @@ binop       = '+' | '-' | '*' | '/' | '%'
 | implicit_param | `parseImplicitParam()` |
 | record         | `parseRecordLiteral()` |
 | args           | `parseArgs()`         |
+
+## Declarations Without Definitions
+
+`fun_decl` and `val_decl` are the definition forms with the definition removed. These are interface definitions used for interaction between Klein and the host language:
+
+```klein
+type Customer = Customer { id: Num, name: String, score: Num }
+
+fun creditCheck(c: Customer): Num
+maxRetries: Num
+```
+
+They parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body,
+and not statements: they are `Declaration`s, held by a `ContractExpr` rather than by a `Program`.
+
+The annotation is what tells a declaration apart from a definition. After the parameter list, `fun`
+with `: type` and no `=` is a `fun_decl`, while `fun mystery()` with neither is still a parse error.
+A `val_decl` likewise requires its annotation — `IDENT` alone is an expression, not a declaration.
+
+Neither form consumes anything past its type: a bodiless declaration never absorbs the following
+line, even when that line opens an indented block.
+
+`prog` and `contract` are separate productions with separate entry points, so the parser always
+knows which kind of file it is reading. A form written into the wrong one is a **parse error at the
+place it is written**: a bodiless `fun`, a `val_decl` or a `release` block in a program, and a
+definition or a bare expression in a contract. What a contract is *for* is still checker semantics:
+see [spec/contracts.md](./spec/contracts.md).
+
+## Revisions
+
+A `/N` suffix on a declared name, so two incompatible versions of a capability or a type coexist in
+one contract file while the old one drains:
+
+```klein
+type Customer = Customer { id: Num }
+type Customer/2 = Customer { id: Num, tier: String }
+
+fun creditScore(c: Customer): Num
+fun creditScore/2(c: Customer/2): Num
+
+maxRetries: Num
+maxRetries/2: Num
+```
+
+`N` is a positive integer literal. **Absent means revision 1**, so `Customer` and `Customer/1` are
+the same name, and declaring both is a duplicate. The suffix appears in exactly two places:
+
+- on the declared name of a `type_def`, `fun_decl` or `val_decl` — never on a definition
+  (`fun f/2(): Num = 1` and `x/2 = 1` are parse errors, as is a revision below 1);
+- on a **type reference**, anywhere a type name may be written: parameter and return types,
+  constructor field types, record and function types, and type arguments (`List<Customer/2>`).
+  A revised type may still be applied and made optional: `Box/2<Num>`, `Customer/2?`.
+
+A revision never appears in an expression — rules do not write them, only contracts do. `Customer`
+and `Customer/2` are unrelated nominal types; nothing is inherited between revisions.
+
+Revisions belong to the `contract` production alone. The rule parser reads every type reference with
+a revision reader that has nothing to return, so a `/N` anywhere in a program is a parse error and
+the parsed rule provably carries none.
+
+### `/` versus division
+
+No new token: a revision reuses `SLASH` and is recognized by position. Nothing else in the grammar
+can put a `/` where a revision goes, because a type is never an operand of an arithmetic operator
+and a declared name is never an expression. The one lookahead the parser needs is for `val_decl`,
+where a contract line may begin with either form: `IDENT '/' INT` followed by `:` or `=` starts a
+declaration, and anything else is the division it has always been (`total / 2` is unchanged).
+
+## Releases
+
+A block naming which revision each rule-facing name means. What it means is specified in
+[spec/contracts.md](./spec/contracts.md); the syntax is a header line and one indented entry per
+line:
+
+```klein
+release 3
+  Customer/2
+  creditScore/3
+  remove maxRetries
+```
+
+The header is the word `release` and a positive integer. Each entry names one declaration, with an
+optional revision suffix under the usual rule that absent means 1, and may be preceded by `remove`
+to take that name out of the release. Entries are separated by newlines and belong to the block by
+indentation, like any other indented group.
+
+### `release` is not a reserved word
+
+It is recognized only at the start of a statement and only when directly followed by an `INT`,
+which is not a legal statement otherwise. Everywhere else it is an ordinary identifier, so
+`release = 3`, `release: Num` and `release + 1` all keep their meaning. This is the same
+positional recognition used for revisions, and for the same reason: the surface stays free for
+rule authors.
+
+A release block belongs to the `contract` production. The rule parser runs the same lookahead for
+one reason only: to say "a release block belongs in a capability contract" rather than letting the
+line fail as a stray expression.
 
 ## Indentation Model
 
@@ -203,10 +313,13 @@ X % sep  one or more X separated by sep
 
 ```
 TypeDef
-  = 'type' TypeName TypeParams? '=' Constructors
+  = 'type' TypeName Revision? TypeParams? '=' Constructors
 
 TypeName
   = UpperIdent
+
+Revision
+  = '/' INT                       # positive integer; absent means 1
 
 TypeParams
   = '<' TypeVar % ',' '>'
@@ -246,7 +359,7 @@ TypeArgs
   = '<' Type % ',' '>'
 
 TypeAtom
-  = UpperIdent                    # concrete type: Num, String, Person
+  = UpperIdent Revision?          # concrete type: Num, String, Person, Customer/2
   | TypeVar                       # type variable: 'A, 'B, 'T
   | RecordType                    # structural record
   | TupleType                     # tuple

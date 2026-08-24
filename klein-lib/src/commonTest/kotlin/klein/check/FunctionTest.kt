@@ -418,7 +418,7 @@ class FunctionTest {
 
     @Test
     fun applyingBottomYieldsBottomWithoutError() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         env.bind("nope", TBottom)
         val result = infer("nope(1, 2)", env)
         assertEquals(TBottom, result.type)

@@ -1,0 +1,39 @@
+# Triaging an insurance claim: sum types, pattern matching, guards.
+#
+#   klein run examples/claims-triage.klein
+
+type Claim =
+  Motor { amount: Num, atFault: Bool }
+  | Property { amount: Num, floodZone: Bool }
+  | Travel { amount: Num }
+
+type Route = Auto { paid: Num } | Adjuster { queue: String } | Decline { reason: String }
+
+# One arm per constructor. Leave one out and the compiler says which.
+fun triage(claim: Claim): Route = match claim
+  Motor m ->
+    if m.atFault then
+      Decline("at fault")
+    else if m.amount > 10000 then
+      Adjuster("motor-major")
+    else
+      Auto(m.amount)
+
+  Property p ->
+    if p.floodZone then Adjuster("flood") else Auto(p.amount * 0.9)
+
+  Travel t ->
+    if t.amount > 2500 then Adjuster("travel") else Auto(t.amount)
+
+# Guards read as a decision table, top to bottom.
+fun priority(route: Route): String = match route
+  Adjuster a if a.queue == "flood" -> "urgent"
+  Adjuster _ -> "normal"
+  Decline _ -> "closed"
+  Auto _ -> "closed"
+
+fun handle(claim: Claim) =
+  route = triage(claim)
+  { route, priority = priority(route) }
+
+handle(Property(8000, true))

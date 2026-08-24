@@ -13,17 +13,17 @@ import kotlin.test.assertTrue
  */
 class OptionalSubtypeTest {
     private val subtyping = Subtyping()
-    private val env = TypeEnv.empty()
+    private val env: RuleEnv = TypeEnv.empty()
 
-    private infix fun Type.subOf(other: Type) = subtyping.isSubtype(this, other, env)
+    private infix fun RuleType.subOf(other: RuleType) = subtyping.isSubtype(this, other, env)
 
-    private fun rec(vararg fields: Pair<String, Type>) = TRecord(fields.toMap())
+    private fun rec(vararg fields: Pair<String, RuleType>) = TRecord(fields.toMap())
 
-    private fun opt(t: Type) = TOptional(t)
+    private fun opt(t: RuleType) = TOptional(t)
 
     private fun fn(
-        param: Type,
-        result: Type,
+        param: RuleType,
+        result: RuleType,
     ) = TFun(listOf(param), result)
 
     // --- Null reflexivity ---

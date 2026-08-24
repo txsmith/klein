@@ -5,7 +5,7 @@ import klein.core.CoreExpr
 import klein.surface.Program
 import klein.StageResult
 import klein.surface.Token
-import klein.check.Type
+import klein.check.RuleType
 import klein.interp.Value
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
@@ -54,7 +54,7 @@ class ProgramSuiteBenchmark {
     fun parse(): StageResult<Program> = Klein.parse(tokens)
 
     @Benchmark
-    fun typecheck(): StageResult<Type> = Klein.check(program)
+    fun typecheck(): StageResult<RuleType> = Klein.check(program)
 
     @Benchmark
     fun lower(): StageResult<CoreExpr> = Klein.lower(program)

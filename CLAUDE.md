@@ -13,6 +13,8 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[type-system.md](./docs/type-system.md)** - Type system design: structural vs nominal typing, subtyping, records, and the tilde operator (inference sections being rewritten for Operation Bidi)
 - **[spec/bidirectional-checking.md](./docs/spec/bidirectional-checking.md)** - The current type-checking model (the Operation Bidi surface spec)
 - **[spec/pattern-matching.md](./docs/spec/pattern-matching.md)** - Pattern matching and destructuring bindings: pattern forms, match typing, exhaustiveness, refutability
+- **[spec/host-integration.md](./docs/spec/host-integration.md)** - How rules and a host evolve independently: environments, capabilities, revisions, releases, editions, pins, reconciliation, drain
+- **[spec/contracts.md](./docs/spec/contracts.md)** - The v1 contract language: declarations without definitions, revisions, releases, the two checking modes; sections marked implemented vs target
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
@@ -22,6 +24,7 @@ Specs are **living contracts** — the current rules, updated in place as the la
 - **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and execution
 - **[performance-debt.md](./docs/performance-debt.md)** - Deliberate performance corners in the execution pipeline, each with its fix
 - **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
+- **[host-integration-roadmap.md](./docs/host-integration-roadmap.md)** - What is left to make the host-integration spec real, and what depends on what
 - **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
 ### Design Decisions
@@ -39,6 +42,12 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 - **[own-machine-not-a-rented-vm.md](./docs/decisions/2026-07-20-own-machine-not-a-rented-vm.md)** - Why Klein runs its own machine instead of compiling to JVM/WASM/Lua (re-centered on embedding, walkable hot tier, fuel)
 - **[source-is-truth-ir-is-a-cache.md](./docs/decisions/2026-07-20-source-is-truth-ir-is-a-cache.md)** - Stored IR integrity: version stamp + checksum, re-derive instead of migrate
 - **[no-load-time-verifier.md](./docs/decisions/2026-07-20-no-load-time-verifier.md)** - Why per-op checks are just unboxing and a verifier was rejected
+
+**Host integration decisions:**
+
+- **[2026-08-24-capabilities-execute-through-the-suspension-path.md](./docs/decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md)** - **Current.** Execution wiring: every capability interaction is a suspension, the compiled program is revision-free with pins at the boundary, the library never caches, the run is guarded at both ends.
+- **[2026-08-08-rule-vocabulary-through-linear-releases.md](./docs/decisions/2026-08-08-rule-vocabulary-through-linear-releases.md)** - **Current.** Numbered releases decide what rules can see; editing one carries rules along, appending one waits for a person. Supersedes the tag half of the ADR below.
+- **[2026-08-06-capability-evolution-through-revisions-and-tags.md](./docs/decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md)** - **Current apart from tags.** Permanent `/N` revisions, invariant type definitions, recompilation as the compatibility verdict, optimistic removal — with the full rejected-alternatives list.
 
 **Foundational language decisions (still current):**
 
@@ -129,10 +138,37 @@ echo "x = 1 + 2" | ./klein check --stdin
 
 `check` has no IR/format flags — the Operation Bidi type is a plain structural tree with nothing to dump.
 
+### Check or run against a capability contract
+
+`--contract <file>` on `check` and `run` checks a rule against a [capability contract](./docs/spec/contracts.md)
+instead of the empty environment. It composes with the plain form: give `check` a contract and
+nothing else to check the contract alone.
+
+```bash
+# Contract alone: prints its declarations and releases, exits non-zero on error
+./klein check --contract examples/lending.contract
+
+# A rule against one release of that contract
+./klein check --contract examples/lending.contract examples/lending-rule.klein --release 2
+
+# --release may be omitted when the contract has exactly one release
+./klein run --contract examples/lending.contract examples/lending-rule.klein --release 2
+```
+
+`run` with a contract is interactive: the CLI is the host, and you answer its capability calls.
+Each suspension prints the call — `creditScore(Customer(1, "Acme", "gold")) = ?` — and reads one
+Klein expression, compiled against the capability's declared answer type (a fun's result type; a
+value's whole type). A wrong-typed answer re-prompts with the checker's message; an answer may use
+the release's types (`Customer(1, "Acme", "gold")` works) but not its capabilities, so answering
+never triggers more prompts. A distinct question is asked once. Prompting needs a terminal: with
+piped input, or with `--stdin` consumed by the rule source, a suspension is an error naming the
+capability, so scripts fail loudly instead of hanging.
+
 ### Run
 
 Execute a program on the Core machine (parse → check → lower → run) and print the final value.
-Host calls are not reachable from source yet, so programs must be pure.
+Without a contract there are no capabilities to call, so programs must be pure; with `--contract`,
+capability calls are answered interactively — see above.
 
 ```bash
 # From a file

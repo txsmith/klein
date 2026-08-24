@@ -1,11 +1,13 @@
 package klein
 
 import klein.surface.*
-import klein.check.Checker
-import klein.check.Type
+import klein.check.RuleEnv
+import klein.check.RuleType
 import klein.check.TypeEnv
+import klein.check.checkProgram
+import klein.check.contract.ContractChecker
+import klein.check.contract.EnvironmentContract
 import klein.core.CoreExpr
-import klein.core.Lowering
 import klein.interp.Execution
 import klein.interp.KleinRuntimeError
 import klein.interp.Machine
@@ -25,7 +27,7 @@ import klein.interp.Value
  * ```
  *
  * Exceptions never escape these functions; stage-internal aborts are converted to errors
- * in the result. The underlying throwing implementations ([Lexer], [Parser]) remain
+ * in the result. The underlying throwing implementations ([Lexer], [parseProgram]) remain
  * available for tools that want them raw.
  */
 object Klein {
@@ -38,7 +40,7 @@ object Klein {
 
     fun parse(tokens: List<Token>): StageResult<Program> =
         try {
-            StageResult.success(Parser(tokens).parseProgram())
+            StageResult.success(parseProgram(tokens))
         } catch (e: ParseError) {
             StageResult.failure(e)
         }
@@ -51,11 +53,37 @@ object Klein {
      */
     fun check(
         program: Program,
-        env: TypeEnv = TypeEnv.empty(),
-    ): StageResult<Type> {
-        val checker = Checker()
-        val type = checker.synthProgram(program, env)
-        return StageResult(type, checker.getErrors())
+        env: RuleEnv = TypeEnv.empty(),
+    ): StageResult<RuleType> {
+        val checked = checkProgram(program, env)
+        return StageResult(checked.type, checked.errors)
+    }
+
+    /**
+     * Read and check a capability contract, and answer the artifact rules are checked against:
+     * `contract.check(ruleSource, ReleaseNumber(2))`, and `contract.implement { … }` when the host
+     * also needs to run them.
+     *
+     * Throws [KleinException] carrying every diagnostic. There is no [StageResult] here because
+     * there is no partial answer worth having: holding an [EnvironmentContract] means the contract
+     * checked.
+     */
+    fun checkContract(contractSource: String): EnvironmentContract {
+        val tokens =
+            try {
+                Lexer(contractSource).tokenize().toList()
+            } catch (e: LexerError) {
+                throw KleinException(listOf(e))
+            }
+        val contract =
+            try {
+                parseContract(tokens)
+            } catch (e: ParseError) {
+                throw KleinException(listOf(e))
+            }
+        val checked = ContractChecker().check(contract)
+        if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
+        return checked.contract
     }
 
     /**
@@ -63,7 +91,7 @@ object Klein {
      * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
      * stage carries no errors — it either produces IR or throws.
      */
-    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(Lowering().lower(program))
+    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(klein.core.lower(program))
 
     /**
      * Run lowered [CoreExpr] on the [Machine] to completion. v1 has no host seam, so a suspension

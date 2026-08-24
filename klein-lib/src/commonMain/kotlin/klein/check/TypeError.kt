@@ -1,6 +1,8 @@
 package klein.check
 
 import klein.KleinError
+import klein.ReleaseNumber
+import klein.RevisionNumber
 import klein.SourceSpan
 
 sealed class TypeError : KleinError {
@@ -15,8 +17,8 @@ sealed class TypeError : KleinError {
     }
 
     data class TypeMismatch(
-        val subtype: Type,
-        val supertype: Type,
+        val subtype: Type<*>,
+        val supertype: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =
@@ -24,8 +26,8 @@ sealed class TypeError : KleinError {
     }
 
     data class CannotJoinBranches(
-        val thenType: Type,
-        val elseType: Type,
+        val thenType: Type<*>,
+        val elseType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =
@@ -34,7 +36,7 @@ sealed class TypeError : KleinError {
 
     data class MissingField(
         val field: String,
-        val recordType: Type,
+        val recordType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type error: ${Type.print(recordType)} has no field '$field'"
@@ -45,7 +47,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NotARecord(
-        val actual: Type,
+        val actual: Type<*>,
         val field: String,
         override val span: SourceSpan,
     ) : TypeError() {
@@ -53,7 +55,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NotAFunction(
-        val actual: Type,
+        val actual: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Type error: '${Type.print(actual)}' is not a function"
@@ -88,6 +90,14 @@ sealed class TypeError : KleinError {
         override val message = "'$name' is already defined"
     }
 
+    data class FunctionTypeInCapability(
+        val name: String,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "'$name' has a function in its type; a host cannot call a Klein function, so capabilities cannot pass one"
+    }
+
     data class RecursiveVal(
         val name: String,
         val cycle: List<String>,
@@ -120,6 +130,69 @@ sealed class TypeError : KleinError {
         override val message = "Type '$typeName' expects $expected type parameter(s), got $actual"
     }
 
+    /**
+     * A revision names one version of *declared* vocabulary, and a built-in type is never declared —
+     * a contract cannot define `Num` at any revision, so `Num/1` is as meaningless as `Num/2`.
+     * `/1` is rejected too: it survives elsewhere only because revision 1 is the default, and
+     * letting it pass here would make the bare name and the written `/1` differ in what they permit.
+     */
+    data class RevisionOnPrimitive(
+        val typeName: String,
+        val revision: RevisionNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "'$typeName' is a built-in type and has no revisions; write '$typeName' without '/${revision.value}'"
+    }
+
+    /**
+     * A release entry that names nothing the contract declares. Entries resolve against the
+     * declaration lists rather than the environment, so a constructor lands here too: constructors
+     * travel with their type and are never pointed at individually.
+     */
+    data class UnknownReleaseTarget(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Release ${release.value} points at '$name', which this contract does not declare"
+    }
+
+    data class DuplicateReleaseEntry(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "'$name' is named twice in release ${release.value}; a name means one revision per release"
+    }
+
+    data class ReleaseOutOfOrder(
+        val release: ReleaseNumber,
+        val previous: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Release ${release.value} follows release ${previous.value}; release numbers must increase down the file"
+    }
+
+    data class RemoveOfUnexposedName(
+        val name: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message =
+            "Release ${release.value} removes '$name', which it does not expose; " +
+                "either it was never there or an earlier release already removed it"
+    }
+
+    data class ReleaseNotSelfContained(
+        val unreachable: String,
+        val release: ReleaseNumber,
+        override val span: SourceSpan,
+    ) : TypeError() {
+        override val message = "Release ${release.value} reaches '$unreachable', which it does not expose"
+    }
+
     data class ImplicitParamOutsideLambda(
         override val span: SourceSpan,
     ) : TypeError() {
@@ -150,7 +223,7 @@ sealed class TypeError : KleinError {
     }
 
     data class NullNotAllowed(
-        val expected: Type,
+        val expected: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Null is not allowed here: expected ${Type.print(expected)}"
@@ -203,22 +276,22 @@ sealed class TypeError : KleinError {
 
     data class NotAConstructorOf(
         val constructorName: String,
-        val scrutinee: Type,
+        val scrutinee: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "'$constructorName' is not a constructor of '${Type.print(scrutinee)}'"
     }
 
     data class CannotMatchOn(
-        val scrutinee: Type,
+        val scrutinee: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message = "Cannot match on a value of type '${Type.print(scrutinee)}'"
     }
 
     data class CannotJoinMatchArms(
-        val armType: Type,
-        val otherType: Type,
+        val armType: Type<*>,
+        val otherType: Type<*>,
         override val span: SourceSpan,
     ) : TypeError() {
         override val message =

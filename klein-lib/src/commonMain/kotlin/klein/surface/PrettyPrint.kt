@@ -1,8 +1,11 @@
 package klein.surface
 
+import klein.RevisionNumber
 import klein.surface.TokenKind.*
 
-fun Token.prettyPrint(): String {
+private fun revisionSuffix(revision: RevisionNumber?): String = if (revision == null) "" else "/${revision.value}"
+
+internal fun Token.prettyPrint(): String {
     val base =
         when (kind) {
             INT, DOUBLE -> "Number($text)"
@@ -16,7 +19,7 @@ fun Token.prettyPrint(): String {
     return if (indent != null) "$base @$indent" else base
 }
 
-fun Stmt.prettyPrint(indent: Int = 0): String {
+internal fun Stmt.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
     return when (this) {
         is Val -> {
@@ -30,28 +33,56 @@ fun Stmt.prettyPrint(indent: Int = 0): String {
             val retStr = if (returnType != null) ": ${returnType.prettyPrint()}" else ""
             "${pad}Fun $name($paramsStr)$retStr =\n${body.prettyPrint(indent + 1)}"
         }
-        is TypeDef -> {
-            val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
-            val constructorsStr =
-                constructors.joinToString(" | ") { c ->
-                    if (c.fields.isEmpty()) {
-                        c.name
-                    } else {
-                        "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
-                    }
-                }
-            "${pad}type $name$typeParamsStr = $constructorsStr"
-        }
+        is TypeDefStmt -> typeDef.prettyPrint(indent)
         is PatternVal -> "${pad}PatternVal(${pattern.prettyPrint()}) =\n${value.prettyPrint(indent + 1)}"
         is Expr -> prettyPrint(indent)
     }
 }
 
-fun TypeExpr.prettyPrint(): String =
+internal fun TypeDef<*>.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    val typeParamsStr = if (typeParams.isNotEmpty()) "<${typeParams.joinToString(", ") { "'$it" }}>" else ""
+    val constructorsStr =
+        constructors.joinToString(" | ") { c ->
+            if (c.fields.isEmpty()) {
+                c.name
+            } else {
+                "${c.name} { ${c.fields.joinToString(", ") { f -> "${f.name}: ${f.type.prettyPrint()}" }} }"
+            }
+        }
+    return "${pad}type $name${revisionSuffix(revision)}$typeParamsStr = $constructorsStr"
+}
+
+internal fun ContractExpr.prettyPrint(): String =
+    (types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() } + releases.map { it.prettyPrint() })
+        .joinToString("\n")
+
+internal fun ReleaseBlock.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    val entriesStr = entries.joinToString("") { "\n$pad  ${it.prettyPrint()}" }
+    return "${pad}Release ${number.value}$entriesStr"
+}
+
+internal fun ReleaseEntry.prettyPrint(): String = "${if (remove) "remove " else ""}$name${revisionSuffix(revision)}"
+
+internal fun CapabilityDeclaration.prettyPrint(indent: Int = 0): String {
+    val pad = "  ".repeat(indent)
+    return when (this) {
+        is FunDecl -> {
+            val paramsStr = params.joinToString(", ") { p ->
+                if (p.typeAnnotation != null) "${p.name}: ${p.typeAnnotation.prettyPrint()}" else p.name
+            }
+            "${pad}FunDecl $name${revisionSuffix(revision)}($paramsStr): ${returnType.prettyPrint()}"
+        }
+        is ValDecl -> "${pad}ValDecl($name${revisionSuffix(revision)}: ${type.prettyPrint()})"
+    }
+}
+
+internal fun TypeExpr<*>.prettyPrint(): String =
     when (this) {
-        is TypeName -> name
+        is TypeName -> "$name${revisionSuffix(revision)}"
         is TypeVar -> "'$name"
-        is AppliedTypeExpr -> "$name<${args.joinToString(", ") { it.prettyPrint() }}>"
+        is AppliedTypeExpr -> "$name${revisionSuffix(revision)}<${args.joinToString(", ") { it.prettyPrint() }}>"
         is FunctionTypeExpr -> "(${if (paramTypes.isEmpty()) {
             "()"
         } else {
@@ -64,7 +95,7 @@ fun TypeExpr.prettyPrint(): String =
         is OptionalTypeExpr -> "${inner.prettyPrint()}?"
     }
 
-fun Expr.prettyPrint(indent: Int = 0): String {
+internal fun Expr.prettyPrint(indent: Int = 0): String {
     val pad = "  ".repeat(indent)
     return when (this) {
         is IntLiteral -> "${pad}Int($value)"
@@ -120,7 +151,7 @@ fun Expr.prettyPrint(indent: Int = 0): String {
     }
 }
 
-fun Pattern.prettyPrint(): String =
+internal fun Pattern.prettyPrint(): String =
     when (this) {
         is WildcardPattern -> "_"
         is VariablePattern -> name

@@ -1,0 +1,5 @@
+# Compiled and executed against lending.contract's release 2 — constructor-only, so it runs to a
+# value with no handlers anywhere:
+#   klein run --contract examples/lending.contract examples/lending-value-rule.klein --release 2
+
+Customer(1, "Acme", "gold").tier == "gold"

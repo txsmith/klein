@@ -1,0 +1,15 @@
+# A rule against examples/claims.contract. It never spells a revision — the
+# release does that — so the same text means different things on each.
+#
+# Exhaustive on release 1:
+#   klein check --contract examples/claims.contract examples/claims-rule.klein --release 1
+#
+# Not exhaustive on release 2, which added a third outcome. The compiler names
+# the arm that is missing, and it names it `Refer`, not `Refer/2`:
+#   klein check --contract examples/claims.contract examples/claims-rule.klein --release 2
+
+fun summarise(d: Decision): String = match d
+  Approve a -> "paid"
+  Deny x -> x.reason
+
+summarise(decide(Claim(1, 250)))

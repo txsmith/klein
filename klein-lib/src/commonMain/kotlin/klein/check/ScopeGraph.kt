@@ -3,7 +3,7 @@ package klein.check
 import klein.SourceSpan
 import klein.surface.*
 
-data class ScopeGraph(
+internal data class ScopeGraph(
     val nodes: List<Node>,
     val edges: Set<Pair<String, String>>,
     val children: List<ScopeGraph>,
@@ -237,7 +237,7 @@ data class ScopeGraph(
                         classify(null, refs) // bare expression: no source node, so no edges
                         anonChildren.addAll(graphs)
                     }
-                    else -> {} // TypeDef etc. introduce no value-level scope
+                    is TypeDefStmt -> {} // a type definition introduces no value-level scope
                 }
             }
             return GraphResult(ScopeGraph(nodes, edges, anonChildren), escapes, duplicates)

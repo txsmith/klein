@@ -1,0 +1,19 @@
+# The same rule with a fallback arm. It checks against release 2, where `Refer`
+# exists for the arm to catch — and is *rejected* on release 1, where the two
+# named arms already cover `Decision` and the fallback is unreachable.
+#
+# Checks:
+#   klein check --contract examples/claims.contract examples/claims-rule-tolerant.klein --release 2
+# "Unreachable match arm: earlier arms already cover it":
+#   klein check --contract examples/claims.contract examples/claims-rule-tolerant.klein --release 1
+#
+# So a rule cannot be written once to absorb outcomes it has never seen. Each
+# release is checked on its own terms, and a new outcome is something a person
+# is made to look at rather than something a `_` quietly swallows.
+
+fun summarise(d: Decision): String = match d
+  Approve a -> "paid"
+  Deny x -> x.reason
+  _ -> "needs a person"
+
+summarise(decide(Claim(1, 250)))

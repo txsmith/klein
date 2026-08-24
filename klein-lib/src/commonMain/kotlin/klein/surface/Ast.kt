@@ -1,5 +1,6 @@
 package klein.surface
 
+import klein.RevisionNumber
 import klein.SourceSpan
 
 import kotlinx.serialization.Serializable
@@ -9,6 +10,11 @@ data class Program(
     val span: SourceSpan,
 )
 
+/**
+ * A statement of the rule language: something that can run. Declarations without bodies belong to
+ * the contract language and live in [ContractExpr], so no pass that walks statements carries a
+ * branch for a form that never executes.
+ */
 sealed class Stmt {
     abstract val span: SourceSpan
 }
@@ -17,7 +23,7 @@ data class Val(
     val name: String,
     val value: Expr,
     override val span: SourceSpan,
-    val typeAnnotation: TypeExpr? = null,
+    val typeAnnotation: TypeExpr<Nothing?>? = null,
 ) : Stmt()
 
 data class PatternVal(
@@ -26,9 +32,9 @@ data class PatternVal(
     override val span: SourceSpan,
 ) : Stmt()
 
-data class Param(
+data class Param<out R : RevisionNumber?>(
     val name: String,
-    val typeAnnotation: TypeExpr? = null,
+    val typeAnnotation: TypeExpr<R>? = null,
     val span: SourceSpan = SourceSpan.zero,
 ) {
     val isDiscard: Boolean get() = name == "_"
@@ -36,71 +42,98 @@ data class Param(
 
 data class FunDef(
     val name: String,
-    val params: List<Param>,
+    val params: List<Param<Nothing?>>,
     val body: Expr,
     override val span: SourceSpan,
-    val returnType: TypeExpr? = null,
+    val returnType: TypeExpr<Nothing?>? = null,
 ) : Stmt()
 
-data class TypeDef(
+/**
+ * A type definition. Shared for real rather than incidentally: a rule may define its own types, and
+ * a contract may too — only the contract parser ever fills [revision] in.
+ */
+data class TypeDef<out R : RevisionNumber?>(
     val name: String,
     val typeParams: List<String>,
-    val constructors: List<Constructor>,
-    override val span: SourceSpan,
-) : Stmt()
+    val constructors: List<Constructor<R>>,
+    val span: SourceSpan,
+    val revision: R,
+)
 
-data class Constructor(
+/** A type definition as it appears in a rule: unrevisioned, because [TypeDef]`<Nothing?>` is all
+ *  this can hold. Unparameterised itself, so `filterIsInstance<TypeDefStmt>()` is erasure-safe. */
+data class TypeDefStmt(
+    val typeDef: TypeDef<Nothing?>,
+) : Stmt() {
+    override val span: SourceSpan get() = typeDef.span
+}
+
+internal fun revisionedName(
+    name: String,
+    revision: RevisionNumber?,
+): String = if (revision == null || revision.value == 1) name else "$name/${revision.value}"
+
+data class Constructor<out R : RevisionNumber?>(
     val name: String,
-    val fields: List<FieldDecl>,
+    val fields: List<FieldDecl<R>>,
     val span: SourceSpan,
 )
 
-data class FieldDecl(
+data class FieldDecl<out R : RevisionNumber?>(
     val name: String,
-    val type: TypeExpr,
+    val type: TypeExpr<R>,
     val span: SourceSpan,
 )
 
-sealed class TypeExpr {
+/**
+ * A type expression, carrying a witness for whether a revision could have been written in it.
+ * `TypeExpr<Nothing?>` is a rule's type, and `Nothing?` has exactly one inhabitant — `null`. So "a
+ * rule wrote a revision" is not a rule the checker enforces but a state that cannot be constructed.
+ */
+sealed class TypeExpr<out R : RevisionNumber?> {
     abstract val span: SourceSpan
 }
 
-data class TypeName(
+data class TypeName<out R : RevisionNumber?>(
     val name: String,
     override val span: SourceSpan,
-) : TypeExpr()
+    val revision: R,
+) : TypeExpr<R>()
 
-data class AppliedTypeExpr(
+data class AppliedTypeExpr<out R : RevisionNumber?>(
     val name: String,
-    val args: List<TypeExpr>,
+    val args: List<TypeExpr<R>>,
     override val span: SourceSpan,
-) : TypeExpr()
+    val revision: R,
+) : TypeExpr<R>()
 
+/** A type variable names a quantifier, never a declaration, so it has no revision slot in either
+ *  language — hence `Nothing`, which fits wherever a `TypeExpr<R>` is wanted. */
 data class TypeVar(
     val name: String,
     override val span: SourceSpan,
-) : TypeExpr()
+) : TypeExpr<Nothing>()
 
-data class FunctionTypeExpr(
-    val paramTypes: List<TypeExpr>,
-    val returnType: TypeExpr,
+data class FunctionTypeExpr<out R : RevisionNumber?>(
+    val paramTypes: List<TypeExpr<R>>,
+    val returnType: TypeExpr<R>,
     override val span: SourceSpan,
-) : TypeExpr()
+) : TypeExpr<R>()
 
-data class TupleTypeExpr(
-    val elements: List<TypeExpr>,
+data class TupleTypeExpr<out R : RevisionNumber?>(
+    val elements: List<TypeExpr<R>>,
     override val span: SourceSpan,
-) : TypeExpr()
+) : TypeExpr<R>()
 
-data class RecordTypeExpr(
-    val fields: List<Pair<String, TypeExpr>>,
+data class RecordTypeExpr<out R : RevisionNumber?>(
+    val fields: List<Pair<String, TypeExpr<R>>>,
     override val span: SourceSpan,
-) : TypeExpr()
+) : TypeExpr<R>()
 
-data class OptionalTypeExpr(
-    val inner: TypeExpr,
+data class OptionalTypeExpr<out R : RevisionNumber?>(
+    val inner: TypeExpr<R>,
     override val span: SourceSpan,
-) : TypeExpr()
+) : TypeExpr<R>()
 
 @Serializable
 sealed class Expr : Stmt() {
@@ -155,7 +188,7 @@ data class UnaryOp(
 ) : Expr()
 
 data class Lambda(
-    val params: List<Param>,
+    val params: List<Param<Nothing?>>,
     val body: Expr,
     override val span: SourceSpan,
 ) : Expr()
@@ -195,7 +228,7 @@ sealed class Pattern {
     abstract val span: SourceSpan
 }
 
-val Pattern.boundNames: List<String>
+internal val Pattern.boundNames: List<String>
     get() =
         when (this) {
             is DataPattern -> listOfNotNull(binder) + fields.mapNotNull { it.binder }
@@ -261,7 +294,7 @@ data class ImplicitParam(
     override val span: SourceSpan,
 ) : Expr()
 
-val Expr.usesImplicitParam: Boolean
+internal val Expr.usesImplicitParam: Boolean
     get() =
         when (this) {
             is ImplicitParam -> true
@@ -289,12 +322,12 @@ val Expr.usesImplicitParam: Boolean
                         is Val -> stmt.value.usesImplicitParam
                         is PatternVal -> stmt.value.usesImplicitParam
                         is FunDef -> false
-                        is TypeDef -> false
+                        is TypeDefStmt -> false
                     }
                 }
         }
 
-val Expr.children: List<Expr>
+internal val Expr.children: List<Expr>
     get() =
         when (this) {
             is Block -> emptyList()
@@ -315,7 +348,7 @@ val Expr.children: List<Expr>
 data class RecordField(
     val name: String,
     val value: Expr,
-    val typeAnnotation: TypeExpr? = null,
+    val typeAnnotation: TypeExpr<Nothing?>? = null,
 )
 data class RecordLiteral(
     val fields: List<RecordField>,
@@ -324,7 +357,7 @@ data class RecordLiteral(
 
 data class Ascription(
     val expr: Expr,
-    val type: TypeExpr,
+    val type: TypeExpr<Nothing?>,
     override val span: SourceSpan,
 ) : Expr()
 

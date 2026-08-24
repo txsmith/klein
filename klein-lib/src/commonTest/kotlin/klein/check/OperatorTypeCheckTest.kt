@@ -104,8 +104,8 @@ class OperatorTypeCheckTest {
     /** Assert [error] is a [TypeError.TypeMismatch] reporting [subtype] cannot be used as [supertype]. */
     private fun assertMismatch(
         error: TypeError,
-        subtype: Type,
-        supertype: Type,
+        subtype: RuleType,
+        supertype: RuleType,
     ) {
         assertIs<TypeError.TypeMismatch>(error)
         assertEquals(subtype, error.subtype)

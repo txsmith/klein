@@ -5,7 +5,7 @@ import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
 @OptIn(ExperimentalContracts::class)
-inline fun invariant(
+internal inline fun invariant(
     condition: Boolean,
     span: SourceSpan? = null,
     message: () -> String,
@@ -14,7 +14,7 @@ inline fun invariant(
     if (!condition) throw InvariantViolation(message(), span)
 }
 
-class InvariantViolation(
+internal class InvariantViolation(
     message: String,
     val span: SourceSpan? = null,
 ) : IllegalStateException(if (span != null) "$message at $span" else message)

@@ -14,8 +14,8 @@ import klein.surface.WildcardPattern
 import klein.check.Type.*
 
 internal class MatchCoverage private constructor(
-    val scrutinee: Type,
-    val core: Type,
+    val scrutinee: RuleType,
+    val core: RuleType,
     val isOptional: Boolean,
     private val coreCtors: List<String>,
 ) {
@@ -26,7 +26,7 @@ internal class MatchCoverage private constructor(
 
     fun exhausted(): Boolean = nullCovered && coreExhausted
 
-    fun residual(): Type = if (isOptional && nullCovered) core else scrutinee
+    fun residual(): RuleType = if (isOptional && nullCovered) core else scrutinee
 
     fun reaches(pattern: Pattern): Boolean =
         when (pattern) {
@@ -87,8 +87,8 @@ internal class MatchCoverage private constructor(
 
     companion object {
         fun of(
-            scrutinee: Type,
-            env: TypeEnv,
+            scrutinee: RuleType,
+            env: RuleEnv,
         ): MatchCoverage? {
             val isOptional = scrutinee is TOptional || scrutinee is TNull
             val core = nonNullCore(scrutinee)
@@ -103,12 +103,13 @@ internal class MatchCoverage private constructor(
         }
 
         private fun coreCtors(
-            core: Type,
-            env: TypeEnv,
+            core: RuleType,
+            env: RuleEnv,
         ): List<String> {
             if (core !is TRef) return emptyList()
-            val members = env.allConstructors().filter { it.parentType == core.name }.map { it.name }
-            if (members.isEmpty() && env.lookupConstructor(core.name) != null) return listOf(core.name)
+            val members =
+                env.allConstructors().filter { it.parentType == core.name }.map { it.name }
+            if (members.isEmpty() && env.lookupConstructor(core.name, core.revision) != null) return listOf(core.name)
             return members
         }
     }

@@ -7,27 +7,27 @@ import kotlin.test.assertNull
 class TypeEnvTest {
     @Test
     fun lookup_returnsBoundType() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         env.bind("x", Type.TNum)
         assertEquals(Type.TNum, env.lookup("x"))
     }
 
     @Test
     fun lookup_returnsNullForUnbound() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         assertNull(env.lookup("x"))
     }
 
     @Test
     fun lookup_returnsNullForDifferentName() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         env.bind("x", Type.TNum)
         assertNull(env.lookup("y"))
     }
 
     @Test
     fun child_canSeeParentBindings() {
-        val parent = TypeEnv.empty()
+        val parent: RuleEnv = TypeEnv.empty()
         parent.bind("x", Type.TNum)
 
         val child = parent.child()
@@ -36,7 +36,7 @@ class TypeEnvTest {
 
     @Test
     fun child_canShadowParentBindings() {
-        val parent = TypeEnv.empty()
+        val parent: RuleEnv = TypeEnv.empty()
         parent.bind("x", Type.TNum)
 
         val child = parent.child()
@@ -48,7 +48,7 @@ class TypeEnvTest {
 
     @Test
     fun child_bindingDoesNotAffectParent() {
-        val parent = TypeEnv.empty()
+        val parent: RuleEnv = TypeEnv.empty()
         val child = parent.child()
         child.bind("x", Type.TNum)
 
@@ -58,7 +58,7 @@ class TypeEnvTest {
 
     @Test
     fun multipleBindings() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         env.bind("x", Type.TNum)
         env.bind("y", Type.TStr)
         env.bind("z", Type.TBool)
@@ -70,7 +70,7 @@ class TypeEnvTest {
 
     @Test
     fun rebindInSameScope() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         env.bind("x", Type.TNum)
         env.bind("x", Type.TStr)
 
@@ -79,7 +79,7 @@ class TypeEnvTest {
 
     @Test
     fun nestedScopes() {
-        val grandparent = TypeEnv.empty()
+        val grandparent: RuleEnv = TypeEnv.empty()
         grandparent.bind("x", Type.TNum)
 
         val parent = grandparent.child()
@@ -99,7 +99,7 @@ class TypeEnvTest {
 
     @Test
     fun functionTypeBinding() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         val fnType = Type.TFun(listOf(Type.TNum), Type.TStr)
         env.bind("f", fnType)
 
@@ -108,7 +108,7 @@ class TypeEnvTest {
 
     @Test
     fun recordTypeBinding() {
-        val env = TypeEnv.empty()
+        val env: RuleEnv = TypeEnv.empty()
         val recType = Type.TRecord(mapOf("a" to Type.TNum, "b" to Type.TStr))
         env.bind("r", recType)
 

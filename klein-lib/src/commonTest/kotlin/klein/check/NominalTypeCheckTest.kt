@@ -13,7 +13,7 @@ class NominalTypeCheckTest {
     /** Assert a program checks with no errors and yields [expected] — errors matter here because a
      *  `⊥`-recovering constructor (App-Bot on an unbound name) would otherwise let the type slip through. */
     private fun assertChecks(
-        expected: Type,
+        expected: RuleType,
         src: String,
     ) {
         val result = infer(src)

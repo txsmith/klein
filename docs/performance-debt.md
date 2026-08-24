@@ -146,6 +146,36 @@ all kept out of v1 to keep lowering uniform.
   linear redex (each param used at most once) — of which the constructor fold is the degenerate
   case that needs no scope/depth fixup.
 
+**Every capability call goes through an eta-lambda.** `lowerWithPrelude` binds a contract
+function `creditScore/1` as `fun creditScore/1 -> host creditScore(_0)`, and a rule's
+`creditScore(id)` is an ordinary `Apply` of that bound lambda — so each capability call runs the
+full call protocol (a `BindingScope`, a param cell per argument, a frame) pushed and popped
+around the suspension, when the `HostCall` could have been emitted at the call site directly.
+Kept for the same reason constructor construction goes through a lambda: `lowerExpr` stays
+syntax-driven and uniform, and a contract name is just a name in scope.
+- *Fix:* resolve the callee first and match on the *resolved binding* rather than on syntax —
+  an `Apply` whose callee resolves to a prelude `Function` of matching arity lowers to
+  `HostCall(name, args)` inline; only a capability passed as a value (`f = creditScore`) keeps
+  the lambda.
+
+**One suspension per capability value.** A contract value `customer: Customer` binds as a bare
+`host customer()` at the top of the prelude scope, so a rule that uses N capability values
+suspends N times on entry before running a single statement of its own — N round trips to the
+host for data the host had in hand before it started the machine.
+- *Fix:* store pre-fill — the runner fills the value's store cell before `Machine.start`, and
+  the bind emits no `HostCall` at all; the slot is just a pre-populated cell the rule reads.
+
+**Every handler answer is typed and subsumed at resume.** `Environment.run` passes each answer
+through `checked` before resuming: `infer` walks the whole answer value to build a type, and
+`isSubtype` then walks that type and the declared one, so the cost grows with the answer's
+size and is paid on every suspension — to catch something a correct handler never does.
+- *Why:* a wrong-typed answer otherwise fails wherever something unboxes it, at the span of the
+  operation that consumed the value rather than the capability call that produced it; the check
+  is what makes `HandlerTypeMismatch` name the call.
+- *Fix:* the loop calls the check in one place rather than spreading the logic around, so a
+  host that trusts its handlers can switch it off — a run option that skips `checked`, or a
+  per-capability opt-out for handlers the host has verified itself.
+
 **Hoisting cheap/trivial receivers, scrutinees, and destructure RHSs.** Three lowerings bind a
 value to a temp so it is evaluated once, more aggressively than needed:
 - Scrutinee and `?.`-receiver hoisting wraps a fresh `scope` and allocates a cell even when the

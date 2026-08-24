@@ -1,0 +1,38 @@
+# Pricing a policy: records in, record out, and nothing else. No effects, no
+# statements, no way to reach the network — the shape a business rule is meant
+# to have.
+#
+#   klein run examples/policy-pricing.klein
+
+type Cover = Basic | Plus | Full
+
+fun coverLoading(cover: Cover): Num = match cover
+  Basic -> 1.0
+  Plus -> 1.25
+  Full -> 1.6
+
+# A block is a sequence of local names ending in the value the block is. The
+# last expression is the result; there is no `return`.
+fun ageLoading(age: Num): Num =
+  young = age < 25
+  senior = age > 70
+  if young then 1.4 else if senior then 1.2 else 1.0
+
+fun noClaimsDiscount(years: Num): Num =
+  capped = if years > 5 then 5 else years
+  1.0 - capped * 0.06
+
+fun quote(driver: { age: Num, claimFreeYears: Num }, cover: Cover) =
+  base = 400.0
+  gross = base * coverLoading(cover) * ageLoading(driver.age)
+  net = gross * noClaimsDiscount(driver.claimFreeYears)
+  { gross, net, discounted = net < gross }
+
+# Lambdas are pipes. `|.field|` is shorthand for a one-argument lambda that
+# reaches into its argument.
+expensive: ({ net: Num }) -> Bool = |.net > 500|
+round: (Num) -> Num = |x -> x - x % 1|
+
+result = quote(customer, plan.cover)
+
+{ quote = result, expensive = expensive(result), rounded = round(result.net) }

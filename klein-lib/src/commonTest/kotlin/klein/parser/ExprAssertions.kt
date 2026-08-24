@@ -1,5 +1,7 @@
 package klein.parser
 
+import klein.ReleaseNumber
+import klein.RevisionNumber
 import klein.surface.AppliedTypeExpr
 import klein.surface.Apply
 import klein.surface.Ascription
@@ -14,7 +16,11 @@ import klein.surface.Expr
 import klein.surface.FieldAccess
 import klein.surface.FieldDecl
 import klein.surface.FieldPattern
+import klein.surface.ContractExpr
+import klein.surface.CapabilityDeclaration
+import klein.surface.FunDecl
 import klein.surface.FunDef
+import klein.surface.ValDecl
 import klein.surface.FunctionTypeExpr
 import klein.surface.Ident
 import klein.surface.IfThenElse
@@ -30,19 +36,25 @@ import klein.surface.Operator
 import klein.surface.OptionalTypeExpr
 import klein.surface.Param
 import klein.surface.ParseError
-import klein.surface.Parser
+import klein.surface.parseContract
+import klein.surface.parseExpr
+import klein.surface.parseProgram
+import klein.surface.parseStmt
 import klein.surface.Pattern
 import klein.surface.PatternVal
 import klein.surface.Program
 import klein.surface.RecordField
 import klein.surface.RecordLiteral
 import klein.surface.RecordTypeExpr
+import klein.surface.ReleaseBlock
+import klein.surface.ReleaseEntry
 import klein.surface.SafeFieldAccess
 import klein.SourceSpan
 import klein.surface.Stmt
 import klein.surface.StringLiteral
 import klein.surface.TupleTypeExpr
 import klein.surface.TypeDef
+import klein.surface.TypeDefStmt
 import klein.surface.TypeExpr
 import klein.surface.TypeName
 import klein.surface.TypeVar
@@ -81,7 +93,9 @@ fun neg(operand: Expr) = UnaryOp(UnaryOperator.Neg, operand, noSpan)
 
 fun not(operand: Expr) = UnaryOp(UnaryOperator.Not, operand, noSpan)
 
-fun param(name: String, type: TypeExpr? = null) = Param(name, type)
+fun <R : RevisionNumber?> param(name: String, type: TypeExpr<R>) = Param(name, type)
+
+fun param(name: String) = Param<Nothing?>(name, null)
 
 fun lambda(
     vararg params: String,
@@ -89,7 +103,7 @@ fun lambda(
 ) = Lambda(params.map { Param(it) }, body, noSpan)
 
 fun lambda(
-    params: List<Param>,
+    params: List<Param<Nothing?>>,
     body: Expr,
 ) = Lambda(params, body, noSpan)
 
@@ -195,7 +209,7 @@ fun record(vararg fields: Pair<String, Expr>) =
 fun annotatedRecord(vararg fields: RecordField) =
     RecordLiteral(fields.toList(), noSpan)
 
-fun recordField(name: String, value: Expr, typeAnnotation: TypeExpr? = null) =
+fun recordField(name: String, value: Expr, typeAnnotation: TypeExpr<Nothing?>? = null) =
     RecordField(name, value, typeAnnotation)
 
 fun matchExpr(
@@ -278,7 +292,7 @@ fun Expr.stripSpans(): Expr =
 
 fun parse(source: String): Expr {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseExpr()
+    return parseExpr(tokens)
 }
 
 fun assertExprEquals(
@@ -291,7 +305,7 @@ fun assertExprEquals(
 fun valStmt(
     name: String,
     value: Expr,
-    typeAnnotation: TypeExpr? = null,
+    typeAnnotation: TypeExpr<Nothing?>? = null,
 ) = Val(name, value, noSpan, typeAnnotation)
 
 fun patternVal(
@@ -307,67 +321,108 @@ fun funDef(
 
 fun funDef(
     name: String,
-    params: List<Param>,
+    params: List<Param<Nothing?>>,
     body: Expr,
-    returnType: TypeExpr? = null,
+    returnType: TypeExpr<Nothing?>? = null,
 ) = FunDef(name, params, body, noSpan, returnType)
+
+fun funDecl(
+    name: String,
+    params: List<Param<*>>,
+    returnType: TypeExpr<*>,
+    revision: RevisionNumber? = null,
+) = FunDecl(name, params, returnType, noSpan, revision)
+
+fun valDecl(
+    name: String,
+    type: TypeExpr<*>,
+    revision: RevisionNumber? = null,
+) = ValDecl(name, type, noSpan, revision)
+
+fun releaseBlock(
+    number: Int,
+    vararg entries: ReleaseEntry,
+) = ReleaseBlock(ReleaseNumber(number), entries.toList(), noSpan)
+
+fun releaseEntry(
+    name: String,
+    revision: RevisionNumber? = null,
+    remove: Boolean = false,
+) = ReleaseEntry(name, revision, remove, noSpan)
 
 fun ascription(
     expr: Expr,
-    type: TypeExpr,
+    type: TypeExpr<Nothing?>,
 ) = Ascription(expr, type, noSpan)
 
-fun typeDef(
+@Suppress("UNCHECKED_CAST")
+fun <R : RevisionNumber?> typeDef(
     name: String,
     typeParams: List<String> = emptyList(),
-    vararg constructors: Constructor,
-) = TypeDef(name, typeParams, constructors.toList(), noSpan)
+    vararg constructors: Constructor<R>,
+    revision: RevisionNumber? = null,
+): TypeDef<R> = TypeDef(name, typeParams, constructors.toList(), noSpan, revision as R)
 
-fun constructor(
+/** A type definition as a rule writes it: wrapped, and unrevisioned because [TypeDefStmt] holds
+ *  nothing else. */
+fun typeDefStmt(
     name: String,
-    vararg fields: FieldDecl,
+    typeParams: List<String> = emptyList(),
+    vararg constructors: Constructor<Nothing?>,
+) = TypeDefStmt(TypeDef(name, typeParams, constructors.toList(), noSpan, null))
+
+fun <R : RevisionNumber?> constructor(
+    name: String,
+    vararg fields: FieldDecl<R>,
 ) = Constructor(name, fields.toList(), noSpan)
 
-fun field(
+fun <R : RevisionNumber?> field(
     name: String,
-    type: TypeExpr,
+    type: TypeExpr<R>,
 ) = FieldDecl(name, type, noSpan)
 
-fun typeName(name: String) = TypeName(name, noSpan)
+fun typeName(name: String) = TypeName<Nothing?>(name, noSpan, null)
+
+fun typeName(
+    name: String,
+    revision: RevisionNumber?,
+) = TypeName(name, noSpan, revision)
 
 fun typeVar(name: String) = TypeVar(name, noSpan)
 
-fun appliedType(
+@Suppress("UNCHECKED_CAST")
+fun <R : RevisionNumber?> appliedType(
     name: String,
-    vararg args: TypeExpr,
-) = AppliedTypeExpr(name, args.toList(), noSpan)
+    vararg args: TypeExpr<R>,
+    revision: RevisionNumber? = null,
+): AppliedTypeExpr<R> = AppliedTypeExpr(name, args.toList(), noSpan, revision as R)
 
-fun functionType(
-    paramType: TypeExpr,
-    returnType: TypeExpr,
+fun <R : RevisionNumber?> functionType(
+    paramType: TypeExpr<R>,
+    returnType: TypeExpr<R>,
 ) = FunctionTypeExpr(listOf(paramType), returnType, noSpan)
 
-fun functionType(
-    paramTypes: List<TypeExpr>,
-    returnType: TypeExpr,
+fun <R : RevisionNumber?> functionType(
+    paramTypes: List<TypeExpr<R>>,
+    returnType: TypeExpr<R>,
 ) = FunctionTypeExpr(paramTypes, returnType, noSpan)
 
-fun functionType(returnType: TypeExpr) = FunctionTypeExpr(emptyList(), returnType, noSpan)
+fun <R : RevisionNumber?> functionType(returnType: TypeExpr<R>) = FunctionTypeExpr(emptyList(), returnType, noSpan)
 
-fun tupleType(vararg elements: TypeExpr) = TupleTypeExpr(elements.toList(), noSpan)
+fun <R : RevisionNumber?> tupleType(vararg elements: TypeExpr<R>) = TupleTypeExpr(elements.toList(), noSpan)
 
-fun recordType(vararg fields: Pair<String, TypeExpr>) = RecordTypeExpr(fields.toList(), noSpan)
+fun <R : RevisionNumber?> recordType(vararg fields: Pair<String, TypeExpr<R>>) = RecordTypeExpr(fields.toList(), noSpan)
 
-fun optionalType(inner: TypeExpr) = OptionalTypeExpr(inner, noSpan)
+fun <R : RevisionNumber?> optionalType(inner: TypeExpr<R>) = OptionalTypeExpr(inner, noSpan)
 
 fun parseStmt(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseStmt()
+    return parseStmt(tokens)
 }
 
 fun parseTopLevel(source: String): Stmt {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseProgram().stmts.first()
+    return parseProgram(tokens).stmts.first()
 }
 
 fun Stmt.stripSpan(): Stmt =
@@ -375,41 +430,54 @@ fun Stmt.stripSpan(): Stmt =
         is Val -> Val(name, value.stripSpans(), noSpan, typeAnnotation?.stripSpan())
         is PatternVal -> PatternVal(pattern.stripSpan(), value.stripSpans(), noSpan)
         is FunDef -> FunDef(name, params.map { it.stripSpan() }, body.stripSpans(), noSpan, returnType?.stripSpan())
-        is TypeDef -> TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan)
+        is TypeDefStmt -> TypeDefStmt(typeDef.stripSpan())
         is Expr -> stripSpans()
     }
 
-fun Param.stripSpan(): Param = Param(name, typeAnnotation?.stripSpan())
-
-fun Constructor.stripSpan(): Constructor = Constructor(name, fields.map { it.stripSpan() }, noSpan)
-
-fun FieldDecl.stripSpan(): FieldDecl = FieldDecl(name, type.stripSpan(), noSpan)
-
-fun TypeExpr.stripSpan(): TypeExpr =
+fun CapabilityDeclaration.stripSpan(): CapabilityDeclaration =
     when (this) {
-        is TypeName -> TypeName(name, noSpan)
-        is TypeVar -> TypeVar(name, noSpan)
-        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan)
+        is FunDecl -> FunDecl(name, params.map { it.stripSpan() }, returnType.stripSpan(), noSpan, revision)
+        is ValDecl -> ValDecl(name, type.stripSpan(), noSpan, revision)
+    }
+
+fun ReleaseBlock.stripSpan(): ReleaseBlock =
+    ReleaseBlock(number, entries.map { ReleaseEntry(it.name, it.revision, it.remove, noSpan) }, noSpan)
+
+fun <R : RevisionNumber?> TypeDef<R>.stripSpan(): TypeDef<R> =
+    TypeDef(name, typeParams, constructors.map { it.stripSpan() }, noSpan, revision)
+
+fun <R : RevisionNumber?> Param<R>.stripSpan(): Param<R> = Param(name, typeAnnotation?.stripSpan())
+
+fun <R : RevisionNumber?> Constructor<R>.stripSpan(): Constructor<R> = Constructor(name, fields.map { it.stripSpan() }, noSpan)
+
+fun <R : RevisionNumber?> FieldDecl<R>.stripSpan(): FieldDecl<R> = FieldDecl(name, type.stripSpan(), noSpan)
+
+@Suppress("UNCHECKED_CAST")
+fun <R : RevisionNumber?> TypeExpr<R>.stripSpan(): TypeExpr<R> =
+    when (this) {
+        is TypeName -> TypeName(name, noSpan, revision)
+        is TypeVar -> TypeVar(name, noSpan) as TypeExpr<R>
+        is AppliedTypeExpr -> AppliedTypeExpr(name, args.map { it.stripSpan() }, noSpan, revision)
         is FunctionTypeExpr -> FunctionTypeExpr(paramTypes.map { it.stripSpan() }, returnType.stripSpan(), noSpan)
         is TupleTypeExpr -> TupleTypeExpr(elements.map { it.stripSpan() }, noSpan)
         is RecordTypeExpr -> RecordTypeExpr(fields.map { (name, type) -> name to type.stripSpan() }, noSpan)
         is OptionalTypeExpr -> OptionalTypeExpr(inner.stripSpan(), noSpan)
     }
 
-fun parseTypeDef(source: String): TypeDef {
+fun parseTypeDef(source: String): TypeDef<Nothing?> {
     val tokens = Lexer(source).tokenize().toList()
-    val stmt = Parser(tokens).parseStmt()
-    if (stmt !is TypeDef) {
+    val stmt = parseStmt(tokens)
+    if (stmt !is TypeDefStmt) {
         throw ParseError("Expected type definition", stmt.span)
     }
-    return stmt
+    return stmt.typeDef
 }
 
 fun assertTypeDefEquals(
-    actual: TypeDef,
-    expected: TypeDef,
+    actual: TypeDef<Nothing?>,
+    expected: TypeDef<Nothing?>,
 ) {
-    assertEqualsPretty(expected, actual.stripSpan() as TypeDef)
+    assertEqualsPretty(expected, actual.stripSpan())
 }
 
 fun assertStmtEquals(
@@ -421,7 +489,7 @@ fun assertStmtEquals(
 
 fun parseProgram(source: String): Program {
     val tokens = Lexer(source).tokenize().toList()
-    return Parser(tokens).parseProgram()
+    return parseProgram(tokens)
 }
 
 fun assertProgramEquals(
@@ -429,6 +497,22 @@ fun assertProgramEquals(
     expected: List<Stmt>,
 ) {
     assertEqualsPretty(expected, actual.stmts.map { it.stripSpan() })
+}
+
+fun parseContract(source: String): ContractExpr {
+    val tokens = Lexer(source).tokenize().toList()
+    return parseContract(tokens)
+}
+
+fun assertContractEquals(
+    actual: ContractExpr,
+    types: List<TypeDef<*>> = emptyList(),
+    declarations: List<CapabilityDeclaration> = emptyList(),
+    releases: List<ReleaseBlock> = emptyList(),
+) {
+    assertEqualsPretty(types, actual.types.map { it.stripSpan() })
+    assertEqualsPretty(declarations, actual.declarations.map { it.stripSpan() })
+    assertEqualsPretty(releases, actual.releases.map { it.stripSpan() })
 }
 
 private fun <T> assertEqualsPretty(

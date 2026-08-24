@@ -1,0 +1,20 @@
+# A capability contract: what the host provides to a rule, not how. See docs/spec/contracts.md.
+# Two releases: `Customer` gains a `tier` field, and `creditScore` moves with it.
+
+type Customer = Customer { id: Num, name: String }
+type Customer/2 = Customer { id: Num, name: String, tier: String }
+
+customer: Customer
+customer/2: Customer/2
+fun creditScore(c: Customer): Num
+fun creditScore/2(c: Customer/2): Num
+
+release 1
+  Customer
+  customer
+  creditScore
+
+release 2
+  Customer/2
+  customer/2
+  creditScore/2
