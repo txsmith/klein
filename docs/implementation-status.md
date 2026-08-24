@@ -137,13 +137,13 @@ evolution).
 | Machine | Flat-loop two-stack CESK; tail calls run in constant control space; fail-fast `KleinRuntimeError` with spans; malformed IR throws `InvariantViolation` |
 | Values | `VStruct` unifies records and data (nullable tag); structural equality |
 | Match | Tag/literal/default arms, guards with first-match fallthrough, per-arm scopes |
-| Suspension | `Execution.Done \| AwaitingHost` with one-shot `resume` and `clone` — `lowerWithPrelude` emits `HostCall` for contract capabilities (eta-lambda for functions, bare nullary call for values); nothing wires the suspension to a host handler yet |
-| CLI | `run`/`r` executes, `core` dumps the lowered IR |
+| Suspension | `Execution.Done \| AwaitingHost` with one-shot `resume` and `clone` — `lowerWithPrelude` emits `HostCall` for contract capabilities (eta-lambda for functions, bare nullary call for values) |
+| Host boundary | `Environment.run(edition) { supply }` drives the loop against registered handlers behind a pre-flight pin check; every answer is checked against the declared type at resume; per-run supply via the lambda-less `immediate` marker |
+| CLI | `run`/`r` executes, `core` dumps the lowered IR; `run --contract … --release N` runs a rule as an interactive host, prompting for each capability answer |
 
 ### Pending
 
 | Feature | Notes |
 |---------|-------|
-| Host calls from source | No surface mechanism yet — the machine side exists; the extern interface design lives on the `host-interop` branch |
 | Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
-| Serialization | IR + suspension round-trip; see the log-persistence rethink in [performance-debt.md](performance-debt.md) |
+| Persistence | Effect log + edition storage (source + release + pins); machine state is never serialized, per the persist-the-log ADR — see [host-integration-roadmap.md](host-integration-roadmap.md) |

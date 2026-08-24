@@ -32,7 +32,7 @@ marks `customer` as run-supplied, and compiles against the public surface only.
 
 
 ```mermaid
-graph LR
+    graph LR
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
@@ -47,10 +47,10 @@ graph LR
 
     TRACE["Call markers, trace modes,<br/>fuel, error traces"]
 
-    CANON --> ED
     CANON --> DERIVE
-    ED --> LOGREC
+    CANON --> RECON
     LOGREC --> REPLAY
+    ED --> REPLAY
     REPLAY --> PARK
     PARK --> DEFER
     PARK --> RECON
@@ -77,30 +77,33 @@ to record, sealed to sum, nullable to `T?`, via `inline`/`reified` — makes tha
 error, marshals both directions (Klein `Value` as a kotlinx serialization format), and emits the
 checked-in contract file, mandatory for code-first. It wraps the dynamic host boundary rather than replacing
 it, and is per-language work — the mapping and encoding spec it binds to is shared. The boundary
-rules stay: no type variables, no function types.
+rules stay: no type variables, no function types. It also carries the enforcement of contracts.md
+§"The host sees exactly the declared shape": marshalling is narrowing, so extra record fields stop
+crossing when values decode into host types — and whether the raw `List<Value>` seam narrows too
+is decided here.
 
 ### Canonical form + numeric spec
 
-The written spec behind hashing and the wire: node tag plus fields in declared order, which fields
-are semantic rather than trivia, and a version stamp on anything stored — so a mismatch means
-discard and re-derive, never migrate, per the source-is-truth ADR. With no users, that stamp is
-what keeps every representation decision reversible, including the open `Num` question: the
-encoding commits to today's doubles knowingly, and exact rationals stay a later semantics change
-paid for with a wipe. The `Long` round-trip rule — a host type may bind to `Num` only if every
-value survives without silent loss — waits until a real host binds one. The value-identity rulings
-replay needs (`-0.0` vs `0.0`, NaN canonicalization) belong to the pending evaluation spec, not
-here.
+A late item now: canonicalization's only consumers are hashing and byte-comparison, and every use
+of hashing here is an optimization with a correct slow path (the reconciliation prefilter falls
+back to recompile-everything; the stored-Core checksum fell away with the Core encoding itself).
+It lands when the fleet is big enough that the slow paths hurt — feeding the reconciler's
+prefilter and, eventually, the FFI wire. The version stamp on anything stored is what keeps every
+representation decision reversible until then, including the open `Num` question: encodings commit
+to today's doubles knowingly, and exact rationals stay a later semantics change paid for with a
+wipe. The `Long` round-trip rule — a host type may bind to `Num` only if every value survives
+without silent loss — waits until a real host binds one. The value-identity rulings replay needs
+(`-0.0` vs `0.0`, NaN canonicalization) belong to the pending evaluation spec, not here.
 
 ### Edition serialization
 
-An edition is what gets stored and run: compiled Core, the pin map, the source, and a version stamp
-plus checksum per the source-is-truth ADR, round-trip tested. Spans need source provenance.
-Direction: a CBOR-shaped tree encoding over the canonical form — storage encodes every field,
-hashes walk only the semantic ones (spans, comment and whitespace trivia, and capability parameter
-names excluded; the revision marker included), and the same encoding backs capability hashes and,
-later, the FFI wire. Everything downstream queries it — replay needs something to replay
-*against*, and reconciliation compares pins. Needs the encoding the canonical form defines; the
-pins it stores already exist on every `Edition`.
+An edition's stored form is **source + release number + pin map**, version-stamped: per the
+source-is-truth ADR the Core is a cache, so loading an edition re-derives it rather than decoding
+it, and a stamp mismatch means discard and re-derive, never migrate. Three flat fields, a trivial
+encoding — no Core tree encoding exists in v1, which is what dissolved the dependency on canonical
+form. Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
+signal reconciliation exists to act on. Replay is the consumer that forces this item: it needs
+something durable to replay *against*.
 
 ### Effect log: record
 
@@ -110,7 +113,10 @@ settled while designing `Environment`: the log is **host-held and appended per t
 value extracted from a returned `Execution` — appends happen between `resume` and the next handler
 invocation and must not be batched, so a handler throwing on turn 3 leaves turns 1–2 durably
 recorded. And a **pending call is never stored** — the log holds completed pairs only, because
-replay arrives back at the same suspension on its own. End state: every run through
+replay arrives back at the same suspension on its own. This item owns the **`Value` encoding**:
+logged answers are the one thing derivable from nothing, so they are the first bytes that must
+round-trip. It needs no stored editions — the log's entry-one pin-resolution record references the
+edition the host already holds — so nothing blocks starting it. End state: every run through
 `Environment.run` leaves a complete, inspectable log behind. Write-only — no replay, no parking.
 
 ### Replay
@@ -119,7 +125,8 @@ Rebuild a run from (edition + log): re-execute the machine feeding logged answer
 arrive at the same state — the final value, or the suspension after the last logged turn. Pure: a
 function to a machine state, no API or lifecycle questions. End state: a determinism test — run
 live, replay the log, identical outcome. Gated by the evaluation spec's value-identity rulings
-(`-0.0`, NaN), which is where equality of logged answers becomes load-bearing.
+(`-0.0`, NaN), which is where equality of logged answers becomes load-bearing, and by edition
+serialization — the first consumer that needs an edition to survive a process.
 
 ### Parked runs + resume
 

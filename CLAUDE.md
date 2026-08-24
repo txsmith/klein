@@ -201,6 +201,7 @@ klein-lang/
 │   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
 │   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
 │   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── Numbering.kt      # RevisionNumber and ReleaseNumber value classes
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization
 │   │   │   │   ├── Parser.kt       # Parsing
@@ -217,27 +218,42 @@ klein-lang/
 │   │   │   │   ├── Store.kt        # The store: write-once cells behind integer addresses
 │   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
 │   │   │   │   └── KleinRuntimeError.kt
-│   │   │   └── check/            # The Operation Bidi bidirectional checker
-│   │   │       ├── Checker.kt              # synth / check driver
-│   │   │       ├── Type.kt                 # The type tree (skolems, foralls) + printer
-│   │   │       ├── TypeError.kt            # Typed error hierarchy
-│   │   │       ├── Subtyping.kt            # Ground subtyping, lub/glb
-│   │   │       ├── Constraint.kt           # Instantiation constraint solving
-│   │   │       ├── TypeEnv.kt              # Environment / scopes
-│   │   │       ├── ScopeGraph.kt           # Top-level dependency SCCs
-│   │   │       ├── TypeDefPreprocessor.kt  # Variance inference, nominal setup
-│   │   │       └── Variance.kt             # Variance lattice
+│   │   │   ├── check/            # The Operation Bidi bidirectional checker
+│   │   │   │   ├── Checker.kt              # synth / check driver (checkProgram facade)
+│   │   │   │   ├── Type.kt                 # The type tree (skolems, foralls, revision witness) + printer
+│   │   │   │   ├── TypeError.kt            # Typed error hierarchy
+│   │   │   │   ├── Subtyping.kt            # Ground subtyping, lub/glb
+│   │   │   │   ├── Constraint.kt           # Instantiation constraint solving
+│   │   │   │   ├── TypeEnv.kt              # Environment / scopes (ContractEnv vs RuleEnv)
+│   │   │   │   ├── ScopeGraph.kt           # Top-level dependency SCCs
+│   │   │   │   ├── TypeDefPreprocessor.kt  # Variance inference, nominal setup
+│   │   │   │   ├── Variance.kt             # Variance lattice
+│   │   │   │   ├── ValueTypes.kt           # infer(Value): the runtime answer's type, for the resume boundary
+│   │   │   │   └── contract/     # Contracts, revisions, releases
+│   │   │   │       ├── ContractChecker.kt      # Contract checking, release folding, self-containment
+│   │   │   │       ├── EnvironmentContract.kt  # check / compileRule / compileValue per release
+│   │   │   │       ├── ResolvedRelease.kt      # A release materialised: types + revisions, bindingFor
+│   │   │   │       ├── UsedCapabilities.kt     # The used-capability pass (expression, type, pattern positions)
+│   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map
+│   │   │   │       └── Projection.kt           # strip(): the one ContractType -> RuleType crossing
+│   │   │   └── host/             # The embedding surface a host calls
+│   │   │       ├── Environment.kt  # implement { }, Registry, Capability (deferred seam commented out)
+│   │   │       └── Runner.kt       # Environment.run: pre-flight pin check, suspend/resume loop, answer check
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
 │   │   │   ├── check/
+│   │   │   │   └── contract/     # Release, self-containment, compileRule/value suites + lending walkthrough
 │   │   │   ├── core/             # Lowering golden tests + IR printer tests
-│   │   │   └── interp/           # Machine unit tests + per-feature eval suites (full pipeline)
+│   │   │   ├── interp/           # Machine unit tests + per-feature eval suites (full pipeline)
+│   │   │   └── host/             # Environment + runner suites (RunAgainstReleaseTest)
 │   │   └── nativeMain/kotlin/klein/
-│   │       └── Main.kt           # CLI entry point
+│   │       └── Main.kt           # CLI entry point (incl. interactive contract run)
 │   └── build.gradle.kts
-├── docs/                         # Design docs, ADRs, spec, roadmap
-├── examples/                     # Sample .klein programs
+├── klein-example-host/           # JVM module outside the library: what embedding Klein looks like
+├── klein-bench/                  # kotlinx-benchmark corpus over the pipeline stages
+├── docs/                         # Specs, ADRs, ideas, roadmaps, guides
+├── examples/                     # Sample .klein programs + lending.contract
 └── README.md                     # Project overview
 ```
 

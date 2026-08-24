@@ -407,7 +407,11 @@ promises.
 
 ## The host sees exactly the declared shape
 
-Status: ruling — binds the runtime boundary when capabilities become callable.
+Status: ruling — enforced by marshalling when the derivation API lands, which is where a host's
+view of a value is constructed. Until then the raw `(List<Value>) -> Value` seam is unmediated:
+a handler receives the value as the rule built it, extra fields included, and the round trip
+below does not yet drop them. Whether the ruling ultimately binds the raw seam too, or only the
+derived one, is derivation's decision.
 
 Klein lets a rule pass a *wider* record than a signature asks for; inside Klein the extra fields
 physically travel along. Crossing to the host, only the declared fields cross — echo the value
