@@ -19,22 +19,20 @@ a capability value is a nullary `HostCall` bound once at scope entry. Together t
 **edition prelude**: a Core scope tailored to one edition, wrapping the rule's own scope.
 `compileRule` emits the pin map beside the Core, so the artifact is an `Edition` rather than a bare
 `CoreExpr`, and `Environment.run` checks every pin against the registered implementations before
-the machine starts, then drives the suspend/resume loop to a value. Designed and phased in
-[docs/design/callable-capabilities/](./design/callable-capabilities/) (PRD, TDD, outline); its two
-once-open decisions are settled there as spec lines, not ADRs: `HostCall` carries a plain name and
-no revision — the Core IR stays revision-free and the revision lives in the pin map — and a
-capability used outside call position eta-expands to an ordinary closure, so `f = creditScore`
-works with no new diagnostic. Two hosts prove it: `klein run` prompts for each capability call, and
-`klein-example-host` — a Gradle module outside `klein-lib`, so `internal` is invisible to it —
-boot-registers `creditScore`, marks `customer` as run-supplied, and compiles against the public
-surface only.
+the machine starts, then drives the suspend/resume loop to a value, checking each handler answer
+against the declared type at the resume boundary. The observable rules are in
+spec/host-integration.md (§Capability, §Edition, §Run); the decisions and rejected alternatives are
+in the ADR
+[capabilities-execute-through-the-suspension-path](./decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md).
+Two hosts prove it: `klein run` prompts for each capability call, and `klein-example-host` — a
+Gradle module outside `klein-lib`, so `internal` is invisible to it — boot-registers `creditScore`,
+marks `customer` as run-supplied, and compiles against the public surface only.
 
 ## What is left
 
 
 ```mermaid
 graph LR
-    SHAPE["Handler return shape check"]
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
@@ -69,14 +67,7 @@ one slice that changes the contract language — §Releases today says a release
 declaration and nothing else — so it goes spec-first: contracts.md and grammar.md, three new
 contract checks, and an ADR for the real alternatives (implicit sink, trailing-expression-only,
 allowing mixed conclusion). The design draft is in
-[docs/design/callable-capabilities/tdd.md](./design/callable-capabilities/tdd.md); the phased file
-list lives in that directory's git history. Builds on `compileRule` and the runner.
-
-### Handler return shape check
-
-A handler answers with a `Value`, and nothing today checks it against the declared return type. A
-shape check at resume turns a wrong answer into `handler creditCheck returned Str, declared Num`
-rather than a failure deep in the machine. Phase 4 of the callable-capabilities outline.
+[ideas/result-sink.md](./ideas/result-sink.md). Builds on `compileRule` and the runner.
 
 ### Capability derivation API
 
@@ -132,7 +123,7 @@ live, replay the log, identical outcome. Gated by the evaluation spec's value-id
 
 ### Parked runs + resume
 
-The API shape deferred out of the callable-capabilities work: `run` grows a parked outcome (or a sibling entry
+The API shape deferred out of execution wiring: `run` grows a parked outcome (or a sibling entry
 point), a parked run is an edition reference plus its log, and resuming is replay followed by
 continuing with live handlers. End state: park mid-run, restart the process, resume to completion.
 
@@ -144,10 +135,9 @@ takes ownership and answers via `call.resume(v)` (in-process, any thread) or by 
 `call.token` and answering from another process — the split is "answer inline" vs "I own the
 continuation", not sync vs async. Handler errors stay unwrapped exceptions with no Klein-level
 representation: the log is truth, so a failed turn simply did not happen, and the host retries or
-abandons by its own policy (`call.fail(...)` is additive later if wanted). The
-callable-capabilities outline records why this waits for the log: in-process, a blocking
-`immediate` handler already covers it, and across a restart a closure is the wrong tool — replay
-is the mechanism.
+abandons by its own policy (`call.fail(...)` is additive later if wanted). Why this waits for the
+log, per the suspension-path ADR: in-process, a blocking `immediate` handler already covers it, and
+across a restart the answer path is replay, which needs the log.
 
 ### Diagnostic severity
 

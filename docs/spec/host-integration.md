@@ -57,7 +57,15 @@ compares them. They can share the host code that implements a capability.
 
 One named, typed thing the host provides for rules to use. It is either a function the host
 answers every time a rule calls it (`creditCheck(c: Customer): Score`), or a value the host
-supplies once at the start of each run (`customerName: String`). A capability is declared in the
+supplies once at the start of each run (`customerName: String`). Two identical calls are two
+questions. Caching is the host's own choice, made inside its implementation, and no mechanism
+here depends on it. A value never changes within a run: every read sees the answer the run
+started with.
+
+In rule code a capability function is an ordinary value. It can be bound, passed, or stored
+(`f = creditCheck`), and applying it asks the host, wherever it travelled in the meantime.
+
+A capability is declared in the
 contract file as a signature with no body. The language and checker side of that file is
 specified in [contracts.md](./contracts.md). Its implementation is ordinary code
 inside the host. A capability is identified by **(name, revision)** within its environment. The
@@ -148,6 +156,9 @@ deleted if they are not in use anymore. A host instance can serve an edition iff
 every revision the edition pins. An edition no instance can serve is unservable until that
 changes.
 
+The compiled program carries only the plain names the rule wrote; every revision lives in the
+pins. Compiling one source against two releases yields the same program with different pins.
+
 Pins bind each capability call in the compiled program to a host implementation. When a run
 starts or resumes, every call is dispatched to the implementation of exactly the pinned revision.
 
@@ -157,11 +168,20 @@ revisions it implements to decide whether it can run the edition.
 
 ### Run
 
-One execution of one edition, from its triggering event to its final result. A run may suspend on
+One execution of one edition, from its triggering event to its final result. Because an edition is
+its rule checked and compiled against one release, the release a rule was checked against is the
+release it runs against — there is no way to run anything else. A run may suspend on
 a capability call and resume later, possibly weeks later. A suspended run is **parked**. A run
 records which edition it executes and its effect log. Through the edition's pins, a parked run
 keeps revisions alive: the host may not remove a revision while a parked run may still resume
 into it.
+
+A run is guarded at both ends of the capability boundary. It refuses to start unless the host can
+answer every pin — a missing implementation or an undeclared revision fails the run before its
+first effect, naming the capability, so a rule never performs half its effects and then hits an
+unanswerable call. And every answer is checked against the declared type as it arrives: a
+wrong-shaped answer fails the run at that call, naming the capability, what it gave and what was
+declared, and the value never enters the program.
 
 ### Turn
 
@@ -532,7 +552,13 @@ reports at every seam.
 
 ## Decision history
 
-Two ADRs. The revision substrate — permanent `/N`, invariant type definitions, recompilation as
+Three ADRs. The execution-wiring decisions — every capability interaction a suspension, the
+revision-free program with pins at the boundary, no library caching, the guarded run — and their
+rejected alternatives (store pre-fill as the mechanism, revisioned programs, memo tables, a CLI
+stubs file, a typed deferral seam) are in
+[decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md](../decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md).
+
+The revision substrate — permanent `/N`, invariant type definitions, recompilation as
 the verdict, optimistic removal — and its rejected alternatives (snapshot files, semantic version
 numbers, `review`/`mechanical` markers, subtyping as the verdict, a retire flag) are in
 [decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md](../decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md).

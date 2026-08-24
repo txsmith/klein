@@ -45,6 +45,7 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 
 **Host integration decisions:**
 
+- **[2026-08-24-capabilities-execute-through-the-suspension-path.md](./docs/decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md)** - **Current.** Execution wiring: every capability interaction is a suspension, the compiled program is revision-free with pins at the boundary, the library never caches, the run is guarded at both ends.
 - **[2026-08-08-rule-vocabulary-through-linear-releases.md](./docs/decisions/2026-08-08-rule-vocabulary-through-linear-releases.md)** - **Current.** Numbered releases decide what rules can see; editing one carries rules along, appending one waits for a person. Supersedes the tag half of the ADR below.
 - **[2026-08-06-capability-evolution-through-revisions-and-tags.md](./docs/decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md)** - **Current apart from tags.** Permanent `/N` revisions, invariant type definitions, recompilation as the compatibility verdict, optimistic removal — with the full rejected-alternatives list.
 
