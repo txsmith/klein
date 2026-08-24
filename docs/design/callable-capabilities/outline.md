@@ -41,7 +41,7 @@ an interactive host that prompts the user for each answer.
   - [x] 1g: Facade functions — one top-level function per atomic operation, workers private
 - [ ] Phase 2: A capability-calling rule runs — the pin check, the runner, and an example host
   - [x] 2a: Per-run supply and the contract reference
-  - [ ] 2b: The runner — pre-flight pin check and the loop
+  - [x] 2b: The runner — pre-flight pin check and the loop
   - [ ] 2c: The example host module
 - [ ] Phase 3: The CLI becomes an interactive host
 - [ ] Phase 4: Handler answers are checked at the resume boundary
@@ -637,8 +637,10 @@ as where the rule's answer goes"; this outline's git history holds the phased fi
 
 ## Not in this outline: driving `Implementation.Deferred`
 
-`Implementation.Deferred(val take: (HostCall) -> Unit)` (Environment.kt:46-48) exists and has never
-been driven. It stays that way, for two reasons that between them leave it nothing to do here.
+`Implementation.Deferred(val take: (HostCall) -> Unit)` existed and was never driven; as of 2b it
+is commented out in Environment.kt — an unimplementable registration should not be writable — to
+return with the effect log. The API shape is right (take the call, persist its token, answer via
+replay); what it waits on is the machinery behind the token. Two reasons it has nothing to do here:
 
 **In-process, `immediate` already covers it.** `Immediate.answer` is an ordinary
 `(List<Value>) -> Value`, so a handler waiting on I/O just blocks in whatever the host language

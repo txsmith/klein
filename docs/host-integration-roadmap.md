@@ -146,7 +146,8 @@ continuing with live handlers. End state: park mid-run, restart the process, res
 
 ### Deferred host calls
 
-Drive `Implementation.Deferred`, undriven since `Environment` landed: `deferred(name) { call -> }`
+Reinstate and drive `Implementation.Deferred` — commented out in Environment.kt since execution
+wiring, because an unimplementable registration should not be writable: `deferred(name) { call -> }`
 takes ownership and answers via `call.resume(v)` (in-process, any thread) or by persisting
 `call.token` and answering from another process — the split is "answer inline" vs "I own the
 continuation", not sync vs async. Handler errors stay unwrapped exceptions with no Klein-level

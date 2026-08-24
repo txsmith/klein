@@ -90,15 +90,16 @@ class EnvironmentTest {
         assertEquals(RevisionNumber(1), env.capabilities.first { it.name == "maxRetries" }.revision)
     }
 
-    @Test
-    fun deferredRegistrationIsAlsoAnImplementation() {
-        val env =
-            load(CONTRACT) {
-                deferred("creditCheck") { }
-                immediate("maxRetries") { Value.VNum(3.0) }
-            }
-        assertTrue(env[env.capabilities.first { it.name == "creditCheck" }.id] is Implementation.Deferred)
-    }
+    // Deferral is commented out until the effect log lands (roadmap §Deferred host calls).
+    // @Test
+    // fun deferredRegistrationIsAlsoAnImplementation() {
+    //     val env =
+    //         load(CONTRACT) {
+    //             deferred("creditCheck") { }
+    //             immediate("maxRetries") { Value.VNum(3.0) }
+    //         }
+    //     assertTrue(env[env.capabilities.first { it.name == "creditCheck" }.id] is Implementation.Deferred)
+    // }
 
     @Test
     fun registeringAnUndeclaredNameFails() {
@@ -111,7 +112,7 @@ class EnvironmentTest {
         assertFailsWith<KleinException> {
             load(CONTRACT) {
                 immediate("creditCheck") { Value.VNum(1.0) }
-                deferred("creditCheck") { }
+                immediate("creditCheck") { Value.VNum(2.0) }
                 immediate("maxRetries") { Value.VNum(3.0) }
             }
         }

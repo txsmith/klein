@@ -30,21 +30,25 @@ data class Capability(
     val type: ContractType get() = declaration.type
 }
 
-interface HostCall {
-    val capability: Capability
-    val args: List<Value>
-
-    fun resume(answer: Value)
-}
+// The deferred seam is commented out until the effect log lands (roadmap §Deferred host calls):
+// the API shape is right — take the call, persist its token, answer via replay — but nothing
+// drives it yet, and an unimplementable registration should not be writable.
+//
+// interface HostCall {
+//     val capability: Capability
+//     val args: List<Value>
+//
+//     fun resume(answer: Value)
+// }
 
 sealed interface Implementation {
     class Immediate(
         val answer: (List<Value>) -> Value,
     ) : Implementation
 
-    class Deferred(
-        val take: (HostCall) -> Unit,
-    ) : Implementation
+    // class Deferred(
+    //     val take: (HostCall) -> Unit,
+    // ) : Implementation
 }
 
 class Registry(
@@ -64,11 +68,11 @@ class Registry(
         revision: RevisionNumber = RevisionNumber(1),
     ) = register(name, revision, null)
 
-    fun deferred(
-        name: String,
-        revision: RevisionNumber = RevisionNumber(1),
-        take: (HostCall) -> Unit,
-    ) = register(name, revision, Implementation.Deferred(take))
+    // fun deferred(
+    //     name: String,
+    //     revision: RevisionNumber = RevisionNumber(1),
+    //     take: (HostCall) -> Unit,
+    // ) = register(name, revision, Implementation.Deferred(take))
 
     private fun register(
         name: String,
