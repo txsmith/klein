@@ -26,12 +26,12 @@ private fun countdown(
 )
 
 private fun run(expr: CoreExpr): Value {
-    val result = Machine.start(expr)
+    val result = Interpreter.start(expr)
     assertIs<Execution.Done>(result)
     return result.value
 }
 
-class MachineTest {
+class InterpreterTest {
     @Test
     fun literalNum() = assertEquals(Value.VNum(42.0), run(num(42.0)))
 
@@ -49,12 +49,12 @@ class MachineTest {
 
     @Test
     fun varOnEmptyScopeIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(v(0, 0)) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(v(0, 0)) }
     }
 
     @Test
     fun varPastRootScopeIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(v(3, 0)) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(v(3, 0)) }
     }
 
     @Test
@@ -84,17 +84,17 @@ class MachineTest {
 
     @Test
     fun arityMismatchIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(app(lam(2, v(0, 0)), num(1.0))) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(app(lam(2, v(0, 0)), num(1.0))) }
     }
 
     @Test
     fun applyingANonClosureIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(app(num(1.0), num(2.0))) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(app(num(1.0), num(2.0))) }
     }
 
     @Test
     fun hostCallSuspendsWithArgsInCallOrder() {
-        val result = Machine.start(host("fetch", num(1.0), num(2.0)))
+        val result = Interpreter.start(host("fetch", num(1.0), num(2.0)))
         assertIs<Execution.AwaitingHost>(result)
         assertEquals("fetch", result.call)
         assertEquals(listOf<Value>(Value.VNum(1.0), Value.VNum(2.0)), result.args)
@@ -102,15 +102,22 @@ class MachineTest {
 
     @Test
     fun resumeCompletesWithTheHostResult() {
-        val suspended = Machine.start(host("fetch", num(1.0)))
+        val suspended = Interpreter.start(host("fetch", num(1.0)))
         assertIs<Execution.AwaitingHost>(suspended)
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
     }
 
     @Test
+    fun aRuntimeErrorAfterResumeIsAFailure() {
+        val suspended = Interpreter.start(prim(PrimOp.Div, num(1.0), host("fetch")))
+        assertIs<Execution.AwaitingHost>(suspended)
+        assertIs<Execution.Failure>(suspended.resume(Value.VNum(0.0)))
+    }
+
+    @Test
     fun hostResultFlowsIntoTheEnclosingApplication() {
         val program = app(lam(1, v(0, 0)), host("f", num(1.0)))
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
         assertEquals(listOf<Value>(Value.VNum(1.0)), suspended.args)
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
@@ -119,15 +126,15 @@ class MachineTest {
     @Test
     fun argsLeaveTheOperandStackOnSuspension() {
         val program = app(lam(2, v(0, 1)), num(7.0), host("f", num(1.0), num(2.0)))
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
-        assertEquals(2, suspended.machine.operandDepth())
+        assertEquals(2, suspended.interpreter.operandDepth())
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
     }
 
     @Test
     fun doubleResumeIsRejected() {
-        val suspended = Machine.start(host("f", num(1.0)))
+        val suspended = Interpreter.start(host("f", num(1.0)))
         assertIs<Execution.AwaitingHost>(suspended)
         suspended.resume(Value.VNum(1.0))
         assertFailsWith<IllegalStateException> { suspended.resume(Value.VNum(2.0)) }
@@ -136,7 +143,7 @@ class MachineTest {
     @Test
     fun cloneAllowsIndependentResumes() {
         val program = app(lam(1, v(0, 0)), host("f", num(1.0)))
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
         val branch = suspended.clone()
         assertEquals(Execution.Done(Value.VNum(10.0)), suspended.resume(Value.VNum(10.0)))
@@ -145,7 +152,7 @@ class MachineTest {
 
     @Test
     fun cloneAfterResumeIsRejected() {
-        val suspended = Machine.start(host("f", num(1.0)))
+        val suspended = Interpreter.start(host("f", num(1.0)))
         assertIs<Execution.AwaitingHost>(suspended)
         suspended.resume(Value.VNum(1.0))
         assertFailsWith<IllegalStateException> { suspended.clone() }
@@ -175,7 +182,7 @@ class MachineTest {
     @Test
     fun clonedBranchesFillScopeCellsIndependently() {
         val program = scope(bind(0, host("f", num(1.0))), result = v(0, 0))
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
         val branch = suspended.clone()
         assertEquals(Execution.Done(Value.VNum(1.0)), suspended.resume(Value.VNum(1.0)))
@@ -186,9 +193,9 @@ class MachineTest {
     fun tailPositionScopeResultsRunInConstantControlSpace() {
         var program: CoreExpr = host("probe")
         repeat(500) { program = scope(result = program) }
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
-        assertTrue(suspended.machine.controlDepth() <= 2, "control depth was ${suspended.machine.controlDepth()}")
+        assertTrue(suspended.interpreter.controlDepth() <= 2, "control depth was ${suspended.interpreter.controlDepth()}")
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
     }
 
@@ -196,9 +203,9 @@ class MachineTest {
     fun tailCallsThroughLambdaBodiesRunInConstantControlSpace() {
         var program: CoreExpr = host("probe")
         repeat(500) { program = app(lam(1, program), num(0.0)) }
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
-        assertTrue(suspended.machine.controlDepth() <= 2, "control depth was ${suspended.machine.controlDepth()}")
+        assertTrue(suspended.interpreter.controlDepth() <= 2, "control depth was ${suspended.interpreter.controlDepth()}")
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
     }
 
@@ -230,7 +237,7 @@ class MachineTest {
     @Test
     fun sequentialHostCallsSuspendInOrder() {
         val program = scope(bind(0, host("a")), bind(1, host("b")), result = v(0, 1))
-        val first = Machine.start(program)
+        val first = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(first)
         assertEquals("a", first.call)
         val second = first.resume(Value.VNum(10.0))
@@ -256,7 +263,7 @@ class MachineTest {
     @Test
     fun bindReadingItsOwnUnfilledSlotIsARuntimeError() {
         val program = scope(bind(0, v(0, 0)), result = num(1.0))
-        assertFailsWith<KleinRuntimeError> { Machine.start(program) }
+        assertIs<Execution.Failure>(Interpreter.start(program))
     }
 
     @Test
@@ -268,12 +275,12 @@ class MachineTest {
                 bind(2, num(2.0)),
                 result = v(0, 1),
             )
-        assertFailsWith<KleinRuntimeError> { Machine.start(program) }
+        assertIs<Execution.Failure>(Interpreter.start(program))
     }
 
     @Test
     fun finalValueGuardRejectsImbalance() {
-        val state = MachineState(num(1.0))
+        val state = InterpreterState(num(1.0))
         state.pushOperand(Value.VNum(1.0))
         state.pushOperand(Value.VNum(2.0))
         assertFailsWith<InvariantViolation> { state.finalValue() }
@@ -285,10 +292,10 @@ class MachineTest {
         repeat(300) {
             program = app(lam(1, scope(bind(0, num(1.0)), result = program)), num(0.0))
         }
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
-        assertTrue(suspended.machine.controlDepth() <= 2, "control depth was ${suspended.machine.controlDepth()}")
-        assertTrue(suspended.machine.operandDepth() <= 2, "operand depth was ${suspended.machine.operandDepth()}")
+        assertTrue(suspended.interpreter.controlDepth() <= 2, "control depth was ${suspended.interpreter.controlDepth()}")
+        assertTrue(suspended.interpreter.operandDepth() <= 2, "operand depth was ${suspended.interpreter.operandDepth()}")
         assertEquals(Execution.Done(Value.VNum(9.0)), suspended.resume(Value.VNum(9.0)))
     }
 
@@ -298,15 +305,15 @@ class MachineTest {
         repeat(300) {
             program = app(lam(1, scope(bind(0, num(1.0)), result = program)), num(0.0))
         }
-        val suspended = Machine.start(program)
+        val suspended = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(suspended)
-        assertEquals(600, suspended.machine.storeSize())
+        assertEquals(600, suspended.interpreter.storeSize())
     }
 
     @Test
     fun argumentsEvaluateLeftToRight() {
         val program = app(lam(2, v(0, 1)), host("first"), host("second"))
-        val first = Machine.start(program)
+        val first = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(first)
         assertEquals("first", first.call)
         val second = first.resume(Value.VNum(1.0))
@@ -318,7 +325,7 @@ class MachineTest {
     @Test
     fun calleeEvaluatesBeforeArguments() {
         val program = app(host("getFn"), host("getArg"))
-        val atCallee = Machine.start(program)
+        val atCallee = Interpreter.start(program)
         assertIs<Execution.AwaitingHost>(atCallee)
         assertEquals("getFn", atCallee.call)
         val atArg = atCallee.resume(Value.VClos(1, v(0, 0), BindingScope()))
@@ -368,14 +375,14 @@ class MachineTest {
 
     @Test
     fun divisionByZeroIsARuntimeError() {
-        assertFailsWith<KleinRuntimeError> { Machine.start(prim(PrimOp.Div, num(1.0), num(0.0))) }
-        assertFailsWith<KleinRuntimeError> { Machine.start(prim(PrimOp.Mod, num(1.0), num(0.0))) }
+        assertIs<Execution.Failure>(Interpreter.start(prim(PrimOp.Div, num(1.0), num(0.0))))
+        assertIs<Execution.Failure>(Interpreter.start(prim(PrimOp.Mod, num(1.0), num(0.0))))
     }
 
     @Test
     fun illTypedPrimOperandIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(prim(PrimOp.Add, str("a"), num(1.0))) }
-        assertFailsWith<InvariantViolation> { Machine.start(prim(PrimOp.Not, num(1.0))) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(prim(PrimOp.Add, str("a"), num(1.0))) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(prim(PrimOp.Not, num(1.0))) }
     }
 
     @Test
@@ -454,24 +461,24 @@ class MachineTest {
     @Test
     fun noMatchingArmIsAnInvariantViolation() {
         assertFailsWith<InvariantViolation> {
-            Machine.start(match(num(1.0), litArm(Constant.CNum(2.0), str("x"))))
+            Interpreter.start(match(num(1.0), litArm(Constant.CNum(2.0), str("x"))))
         }
         assertFailsWith<InvariantViolation> {
-            Machine.start(match(num(1.0), default(str("x"), guard = bool(false))))
+            Interpreter.start(match(num(1.0), default(str("x"), guard = bool(false))))
         }
     }
 
     @Test
     fun nonBoolGuardIsAnInvariantViolation() {
         assertFailsWith<InvariantViolation> {
-            Machine.start(match(num(1.0), default(str("x"), guard = num(1.0))))
+            Interpreter.start(match(num(1.0), default(str("x"), guard = num(1.0))))
         }
     }
 
     @Test
     fun scrutineeEvaluatesOnceThroughSuspension() {
         val exec =
-            Machine.start(
+            Interpreter.start(
                 match(
                     host("pick"),
                     litArm(Constant.CNum(1.0), str("one")),
@@ -491,21 +498,21 @@ class MachineTest {
                 default(str("yes"), guard = prim(PrimOp.Eq, host("ask"), num(1.0))),
                 default(str("no")),
             )
-        val yes = Machine.start(program())
+        val yes = Interpreter.start(program())
         assertIs<Execution.AwaitingHost>(yes)
         assertEquals("ask", yes.call)
         assertEquals(Execution.Done(Value.VStr("yes")), yes.resume(Value.VNum(1.0)))
 
-        val no = Machine.start(program())
+        val no = Interpreter.start(program())
         assertIs<Execution.AwaitingHost>(no)
         assertEquals(Execution.Done(Value.VStr("no")), no.resume(Value.VNum(0.0)))
     }
 
     @Test
     fun matchArmsAreTailPositions() {
-        val suspended = Machine.start(countdown(500.0, base = host("probe")))
+        val suspended = Interpreter.start(countdown(500.0, base = host("probe")))
         assertIs<Execution.AwaitingHost>(suspended)
-        assertTrue(suspended.machine.controlDepth() <= 2, "control depth was ${suspended.machine.controlDepth()}")
+        assertTrue(suspended.interpreter.controlDepth() <= 2, "control depth was ${suspended.interpreter.controlDepth()}")
         assertEquals(Execution.Done(Value.VStr("done")), suspended.resume(Value.VStr("done")))
     }
 
@@ -573,13 +580,13 @@ class MachineTest {
 
     @Test
     fun missingFieldIsAnInvariantViolation() {
-        assertFailsWith<InvariantViolation> { Machine.start(get(mk(null, "x" to num(1.0)), "y")) }
-        assertFailsWith<InvariantViolation> { Machine.start(get(num(1.0), "x")) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(get(mk(null, "x" to num(1.0)), "y")) }
+        assertFailsWith<InvariantViolation> { Interpreter.start(get(num(1.0), "x")) }
     }
 
     @Test
     fun makeDataArgsEvaluateLeftToRight() {
-        val first = Machine.start(mk(null, "a" to host("first"), "b" to host("second")))
+        val first = Interpreter.start(mk(null, "a" to host("first"), "b" to host("second")))
         assertIs<Execution.AwaitingHost>(first)
         assertEquals("first", first.call)
         val second = first.resume(Value.VNum(1.0))
@@ -593,7 +600,7 @@ class MachineTest {
 
     @Test
     fun primOperandsEvaluateLeftToRight() {
-        val first = Machine.start(prim(PrimOp.Add, host("first"), host("second")))
+        val first = Interpreter.start(prim(PrimOp.Add, host("first"), host("second")))
         assertIs<Execution.AwaitingHost>(first)
         assertEquals("first", first.call)
         val second = first.resume(Value.VNum(1.0))

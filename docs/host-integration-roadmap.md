@@ -28,6 +28,17 @@ Two hosts prove it: `klein run` prompts for each capability call, and `klein-exa
 Gradle module outside `klein-lib`, so `internal` is invisible to it — boot-registers `creditScore`,
 marks `customer` as run-supplied, and compiles against the public surface only.
 
+**The effect log and the unified run.** Every run returns its full history as a value: the inputs
+read at the start, every call with its answer, and how the run ended. A malformed history cannot
+even be represented. One run operation covers starting fresh, resuming, and replaying; replay
+matches the log by position, asks the host nothing, and treats a recorded ending as a check, never
+something to rewrite. A rule failing is a normal outcome, a host misusing the run is an error, and
+a host's own exceptions pass through untouched. Hosts persist entries as they are recorded, inside
+their own transaction, and a parked run resumes by appending the answer to its log. Logs
+round-trip through a binary and a JSON encoding, both version-stamped. The rules are in
+[spec/effect-log.md](./spec/effect-log.md); the decision record is
+[replay-is-ordinal-migration-is-host-policy](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
+
 ## What is left
 
 
@@ -38,10 +49,6 @@ marks `customer` as run-supplied, and compiles against the public surface only.
 
     CANON["Canonical form<br/>encoding + version stamp"]
     ED["Edition serialization<br/>Core + pins + checksum"]
-    LOGREC["Effect log: record"]
-    REPLAY["Replay"]
-    PARK["Parked runs + resume"]
-    DEFER["Deferred host calls"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
@@ -49,11 +56,7 @@ marks `customer` as run-supplied, and compiles against the public surface only.
 
     CANON --> DERIVE
     CANON --> RECON
-    LOGREC --> REPLAY
-    ED --> REPLAY
-    REPLAY --> PARK
-    PARK --> DEFER
-    PARK --> RECON
+    ED --> RECON
     SEV --> RECON
 ```
 
@@ -103,54 +106,15 @@ it, and a stamp mismatch means discard and re-derive, never migrate. Three flat 
 encoding — no Core tree encoding exists in v1, which is what dissolved the dependency on canonical
 form. Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
 signal reconciliation exists to act on. Replay is the consumer that forces this item: it needs
-something durable to replay *against*.
-
-### Effect log: record
-
-The turn record and the append discipline, per the persist-the-log ADR: each completed
-request/answer pair appended as a turn, with the pin-resolution record as entry one. Two invariants
-settled while designing `Environment`: the log is **host-held and appended per turn**, never a
-value extracted from a returned `Execution` — appends happen between `resume` and the next handler
-invocation and must not be batched, so a handler throwing on turn 3 leaves turns 1–2 durably
-recorded. And a **pending call is never stored** — the log holds completed pairs only, because
-replay arrives back at the same suspension on its own. This item owns the **`Value` encoding**:
-logged answers are the one thing derivable from nothing, so they are the first bytes that must
-round-trip. It needs no stored editions — the log's entry-one pin-resolution record references the
-edition the host already holds — so nothing blocks starting it. End state: every run through
-`Environment.run` leaves a complete, inspectable log behind. Write-only — no replay, no parking.
-
-### Replay
-
-Rebuild a run from (edition + log): re-execute the machine feeding logged answers back in and
-arrive at the same state — the final value, or the suspension after the last logged turn. Pure: a
-function to a machine state, no API or lifecycle questions. End state: a determinism test — run
-live, replay the log, identical outcome. Gated by the evaluation spec's value-identity rulings
-(`-0.0`, NaN), which is where equality of logged answers becomes load-bearing, and by edition
-serialization — the first consumer that needs an edition to survive a process.
-
-### Parked runs + resume
-
-The API shape deferred out of execution wiring: `run` grows a parked outcome (or a sibling entry
-point), a parked run is an edition reference plus its log, and resuming is replay followed by
-continuing with live handlers. End state: park mid-run, restart the process, resume to completion.
-
-### Deferred host calls
-
-Reinstate and drive `Implementation.Deferred` — commented out in Environment.kt since the runner
-landed, because an unimplementable registration should not be writable: `deferred(name) { call -> }`
-takes ownership and answers via `call.resume(v)` (in-process, any thread) or by persisting
-`call.token` and answering from another process — the split is "answer inline" vs "I own the
-continuation", not sync vs async. Handler errors stay unwrapped exceptions with no Klein-level
-representation: the log is truth, so a failed turn simply did not happen, and the host retries or
-abandons by its own policy (`call.fail(...)` is additive later if wanted). Why this waits for the
-log, per the suspension-path ADR: in-process, a blocking `immediate` handler already covers it, and
-across a restart the answer path is replay, which needs the log.
+something durable to replay *against*. The optional stored-Core cache earns a second job here:
+re-deriving Core requires the contract to still resolve the edition's release, so replaying the
+history of an edition whose release has been retired needs the cache.
 
 ### Diagnostic severity
 
 Every `TypeError` gets a class saying whether it is a soundness failure or a degeneracy, decided at
 birth rather than mapped after the fact — per [diagnostic-severity.md](./ideas/diagnostic-severity.md).
-Reconciliation needs it to tell an actionable recompile failure from noise. Includes splitting
+Reonciliation needs it to tell an actionable recompile failure from noise. Includes splitting
 `IncomparableEquality` out of `TypeMismatch` at the equality emission site.
 
 ### Reconciliation + drain
@@ -174,6 +138,10 @@ Small, unblocked, and easy to lose:
   `(name, revision)` and the hash is only a change-detector for the reconciler. Worth fixing before
   reconciliation, which is what consumes it.
 - **`klein-bench` is in no routine check** and silently stopped compiling for two phases.
+- **The release-resolution memo is not thread-safe**, and `run` now touches it on every call
+  (pre-flight resolves the release twice, the run once). Two threads running editions against one
+  shared `Environment` race on a plain mutable map. Needs a multiplatform locking decision; until
+  then an `Environment` is single-threaded.
 - **The CLI exits 0 on usage errors** — unknown command, unknown option for a command. Matters as
   soon as `klein check` goes in a hook or a CI script.
 
@@ -182,7 +150,9 @@ Small, unblocked, and easy to lose:
 - **Module system** — types already ride capability signatures; what modules would buy (shared
   Klein code, hub-type version bridging, module-mediated rule composition) is costed in the Module
   entry of host-integration.md.
-- **Editor and storage connectors** — standalone components, after the library surface settles.
+- **Storage connectors** — standalone components, after the library surface settles. (The editor
+  and the migration toolkit live on the global roadmap, [roadmap.md](./roadmap.md), as features of
+  their own.)
 - **Non-JVM hosts via a C facade** — JVM languages (Java, Scala) consume the Kotlin library
   directly. Kotlin/Native can emit a dynamic or static library with a generated C header, but the
   real surface is a deliberate flat facade over the message layer: start / pending-request /

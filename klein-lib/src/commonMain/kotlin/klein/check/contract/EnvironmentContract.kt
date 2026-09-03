@@ -47,6 +47,14 @@ data class ContractDeclaration(
             val fn = if (stripped is TForall) stripped.body else stripped
             return (fn as TFun).result
         }
+
+    val parameterTypes: List<RuleType>
+        get() {
+            if (kind == DeclarationKind.Value) return emptyList()
+            val stripped = type.strip()
+            val fn = if (stripped is TForall) stripped.body else stripped
+            return (fn as TFun).params
+        }
 }
 
 /**

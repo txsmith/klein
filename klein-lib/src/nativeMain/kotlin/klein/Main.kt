@@ -9,6 +9,8 @@ import klein.check.contract.DeclarationKind
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.UnknownRelease
 import klein.core.CorePrinter
+import klein.host.RunFailure
+import klein.host.RunOutcome
 import klein.host.implement
 import klein.host.run
 import klein.interp.KleinRuntimeError
@@ -192,8 +194,24 @@ private fun runCmd(
                 immediate(d.name, d.revision) { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
             }
         }
-    val result = withRuleDiagnostics(ruleSource, rawErrors) { environment.run(edition) }
-    println(Value.print(result))
+    val outcome =
+        try {
+            withRuleDiagnostics(ruleSource, rawErrors) { environment.run(edition) }
+        } catch (e: RunFailure) {
+            printError(ruleSource, null, e.error.message, rawErrors)
+            exitProcess(1)
+        }
+    when (outcome) {
+        is RunOutcome.Completed -> println(Value.print(outcome.value))
+        is RunOutcome.Failed -> {
+            outcome.diagnostics.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
+            exitProcess(1)
+        }
+        is RunOutcome.Parked -> {
+            printError(ruleSource, null, "parked at ${outcome.call.print()}", rawErrors)
+            exitProcess(1)
+        }
+    }
 }
 
 private class UnanswerableCapability(

@@ -8,7 +8,7 @@
 - [2026-01-14-simplesub-type-inference.md](./2026-01-14-simplesub-type-inference.md) — the foundation now under strain
 - [2026-04-12-rigid-type-variables-in-annotations.md](./2026-04-12-rigid-type-variables-in-annotations.md) — the encoding this analysis retires
 
-**Companion:** [rigid-tvar-interactions.md](./rigid-tvar-interactions.md) — the full derivation of the rigid-variable encoding and its 9-case constraint matrix. This ADR is the narrative and the decision; the companion is the granular mechanics.
+**Companion:** [rigid-tvar-interactions.md](./2026-06-23-rigid-tvar-interactions.md) — the full derivation of the rigid-variable encoding and its 9-case constraint matrix. This ADR is the narrative and the decision; the companion is the granular mechanics.
 
 ---
 
@@ -80,7 +80,7 @@ None of this makes the OR rows *uncomputable*. A disjunctive constraint is perfe
 
 That is why the restriction is theorem-shaped rather than conservative taste — *for this class of solver*. Without complement (negation), the type lattice is merely *distributive*, and in a distributive lattice principal inference requires the polar discipline; getting unrestricted `&`/`|` back with principal inference means upgrading to a full *Boolean* algebra of types and a solver built to reason about it. That is exactly the bargain MLstruct strikes, and what §8 returns to.
 
-> **See the companion** [rigid-tvar-interactions.md](./rigid-tvar-interactions.md) for the rigorous version: the "all-of where required, any-of where offered" reading of the bounds, and the complete nine-case matrix of constraint shapes (concrete×rigid and rigid×rigid). Cases 4 and 6–8 there are precisely the OR rows above; cases 6–9 (rigid-vs-rigid) are the combinatorial cliff in miniature.
+> **See the companion** [rigid-tvar-interactions.md](./2026-06-23-rigid-tvar-interactions.md) for the rigorous version: the "all-of where required, any-of where offered" reading of the bounds, and the complete nine-case matrix of constraint shapes (concrete×rigid and rigid×rigid). Cases 4 and 6–8 there are precisely the OR rows above; cases 6–9 (rigid-vs-rigid) are the combinatorial cliff in miniature.
 
 ### 3.4 The same discipline is what makes simplification work
 
@@ -112,7 +112,7 @@ So writing either connective, then using the value, manufactures precisely the d
 
 An un-annotated parameter `x` is just a *variable*. Its uses accumulate as upper bounds (§3.1), and the constraints that actually fire are `flowedInValue <: eachDemand` — a concrete source against a single demand, all AND-decomposable. The *intersection* of `x`'s demands is only ever **read off** at the end; it never appears on the left of a constraint. An annotation is exactly what changes this: `x: A & B` asserts that the intersection itself *is* the value's type, so the moment `x` is used the intersection flows onto the left of `<:`. The annotation converts a passive display artifact into an active input — and that is the whole difference.
 
-The current encoding does not dodge this. Klein lowers `A & B` to a rigid type variable carrying `{A, B}` as upper bounds (see the [companion](./rigid-tvar-interactions.md)). That rigid variable *is* an intersection node in a variable's clothing — constraining it against a demand is constraining `(A & B) <: C`, the same OR row. The encoding relocates the disjunction into the bound store; it does not remove it.
+The current encoding does not dodge this. Klein lowers `A & B` to a rigid type variable carrying `{A, B}` as upper bounds (see the [companion](./2026-06-23-rigid-tvar-interactions.md)). That rigid variable *is* an intersection node in a variable's clothing — constraining it against a demand is constraining `(A & B) <: C`, the same OR row. The encoding relocates the disjunction into the bound store; it does not remove it.
 
 ### 4.3 The polarity gate does not save us
 
@@ -205,7 +205,7 @@ So the decision is not "which intersections do we want" but **"which coexistence
 
 This ADR makes a deliberately *partial* decision, and both halves matter.
 
-**Decided.** The path Klein is on — SimpleSub plus subtyping plus hand-rolled patches for general user-written `&`/`|` — is **ruled out as a destination** (§7). It is not a stable system but the downhill slope toward MLstruct: continuing to patch it buys incompleteness in the interim and MLstruct's bill in the end. The general union/intersection annotation effort in its current form is therefore **stopped**, not paused for more patching. The rigid-variable encoding ([companion](./rigid-tvar-interactions.md), [2026-04-12-rigid-type-variables-in-annotations.md](./2026-04-12-rigid-type-variables-in-annotations.md)) is understood as a dead end, retained only as the record of what was tried.
+**Decided.** The path Klein is on — SimpleSub plus subtyping plus hand-rolled patches for general user-written `&`/`|` — is **ruled out as a destination** (§7). It is not a stable system but the downhill slope toward MLstruct: continuing to patch it buys incompleteness in the interim and MLstruct's bill in the end. The general union/intersection annotation effort in its current form is therefore **stopped**, not paused for more patching. The rigid-variable encoding ([companion](./2026-06-23-rigid-tvar-interactions.md), [2026-04-12-rigid-type-variables-in-annotations.md](./2026-04-12-rigid-type-variables-in-annotations.md)) is understood as a dead end, retained only as the record of what was tried.
 
 **Not decided.** *Which* of the three destinations (§9) Klein adopts — MLstruct, Path G, or Path ML — is left open. The analysis establishes that these are the only stable grounds and what each costs; it does not, by itself, select one. That selection is primarily a product-level capability judgement — subtyping, full inference, or both — that is the maintainers' to make, gated at most by a narrow check for any use-case that would *force* the Boolean engine — realistically, only nominal meets, function overloading, or variable-laden intersections do, and a business-rules language likely needs none of them.
 

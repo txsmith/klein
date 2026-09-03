@@ -5,6 +5,7 @@ import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.EnvironmentContract
 import klein.host.Environment
+import klein.host.RunOutcome
 import klein.host.implement
 import klein.host.run
 import klein.interp.Value
@@ -33,7 +34,7 @@ class LendingHost(
     fun decide(
         ruleSource: String,
         release: ReleaseNumber,
-    ): Value {
+    ): RunOutcome {
         val edition = contract.compileRule(ruleSource, release)
         return environment.run(edition) {
             immediate("customer", RevisionNumber(1)) {
@@ -52,6 +53,15 @@ fun main(args: Array<String>) {
         System.exit(2)
     }
     val host = LendingHost(File(args[0]).readText())
-    val result = host.decide(File(args[1]).readText(), ReleaseNumber(args[2].toInt()))
-    println(Value.print(result))
+    when (val outcome = host.decide(File(args[1]).readText(), ReleaseNumber(args[2].toInt()))) {
+        is RunOutcome.Completed -> println(Value.print(outcome.value))
+        is RunOutcome.Failed -> {
+            outcome.diagnostics.forEach { System.err.println(it.message) }
+            System.exit(1)
+        }
+        is RunOutcome.Parked -> {
+            System.err.println("parked at ${outcome.call.print()}")
+            System.exit(1)
+        }
+    }
 }

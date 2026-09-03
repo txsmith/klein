@@ -21,7 +21,7 @@ private fun registerAll(registry: Registry) =
 private fun load(
     source: String,
     register: Registry.() -> Unit = {},
-): Environment = Klein.checkContract(source).implement(register)
+): Environment = Klein.checkContract(source).implement(register = register)
 
 private val CONTRACT =
     """
@@ -89,17 +89,6 @@ class EnvironmentTest {
         assertEquals(RevisionNumber(3), env.capabilities.first { it.name == "creditCheck" }.revision)
         assertEquals(RevisionNumber(1), env.capabilities.first { it.name == "maxRetries" }.revision)
     }
-
-    // Deferral is commented out until the effect log lands (roadmap §Deferred host calls).
-    // @Test
-    // fun deferredRegistrationIsAlsoAnImplementation() {
-    //     val env =
-    //         load(CONTRACT) {
-    //             deferred("creditCheck") { }
-    //             immediate("maxRetries") { Value.VNum(3.0) }
-    //         }
-    //     assertTrue(env[env.capabilities.first { it.name == "creditCheck" }.id] is Implementation.Deferred)
-    // }
 
     @Test
     fun registeringAnUndeclaredNameFails() {
@@ -290,7 +279,7 @@ class EnvironmentTest {
                 immediate("maxRetries") { Value.VNum(3.0) }
             }
         assertEquals(null, env[env.capabilities.first { it.name == "creditCheck" }.id])
-        assertIs<Implementation.Immediate>(env[env.capabilities.first { it.name == "maxRetries" }.id])
+        assertIs<Handler.Immediate>(env[env.capabilities.first { it.name == "maxRetries" }.id])
     }
 
     @Test
@@ -322,7 +311,7 @@ class EnvironmentTest {
     @Test
     fun theEnvironmentKeepsTheContractItImplements() {
         val contract = Klein.checkContract(CONTRACT)
-        val env = contract.implement(::registerAll)
+        val env = contract.implement(register = ::registerAll)
         assertTrue(env.contract === contract)
     }
 
