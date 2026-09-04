@@ -114,7 +114,7 @@ history of an edition whose release has been retired needs the cache.
 
 Every `TypeError` gets a class saying whether it is a soundness failure or a degeneracy, decided at
 birth rather than mapped after the fact — per [diagnostic-severity.md](./ideas/diagnostic-severity.md).
-Reonciliation needs it to tell an actionable recompile failure from noise. Includes splitting
+Reconciliation needs it to tell an actionable recompile failure from noise. Includes splitting
 `IncomparableEquality` out of `TypeMismatch` at the equality emission site.
 
 ### Reconciliation + drain
@@ -134,14 +134,14 @@ observability starts to hurt. Tracked as the older issue #15.
 
 Small, unblocked, and easy to lose:
 
-- **`CapabilityId` still hashes the signature.** The settled design is that identity is
-  `(name, revision)` and the hash is only a change-detector for the reconciler. Worth fixing before
-  reconciliation, which is what consumes it.
+- **No signature change-detector exists.** `CapabilityId` was deleted in the PR #28 review:
+  identity is `(name, revision)`, full stop. The reconciler still wants a cheap "did this
+  signature change" prefilter; add a hash as a pin-side field when reconciliation consumes it.
 - **`klein-bench` is in no routine check** and silently stopped compiling for two phases.
-- **The release-resolution memo is not thread-safe**, and `run` now touches it on every call
-  (pre-flight resolves the release twice, the run once). Two threads running editions against one
-  shared `Environment` race on a plain mutable map. Needs a multiplatform locking decision; until
-  then an `Environment` is single-threaded.
+- **The surface-resolution memos are not thread-safe**, and `run` touches the pin memo on every
+  call (twice when replaying: the pre-flight log check and the run itself). Two threads running
+  editions against one shared `Environment` race on a plain mutable map. Needs a multiplatform
+  locking decision; until then an `Environment` is single-threaded.
 - **The CLI exits 0 on usage errors** — unknown command, unknown option for a command. Matters as
   soon as `klein check` goes in a hook or a CI script.
 
