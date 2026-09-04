@@ -47,15 +47,12 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
-    CANON["Canonical form<br/>encoding + version stamp"]
     ED["Edition serialization<br/>Core + pins + checksum"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
     TRACE["Call markers, trace modes,<br/>fuel, error traces"]
 
-    CANON --> DERIVE
-    CANON --> RECON
     ED --> RECON
     SEV --> RECON
 ```
@@ -85,18 +82,22 @@ rules stay: no type variables, no function types. It also carries the enforcemen
 crossing when values decode into host types — and whether the raw `List<Value>` seam narrows too
 is decided here.
 
-### Canonical form + numeric spec
+### Hashing and the numeric commitments (dissolved as a v1 item)
 
-A late item now: canonicalization's only consumers are hashing and byte-comparison, and every use
-of hashing here is an optimization with a correct slow path (the reconciliation prefilter falls
-back to recompile-everything; the stored-Core checksum fell away with the Core encoding itself).
-It lands when the fleet is big enough that the slow paths hurt — feeding the reconciler's
-prefilter and, eventually, the FFI wire. The version stamp on anything stored is what keeps every
-representation decision reversible until then, including the open `Num` question: encodings commit
-to today's doubles knowingly, and exact rationals stay a later semantics change paid for with a
-wipe. The `Long` round-trip rule — a host type may bind to `Num` only if every value survives
-without silent loss — waits until a real host binds one. The value-identity rulings replay needs
-(`-0.0` vs `0.0`, NaN canonicalization) belong to the pending evaluation spec, not here.
+Canonical form is no longer a deliverable. The value encoding already exists — the effect log's
+binary codec is version-stamped and deterministic — and canonical bytes (equal values encode to
+equal bytes) have no consumer: replay compares decoded values in memory, and nothing
+content-addresses anything. The v1 reconciler does not hash at all; it recompiles everything.
+Hashing arrives later as a staged optimization, described under Reconciliation below: whole
+pin sets first, then per pin. Deterministic encoding suffices for both (the log codec for
+values, the printed type for signatures).
+
+The numeric commitments stand on their own: encodings commit to today's doubles knowingly, and
+exact rationals stay a later semantics change paid for with a wipe — the version stamp on
+anything stored keeps that reversible. The `Long` round-trip rule — a host type may bind to
+`Num` only if every value survives without silent loss — waits until a real host binds one. The
+value-identity rulings replay needs (`-0.0` vs `0.0`, NaN canonicalization) belong to the
+pending evaluation spec.
 
 ### Edition serialization
 
@@ -119,10 +120,16 @@ Reconciliation needs it to tell an actionable recompile failure from noise. Incl
 
 ### Reconciliation + drain
 
-Pure functions and report objects over org-supplied data: reconcile with a pin-hash prefilter and
-severity-classified reports, and answer drain queries — edition and parked-run counts per revision.
-There is no retire flag; removal is optimistic, stranded runs alert, and a revision stays
-restorable. Delivering failed-recompile reports to rule authors is the org's job, not the library's.
+Pure functions and report objects over org-supplied data: the v1 reconciler recompiles every
+edition against the edited contract and reports with severity-classified diagnostics, and answers
+drain queries — edition and parked-run counts per revision. There is no retire flag; removal is
+optimistic, stranded runs alert, and a revision stays restorable. Delivering failed-recompile
+reports to rule authors is the org's job, not the library's.
+
+Hashing is a later optimization, staged: first hash entire pin sets — a crude change detector,
+"did anything this edition sees change?" — then per-pin hashes to narrow which capability
+changed. The same pin-set hash would also serve as the surface-resolution memo key in
+`EnvironmentContract`.
 
 ### Call markers, trace modes, error traces
 

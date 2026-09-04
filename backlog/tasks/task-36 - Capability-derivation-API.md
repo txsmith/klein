@@ -4,10 +4,10 @@ title: Capability derivation API
 status: To Do
 assignee: []
 created_date: '2026-09-04 12:19'
+updated_date: '2026-09-04 12:39'
 labels:
   - host-boundary
-dependencies:
-  - TASK-32
+dependencies: []
 ordinal: 36000
 ---
 
