@@ -47,7 +47,7 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
-    ED["Edition serialization<br/>Core + pins + checksum"]
+    ED["Edition serialization<br/>source + pins, release as provenance"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
@@ -66,7 +66,9 @@ the two is a compile error, not a silent wrap. Extracted from execution wiring b
 one slice that changes the contract language — §Releases today says a release entry names a
 declaration and nothing else — so it goes spec-first: contracts.md and grammar.md, three new
 contract checks, and an ADR for the real alternatives (implicit sink, trailing-expression-only,
-allowing mixed conclusion). The design draft is in
+allowing mixed conclusion). One constraint from edition serialization: whatever the sink
+contributes to compilation must land in the edition's stored form (a pin or a field), or
+pin-based re-derivation silently reproduces the wrong program. The design draft is in
 [ideas/result-sink.md](./ideas/result-sink.md). Builds on `compileRule` and the runner.
 
 ### Capability derivation API
@@ -101,15 +103,28 @@ pending evaluation spec.
 
 ### Edition serialization
 
-An edition's stored form is **source + release number + pin map**, version-stamped: per the
-source-is-truth ADR the Core is a cache, so loading an edition re-derives it rather than decoding
-it, and a stamp mismatch means discard and re-derive, never migrate. Three flat fields, a trivial
-encoding — no Core tree encoding exists in v1, which is what dissolved the dependency on canonical
-form. Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
+An edition's stored form is **source + pin map**, version-stamped, with the release number kept
+as provenance only: it feeds the reconciler's report and the migration nudge ("authored against
+release 2, current is 5"), and nothing loads through it. Per the source-is-truth ADR the Core is
+a cache, so loading an edition re-derives it rather than decoding it, and a stamp mismatch means
+discard and re-derive, never migrate. Flat fields, a trivial encoding, no Core tree encoding in
+v1.
+
+Re-derivation goes through the pin surface, not the release: pins are exactly the names the rule
+source wrote, `resolvePins` closes them into the full typing surface, and the recompile must
+emit the same pin map it was given (a fixpoint check; divergence means the contract changed
+under the edition, the same failure class as an unserved pin at run time). Removing a release
+therefore stays a compile-time act: it forces migration at the next edit and touches nothing
+already compiled, parked runs included. This rests on one invariant: everything a release
+contributes to compilation is captured in the stored form. Today that is only the
+name-to-revision surface; the result sink is the first feature that will test it. The
+stored-Core cache is a pure performance option: pin-based re-derivation needs only what the run
+itself needs (the pinned revisions still declared), so its old second job, replaying editions of
+retired releases, is gone.
+
+Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
 signal reconciliation exists to act on. Replay is the consumer that forces this item: it needs
-something durable to replay *against*. The optional stored-Core cache earns a second job here:
-re-deriving Core requires the contract to still resolve the edition's release, so replaying the
-history of an edition whose release has been retired needs the cache.
+something durable to replay *against*.
 
 ### Diagnostic severity
 
