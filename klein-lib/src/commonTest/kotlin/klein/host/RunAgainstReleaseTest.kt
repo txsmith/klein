@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
@@ -36,7 +37,7 @@ private fun scoreByTier(args: List<Value>): Value {
 
 private fun Environment.runToValue(
     edition: Edition,
-    registerHandlers: Registry.() -> Unit = {},
+    registerHandlers: HandlerRegistry.() -> Unit = {},
 ): Value = assertIs<RunOutcome.Completed>(run(edition, registerHandlers = registerHandlers)).value
 
 private fun Environment.runToFailure(edition: Edition): RunError = assertFailsWith<RunFailure> { run(edition) }.error
@@ -69,6 +70,23 @@ class RunAgainstReleaseTest {
     }
 
     @Test
+    fun aCallRepeatedWithTheSameArgumentsIsAskedEachTime() {
+        val contract = Klein.checkContract(LENDING_CONTRACT)
+        var asks = 0
+        val env =
+            contract.implement {
+                immediate("customer") { gold }
+                immediate("creditScore") { asks++; scoreByTier(it) }
+            }
+        val edition = contract.compileRule("creditScore(customer) + creditScore(customer)", ReleaseNumber(1))
+        val outcome = assertIs<RunOutcome.Completed>(env.run(edition))
+        assertEquals(Value.VNum(1400.0), outcome.value)
+        assertEquals(2, asks)
+        assertEquals(2, outcome.log.replies.size)
+        assertEquals(outcome.log.replies[0], outcome.log.replies[1])
+    }
+
+    @Test
     fun callingThroughABindingMatchesTheDirectCall() {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
@@ -77,7 +95,12 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { scoreByTier(it) }
             }
         val direct = env.runToValue(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)))
-        val indirect = env.runToValue(contract.compileRule("f = creditScore\nf(customer) >= 620", ReleaseNumber(1)))
+        val throughBinding =
+            """
+            f = creditScore
+            f(customer) >= 620
+            """.trimIndent()
+        val indirect = env.runToValue(contract.compileRule(throughBinding, ReleaseNumber(1)))
         assertEquals(direct, indirect)
         assertEquals(Value.VBool(true), indirect)
     }
@@ -100,14 +123,48 @@ class RunAgainstReleaseTest {
         val env =
             contract.implement {
                 immediate("creditScore") { Value.VNum(600.0) }
-                immediate("creditScore", revision = RevisionNumber(2)) { Value.VNum(700.0) }
+                immediate("creditScore/2") { Value.VNum(700.0) }
             }
         assertEquals(Value.VBool(false), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(1))))
         assertEquals(Value.VBool(true), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(2))))
     }
 
     @Test
-    fun anUnregisteredPinIsUnservedPinBeforeTheInterpreterStarts() {
+    fun aDrainThatRemovedAStillPinnedRevisionIsUnservedBeforeTheInterpreterStarts() {
+        val compiling =
+            Klein.checkContract(
+                """
+                fun creditScore(c: Num): Num
+                fun creditScore/2(c: Num): Num
+
+                release 1
+                  creditScore
+
+                release 2
+                  creditScore/2
+                """.trimIndent(),
+            )
+        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(1))
+
+        var asked = false
+        val drained =
+            Klein.checkContract(
+                """
+                fun creditScore/2(c: Num): Num
+
+                release 2
+                  creditScore/2
+                """.trimIndent(),
+            ).implement { immediate("creditScore/2") { asked = true; Value.VNum(700.0) } }
+
+        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        assertEquals("creditScore", pin.name)
+        assertEquals(RevisionNumber(1), pin.revision)
+        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
+    }
+
+    @Test
+    fun aRollbackThatRemovedAStillPinnedRevisionIsUnservedBeforeTheInterpreterStarts() {
         val compiling =
             Klein.checkContract(
                 """
@@ -124,7 +181,7 @@ class RunAgainstReleaseTest {
         val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(2))
 
         var asked = false
-        val drained =
+        val rolledBack =
             Klein.checkContract(
                 """
                 fun creditScore(c: Num): Num
@@ -137,9 +194,58 @@ class RunAgainstReleaseTest {
                 """.trimIndent(),
             ).implement { immediate("creditScore") { asked = true; Value.VNum(700.0) } }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(rolledBack.runToFailure(edition)).problems.single())
         assertEquals("creditScore", pin.name)
         assertEquals(RevisionNumber(2), pin.revision)
+        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
+    }
+
+    @Test
+    fun aTypeAnnotationPinIsVocabularyTheEnvironmentNeedNotServe() {
+        val contract = Klein.checkContract(LENDING_CONTRACT)
+        val rule =
+            """
+            fun f(c: Customer): Num = creditScore(c)
+            f(customer)
+            """.trimIndent()
+        val edition = contract.compileRule(rule, ReleaseNumber(1))
+        assertTrue("Customer" in edition.pins, "the edition should pin the annotated type: ${edition.pins}")
+        val env =
+            contract.implement {
+                immediate("customer") { gold }
+                immediate("creditScore") { scoreByTier(it) }
+            }
+        assertEquals(Value.VNum(700.0), env.runToValue(edition))
+    }
+
+    @Test
+    fun aDrainThatRemovedAStillPinnedTypeIsUnservedBeforeTheInterpreterStarts() {
+        val rule =
+            """
+            fun f(c: Customer): Num = creditScore(c)
+            f(customer)
+            """.trimIndent()
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(rule, ReleaseNumber(1))
+
+        var asked = false
+        val drained =
+            Klein.checkContract(
+                """
+                customer: { id: Num, tier: String }
+                fun creditScore(c: { id: Num, tier: String }): Num
+
+                release 1
+                  customer
+                  creditScore
+                """.trimIndent(),
+            ).implement {
+                immediate("customer") { asked = true; gold }
+                immediate("creditScore") { asked = true; Value.VNum(700.0) }
+            }
+
+        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        assertEquals("Customer", pin.name)
+        assertEquals(RevisionNumber(1), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
     }
 

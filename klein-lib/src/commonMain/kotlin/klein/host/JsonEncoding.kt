@@ -145,7 +145,8 @@ private fun StringBuilder.writeValueFields(fields: Map<String, Value>) {
 
 private fun StringBuilder.writeNumber(value: Double) {
     if (value.isFinite()) {
-        append(value)
+        // Kotlin/JS prints -0.0 as "0"; spell it out so the sign survives on every platform.
+        if (value == 0.0 && value.toRawBits() != 0L) append("-0.0") else append(value)
     } else {
         val bits = value.toRawBits().toULong().toString(16).padStart(16, '0')
         append("{\"bits\":\"")

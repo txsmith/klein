@@ -16,7 +16,7 @@ data class Diagnostic(
     val span: SourceSpan?,
 ) {
     companion object {
-        fun of(error: KleinError) = Diagnostic(error.message, error.span)
+        internal fun of(error: KleinError) = Diagnostic(error.message, error.span)
     }
 }
 

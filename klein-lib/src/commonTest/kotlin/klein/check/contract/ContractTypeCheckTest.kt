@@ -106,11 +106,11 @@ class ContractTypeCheckTest {
             )
         assertEquals(
             listOf(
-                Triple("creditScore", RevisionNumber(1), DeclarationKind.Function),
-                Triple("creditScore", RevisionNumber(2), DeclarationKind.Function),
-                Triple("maxRetries", RevisionNumber(1), DeclarationKind.Value),
+                Triple("creditScore", RevisionNumber(1), ContractDeclaration.Function::class),
+                Triple("creditScore", RevisionNumber(2), ContractDeclaration.Function::class),
+                Triple("maxRetries", RevisionNumber(1), ContractDeclaration.Value::class),
             ),
-            contract.declarations.map { Triple(it.name, it.revision, it.kind) },
+            contract.declarations.map { Triple(it.name, it.revision, it::class) },
         )
         assertEquals("(Customer/2) -> Num", Type.print(contract.declarations[1].type))
     }

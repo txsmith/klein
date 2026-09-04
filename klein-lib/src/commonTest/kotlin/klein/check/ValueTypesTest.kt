@@ -28,8 +28,8 @@ class ValueTypesTest {
                   Shape
                   Box
                 """.trimIndent(),
-            ).resolve(ReleaseNumber(1))
-            .types
+            ).resolveRelease(ReleaseNumber(1))
+            .ruleTypeEnv
 
     private fun struct(
         tag: String?,

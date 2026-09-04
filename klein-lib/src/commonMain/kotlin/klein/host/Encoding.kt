@@ -5,7 +5,7 @@ import klein.KleinException
 import klein.SourceSpan
 import klein.interp.Value
 
-class UnreadableLog(
+class UnreadableLog internal constructor(
     override val message: String,
 ) : KleinError {
     override val span: SourceSpan? get() = null

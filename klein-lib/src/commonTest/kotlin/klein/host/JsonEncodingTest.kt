@@ -38,7 +38,7 @@ private val everyValueShape: List<Value> =
         Value.VNum(Double.MIN_VALUE),
         Value.VStr(""),
         Value.VStr("héllo wörld — 日本語 🚀   😀"),
-        Value.VStr("quotes \" backslash \\ newline \n tab \t control "),
+        Value.VStr("quotes \" backslash \\ newline \n tab \t control \u0001"),
         Value.VBool(true),
         Value.VBool(false),
         Value.VNull,
@@ -322,5 +322,115 @@ class JsonEncodingTest {
         val text = encodeJson(EffectLog(LogEntry.Start(emptyMap()))) + "x"
         val diagnostic = assertUnreadable(text)
         assertTrue(diagnostic.message.contains("trailing"), diagnostic.message)
+    }
+
+    @Test
+    fun anUnexpectedFieldInEveryOwnerIsUnreadable() {
+        val documents =
+            listOf(
+                """{"format":"klein-effect-log","version":1,"entries":[$startEntry],"x":1}""",
+                frame("""{"entry":"start","inputs":{},"x":1}"""),
+                frame("""{"entry":"reply","call":{"name":"f","args":[]},"answer":1,"x":1}"""),
+                frame("""{"entry":"failure","errors":[],"x":1}"""),
+                frame("""{"entry":"reply","call":{"name":"f","args":[],"x":1},"answer":1}"""),
+                frame("""{"entry":"failure","errors":[{"message":"m","x":1}]}"""),
+                frame("""{"entry":"result","value":{"bits":"7ff8000000000000","x":1}}"""),
+                frame("""{"entry":"result","value":{"unit":true,"x":1}}"""),
+                frame("""{"entry":"result","value":{"tag":"T","fields":{},"x":1}}"""),
+            )
+        documents.forEach { document ->
+            val diagnostic = assertUnreadable(document)
+            assertTrue(diagnostic.message.contains("unexpected field \"x\""), diagnostic.message)
+        }
+    }
+
+    @Test
+    fun aBareFieldsObjectDecodesToAnUntaggedStruct() {
+        val text = frame(startEntry, """{"entry":"result","value":{"fields":{}}}""")
+        val expected = EffectLog(LogEntry.Start(emptyMap()), ending = LogEntry.Result(Value.VStruct(null, emptyMap())))
+        assertEquals(expected, decodeJson(text))
+    }
+
+    @Test
+    fun aStructWithATagButNoFieldsIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"result","value":{"tag":"T"}}"""))
+        assertTrue(diagnostic.message.contains("fields"), diagnostic.message)
+    }
+
+    @Test
+    fun everyHexDigitIsAcceptedInRawBits() {
+        val text = frame(startEntry, """{"entry":"result","value":{"bits":"0123456789abcdef"}}""")
+        val result = assertIs<LogEntry.Result>(decodeJson(text).ending)
+        assertEquals(0x0123456789abcdefL, assertIs<Value.VNum>(result.value).value.toRawBits())
+    }
+
+    @Test
+    fun aNonHexDigitInRawBitsIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"result","value":{"bits":"0123456789abcdeg"}}"""))
+        assertTrue(diagnostic.message.contains("hex"), diagnostic.message)
+    }
+
+    @Test
+    fun uppercaseRawBitsAreUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"result","value":{"bits":"0123456789ABCDEF"}}"""))
+        assertTrue(diagnostic.message.contains("lowercase"), diagnostic.message)
+    }
+
+    @Test
+    fun whitespaceInEveryStructuralPositionDecodes() {
+        val text = """{ "format" : "klein-effect-log" , "version" : 1 , "entries" : [ { "entry" : "start" , "inputs" : { } } ] }""" + "   "
+        assertEquals(EffectLog(LogEntry.Start(emptyMap())), decodeJson(text))
+    }
+
+    @Test
+    fun handWrittenNumberFormsDecodeToTheirValues() {
+        val text = frame("""{"entry":"start","inputs":{"a":0,"b":9,"c":90,"d":109,"e":1e5,"f":1E+5,"g":2.5e-3,"h":-0.0}}""")
+        val expected =
+            mapOf(
+                "a" to Value.VNum(0.0),
+                "b" to Value.VNum(9.0),
+                "c" to Value.VNum(90.0),
+                "d" to Value.VNum(109.0),
+                "e" to Value.VNum(1e5),
+                "f" to Value.VNum(1e5),
+                "g" to Value.VNum(2.5e-3),
+                "h" to Value.VNum(-0.0),
+            )
+        assertEquals(expected, decodeJson(text).start.inputs)
+    }
+
+    @Test
+    fun aLeadingZeroFollowedByADigitIsUnreadable() {
+        assertUnreadable(frame("""{"entry":"start","inputs":{"a":01}}"""))
+    }
+
+    @Test
+    fun anExponentWithoutDigitsIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"start","inputs":{"a":1e}}"""))
+        assertTrue(diagnostic.message.contains("digit"), diagnostic.message)
+    }
+
+    @Test
+    fun aSpaceIsWrittenRawAndAControlCharacterAsItsEscape() {
+        val text = encodeJson(EffectLog(LogEntry.Start(mapOf("s" to Value.VStr("a b\u0001")))))
+        assertTrue(text.contains("\"a b\\u0001\""), text)
+    }
+
+    @Test
+    fun aRawControlCharacterInsideAStringIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("{\"entry\":\"result\",\"value\":\"a\tb\"}"))
+        assertTrue(diagnostic.message.contains("raw control character"), diagnostic.message)
+    }
+
+    @Test
+    fun aUnicodeEscapeCutOffByTheEndOfTextIsUnreadable() {
+        val text = """{"format":"klein-effect-log","version":1,"entries":[{"entry":"result","value":"\u12"""
+        assertTrue(assertUnreadable(text).message.contains("ends early"))
+    }
+
+    @Test
+    fun aUnicodeEscapeWithNonHexDigitsIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"result","value":"\uzzzz"}"""))
+        assertTrue(diagnostic.message.contains("four hex digits"), diagnostic.message)
     }
 }

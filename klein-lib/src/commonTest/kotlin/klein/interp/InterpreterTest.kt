@@ -469,6 +469,16 @@ class InterpreterTest {
     }
 
     @Test
+    fun aDataArmOverANonStructScrutineeIsAnInvariantViolation() {
+        assertFailsWith<InvariantViolation> {
+            Interpreter.start(match(num(1.0), ctorArm("Circle", listOf("radius"), str("x"))))
+        }
+        assertFailsWith<InvariantViolation> {
+            Interpreter.start(match(num(1.0), recordArm(listOf("radius"), str("x"))))
+        }
+    }
+
+    @Test
     fun nonBoolGuardIsAnInvariantViolation() {
         assertFailsWith<InvariantViolation> {
             Interpreter.start(match(num(1.0), default(str("x"), guard = num(1.0))))

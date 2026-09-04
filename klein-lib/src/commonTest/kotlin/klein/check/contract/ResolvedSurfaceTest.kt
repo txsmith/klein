@@ -40,9 +40,9 @@ private val CONTRACT =
 
 private val contract = Klein.checkContract(CONTRACT)
 
-private fun resolve(release: Int = 2): ResolvedRelease = contract.resolve(ReleaseNumber(release))
+private fun resolve(release: Int = 2): ResolvedSurface = contract.resolveRelease(ReleaseNumber(release))
 
-class ResolvedReleaseTest {
+class ResolvedSurfaceTest {
     // ── bindingFor, one per kind ─────────────────────────────────────────────
 
     @Test
@@ -93,22 +93,22 @@ class ResolvedReleaseTest {
 
     @Test
     fun revisionsFollowTheReleaseSurface() {
-        assertEquals(RevisionNumber(1), resolve(1).revisions["creditScore"])
-        assertEquals(RevisionNumber(2), resolve().revisions["creditScore"])
-        assertNull(resolve(1).revisions["riskBand"])
+        assertEquals(RevisionNumber(1), resolve(1).exposedRevisions["creditScore"])
+        assertEquals(RevisionNumber(2), resolve().exposedRevisions["creditScore"])
+        assertNull(resolve(1).exposedRevisions["riskBand"])
     }
 
     @Test
     fun aSumTypesConstructorsHaveRevisionsThoughNoReleaseEntryNamesThem() {
-        val revisions = resolve().revisions
-        assertEquals(RevisionNumber(2), revisions["Circle"])
-        assertEquals(RevisionNumber(2), revisions["Square"])
-        assertNull(resolve(1).revisions["Circle"])
+        val exposedRevisions = resolve().exposedRevisions
+        assertEquals(RevisionNumber(2), exposedRevisions["Circle"])
+        assertEquals(RevisionNumber(2), exposedRevisions["Square"])
+        assertNull(resolve(1).exposedRevisions["Circle"])
     }
 
     @Test
     fun aTypeOnlyNameHasARevisionThoughItBindsNothing() {
-        assertEquals(RevisionNumber(2), resolve().revisions["Shape"])
+        assertEquals(RevisionNumber(2), resolve().exposedRevisions["Shape"])
     }
 
     // ── the two halves agree ─────────────────────────────────────────────────
@@ -116,15 +116,15 @@ class ResolvedReleaseTest {
     @Test
     fun everyNameTypesBindsOrRegistersHasARevision() {
         for (release in contract.releases) {
-            val (types, revisions) = resolve(release.value).let { it.types to it.revisions }
+            val (ruleTypeEnv, exposedRevisions) = resolve(release.value).let { it.ruleTypeEnv to it.exposedRevisions }
             contract.declarations.map { it.name }.distinct().forEach { name ->
-                if (types.lookup(name) != null) assertNotNull(revisions[name], "$name bound without a revision")
+                if (ruleTypeEnv.lookup(name) != null) assertNotNull(exposedRevisions[name], "$name bound without a revision")
             }
-            types.allTypeDefs().forEach { assertNotNull(revisions[it.name], "${it.name} registered without a revision") }
-            types.allConstructors().forEach { assertNotNull(revisions[it.name], "${it.name} registered without a revision") }
-            revisions.keys.forEach { name ->
-                val visible = types.lookup(name) != null || types.lookupTypeDef(name) != null || types.lookupConstructor(name, null) != null
-                assertTrue(visible, "$name has a revision but nothing in types")
+            ruleTypeEnv.allTypeDefs().forEach { assertNotNull(exposedRevisions[it.name], "${it.name} registered without a revision") }
+            ruleTypeEnv.allConstructors().forEach { assertNotNull(exposedRevisions[it.name], "${it.name} registered without a revision") }
+            exposedRevisions.keys.forEach { name ->
+                val visible = ruleTypeEnv.lookup(name) != null || ruleTypeEnv.lookupTypeDef(name) != null || ruleTypeEnv.lookupConstructor(name, null) != null
+                assertTrue(visible, "$name has a revision but nothing in the rule type env")
             }
         }
     }

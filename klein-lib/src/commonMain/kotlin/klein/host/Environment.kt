@@ -3,34 +3,12 @@ package klein.host
 import klein.KleinError
 import klein.KleinException
 import klein.RevisionNumber
-import klein.check.ContractType
-import klein.check.Type
 import klein.check.contract.ContractDeclaration
-import klein.check.contract.DeclarationKind
+import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
 import klein.interp.Value
 
-class CapabilityId(
-    private val key: String,
-) {
-    override fun equals(other: Any?) = other is CapabilityId && key == other.key
-
-    override fun hashCode() = key.hashCode()
-
-    override fun toString() = key
-}
-
-data class Capability(
-    val declaration: ContractDeclaration,
-    val id: CapabilityId,
-) {
-    val name: String get() = declaration.name
-    val revision: RevisionNumber get() = declaration.revision
-    val kind: DeclarationKind get() = declaration.kind
-    val type: ContractType get() = declaration.type
-}
-
-sealed interface Handler {
+internal sealed interface Handler {
     class Immediate(
         val answer: (List<Value>) -> Value,
     ) : Handler
@@ -40,7 +18,7 @@ sealed interface Handler {
     ) : Handler
 }
 
-class Registry(
+class HandlerRegistry internal constructor(
     val declarations: List<ContractDeclaration>,
 ) {
     internal val registered = mutableMapOf<Pair<String, RevisionNumber>, Handler?>()
@@ -48,25 +26,38 @@ class Registry(
 
     fun immediate(
         name: String,
-        revision: RevisionNumber = RevisionNumber(1),
         answer: (List<Value>) -> Value,
-    ) = register(name, revision, Handler.Immediate(answer))
+    ) {
+        val (parsedName, revision) = parse(name) ?: return
+        register(parsedName, revision, Handler.Immediate(answer))
+    }
 
-    fun immediate(
-        name: String,
-        revision: RevisionNumber = RevisionNumber(1),
-    ) = register(name, revision, null)
+    fun immediate(name: String) {
+        val (parsedName, revision) = parse(name) ?: return
+        register(parsedName, revision, null)
+    }
 
     fun deferred(
         name: String,
-        revision: RevisionNumber = RevisionNumber(1),
         initiate: (Call) -> Unit,
     ) {
-        if (declarations.any { it.name == name && it.revision == revision && it.kind == DeclarationKind.Value }) {
-            errors.add(RegistrationError("'$name' is a value, which is read at start and cannot be deferred"))
+        val (parsedName, revision) = parse(name) ?: return
+        if (declarations.any { it.name == parsedName && it.revision == revision && it is ContractDeclaration.Value }) {
+            errors.add(RegistrationError("'$parsedName' is a value, which is read at start and cannot be deferred"))
             return
         }
-        register(name, revision, Handler.Deferred(initiate))
+        register(parsedName, revision, Handler.Deferred(initiate))
+    }
+
+    private fun parse(name: String): Pair<String, RevisionNumber>? {
+        val slash = name.indexOf('/')
+        if (slash < 0) return name to RevisionNumber(1)
+        val revision = name.substring(slash + 1).toIntOrNull()
+        if (slash == 0 || revision == null || revision < 1) {
+            errors.add(RegistrationError("'$name' is not a declared name: a revision suffix is '/' and a number, as the contract writes it"))
+            return null
+        }
+        return name.substring(0, slash) to RevisionNumber(revision)
     }
 
     private fun register(
@@ -92,7 +83,7 @@ class Registry(
  * Bind a checked contract to a running host: run [register], require a registration for every
  * declared `(name, revision)` — an immediate implementation, a deferred one whose ask parks the run
  * after its initiation lambda has run, or the lambda-less marker whose implementation arrives with
- * each run — and mint a [Capability] per declaration. Throws [KleinException] if any
+ * each run. Throws [KleinException] if any
  * declaration is unregistered, any registration names something undeclared, or anything is
  * registered twice. [transact] wraps every unit of a run that pairs host work with a log write —
  * an ask's handler, answer check, and `persist` — so a DB host can commit both together. It must
@@ -104,9 +95,9 @@ class Registry(
  */
 fun EnvironmentContract.implement(
     transact: (block: () -> Unit) -> Unit = { it() },
-    register: Registry.() -> Unit = {},
+    register: HandlerRegistry.() -> Unit = {},
 ): Environment {
-    val registry = Registry(declarations).apply(register)
+    val registry = HandlerRegistry(declarations).apply(register)
     declarations
         .filter { (it.name to it.revision) !in registry.registered }
         .forEach {
@@ -119,53 +110,73 @@ fun EnvironmentContract.implement(
         }
     if (registry.errors.isNotEmpty()) throw KleinException(registry.errors)
 
-    val capabilities =
-        declarations.map { declaration ->
-            Capability(declaration, capabilityId(declaration.name, declaration.type, declaration.revision))
-        }
     val handlers =
-        capabilities
-            .mapNotNull { capability ->
-                registry.registered.getValue(capability.name to capability.revision)?.let { capability.id to it }
+        declarations
+            .mapNotNull { declaration ->
+                registry.registered.getValue(declaration.name to declaration.revision)?.let { (declaration.name to declaration.revision) to it }
             }.toMap()
-    return Environment(capabilities, this, handlers, transact)
+    return Environment(this, handlers, transact)
 }
 
 /** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
  *  has it. Checking rules needs none of this — that is [EnvironmentContract]'s job. */
 class Environment internal constructor(
-    val capabilities: List<Capability>,
     internal val contract: EnvironmentContract,
-    private val handlers: Map<CapabilityId, Handler>,
+    private val handlers: Map<Pair<String, RevisionNumber>, Handler>,
     internal val transact: (block: () -> Unit) -> Unit,
 ) {
-    operator fun get(id: CapabilityId): Handler? = handlers[id]
+    val capabilities: List<ContractDeclaration> get() = contract.declarations
 
-    fun capability(
+    private val declarations = contract.declarations.associateBy { it.name to it.revision }
+
+    /**
+     * Start, resume, and replay are this one call. A null [log] starts fresh; otherwise the log is
+     * replayed first (start values by name, replies by position) and every call past the
+     * end of the log is answered by [registerHandlers], or failing that by the environment's own
+     * registrations.
+     *
+     * A rule that fails at runtime is a normal result: [RunOutcome.Failed] carries its diagnostics and
+     * the log so far. Everything else Klein detects — a bad registration, an unservable pin, a recorded
+     * answer that does not fit the contract, a divergence, a call whose arguments do not fit the
+     * contract, a handler answering the wrong type — is host
+     * misuse and throws [RunFailure]; an exception from the host's own code (a handler, an initiation,
+     * [persist], `transact`) escapes unwrapped. A call to a deferred capability runs its initiation,
+     * records nothing, and returns [RunOutcome.Parked]; resume by calling run again with
+     * `parked.toReply(answer)` appended to the log.
+     *
+     * [persist] is called with each newly recorded entry before execution continues, inside the same
+     * `transact` as the handler work that produced it. Replayed entries are not persisted.
+     */
+    fun run(
+        edition: Edition,
+        log: EffectLog? = null,
+        persist: (LogEntry) -> Unit = {},
+        registerHandlers: HandlerRegistry.() -> Unit = {},
+    ): RunOutcome {
+        val handlers = HandlerRegistry(contract.declarations).apply(registerHandlers)
+        if (handlers.errors.isNotEmpty()) throw RunFailure(RunError.InvalidRegistration(handlers.errors))
+        val pinProblems = checkPins(edition, handlers)
+        if (pinProblems.isNotEmpty()) throw RunFailure(RunError.UnservablePins(pinProblems))
+        if (log != null) {
+            val logProblems = checkLog(edition, log)
+            if (logProblems.isNotEmpty()) throw RunFailure(RunError.LogTypeMismatch(logProblems))
+        }
+        return Run(this, edition, handlers, persist, log).start()
+    }
+
+    internal fun getHandler(
         name: String,
         revision: RevisionNumber,
-    ): Capability? = capabilities.firstOrNull { it.name == name && it.revision == revision }
+    ): Handler? = handlers[name to revision]
+
+    internal fun getCapabilityDeclaration(
+        name: String,
+        revision: RevisionNumber,
+    ): ContractDeclaration? = declarations[name to revision]
 }
 
-class RegistrationError(
+class RegistrationError internal constructor(
     override val message: String,
 ) : KleinError {
     override val span: klein.SourceSpan? = null
-}
-
-internal fun capabilityId(
-    name: String,
-    type: ContractType,
-    revision: RevisionNumber,
-): CapabilityId = CapabilityId(fingerprint("$name/${canonicalize(type)}/${revision.value}"))
-
-internal fun canonicalize(type: Type<*>): String = Type.print(type)
-
-private fun fingerprint(input: String): String {
-    var hash = -0x340d631b7bdddcdbL
-    for (char in input) {
-        hash = hash xor char.code.toLong()
-        hash *= 0x100000001b3L
-    }
-    return hash.toULong().toString(16).padStart(16, '0')
 }

@@ -3,57 +3,22 @@ package klein.host
 import klein.RevisionNumber
 import klein.check.RuleType
 import klein.check.Type
-import klein.check.contract.DeclarationKind
+import klein.check.contract.ContractDeclaration
 import klein.check.contract.Edition
-import klein.check.contract.ResolvedRelease
+import klein.check.contract.ResolvedSurface
 import klein.interp.Execution
 import klein.interp.Interpreter
 import klein.interp.Value
 
-/**
- * Start, resume, and replay are this one call. A null [log] starts fresh; otherwise the log is
- * replayed first (start values by name, replies by position) and every call past the
- * end of the log is answered by [registerHandlers], or failing that by the environment's own
- * registrations.
- *
- * A rule that fails at runtime is a normal result: [RunOutcome.Failed] carries its diagnostics and
- * the log so far. Everything else Klein detects — a bad registration, an unservable pin, a recorded
- * answer that does not fit the contract, a divergence, a call whose arguments do not fit the
- * contract, a handler answering the wrong type — is host
- * misuse and throws [RunFailure]; an exception from the host's own code (a handler, an initiation,
- * [persist], `transact`) escapes unwrapped. A call to a deferred capability runs its initiation,
- * records nothing, and returns [RunOutcome.Parked]; resume by calling run again with
- * `parked.toReply(answer)` appended to the log.
- *
- * [persist] is called with each newly recorded entry before execution continues, inside the same
- * `transact` as the handler work that produced it. Replayed entries are not persisted.
- */
-fun Environment.run(
-    edition: Edition,
-    log: EffectLog? = null,
-    persist: (LogEntry) -> Unit = {},
-    registerHandlers: Registry.() -> Unit = {},
-): RunOutcome {
-    val handlers = Registry(contract.declarations).apply(registerHandlers)
-    if (handlers.errors.isNotEmpty()) throw RunFailure(RunError.InvalidRegistration(handlers.errors))
-    val pinProblems = checkPins(edition, handlers)
-    if (pinProblems.isNotEmpty()) throw RunFailure(RunError.UnservablePins(pinProblems))
-    if (log != null) {
-        val logProblems = checkLog(edition, log)
-        if (logProblems.isNotEmpty()) throw RunFailure(RunError.LogTypeMismatch(logProblems))
-    }
-    return Run(this, edition, handlers, persist, log).start()
-}
-
 sealed interface RunOutcome {
     val log: EffectLog
 
-    class Completed(
+    class Completed internal constructor(
         val value: Value,
         override val log: EffectLog,
     ) : RunOutcome
 
-    class Failed(
+    class Failed internal constructor(
         val diagnostics: List<Diagnostic>,
         override val log: EffectLog,
     ) : RunOutcome
@@ -63,7 +28,7 @@ sealed interface RunOutcome {
      * transaction, not Klein's. Resuming replays it like any other stored entry; [run] will not
      * persist it for you.
      */
-    class Parked(
+    class Parked internal constructor(
         val call: Call,
         override val log: EffectLog,
     ) : RunOutcome {
@@ -78,22 +43,22 @@ class RunFailure internal constructor(
 sealed interface RunError {
     val message: String
 
-    class InvalidRegistration(
+    class InvalidRegistration internal constructor(
         val problems: List<RegistrationError>,
     ) : RunError {
         override val message get() = problems.joinToString("\n") { it.message }
     }
 
-    class UnservablePins(
+    class UnservablePins internal constructor(
         val problems: List<PinProblem>,
     ) : RunError {
         override val message get() = problems.joinToString("\n") { it.message }
     }
 
-    class LogTypeMismatch(
+    class LogTypeMismatch internal constructor(
         val problems: List<Problem>,
     ) : RunError {
-        class Problem(
+        class Problem internal constructor(
             val at: Int,
             val name: String,
             val answerType: String,
@@ -105,7 +70,7 @@ sealed interface RunError {
         override val message get() = problems.joinToString("\n") { it.message }
     }
 
-    class Diverged(
+    class Diverged internal constructor(
         val expected: String,
         val got: String,
         val at: Int,
@@ -114,7 +79,7 @@ sealed interface RunError {
         override val message get() = "replay diverged at log entry $at: expected $expected, got $got"
     }
 
-    class HandlerTypeMismatch(
+    class HandlerTypeMismatch internal constructor(
         val call: String,
         val answerType: String,
         val declaredType: RuleType,
@@ -122,7 +87,7 @@ sealed interface RunError {
         override val message get() = "'$call' answered with $answerType where the contract declares ${Type.print(declaredType)}"
     }
 
-    class CallTypeMismatch(
+    class CallTypeMismatch internal constructor(
         val call: String,
         val got: String,
         val declared: String,
@@ -131,14 +96,14 @@ sealed interface RunError {
     }
 }
 
-private class Run(
+internal class Run(
     val environment: Environment,
     val edition: Edition,
-    val handlers: Registry,
+    val handlers: HandlerRegistry,
     val persist: (LogEntry) -> Unit,
     val effectLog: EffectLog?,
 ) {
-    val release = environment.contract.resolve(edition.release)
+    val resolvedPins = environment.contract.resolvePins(edition.pins)
     lateinit var log: EffectLog
 
     fun start(): RunOutcome =
@@ -298,14 +263,14 @@ private class Run(
     }
 
     private fun isValueAsk(suspension: Execution.AwaitingHost) =
-        environment.capability(suspension.call, edition.pins.getValue(suspension.call))!!.kind == DeclarationKind.Value
+        environment.getCapabilityDeclaration(suspension.call, edition.pins.getValue(suspension.call)) is ContractDeclaration.Value
 
     private fun askHandler(suspension: Execution.AwaitingHost): HandlerResponse {
-        if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, edition.pins, release)
+        if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, resolvedPins)
         return when (val handler = environment.resolveHandler(suspension.call, edition.pins, handlers)) {
             is Handler.Immediate -> {
                 val answer = handler.answer(suspension.args)
-                environment.checkAnswerType(suspension, edition.pins, release, answer)
+                environment.checkAnswerType(suspension, resolvedPins, answer)
                 HandlerResponse.Answer(answer)
             }
             is Handler.Deferred -> {
@@ -332,29 +297,30 @@ private fun Execution.AwaitingHost.toCall() = Call(call, args)
 
 private fun Environment.checkAnswerType(
     suspension: Execution.AwaitingHost,
-    pins: Map<String, RevisionNumber>,
-    release: ResolvedRelease,
+    resolvedPins: ResolvedSurface,
     answer: Value,
 ) {
-    val declared = capability(suspension.call, pins.getValue(suspension.call))!!.declaration.answerType
-    if (!fitsDeclaredType(answer, declared, release)) {
-        throw RunFailure(RunError.HandlerTypeMismatch(suspension.call, printType(answer, release), declared))
+    val revision = resolvedPins.exposedRevisions.getValue(suspension.call)
+    val declared = getCapabilityDeclaration(suspension.call, revision)!!.answerType
+    if (!fitsDeclaredType(answer, declared, resolvedPins.ruleTypeEnv)) {
+        throw RunFailure(RunError.HandlerTypeMismatch(suspension.call, printType(answer, resolvedPins.ruleTypeEnv), declared))
     }
 }
 
 private fun Environment.checkCallTypes(
     suspension: Execution.AwaitingHost,
-    pins: Map<String, RevisionNumber>,
-    release: ResolvedRelease,
+    resolvedPins: ResolvedSurface,
 ) {
-    val declared = capability(suspension.call, pins.getValue(suspension.call))!!.declaration.parameterTypes
+    val revision = resolvedPins.exposedRevisions.getValue(suspension.call)
+    val declaration = getCapabilityDeclaration(suspension.call, revision)
+    val declared = (declaration as ContractDeclaration.Function).parameterTypes
     if (suspension.args.size != declared.size) {
         val got = describeArgumentCount(suspension.args.size)
         throw RunFailure(RunError.CallTypeMismatch(suspension.call, got, "${declared.size}"))
     }
     for ((argument, parameter) in suspension.args.zip(declared)) {
-        if (!fitsDeclaredType(argument, parameter, release)) {
-            val got = printType(argument, release)
+        if (!fitsDeclaredType(argument, parameter, resolvedPins.ruleTypeEnv)) {
+            val got = printType(argument, resolvedPins.ruleTypeEnv)
             val wanted = Type.print(parameter)
             throw RunFailure(RunError.CallTypeMismatch(suspension.call, got, wanted))
         }
@@ -366,10 +332,10 @@ private fun describeArgumentCount(count: Int) = if (count == 1) "1 argument" els
 private fun Environment.resolveHandler(
     name: String,
     pins: Map<String, RevisionNumber>,
-    handlers: Registry,
+    handlers: HandlerRegistry,
 ): Handler {
     val revision = pins.getValue(name)
     return handlers.registered[name to revision]
-        ?: this[capability(name, revision)!!.id]
+        ?: getHandler(name, revision)
         ?: throw IllegalStateException("no handler for '$name' although checkPins passed")
 }

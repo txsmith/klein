@@ -358,10 +358,9 @@ internal class Interpreter private constructor(
         }
 
     private fun collectOperands(
-        expr: CoreExpr,
+        expr: HasOperands,
         frame: Frame,
     ): Boolean {
-        if (expr !is HasOperands) return true
         val collected = state.collected(frame)
         if (collected == expr.operands.size) return true
         val next = expr.operands[collected]
