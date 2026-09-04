@@ -173,15 +173,15 @@ its rule checked and compiled against one release, the release a rule was checke
 release it runs against — there is no way to run anything else. A run may suspend on
 a capability call and resume later, possibly weeks later. A suspended run is **parked**. A run
 records which edition it executes and its effect log. Through the edition's pins, a parked run
-keeps revisions alive: the host may not remove a revision while a parked run may still resume
-into it.
+keeps revisions alive: the host may not remove a revision while a parked run may still ask it
+live.
 
 A run is guarded at both ends of the capability boundary. It refuses to start unless the host can
-answer every pin — a missing implementation or an undeclared revision fails the run before its
+answer every pin. A missing implementation or an undeclared revision fails the run before its
 first effect, naming the capability, so a rule never performs half its effects and then hits an
-unanswerable call. And every answer is checked against the declared type as it arrives: a
-wrong-shaped answer fails the run at that call, naming the capability, what it gave and what was
-declared, and the value never enters the program.
+unanswerable call. Every answer is checked against the declared type as it arrives: a wrong-shaped 
+answer fails the run at that call, naming the capability, what it gave and what was
+declared, and the value never enters the program. 
 
 ### Turn
 
@@ -192,13 +192,20 @@ entries per turn.
 
 ### Effect log
 
-A run's record of its interaction with the host. An entry holds which capability was called, at
-which revision, with which arguments, and the answer the host gave. Entries are ordered. The log
-is append-only, and a recorded entry never changes. Replaying the log against the run's edition
-rebuilds a parked run without asking the host anything again.
+A run's record of every answer the host gave it. The log holds the run's inputs (the values it 
+was given at start, keyed by name) and every capability call (name, arguments, answer) in order. 
+Revisions or release numbers do not appear in it: the log records what happened in an append-only
+style. Recorded entries never change.
 
-How entries are keyed to call sites in the edition is undecided. Everything that would resume a
-run on a *different* edition waits on that decision. See open questions.
+Replaying the log against the run's edition rebuilds a parked run without asking the host anything
+again. Resuming needs nothing but the log, appending the answer a parked run was waiting for and 
+replaying is what resumption is, in the same process or another one.
+
+Within one edition, calls are keyed by position and inputs by name. Replay matches by position on
+a different edition too: no key scheme makes cross-edition resumption automatic, so a parked run
+finishes on the edition it started on until a host migrates it. Migration is a host-written
+function against a toolkit Klein will ship; see future work. The log's precise semantics — the
+record's shape, replay, divergence, outcomes — are specified in [effect-log.md](./effect-log.md).
 
 ### Reconciliation
 
@@ -223,7 +230,8 @@ new contract.
 
 A failed recompile has two urgencies. Under a re-pointed release the rule waits safely, because
 the old revision is still declared and served. Under an in-place signature change there is no old
-revision to stay on once the fleet flips. A CI check can detect this, or the host can choose to handle it as a runtime error.
+revision to stay on once the fleet flips. When that failure is caught, in a CI check, at boot, or
+at first reconciliation, is future work.
 
 The hash also enforces the revision discipline. An incompatible in-place edit, or any edit to a
 type definition at an unchanged revision, appears as a hash mismatch and is reported as a
@@ -518,8 +526,8 @@ The "by procedure" half of the agreement, gathered in one place. The host:
 
 - Stores rules, versions, editions, runs and effect logs. Guarantees are only as strong as this
   storage.
-- Decides when turns run, and appends effect-log entries as turns complete, before the next turn
-  starts.
+- Decides when turns run, and persists each run's effect log as the run hands it back. How
+  durable, and how often, is the host's own choice.
 - Retries or abandons a turn whose handler failed. The log holds only completed turns, so a
   failed turn is one that never happened.
 - Serves every revision an unfinished run still pins, and runs each edition only on an instance
@@ -535,24 +543,35 @@ Storage and its guarantees (transactional activation needs a transactional store
 how reports reach authors. Klein's side of the contract is the invariants above and structured
 reports at every seam.
 
-## Open questions
+## Future work
 
 - **Value capability scope.** `customerName` is per run; `maxRetries` is really per environment.
   The contract syntax does not distinguish the two, and the effect log records only the per-run
-  kind. Decide whether scope is declared, and how.
-- **Parked-run migration.** Moving a parked run to a newer edition is unsolved and out of scope.
-  Parked runs finish on the edition they started on.
-- **Effect log keying.** Replay matches log entries to capability calls in the edition. Position
-  works while the edition is fixed. Resuming on a different edition needs a stabler key. Blocks
-  parked-run migration.
-- **Illegal in-place edits.** The recompile discovers an incompatible in-place edit, but when: in
-  CI before the deploy, at boot, or at first reconciliation? Alternatively, ban in-place edits
-  entirely — every change needs a revision, and the detection machinery for small edits
-  disappears.
+  kind. A later revision decides whether scope is declared, and how.
+- **The migration toolkit.** Moving a parked run to a newer edition is a host-written function
+  against a toolkit Klein ships, never an engine feature: replay matches by position, and no key
+  scheme makes migration automatic. See
+  [replay-is-ordinal-migration-is-host-policy](../decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
+  Until the toolkit exists, parked runs finish on the edition they started on.
+- **Catching illegal in-place edits.** The recompile discovers an incompatible in-place edit; when
+  it runs is not yet fixed: in CI before the deploy, at boot, or at first reconciliation.
+  Alternatively, ban in-place edits entirely; then every change needs a revision, and the
+  detection machinery for small edits disappears.
 
 ## Decision history
 
-Three ADRs. The execution-wiring decisions — every capability interaction a suspension, the
+Five ADRs.
+
+The persistence substrate — machine state is never serialized, the log is truth, replay
+rebuilds everything else — is
+[decisions/2026-07-31-persist-the-log-replay-the-run.md](../decisions/2026-07-31-persist-the-log-replay-the-run.md),
+which §Effect log and §Run stand on directly.
+
+Replay stays in order and migration is host policy — no key scheme makes it automatic, the
+engine never migrates, and a toolkit serves the host-written function — in
+[decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md](../decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
+
+The execution-wiring decisions — every capability interaction a suspension, the
 revision-free program with pins at the boundary, no library caching, the guarded run — and their
 rejected alternatives (store pre-fill as the mechanism, revisioned programs, memo tables, a CLI
 stubs file, a typed deferral seam) are in

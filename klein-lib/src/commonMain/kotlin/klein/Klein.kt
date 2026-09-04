@@ -9,8 +9,8 @@ import klein.check.contract.ContractChecker
 import klein.check.contract.EnvironmentContract
 import klein.core.CoreExpr
 import klein.interp.Execution
+import klein.interp.Interpreter
 import klein.interp.KleinRuntimeError
-import klein.interp.Machine
 import klein.interp.Value
 
 /**
@@ -94,19 +94,16 @@ object Klein {
     fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(klein.core.lower(program))
 
     /**
-     * Run lowered [CoreExpr] on the [Machine] to completion. v1 has no host seam, so a suspension
-     * on a host call is reported as an error rather than driven; a [KleinRuntimeError] from the
-     * machine (division by zero, etc.) becomes a stage failure. Invariant violations propagate:
-     * they are machine/lowerer bugs, not user diagnostics.
+     * Run lowered [CoreExpr] on the [Interpreter] to completion. This entry point runs without an
+     * environment — `klein.host` owns that seam — so a suspension on a host call is reported as an
+     * error rather than driven; a failed run (division by zero, etc.) becomes a stage failure.
+     * Invariant violations propagate: they are interpreter/lowerer bugs, not user diagnostics.
      */
     fun execute(program: CoreExpr): StageResult<Value> =
-        try {
-            when (val exec = Machine.start(program)) {
-                is Execution.Done -> StageResult.success(exec.value)
-                is Execution.AwaitingHost ->
-                    StageResult.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
-            }
-        } catch (e: KleinRuntimeError) {
-            StageResult.failure(e)
+        when (val exec = Interpreter.start(program)) {
+            is Execution.Done -> StageResult.success(exec.value)
+            is Execution.Failure -> StageResult.failure(exec.error)
+            is Execution.AwaitingHost ->
+                StageResult.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
         }
 }

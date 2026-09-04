@@ -48,8 +48,9 @@ recorded, and nothing observable waits on either:
   shows up in a profile.
 - **The deferred hand-off.** `deferred(name) { call -> }` — the host owning the continuation — is
   commented out, to return with the effect log. In-process waiting is a blocking handler; across a
-  restart the answer path is replay, which needs the log. The API shape is right; the machinery
-  behind its token does not exist yet.
+  restart the answer path is replay, which needs the log. (Settled since, in
+  [spec/effect-log.md](../spec/effect-log.md) §Parked: deferral returns as a `Parked` outcome with
+  the log alone resumes a parked run; the callback-and-token shape is deleted, not revived.)
 
 ## Considered and rejected
 

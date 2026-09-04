@@ -23,6 +23,9 @@ private val CONTRACT =
       Customer
       customer
       creditScore
+
+    release 2
+      Shape/2
     """.trimIndent()
 
 private val contract = Klein.checkContract(CONTRACT)
@@ -100,6 +103,19 @@ class CompileValueTest {
                 contract.compileValue("customer", ReleaseNumber(1), answerTypeOf("customer"))
             }.errors
         assertEquals("customer", assertIs<CapabilityInAnswer>(errors.single()).name)
+    }
+
+    @Test
+    fun anAnswerMentioningATypeThatBindsNoTermCompilesAndEvaluates() {
+        val source =
+            """
+            s: Shape = Circle(9)
+            s.area
+            """.trimIndent()
+        val core = contract.compileValue(source, ReleaseNumber(2), answerTypeOf("creditScore"))
+        val executed = Klein.execute(core)
+        assertEquals(emptyList(), executed.errors)
+        assertEquals(Value.VNum(9.0), executed.output)
     }
 
     @Test

@@ -15,6 +15,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[spec/pattern-matching.md](./docs/spec/pattern-matching.md)** - Pattern matching and destructuring bindings: pattern forms, match typing, exhaustiveness, refutability
 - **[spec/host-integration.md](./docs/spec/host-integration.md)** - How rules and a host evolve independently: environments, capabilities, revisions, releases, editions, pins, reconciliation, drain
 - **[spec/contracts.md](./docs/spec/contracts.md)** - The v1 contract language: declarations without definitions, revisions, releases, the two checking modes; sections marked implemented vs target
+- **[spec/effect-log.md](./docs/spec/effect-log.md)** - The effect log and the unified `run`: the record's shape, replay, divergence, outcomes, `Parked`, the two codecs
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
@@ -23,9 +24,8 @@ Specs are **living contracts** — the current rules, updated in place as the la
 
 - **[implementation-status.md](./docs/implementation-status.md)** - Current implementation status across parser, type system, and execution
 - **[performance-debt.md](./docs/performance-debt.md)** - Deliberate performance corners in the execution pipeline, each with its fix
-- **[roadmap.md](./docs/roadmap.md)** - Phase-based roadmap for what comes after the type checker (pattern matching, syntax, execution)
+- **[roadmap.md](./docs/roadmap.md)** - The global roadmap: syntax additions, advanced features, the migration toolkit, editor + tooling, the evaluation spec
 - **[host-integration-roadmap.md](./docs/host-integration-roadmap.md)** - What is left to make the host-integration spec real, and what depends on what
-- **[dsl-project-summary.md](./docs/dsl-project-summary.md)** - Original vision document for Klein as a cross-platform expression language with algebraic effects
 
 ### Design Decisions
 
@@ -45,6 +45,7 @@ See [docs/decisions/](./docs/decisions/) for the full set of ADRs. ADRs are immu
 
 **Host integration decisions:**
 
+- **[2026-08-26-replay-is-ordinal-migration-is-host-policy.md](./docs/decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md)** - **Current.** The log stays an ordered list and replay matches it by position; no key scheme makes migration automatic, so migration is a host-written function against a Klein toolkit. Pins host-call order as language semantics.
 - **[2026-08-24-capabilities-execute-through-the-suspension-path.md](./docs/decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md)** - **Current.** Execution wiring: every capability interaction is a suspension, the compiled program is revision-free with pins at the boundary, the library never caches, the run is guarded at both ends.
 - **[2026-08-08-rule-vocabulary-through-linear-releases.md](./docs/decisions/2026-08-08-rule-vocabulary-through-linear-releases.md)** - **Current.** Numbered releases decide what rules can see; editing one carries rules along, appending one waits for a person. Supersedes the tag half of the ADR below.
 - **[2026-08-06-capability-evolution-through-revisions-and-tags.md](./docs/decisions/2026-08-06-capability-evolution-through-revisions-and-tags.md)** - **Current apart from tags.** Permanent `/N` revisions, invariant type definitions, recompilation as the compatibility verdict, optimistic removal — with the full rejected-alternatives list.
@@ -237,7 +238,7 @@ klein-lang/
 │   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map
 │   │   │   │       └── Projection.kt           # strip(): the one ContractType -> RuleType crossing
 │   │   │   └── host/             # The embedding surface a host calls
-│   │   │       ├── Environment.kt  # implement { }, Registry, Capability (deferred seam commented out)
+│   │   │       ├── Environment.kt  # implement { }, Registry, Handler (immediate and deferred), Capability
 │   │   │       └── Runner.kt       # Environment.run: pre-flight pin check, suspend/resume loop, answer check
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/

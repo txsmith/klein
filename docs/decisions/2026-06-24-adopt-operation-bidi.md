@@ -13,7 +13,7 @@
 **Supersedes:**
 - [2026-01-14-simplesub-type-inference.md](./2026-01-14-simplesub-type-inference.md) — global constraint-based inference is replaced.
 - [2026-02-02-lub-glb-type-simplification.md](./2026-02-02-lub-glb-type-simplification.md) — no inferred types left to simplify.
-- [2026-04-12-rigid-type-variables-in-annotations.md](./2026-04-12-rigid-type-variables-in-annotations.md) + [rigid-tvar-interactions.md](./rigid-tvar-interactions.md) — the OR-trial encoding is retired (the `'T` skolem idea survives, the mechanism does not). Its "local `'T` must be introduced in the enclosing **signature**" rule is also dropped — superseded by the nearest-enclosing-binder rule below, which the old rule only needed because of top-level let-generalization (now gone).
+- [2026-04-12-rigid-type-variables-in-annotations.md](./2026-04-12-rigid-type-variables-in-annotations.md) + [2026-06-23-rigid-tvar-interactions.md](./2026-06-23-rigid-tvar-interactions.md) — the OR-trial encoding is retired (the `'T` skolem idea survives, the mechanism does not). Its "local `'T` must be introduced in the enclosing **signature**" rule is also dropped — superseded by the nearest-enclosing-binder rule below, which the old rule only needed because of top-level let-generalization (now gone).
 - [2026-03-11-constructor-type-options.md](./2026-03-11-constructor-type-options.md) — partially revisited: its LUB/union-display machinery goes with the simplifier, but **Option 2's core is kept** — constructors keep their own type (`Dog : Dog`, no auto-upcast). What a heterogeneous join yields is reopened (no anonymous unions; spec §7).
 
 > Early-stage record: the shape below is expected to change as the rewrite proceeds. It exists to capture the direction, not to freeze it.

@@ -1,43 +1,18 @@
 # Klein Roadmap
 
-A look ahead — how Klein evolves from here toward the full language.
+The global roadmap: the language and the features around it. Current status in detail is
+[implementation-status.md](./implementation-status.md); the host-boundary machinery — editions,
+the effect log, reconciliation — has its own dependency map in
+[host-integration-roadmap.md](./host-integration-roadmap.md).
 
 ## Done so far
 
-- **Lexer & parser** — expressions, lambdas, records, if/then/else, function
-  definitions, type annotations.
-- **Type definitions** — constructors, sum types, type parameters, variance
-  inference, nominal subtyping (`Money <: { value: Num }`).
-- **Type checking** — **Operation Bidi**, local bidirectional checking: annotate
-  signatures, infer interiors; structural + nominal subtyping; generics by
-  implicit quantification; joins resolve to a nominal supertype or error. The
-  SimpleSub inference engine is deleted. Deferred: declared bounds
-  (`where 'T <: B`) for "both"-ness. See
-  [adopt-operation-bidi](./decisions/2026-06-24-adopt-operation-bidi.md) and
-  [implementation-status](./implementation-status.md).
+Lexer and parser; type definitions with variance inference and nominal subtyping; type checking (annotate signatures, infer interiors); pattern matching and destructuring
+per [spec/pattern-matching.md](spec/pattern-matching.md), nested patterns deferred; Core IR and
+the CESK machine, with suspendable host calls; capability contracts, releases, and execution
+against a host — the host roadmap's Done section tells that half.
 
-## Phase 2 — Pattern Matching
-
-**Done** (2026-07-18, `pattern-matching` branch) — parser + checker per
-[spec/pattern-matching.md](spec/pattern-matching.md). Notable deltas from the table
-below: arms are bare (no `|` marker), destructuring is record-only (`Ok { value }`,
-no positional `Some(x)`), a matched value is named with a constructor binder
-(`Dog d`) or variable pattern — there is no scrutinee flow-narrowing — and
-exhaustiveness is a hard type error. Nested patterns deferred. Evaluator lands
-with the interpreter.
-
-| Item | Notes |
-|------|-------|
-| Match keyword | `match expr` with arms |
-| Literal patterns | `42`, `"hello"`, `true` |
-| Variable patterns | `x` binds the value |
-| Record patterns | `{ name, age }` destructuring |
-| Constructor patterns | `Some(x)`, `None` |
-| Wildcard | `_` matches anything |
-| Guards | `pattern if cond -> expr` |
-| Exhaustiveness | over a sum's constructors (closed, no negation) |
-
-## Phase 3 — Additional Syntax
+## Additional syntax
 
 Lower priority; add as needed.
 
@@ -50,17 +25,41 @@ Lower priority; add as needed.
 | Tilde operator `~` | `f~` transforms to record-accepting |
 | Record spread `...` | `{ ...r, x = 1 }` — also the basis for tag-preserving extension |
 
-## Phase 4 — Advanced Features
+## Advanced features
 
 | Item | Notes |
 |------|-------|
 | Extension methods | `on` keyword for method receiver |
 | Modules | `module Name` + imports |
 | First-class intersection | `A & B` everywhere — deferred Operation Bidi candidate (see spec §8) |
+| Nested patterns | `Cons { head = Circle { radius } }` — needs usefulness-matrix exhaustiveness |
 
-## Phase 5 — Execution
+## Migration toolkit
+
+What a host-written migration is written against, per the
+[replay-order ADR](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md) — Klein
+ships primitives, the migration function is the org's. Four pieces: a policy seam on `run` — a
+third answer source beside the log and the handlers, consulted for unmatched questions; a keyed
+view over the ordered log, looking entries up by name and argument values instead of by counting;
+the two lists — questions the new edition asked that the log could not answer, and answers the log
+held that it never asked for — which is the divergence check generalised from an error into a
+worklist; and derived answers with provenance, so an answer a migration synthesised from logged
+data is distinguishable in the log from one the host actually gave — the one `Turn` schema
+addition the toolkit requires. Needs `Parked` and edition serialization from the host map.
+
+## Editor + tooling
+
+The standalone-components tier: a rule editor embedding the checker — the library compiles to JS,
+so check-as-you-type runs in the browser against the real engine — with the release picker
+host-integration.md §Edition describes; diagnostics rendered from spans and severity classes; a
+contract browser over declarations and releases; and an effect-log viewer, because the log is data
+and a run's history deserves a UI. Components stay components per the library tenet: the core
+never depends on any of this, and an org can replace or skip each piece. Lands after the library
+surface settles; diagnostic severity is the one library-side prerequisite.
+
+## Unphased
 
 | Item | Notes |
 |------|-------|
-| Interpreter | |
-| Effect system | suspendable effects |
+| A proper README / tutorial | A narrative "what is Klein, by example" against the real language — the lending walkthrough as the spine. Replaces the deleted dsl-project-summary.md, whose vision-document role it inherits; the old text is in git history. |
+| Evaluation spec | docs/spec/evaluation.md — the machine's semantics in writing: value identity (`-0.0`, NaN), host-call order as program order (per the replay-order ADR), arithmetic. Replay's determinism test is gated on it. |

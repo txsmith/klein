@@ -2,18 +2,19 @@
 
 **Status:** Current · **Date:** 2026-07-31
 
-A suspended run is persisted as exactly three things: the compiled artifact (pinned by
-checksum), the extern vals it was linked with, and the log of extern-fun responses so far.
+A suspended run is persisted as exactly two things: a reference to its edition (source, release,
+and pin map — the Core is re-derived, per source-is-truth), and the log of host answers so far —
+the values it started with and the call responses.
 **Machine state is never serialized.** Cold resume re-runs the program from the start,
 feeding logged responses back until the log runs out, then continues live. The machine is
-deterministic by construction — nondeterminism enters only through the extern boundary — so
+deterministic by construction — nondeterminism enters only through the capability boundary — so
 the state at any suspension is a pure function of those three records. (Temporal works this
 way; Klein gets the determinism Temporal has to fight for from the language itself.)
 
 Two tiers follow. The in-memory machine is the **hot tier**: resume is O(1) while the
 process holds it, and inspection, traces, and forking happen there. The log is the
 **durable tier**: crash, eviction, migration — resume costs one replay. During replay each
-re-issued request is matched against the logged one — name and arguments — so any semantic
+re-issued request is checked against the logged one — name and arguments — so any semantic
 drift fails loudly at resume, never as silent divergence.
 
 ## What this deletes
@@ -35,7 +36,7 @@ drift fails loudly at resume, never as silent divergence.
   depends on evaluation order, strictness, and equality staying exactly as the eval suites
   pin them — the suite guards suspended runs in production, not just correctness today.
 - **Fuel bounds replay structurally.** A run that lived under a step budget of F replays in
-  at most F steps. The known limitation — unbounded pure compute between extern calls
+  at most F steps. The known limitation — unbounded pure compute between capability calls
   inflates replay — is mitigated by the same mechanism that already exists for abuse.
 
 ## Derived views
@@ -44,10 +45,10 @@ The log is truth; everything else stored about a run is a disposable cache, re-d
 replay: persist-time trace snapshots for dashboards, full traces for forensics (replay with
 full tracing on — exact, because deterministic), and debugging itself (attach = replay to
 any event, then inspect the live machine: named locals via the IR's name metadata, exact
-error states, what-if forks). Retraction never edits the log: truncate and reconcile —
-re-execution matches retracted write events as an idempotency ledger; unmatched orphans are
-the compensation list — never splice, because a spliced log is a history no execution could
-have produced.
+error states, what-if forks). Retraction never edits the middle of a log: an operator repairing a
+stuck run truncates to some prefix and corrects at the tip, then replay continues from there.
+Never splice, because a spliced log is a history no execution could have produced. What the host
+does about effects the truncated entries recorded is host policy, like migration.
 
 ## What the hot tier still requires
 

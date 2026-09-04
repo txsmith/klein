@@ -4,7 +4,7 @@ import klein.SourceSpan
 import klein.core.*
 import kotlin.collections.ArrayList
 
-internal class MachineState internal constructor(
+internal class InterpreterState internal constructor(
     val store: Store,
     private var control: Stack<Frame>,
     private var operands: Stack<Value>,
@@ -12,7 +12,7 @@ internal class MachineState internal constructor(
     internal constructor(program: CoreExpr) :
         this(Store(), Stack.single(Frame(program, operandBase = 0, scope = BindingScope())), Stack.Empty)
 
-    fun snapshot(): MachineState = MachineState(store.copy(), control, operands)
+    fun snapshot(): InterpreterState = InterpreterState(store.copy(), control, operands)
 
     fun controlDepth(): Int = control.size
 
@@ -61,20 +61,20 @@ internal class MachineState internal constructor(
 
     fun finalValue(): Value {
         invariant(operands.size == 1) {
-            "machine finished with ${operands.size} operands, expected exactly 1"
+            "the interpreter finished with ${operands.size} operands, expected exactly 1"
         }
         return operands.peek()
     }
 }
 
-internal class Machine private constructor(
-    private val state: MachineState,
+internal class Interpreter private constructor(
+    private val state: InterpreterState,
 ) {
     companion object {
-        fun start(program: CoreExpr): Execution = Machine(MachineState(program)).run()
+        fun start(program: CoreExpr): Execution = Interpreter(InterpreterState(program)).run()
     }
 
-    internal fun cloneSuspended(): Machine = Machine(state.snapshot())
+    internal fun cloneSuspended(): Interpreter = Interpreter(state.snapshot())
 
     internal fun controlDepth(): Int = state.controlDepth()
 
@@ -87,7 +87,14 @@ internal class Machine private constructor(
         return run()
     }
 
-    internal fun run(): Execution {
+    internal fun run(): Execution =
+        try {
+            crank()
+        } catch (e: KleinRuntimeError) {
+            Execution.Failure(e)
+        }
+
+    private fun crank(): Execution {
         while (true) {
             val frame = state.currentFrame() ?: break
 
@@ -351,10 +358,9 @@ internal class Machine private constructor(
         }
 
     private fun collectOperands(
-        expr: CoreExpr,
+        expr: HasOperands,
         frame: Frame,
     ): Boolean {
-        if (expr !is HasOperands) return true
         val collected = state.collected(frame)
         if (collected == expr.operands.size) return true
         val next = expr.operands[collected]
@@ -373,31 +379,38 @@ internal class Machine private constructor(
 }
 
 /**
- * What one turn of the machine produced: a final [Done] value, or a suspension on a host call —
- * both internal to how [klein.Klein.execute] drives a run; v1 exposes neither to a host directly.
+ * What one turn of the interpreter produced: a final [Done] value, a suspension on a host call, or
+ * a [Failure] — a runtime error is a terminal interpreter state, not an exception crossing the
+ * boundary. All internal to the library's drivers, [klein.Klein.execute] and the host runner; v1
+ * exposes none to a host directly. Invariant violations still propagate: they are
+ * interpreter/lowerer bugs, not outcomes.
  */
 internal sealed class Execution {
     data class Done(
         val value: Value,
     ) : Execution()
 
+    class Failure(
+        val error: KleinRuntimeError,
+    ) : Execution()
+
     class AwaitingHost internal constructor(
         val call: String,
         val args: List<Value>,
         val span: SourceSpan,
-        internal val machine: Machine,
+        internal val interpreter: Interpreter,
     ) : Execution() {
         private var consumed = false
 
         fun resume(value: Value): Execution {
             check(!consumed) { "this suspension was already resumed" }
             consumed = true
-            return machine.resume(value)
+            return interpreter.resume(value)
         }
 
         fun clone(): AwaitingHost {
             check(!consumed) { "this suspension was already resumed" }
-            return AwaitingHost(call, args, span, machine.cloneSuspended())
+            return AwaitingHost(call, args, span, interpreter.cloneSuspended())
         }
     }
 }

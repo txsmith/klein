@@ -29,13 +29,13 @@ internal data class ContractResult(
 /**
  * One release: what each plain name means to the rules checked against it.
  *
- * [surface] is *absolute* — deltas already folded — so nothing downstream re-derives it. Inside one
+ * [exposedRevisions] is *absolute* — deltas already folded — so nothing downstream re-derives it. Inside one
  * release a name means exactly one revision, which is what makes dropping the revision on the way
  * to a rule lossless.
  */
 internal data class FlattenedReleaseBlock(
     val number: ReleaseNumber,
-    val surface: Map<String, RevisionNumber>,
+    val exposedRevisions: Map<String, RevisionNumber>,
     val span: SourceSpan = SourceSpan.zero,
 )
 
@@ -60,7 +60,7 @@ internal class ContractChecker {
         val declarations = bindDeclarations(contract, scope)
         val releases = flattenReleaseBlocks(contract, scope)
         return ContractResult(
-            EnvironmentContract(declarations, releases.map { it.number }, scope, releases.associateBy { it.number }),
+            EnvironmentContract(declarations, scope, releases.associateBy({ it.number }, { it.exposedRevisions })),
             errors.toList(),
         )
     }
@@ -146,7 +146,7 @@ internal class ContractChecker {
     ) {
         val exposed = mutableSetOf<Pair<String, RevisionNumber>>()
         val rootTypes = mutableListOf<ContractType>()
-        for ((name, revision) in release.surface) {
+        for ((name, revision) in release.exposedRevisions) {
             exposed.add(name to revision)
             env.constructorsOf(name, revision).forEach { exposed.add(it.name to revision) }
 
@@ -189,12 +189,14 @@ internal class ContractChecker {
         contract.declarations.forEach { declaration ->
             val revision = declaration.revision ?: RevisionNumber(1)
             if (!declare(declaration.name, revision, declaration.span)) return@forEach
-            val (kind, type) =
+            declarations.add(
                 when (declaration) {
-                    is FunDecl -> DeclarationKind.Function to bindFunDecl(declaration, revision, env)
-                    is ValDecl -> DeclarationKind.Value to bindValDecl(declaration, revision, env)
-                }
-            declarations.add(ContractDeclaration(declaration.name, revision, kind, type))
+                    is FunDecl ->
+                        ContractDeclaration.Function(declaration.name, revision, bindFunDecl(declaration, revision, env))
+                    is ValDecl ->
+                        ContractDeclaration.Value(declaration.name, revision, bindValDecl(declaration, revision, env))
+                },
+            )
         }
         return declarations
     }
@@ -248,15 +250,8 @@ internal class ContractChecker {
     }
 }
 
-/**
- * Every type reachable from these, the seeds themselves included: their own structure, and
- * transitively the fields of each named type they reference.
- *
- * A name is expanded once across the whole walk, so recursive and mutually recursive types
- * terminate and appear as references rather than as expansions. Seeds are always types the
- * environment already holds; nothing here constructs one.
- */
-private fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractType> {
+/** The transitive closure of all types. */
+internal fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractType> {
     val expanded = mutableSetOf<Pair<String, RevisionNumber>>()
     val reached = mutableListOf<ContractType>()
 
@@ -294,7 +289,7 @@ private fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractTy
  * Following what this returns is [reachableTypes]'s job, not this one's. Empty for a name that is
  * not a type.
  */
-private fun ContractEnv.declaredFields(
+internal fun ContractEnv.declaredFields(
     name: String,
     revision: RevisionNumber,
 ): List<ContractType> =
