@@ -4,8 +4,10 @@ title: Stop pushing a control frame per leaf subexpression
 status: To Do
 assignee: []
 created_date: '2026-09-04 12:16'
+updated_date: '2026-09-04 12:24'
 labels:
   - perf
+  - execution
 dependencies: []
 ordinal: 5000
 ---

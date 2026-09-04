@@ -343,4 +343,4 @@ Each kind of writing has one home:
 Labels are the seam between the map and the backlog — a map leaf names a label, and
 `backlog task list -l <label> --plain` returns everything hanging off that node. The label
 set is fixed: `language`, `parser`, `checker`, `host-boundary`, `contracts`, `perf`,
-`tooling`. Do not invent labels outside it without asking.
+`execution`, `lowering`, `tooling`. Do not invent labels outside it without asking.

@@ -10,5 +10,5 @@ everything hanging off it.
 - **Host boundary** → `docs/host-integration-roadmap.md` (v1) — labels `host-boundary`, `contracts`  ← you are here
   - `docs/spec/contracts.md`, `docs/spec/host-integration.md`, `docs/spec/effect-log.md`
   - Parked-run migration — post-v1, `docs/ideas/suspended-run-migration.md`
-- **Execution & performance** → `docs/performance-debt.md` — label `perf`
+- **Execution & performance** → `docs/performance-debt.md` — labels `perf`, `execution`, `lowering`
 - **Tooling** — `tree-sitter-klein`, `klein-bench`, formatter — label `tooling` (no owning doc yet)

@@ -1,7 +1,7 @@
 project_name: "Klein"
 default_status: "To Do"
 statuses: ["To Do", "In Progress", "Done"]
-labels: ["language", "parser", "checker", "host-boundary", "contracts", "perf", "tooling"]
+labels: ["language", "parser", "checker", "host-boundary", "contracts", "perf", "execution", "lowering", "tooling"]
 date_format: yyyy-mm-dd
 max_column_width: 20
 default_editor: "nvim"

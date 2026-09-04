@@ -4,8 +4,10 @@ title: Emit HostCall inline for direct capability calls
 status: To Do
 assignee: []
 created_date: '2026-09-04 12:17'
+updated_date: '2026-09-04 12:24'
 labels:
   - perf
+  - lowering
 dependencies: []
 ordinal: 11000
 ---

@@ -4,8 +4,10 @@ title: Reuse the parent scope for match arms that bind nothing
 status: To Do
 assignee: []
 created_date: '2026-09-04 12:17'
+updated_date: '2026-09-04 12:24'
 labels:
   - perf
+  - execution
 dependencies: []
 ordinal: 6000
 ---
