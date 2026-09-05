@@ -1,38 +1,38 @@
 package klein.host
 
+import klein.HostError
 import klein.RevisionNumber
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.Subtyping
 import klein.check.Type
 import klein.check.contract.Edition
+import klein.check.contract.UnknownPin
 import klein.check.infer
 import klein.interp.Value
-
-sealed interface PinProblem {
-    val message: String
-}
-
-class UnservedPin internal constructor(
-    val name: String,
-    val revision: RevisionNumber,
-) : PinProblem {
-    override val message = "the edition pins '$name' revision ${revision.value}, which this environment does not declare"
-}
 
 class MissingHandler internal constructor(
     val name: String,
     val revision: RevisionNumber,
-) : PinProblem {
+) : HostError {
     override val message =
         "'$name' revision ${revision.value} has no handler: register one at boot or supply one with the run"
+}
+
+class LogTypeMismatch internal constructor(
+    val at: Int,
+    val name: String,
+    val answerType: String,
+    val declaredType: RuleType,
+) : HostError {
+    override val message get() = "log entry $at holds $answerType for '$name' where the contract declares ${Type.print(declaredType)}"
 }
 
 internal fun Environment.checkPins(
     edition: Edition,
     handlers: HandlerRegistry,
-): List<PinProblem> {
-    val problems = mutableListOf<PinProblem>()
+): List<HostError> {
+    val problems = mutableListOf<HostError>()
     for ((name, revision) in edition.pins) {
         val capability = getCapabilityDeclaration(name, revision)
         when {
@@ -41,7 +41,7 @@ internal fun Environment.checkPins(
                     problems.add(MissingHandler(name, revision))
                 }
             contract.declaresVocabulary(name, revision) -> {}
-            else -> problems.add(UnservedPin(name, revision))
+            else -> problems.add(UnknownPin(name, revision))
         }
     }
     return problems
@@ -50,9 +50,9 @@ internal fun Environment.checkPins(
 internal fun Environment.checkLog(
     edition: Edition,
     log: EffectLog,
-): List<RunError.LogTypeMismatch.Problem> {
+): List<LogTypeMismatch> {
     val ruleTypeEnv = contract.resolvePins(edition.pins).ruleTypeEnv
-    val problems = mutableListOf<RunError.LogTypeMismatch.Problem>()
+    val problems = mutableListOf<LogTypeMismatch>()
     fun check(
         at: Int,
         name: String,
@@ -61,7 +61,7 @@ internal fun Environment.checkLog(
         val revision = edition.pins[name] ?: return
         val declaredType = getCapabilityDeclaration(name, revision)?.answerType ?: return
         if (!fitsDeclaredType(answer, declaredType, ruleTypeEnv)) {
-            problems.add(RunError.LogTypeMismatch.Problem(at, name, printType(answer, ruleTypeEnv), declaredType))
+            problems.add(LogTypeMismatch(at, name, printType(answer, ruleTypeEnv), declaredType))
         }
     }
     for ((at, entry) in log.entries.withIndex()) {

@@ -62,9 +62,9 @@ class EffectLogTest {
 
     private fun makeLog(vararg inputs: Pair<String, Value>) = EffectLog(LogEntry.Start(mapOf(*inputs)))
 
-    private fun assertDiverges(block: () -> RunOutcome): RunError.Diverged {
-        val failure = assertFailsWith<RunFailure> { block() }
-        return assertIs<RunError.Diverged>(failure.error)
+    private fun assertDiverges(block: () -> RunOutcome): Diverged {
+        val failure = assertFailsWith<KleinException> { block() }
+        return assertIs<Diverged>(failure.errors.single())
     }
 
     @Test
@@ -122,18 +122,18 @@ class EffectLogTest {
     fun aWrongTypedAnswerThrowsWithNothingPersistedPastTheStart() {
         val env = makeHost(overrides = arrayOf("creditScore" to { Value.VStr("hi") }))
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { env.run(compile(STANDARD), persist = persisted::add) }
-        assertIs<RunError.HandlerTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD), persist = persisted::add) }
+        assertIs<HandlerTypeMismatch>(failure.errors.single())
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
     }
 
     @Test
     fun aRunRegistrationForAnUndeclaredNameThrows() {
         val failure =
-            assertFailsWith<RunFailure> {
+            assertFailsWith<KleinException> {
                 makeHost().run(compile(STANDARD), registerHandlers = { immediate("nope") { Value.VUnit } })
             }
-        val problem = assertIs<RunError.InvalidRegistration>(failure.error).problems.single()
+        val problem = assertIs<RegistrationError>(failure.errors.single())
         assertEquals("'nope' revision 1 is registered but the contract does not declare it", problem.message)
         assertEquals(0, asks)
     }
@@ -141,10 +141,10 @@ class EffectLogTest {
     @Test
     fun aRunRegistrationDeferringAValueThrows() {
         val failure =
-            assertFailsWith<RunFailure> {
+            assertFailsWith<KleinException> {
                 makeHost().run(compile(STANDARD), registerHandlers = { deferred("customer") {} })
             }
-        val problem = assertIs<RunError.InvalidRegistration>(failure.error).problems.single()
+        val problem = assertIs<RegistrationError>(failure.errors.single())
         assertEquals("'customer' is a value, which is read at start and cannot be deferred", problem.message)
         assertEquals(0, asks)
     }
@@ -153,8 +153,8 @@ class EffectLogTest {
     fun aPreFlightErrorThrowsBeforeAnythingRuns() {
         var asked = false
         val env = contract.implement { immediate("customer"); immediate("threshold"); immediate("creditScore") { asked = true; scoreByTier(it) } }
-        val failure = assertFailsWith<RunFailure> { env.run(compile(STANDARD)) }
-        assertIs<MissingHandler>(assertIs<RunError.UnservablePins>(failure.error).problems.single())
+        val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD)) }
+        assertIs<MissingHandler>(failure.errors.single())
         assertFalse(asked, "pre-flight should reject the run before any capability is asked")
     }
 
@@ -214,8 +214,8 @@ class EffectLogTest {
     fun aWrongTypedValueAnswerThrowsBeforeTheStartPersists() {
         val env = makeHost(overrides = arrayOf("customer" to { Value.VStr("nope") }))
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { env.run(compile(STANDARD), persist = persisted::add) }
-        assertIs<RunError.HandlerTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD), persist = persisted::add) }
+        assertIs<HandlerTypeMismatch>(failure.errors.single())
         assertEquals(emptyList<LogEntry>(), persisted)
     }
 
@@ -407,8 +407,8 @@ class EffectLogTest {
 
     @Test
     fun aStartValueOfTheWrongTypeFailsPreFlight() {
-        val failure = assertFailsWith<RunFailure> { makeHost().run(compile(STANDARD), log = makeLog("customer" to Value.VStr("x"))) }
-        val mismatch = assertIs<RunError.LogTypeMismatch>(failure.error).problems.single()
+        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), log = makeLog("customer" to Value.VStr("x"))) }
+        val mismatch = assertIs<LogTypeMismatch>(failure.errors.single())
         assertEquals(0, mismatch.at)
         assertEquals("customer", mismatch.name)
         assertEquals(0, asks)
@@ -417,8 +417,8 @@ class EffectLogTest {
     @Test
     fun aReplyAnswerOfTheWrongTypeFailsPreFlight() {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("creditScore", listOf(gold)), Value.VStr("hi"))
-        val failure = assertFailsWith<RunFailure> { makeHost().run(compile(STANDARD), log = log) }
-        val mismatch = assertIs<RunError.LogTypeMismatch>(failure.error).problems.single()
+        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), log = log) }
+        val mismatch = assertIs<LogTypeMismatch>(failure.errors.single())
         assertEquals(1, mismatch.at)
         assertEquals("creditScore", mismatch.name)
         assertEquals(0, asks)

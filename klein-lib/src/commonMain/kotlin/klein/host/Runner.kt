@@ -1,5 +1,7 @@
 package klein.host
 
+import klein.HostError
+import klein.KleinException
 import klein.RevisionNumber
 import klein.check.RuleType
 import klein.check.Type
@@ -36,64 +38,29 @@ sealed interface RunOutcome {
     }
 }
 
-class RunFailure internal constructor(
-    val error: RunError,
-) : Exception(error.message)
+class Diverged internal constructor(
+    val expected: String,
+    val got: String,
+    val at: Int,
+    val call: Call?,
+) : HostError {
+    override val message get() = "replay diverged at log entry $at: expected $expected, got $got"
+}
 
-sealed interface RunError {
-    val message: String
+class HandlerTypeMismatch internal constructor(
+    val call: String,
+    val answerType: String,
+    val declaredType: RuleType,
+) : HostError {
+    override val message get() = "'$call' answered with $answerType where the contract declares ${Type.print(declaredType)}"
+}
 
-    class InvalidRegistration internal constructor(
-        val problems: List<RegistrationError>,
-    ) : RunError {
-        override val message get() = problems.joinToString("\n") { it.message }
-    }
-
-    class UnservablePins internal constructor(
-        val problems: List<PinProblem>,
-    ) : RunError {
-        override val message get() = problems.joinToString("\n") { it.message }
-    }
-
-    class LogTypeMismatch internal constructor(
-        val problems: List<Problem>,
-    ) : RunError {
-        class Problem internal constructor(
-            val at: Int,
-            val name: String,
-            val answerType: String,
-            val declaredType: RuleType,
-        ) {
-            val message get() = "log entry $at holds $answerType for '$name' where the contract declares ${Type.print(declaredType)}"
-        }
-
-        override val message get() = problems.joinToString("\n") { it.message }
-    }
-
-    class Diverged internal constructor(
-        val expected: String,
-        val got: String,
-        val at: Int,
-        val call: Call?,
-    ) : RunError {
-        override val message get() = "replay diverged at log entry $at: expected $expected, got $got"
-    }
-
-    class HandlerTypeMismatch internal constructor(
-        val call: String,
-        val answerType: String,
-        val declaredType: RuleType,
-    ) : RunError {
-        override val message get() = "'$call' answered with $answerType where the contract declares ${Type.print(declaredType)}"
-    }
-
-    class CallTypeMismatch internal constructor(
-        val call: String,
-        val got: String,
-        val declared: String,
-    ) : RunError {
-        override val message get() = "'$call' was called with $got where the contract declares $declared"
-    }
+class CallTypeMismatch internal constructor(
+    val call: String,
+    val got: String,
+    val declared: String,
+) : HostError {
+    override val message get() = "'$call' was called with $got where the contract declares $declared"
 }
 
 internal class Run(
@@ -133,7 +100,7 @@ internal class Run(
             if (!isValueAsk(suspension)) break
             val answer =
                 start.inputs[suspension.call]
-                    ?: diverge(RunError.Diverged("the start entry to hold '${suspension.call}'", "a start entry without it", 0, suspension.toCall()))
+                    ?: diverge(Diverged("the start entry to hold '${suspension.call}'", "a start entry without it", 0, suspension.toCall()))
             execution = suspension.resume(answer)
         }
         return execution
@@ -222,13 +189,13 @@ internal class Run(
             is Execution.AwaitingHost -> throw IllegalStateException("cannot finish a run while awaiting '${end.call}'")
         }
 
-    private fun diverge(diverged: RunError.Diverged): Nothing = throw RunFailure(diverged)
+    private fun diverge(diverged: Diverged): Nothing = throw KleinException(listOf(diverged))
 
     private fun compareToRecorded(
         at: Int,
         recorded: LogEntry,
         execution: Execution,
-    ): RunError.Diverged? {
+    ): Diverged? {
         val call = (execution as? Execution.AwaitingHost)?.toCall()
         val matches =
             when (recorded) {
@@ -238,7 +205,7 @@ internal class Run(
                 is LogEntry.Start -> throw IllegalStateException("the start entry is replayed by name, not by position")
             }
         if (matches) return null
-        return RunError.Diverged(describeRecorded(recorded), describeProduced(execution), at, call)
+        return Diverged(describeRecorded(recorded), describeProduced(execution), at, call)
     }
 
     private fun describeRecorded(entry: LogEntry): String =
@@ -303,7 +270,7 @@ private fun Environment.checkAnswerType(
     val revision = resolvedPins.exposedRevisions.getValue(suspension.call)
     val declared = getCapabilityDeclaration(suspension.call, revision)!!.answerType
     if (!fitsDeclaredType(answer, declared, resolvedPins.ruleTypeEnv)) {
-        throw RunFailure(RunError.HandlerTypeMismatch(suspension.call, printType(answer, resolvedPins.ruleTypeEnv), declared))
+        throw KleinException(listOf(HandlerTypeMismatch(suspension.call, printType(answer, resolvedPins.ruleTypeEnv), declared)))
     }
 }
 
@@ -316,13 +283,13 @@ private fun Environment.checkCallTypes(
     val declared = (declaration as ContractDeclaration.Function).parameterTypes
     if (suspension.args.size != declared.size) {
         val got = describeArgumentCount(suspension.args.size)
-        throw RunFailure(RunError.CallTypeMismatch(suspension.call, got, "${declared.size}"))
+        throw KleinException(listOf(CallTypeMismatch(suspension.call, got, "${declared.size}")))
     }
     for ((argument, parameter) in suspension.args.zip(declared)) {
         if (!fitsDeclaredType(argument, parameter, resolvedPins.ruleTypeEnv)) {
             val got = printType(argument, resolvedPins.ruleTypeEnv)
             val wanted = Type.print(parameter)
-            throw RunFailure(RunError.CallTypeMismatch(suspension.call, got, wanted))
+            throw KleinException(listOf(CallTypeMismatch(suspension.call, got, wanted)))
         }
     }
 }

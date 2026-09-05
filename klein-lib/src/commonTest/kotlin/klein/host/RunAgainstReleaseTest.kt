@@ -1,9 +1,12 @@
 package klein.host
 
+import klein.HostError
 import klein.Klein
+import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.Edition
+import klein.check.contract.UnknownPin
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -41,7 +44,7 @@ private fun Environment.runToValue(
     registerHandlers: HandlerRegistry.() -> Unit = {},
 ): Value = assertIs<RunOutcome.Completed>(run(edition, registerHandlers = registerHandlers)).value
 
-private fun Environment.runToFailure(edition: Edition): RunError = assertFailsWith<RunFailure> { run(edition) }.error
+private fun Environment.runToFailure(edition: Edition): HostError = assertFailsWith<KleinException> { run(edition) }.errors.single()
 
 /** The execution narrative: the editions [LendingExampleTest] only checks, run against a live host. */
 class RunAgainstReleaseTest {
@@ -158,7 +161,7 @@ class RunAgainstReleaseTest {
                 """.trimIndent(),
             ).implement { immediate("creditScore/2") { asked = true; Value.VNum(700.0) } }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
         assertEquals("creditScore", pin.name)
         assertEquals(RevisionNumber(1), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -195,7 +198,7 @@ class RunAgainstReleaseTest {
                 """.trimIndent(),
             ).implement { immediate("creditScore") { asked = true; Value.VNum(700.0) } }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(rolledBack.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(rolledBack.runToFailure(edition))
         assertEquals("creditScore", pin.name)
         assertEquals(RevisionNumber(2), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -244,7 +247,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
         assertEquals("Customer", pin.name)
         assertEquals(RevisionNumber(1), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -260,7 +263,7 @@ class RunAgainstReleaseTest {
             }
         val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
 
-        val missing = assertIs<MissingHandler>(assertIs<RunError.UnservablePins>(env.runToFailure(edition)).problems.single())
+        val missing = assertIs<MissingHandler>(env.runToFailure(edition))
         assertEquals("customer", missing.name)
         assertEquals(RevisionNumber(1), missing.revision)
 
@@ -301,7 +304,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { Value.VStr("hi") }
             }
         val error = env.runToFailure(contract.compileRule("1 + $CREDIT_RULE", ReleaseNumber(1)).orFail())
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("creditScore", mismatch.call)
         assertEquals("'creditScore' answered with String where the contract declares Num", mismatch.message)
     }
@@ -315,7 +318,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { scoreByTier(it) }
             }
         val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail())
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("customer", mismatch.call)
         assertEquals("'customer' answered with { id: String, tier: String } where the contract declares Customer", mismatch.message)
     }
@@ -356,7 +359,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { closure }
             }
         val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail())
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("'creditScore' answered with a function where the contract declares Num", mismatch.message)
     }
 
@@ -385,8 +388,8 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { narrowed.run(edition, persist = persisted::add) }
-        val mismatch = assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { narrowed.run(edition, persist = persisted::add) }
+        val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with Customer where the contract declares String", mismatch.message)
         assertFalse(asked, "the argument check should reject the call before the handler runs")
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
@@ -404,8 +407,8 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { widened.run(edition, persist = persisted::add) }
-        val mismatch = assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { widened.run(edition, persist = persisted::add) }
+        val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with 1 argument where the contract declares 2", mismatch.message)
         assertFalse(asked, "the arity check should reject the call before the handler runs")
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
@@ -422,8 +425,8 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 deferred("creditScore") { initiated = true }
             }
-        val failure = assertFailsWith<RunFailure> { narrowed.run(edition) }
-        assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { narrowed.run(edition) }
+        assertIs<CallTypeMismatch>(failure.errors.single())
         assertFalse(initiated, "the argument check should reject the call before the initiation runs")
     }
 

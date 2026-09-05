@@ -8,7 +8,6 @@ import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.InvalidContract
 import klein.core.CorePrinter
-import klein.host.RunFailure
 import klein.host.RunOutcome
 import klein.host.implement
 import klein.interp.Value
@@ -192,14 +191,7 @@ private fun runCmd(
                 immediate("${d.name}/${d.revision.value}") { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
             }
         }
-    val outcome =
-        try {
-            orExit { environment.run(edition) }
-        } catch (e: RunFailure) {
-            printError(ruleSource, null, e.error.message, rawErrors)
-            exitProcess(1)
-        }
-    when (outcome) {
+    when (val outcome = orExit { environment.run(edition) }) {
         is RunOutcome.Completed -> println(Value.print(outcome.value))
         is RunOutcome.Failed -> {
             outcome.diagnostics.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
