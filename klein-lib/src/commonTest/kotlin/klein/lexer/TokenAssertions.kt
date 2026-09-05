@@ -1,14 +1,15 @@
 package klein.lexer
 
+import klein.surface.Abort
 import klein.surface.Lexer
-import klein.surface.LexerError
+import klein.surface.SyntaxError
 import klein.surface.Token
 import klein.surface.TokenKind
 import klein.surface.TokenKind.*
 import kotlin.test.assertEquals
 import kotlin.test.fail
 
-private fun LexerError.formatWithSource(source: String): String = span.formatInSource(source, contextLines = 5, message = message)
+private fun SyntaxError.formatWithSource(source: String): String = span.formatInSource(source, contextLines = 5, message = message)
 
 sealed class ExpectedToken {
     abstract val span: klein.SourceSpan?
@@ -180,7 +181,7 @@ fun assertTokens(
 ) {
     val result = runCatching { Lexer(source).tokenize().toList() }
     val actualTokens = result.getOrNull() ?: emptyList()
-    val lexerError = result.exceptionOrNull() as? LexerError
+    val lexerError = (result.exceptionOrNull() as? Abort)?.diagnostic
 
     val errorIndex = expected.indexOfFirst { it is ExpectedToken.Error }
 
@@ -212,7 +213,7 @@ fun assertTokens(
 
         // Check error message
         val expectedError = expected[errorIndex] as ExpectedToken.Error
-        if (expectedError.expectedMessage !in (lexerError.message ?: "")) {
+        if (expectedError.expectedMessage !in lexerError.message) {
             fail("Expected error containing '${expectedError.expectedMessage}' but got:\n${lexerError.formatWithSource(source)}")
         }
     } else {

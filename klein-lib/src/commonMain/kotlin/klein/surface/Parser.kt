@@ -1,21 +1,14 @@
 package klein.surface
 
-import klein.KleinError
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.SourceSpan
 
 import klein.surface.TokenKind.*
 
-class ParseError(
-    override val message: String,
-    override val span: SourceSpan,
-) : Exception(message),
-    KleinError
+internal fun parseProgram(tokens: List<Token>): Program = Parser(tokens).parseProgram()
 
-fun parseProgram(tokens: List<Token>): Program = Parser(tokens).parseProgram()
-
-fun parseContract(tokens: List<Token>): ContractExpr = Parser(tokens).parseContract()
+internal fun parseContract(tokens: List<Token>): ContractExpr = Parser(tokens).parseContract()
 
 internal fun parseStmt(tokens: List<Token>): Stmt = Parser(tokens).parseStmt()
 
@@ -40,7 +33,7 @@ private class Parser(
         val stmts = mutableListOf<Stmt>()
         while (peek().kind != EOF) {
             if (isReleaseHeader()) {
-                throw ParseError("A release block belongs in a capability contract; a rule has none", peek().span)
+                syntaxError("A release block belongs in a capability contract; a rule has none", peek().span)
             }
             val stmt =
                 when (peek().kind) {
@@ -72,16 +65,16 @@ private class Parser(
                     peek().kind == FUN -> parseFunDecl().also { declarations.add(it) }.span
                     isReleaseHeader() -> parseReleaseBlock().also { releases.add(it) }.span
                     isDestructuringBinding() ->
-                        throw ParseError(definitionInContract(parsePattern().boundNames.firstOrNull()), peek().span)
+                        syntaxError(definitionInContract(parsePattern().boundNames.firstOrNull()), peek().span)
                     isBinding() -> parseValDecl().also { declarations.add(it) }.span
                     else ->
-                        throw ParseError(
+                        syntaxError(
                             "A capability contract has nothing to evaluate; it only declares what the host provides",
                             peek().span,
                         )
                 }
             if (!canEndStatement()) {
-                throw ParseError("Expected newline but got ${peek()}", peek().span)
+                syntaxError("Expected newline but got ${peek()}", peek().span)
             }
         }
         return ContractExpr(types, declarations, releases, start + end)
@@ -101,7 +94,7 @@ private class Parser(
         val numberToken = advance()
         val number = numberToken.text!!.toIntOrNull()
         if (number == null || number < 1) {
-            throw ParseError("A release number must be a positive integer, got '${numberToken.text}'", numberToken.span)
+            syntaxError("A release number must be a positive integer, got '${numberToken.text}'", numberToken.span)
         }
 
         val entries = mutableListOf<ReleaseEntry>()
@@ -122,12 +115,12 @@ private class Parser(
 
         val nameToken = peek()
         if (!isEntryName(nameToken)) {
-            throw ParseError("A release entry names one declaration, got $nameToken", nameToken.span)
+            syntaxError("A release entry names one declaration, got $nameToken", nameToken.span)
         }
         advance()
         val revision = parseRevisionSuffix()
         if (!canEndStatement()) {
-            throw ParseError("A release entry names one declaration and nothing else, got ${peek()}", peek().span)
+            syntaxError("A release entry names one declaration and nothing else, got ${peek()}", peek().span)
         }
         val lastConsumed = tokens[pos - 1]
         return ReleaseEntry(nameToken.text!!, revision, remove, start.span + lastConsumed.span)
@@ -139,7 +132,7 @@ private class Parser(
         // Check for keyword used as variable name in binding
         val token = peek()
         if (token.kind.keyword != null && peekAt(1).kind == EQ) {
-            throw ParseError("Expected identifier, got keyword '${token.kind.keyword}'", token.span)
+            syntaxError("Expected identifier, got keyword '${token.kind.keyword}'", token.span)
         }
 
         val stmt =
@@ -151,7 +144,7 @@ private class Parser(
             }
 
         if (!canEndStatement()) {
-            throw ParseError("Expected newline but got ${peek()}", peek().span)
+            syntaxError("Expected newline but got ${peek()}", peek().span)
         }
 
         return stmt
@@ -171,7 +164,7 @@ private class Parser(
         expectAndAdvance(RPAREN, message = "Expected ')'")
         val returnType = parseOptionalTypeAnnotation { parseTypeExpr(::expectNoRevision) }
         if (returnType != null && peek().kind != EQ) {
-            throw ParseError(declarationWithoutBody(name.text), funToken.span + returnType.span)
+            syntaxError(declarationWithoutBody(name.text), funToken.span + returnType.span)
         }
         expectAndAdvance(EQ, message = "Expected '='")
         val body = parseBlockOrExpr()
@@ -187,9 +180,9 @@ private class Parser(
         expectAndAdvance(RPAREN, message = "Expected ')'")
         val returnType =
             parseOptionalTypeAnnotation { parseTypeExpr(::contractRevision) }
-                ?: throw ParseError("Expected ':' and a return type, got ${peek()}", peek().span)
+                ?: syntaxError("Expected ':' and a return type, got ${peek()}", peek().span)
         if (peek().kind == EQ) {
-            throw ParseError(definitionInContract(name.text), peek().span)
+            syntaxError(definitionInContract(name.text), peek().span)
         }
         return FunDecl(name.text, params, returnType, funToken.span + returnType.span, revision)
     }
@@ -199,9 +192,9 @@ private class Parser(
         val revision = contractRevision(name.text!!)
         val type =
             parseOptionalTypeAnnotation { parseTypeExpr(::contractRevision) }
-                ?: throw ParseError(definitionInContract(name.text), peek().span)
+                ?: syntaxError(definitionInContract(name.text), peek().span)
         if (peek().kind == EQ) {
-            throw ParseError(definitionInContract(name.text), peek().span)
+            syntaxError(definitionInContract(name.text), peek().span)
         }
         return ValDecl(name.text, type, name.span + type.span, revision)
     }
@@ -226,7 +219,7 @@ private class Parser(
      */
     private fun expectNoRevision(name: String): Nothing? {
         if (peek().kind == SLASH && peekAt(1).kind == INT) {
-            throw ParseError(
+            syntaxError(
                 "'$name/${peekAt(1).text}' names a revision; revision syntax is only allowed in a capability contract",
                 peek().span + peekAt(1).span,
             )
@@ -239,12 +232,12 @@ private class Parser(
         val slash = advance()
         val number = peek()
         if (number.kind != INT) {
-            throw ParseError("Expected a revision number after '/', got $number", slash.span + number.span)
+            syntaxError("Expected a revision number after '/', got $number", slash.span + number.span)
         }
         advance()
         val revision = number.text!!.toIntOrNull()
         if (revision == null || revision < 1) {
-            throw ParseError("Revision must be a positive integer, got '${number.text}'", number.span)
+            syntaxError("Revision must be a positive integer, got '${number.text}'", number.span)
         }
         return RevisionNumber(revision)
     }
@@ -274,7 +267,7 @@ private class Parser(
     private fun parseTypeParams(): List<String> {
         advance()
         if (peek().kind == GT) {
-            throw ParseError("Type parameter list cannot be empty", peek().span)
+            syntaxError("Type parameter list cannot be empty", peek().span)
         }
 
         val params = mutableListOf<String>()
@@ -284,7 +277,7 @@ private class Parser(
             val paramToken = expectAndAdvance(TYPE_VAR, message = "Expected type variable (e.g., 'A)")
             val paramName = paramToken.text!!
             if (!seenParams.add(paramName)) {
-                throw ParseError("Duplicate type parameter: '$paramName", paramToken.span)
+                syntaxError("Duplicate type parameter: '$paramName", paramToken.span)
             }
             params.add(paramName)
 
@@ -300,7 +293,7 @@ private class Parser(
                         break
                     }
                 }
-                else -> throw ParseError("Expected ',' or '>'", peek().span)
+                else -> syntaxError("Expected ',' or '>'", peek().span)
             }
         }
 
@@ -332,7 +325,7 @@ private class Parser(
         validateNotReserved(nameToken)
 
         if (!seenNames.add(nameToken.text!!)) {
-            throw ParseError("Duplicate constructor name: '${nameToken.text}'", nameToken.span)
+            syntaxError("Duplicate constructor name: '${nameToken.text}'", nameToken.span)
         }
 
         val fields =
@@ -349,7 +342,7 @@ private class Parser(
     private fun <R : RevisionNumber?> parseConstructorFields(revision: (name: String) -> R): List<FieldDecl<R>> {
         advance()
         if (peek().kind == RBRACE) {
-            throw ParseError("Constructor fields cannot be empty", peek().span)
+            syntaxError("Constructor fields cannot be empty", peek().span)
         }
 
         val fields = mutableListOf<FieldDecl<R>>()
@@ -371,7 +364,7 @@ private class Parser(
                         break
                     }
                 }
-                else -> throw ParseError("Expected ',' or '}'", peek().span)
+                else -> syntaxError("Expected ',' or '}'", peek().span)
             }
         }
 
@@ -385,7 +378,7 @@ private class Parser(
         val nameToken = expectName("Expected field name")
 
         if (!seenFields.add(nameToken.text!!)) {
-            throw ParseError("Duplicate field name: '${nameToken.text}'", nameToken.span)
+            syntaxError("Duplicate field name: '${nameToken.text}'", nameToken.span)
         }
 
         expectAndAdvance(COLON, message = "Expected ':'")
@@ -488,12 +481,12 @@ private class Parser(
                 }
                 val close = expectAndAdvance(RBRACE, message = "Expected '}'")
                 if (fields.isEmpty()) {
-                    throw ParseError("Empty record type '{}' is not allowed; use 'Any' instead", token.span + close.span)
+                    syntaxError("Empty record type '{}' is not allowed; use 'Any' instead", token.span + close.span)
                 }
                 RecordTypeExpr(fields, token.span + close.span)
             }
 
-            else -> throw ParseError("Expected type", token.span)
+            else -> syntaxError("Expected type", token.span)
         }
     }
 
@@ -506,7 +499,7 @@ private class Parser(
                 } else {
                     message
                 }
-            throw ParseError(errorMsg, token.span)
+            syntaxError(errorMsg, token.span)
         }
         return advance()
     }
@@ -514,14 +507,14 @@ private class Parser(
     private fun validateNotReserved(token: Token) {
         val reserved = setOf("Type", "If", "Then", "Else", "Fun", "And", "Or", "Not", "Match")
         if (token.text in reserved) {
-            throw ParseError("'${token.text}' is a reserved word", token.span)
+            syntaxError("'${token.text}' is a reserved word", token.span)
         }
     }
 
     private fun expectName(message: String): Token {
         val token = expectIdentifier(message)
         if (token.text == "_") {
-            throw ParseError("_ (underscore) cannot be used as a name", token.span)
+            syntaxError("_ (underscore) cannot be used as a name", token.span)
         }
         return token
     }
@@ -560,7 +553,7 @@ private class Parser(
         expectNoRevision(name.text!!)
         val typeAnnotation = parseOptionalTypeAnnotation { parseTypeExpr(::expectNoRevision) }
         if (typeAnnotation != null && peek().kind != EQ) {
-            throw ParseError(declarationWithoutBody(name.text), name.span + typeAnnotation.span)
+            syntaxError(declarationWithoutBody(name.text), name.span + typeAnnotation.span)
         }
         expectAndAdvance(EQ, message = "Expected =")
         val value = parseBlockOrExpr()
@@ -646,13 +639,13 @@ private class Parser(
         return when (token.kind) {
             INT -> {
                 advance()
-                val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                val value = token.text!!.toLongOrNull() ?: syntaxError("Invalid number: ${token.text}", token.span)
                 IntLiteral(value, token.span, token.text)
             }
 
             DOUBLE -> {
                 advance()
-                val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                val value = token.text!!.toDoubleOrNull() ?: syntaxError("Invalid number: ${token.text}", token.span)
                 DoubleLiteral(value, token.span, token.text)
             }
 
@@ -720,11 +713,11 @@ private class Parser(
 
             LBRACE -> parseRecordLiteral(token)
 
-            FUN -> throw ParseError("Function definitions are only allowed at the top level", token.span)
+            FUN -> syntaxError("Function definitions are only allowed at the top level", token.span)
 
-            TYPE -> throw ParseError("Type definitions are only allowed at the top level", token.span)
+            TYPE -> syntaxError("Type definitions are only allowed at the top level", token.span)
 
-            else -> throw ParseError("Expected expression, got $token", token.span)
+            else -> syntaxError("Expected expression, got $token", token.span)
         }
     }
 
@@ -753,7 +746,7 @@ private class Parser(
 
         val first = peek()
         if (!first.startsLineAfter(lineIndentOf(matchToken))) {
-            throw ParseError("Expected indented match arms after scrutinee", first.span)
+            syntaxError("Expected indented match arms after scrutinee", first.span)
         }
         val armIndent = lineIndentOf(first)
 
@@ -764,7 +757,7 @@ private class Parser(
             boundaryIndent = armIndent
         }
         if (arms.isEmpty()) {
-            throw ParseError("Expected at least one match arm", first.span)
+            syntaxError("Expected at least one match arm", first.span)
         }
 
         return Match(scrutinee, arms, matchToken.span + arms.last().span)
@@ -789,13 +782,13 @@ private class Parser(
         return when (token.kind) {
             INT -> {
                 advance()
-                val value = token.text!!.toLongOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                val value = token.text!!.toLongOrNull() ?: syntaxError("Invalid number: ${token.text}", token.span)
                 LiteralPattern(IntLiteral(value, token.span, token.text), token.span)
             }
 
             DOUBLE -> {
                 advance()
-                val value = token.text!!.toDoubleOrNull() ?: throw ParseError("Invalid number: ${token.text}", token.span)
+                val value = token.text!!.toDoubleOrNull() ?: syntaxError("Invalid number: ${token.text}", token.span)
                 LiteralPattern(DoubleLiteral(value, token.span, token.text), token.span)
             }
 
@@ -870,14 +863,14 @@ private class Parser(
                 DataPattern(null, null, fields, fieldsSpan)
             }
 
-            else -> throw ParseError("Expected pattern, got $token", token.span)
+            else -> syntaxError("Expected pattern, got $token", token.span)
         }
     }
 
     private fun parseRecordFields(): Pair<List<FieldPattern>, SourceSpan> {
         val open = expectAndAdvance(LBRACE, message = "Expected '{'")
         if (peek().kind == RBRACE) {
-            throw ParseError("Record pattern must name at least one field", open.span + peek().span)
+            syntaxError("Record pattern must name at least one field", open.span + peek().span)
         }
 
         val fields = mutableListOf<FieldPattern>()
@@ -886,7 +879,7 @@ private class Parser(
         while (true) {
             val fieldToken = expectName("Expected field name")
             if (!seenFields.add(fieldToken.text!!)) {
-                throw ParseError("Duplicate field in pattern: '${fieldToken.text}'", fieldToken.span)
+                syntaxError("Duplicate field in pattern: '${fieldToken.text}'", fieldToken.span)
             }
 
             val binder =
@@ -905,7 +898,7 @@ private class Parser(
                     advance()
                     if (peek().kind == RBRACE) break
                 }
-                else -> throw ParseError("Expected ',' or '}'", peek().span)
+                else -> syntaxError("Expected ',' or '}'", peek().span)
             }
         }
 
@@ -927,7 +920,7 @@ private class Parser(
         if (token.kind.keyword != null) {
             val next = peekAt(1)
             if (next.kind == ARROW || next.kind == COMMA || next.kind == COLON) {
-                throw ParseError("Expected parameter name, got keyword '${token.kind.keyword}'", token.span)
+                syntaxError("Expected parameter name, got keyword '${token.kind.keyword}'", token.span)
             }
         }
 
@@ -950,10 +943,10 @@ private class Parser(
                 // Check for keyword after comma
                 val afterComma = peek()
                 if (afterComma.kind.keyword != null && (peekAt(1).kind == ARROW || peekAt(1).kind == COMMA || peekAt(1).kind == COLON)) {
-                    throw ParseError("Expected parameter name, got keyword '${afterComma.kind.keyword}'", afterComma.span)
+                    syntaxError("Expected parameter name, got keyword '${afterComma.kind.keyword}'", afterComma.span)
                 }
                 if (afterComma.kind != IDENT) {
-                    throw ParseError("Expected parameter name, got $afterComma", afterComma.span)
+                    syntaxError("Expected parameter name, got $afterComma", afterComma.span)
                 }
             } else {
                 break
@@ -978,7 +971,7 @@ private class Parser(
                     advance()
                     parseExpr()
                 } else if (typeAnnotation != null) {
-                    throw ParseError("Expected '=' after type annotation", peek().span)
+                    syntaxError("Expected '=' after type annotation", peek().span)
                 } else {
                     Ident(name, nameToken.span)
                 }
@@ -1135,7 +1128,7 @@ private class Parser(
                 } else {
                     "$message, got $token"
                 }
-            throw ParseError(errorMsg, token.span)
+            syntaxError(errorMsg, token.span)
         }
         return advance()
     }
@@ -1146,7 +1139,7 @@ private class Parser(
     ): Token {
         val token = peek()
         if (token.kind !in kinds) {
-            throw ParseError("$message, got $token", token.span)
+            syntaxError("$message, got $token", token.span)
         }
         return if (token.kind == EOF) token else advance()
     }

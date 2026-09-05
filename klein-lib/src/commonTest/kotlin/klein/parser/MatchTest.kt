@@ -1,7 +1,7 @@
 package klein.parser
 
 import klein.surface.Match
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -337,18 +337,18 @@ class MatchTest {
 
     @Test
     fun armsOnTheMatchLineAreRejected() {
-        val e = assertFailsWith<ParseError> { parse("match s Circle -> 1") }
-        assertIs<ParseError>(e)
+        val e = assertFailsWith<Abort> { parse("match s Circle -> 1") }
+        assertIs<Abort>(e)
     }
 
     @Test
     fun matchWithoutArmsIsRejected() {
-        assertFailsWith<ParseError> { parse("match s") }
+        assertFailsWith<Abort> { parse("match s") }
     }
 
     @Test
     fun emptyRecordPatternIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match s
@@ -360,7 +360,7 @@ class MatchTest {
 
     @Test
     fun keywordAsPatternFieldIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match p
@@ -372,7 +372,7 @@ class MatchTest {
 
     @Test
     fun underscoreAsPatternFieldIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match p
@@ -384,7 +384,7 @@ class MatchTest {
 
     @Test
     fun duplicateFieldInPatternIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match s
@@ -416,7 +416,7 @@ class MatchTest {
 
     @Test
     fun positionalPatternIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match r
@@ -428,7 +428,7 @@ class MatchTest {
 
     @Test
     fun matchIsNoLongerAnIdentifier() {
-        assertFailsWith<ParseError> { parseStmt("match = 1") }
+        assertFailsWith<Abort> { parseStmt("match = 1") }
     }
 
     @Test
@@ -476,7 +476,7 @@ class MatchTest {
 
     @Test
     fun nonIdentifierAfterConstructorIsRejected() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parse(
                 """
                 match a

@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -140,73 +140,73 @@ class LambdaTest {
 
     @Test
     fun unclosedLambda() {
-        val error = assertFailsWith<ParseError> { parse("|42") }
+        val error = assertFailsWith<Abort> { parse("|42") }
         assertEquals("Expected '|', got Eof", error.message)
     }
 
     @Test
     fun unclosedLambdaWithParam() {
-        val error = assertFailsWith<ParseError> { parse("|x -> x") }
+        val error = assertFailsWith<Abort> { parse("|x -> x") }
         assertEquals("Expected '|', got Eof", error.message)
     }
 
     @Test
     fun emptyLambda() {
-        val error = assertFailsWith<ParseError> { parse("||") }
+        val error = assertFailsWith<Abort> { parse("||") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingArrowAfterParams() {
-        val error = assertFailsWith<ParseError> { parse("|x, y x + y|") }
+        val error = assertFailsWith<Abort> { parse("|x, y x + y|") }
         assertEquals("Expected '->', got Ident(x)", error.message)
     }
 
     @Test
     fun trailingCommaInParams() {
-        val error = assertFailsWith<ParseError> { parse("|x, y, -> x|") }
+        val error = assertFailsWith<Abort> { parse("|x, y, -> x|") }
         assertEquals("Expected parameter name, got '->'", error.message)
     }
 
     @Test
     fun missingBodyAfterArrow() {
-        val error = assertFailsWith<ParseError> { parse("|x -> |") }
+        val error = assertFailsWith<Abort> { parse("|x -> |") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun lambdaWithOnlyArrow() {
-        val error = assertFailsWith<ParseError> { parse("| -> 1|") }
+        val error = assertFailsWith<Abort> { parse("| -> 1|") }
         assertEquals("Expected expression, got '->'", error.message)
     }
 
     @Test
     fun keywordTrueAsParam() {
-        val error = assertFailsWith<ParseError> { parse("|true -> 1|") }
+        val error = assertFailsWith<Abort> { parse("|true -> 1|") }
         assertEquals("Expected parameter name, got keyword 'true'", error.message)
     }
 
     @Test
     fun keywordIfAsParam() {
-        val error = assertFailsWith<ParseError> { parse("|if -> 1|") }
+        val error = assertFailsWith<Abort> { parse("|if -> 1|") }
         assertEquals("Expected parameter name, got keyword 'if'", error.message)
     }
 
     @Test
     fun keywordAndAsParam() {
-        val error = assertFailsWith<ParseError> { parse("|and -> 1|") }
+        val error = assertFailsWith<Abort> { parse("|and -> 1|") }
         assertEquals("Expected parameter name, got keyword 'and'", error.message)
     }
 
     @Test
     fun parensAroundSingleParam() {
-        val error = assertFailsWith<ParseError> { parse("|(x) -> x|") }
+        val error = assertFailsWith<Abort> { parse("|(x) -> x|") }
         assertEquals("Expected '|', got '->'", error.message)
     }
 
     @Test
     fun parensAroundMultipleParams() {
-        val error = assertFailsWith<ParseError> { parse("|(x, y) -> x + y|") }
+        val error = assertFailsWith<Abort> { parse("|(x, y) -> x + y|") }
         assertEquals("Expected ')', got ','", error.message)
     }
 
@@ -357,7 +357,7 @@ class LambdaTest {
 
     @Test
     fun lambdaWithArrowNoParamsIsError() {
-        val error = assertFailsWith<ParseError> { parse("|-> 42|") }
+        val error = assertFailsWith<Abort> { parse("|-> 42|") }
         assertEquals("Expected expression, got '->'", error.message)
     }
 
@@ -769,19 +769,19 @@ class LambdaTest {
 
     @Test
     fun inlineBindingInLambdaIsError() {
-        val error = assertFailsWith<ParseError> { parse("|x -> y = 1 y|") }
+        val error = assertFailsWith<Abort> { parse("|x -> y = 1 y|") }
         assertEquals("Expected '|', got '='", error.message)
     }
 
     @Test
     fun multipleInlineBindingsInLambdaIsError() {
-        val error = assertFailsWith<ParseError> { parse("|x -> a = 1 b = 2 a + b|") }
+        val error = assertFailsWith<Abort> { parse("|x -> a = 1 b = 2 a + b|") }
         assertEquals("Expected '|', got '='", error.message)
     }
 
     @Test
     fun inlineBindingInHeadlessLambdaIsError() {
-        val error = assertFailsWith<ParseError> { parse("|y = 1 y|") }
+        val error = assertFailsWith<Abort> { parse("|y = 1 y|") }
         assertEquals("Expected '|', got '='", error.message)
     }
 }

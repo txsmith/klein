@@ -96,9 +96,6 @@ echo "x = 1 + 2" | ./klein tokens --stdin
 
 # Raw output (just tokens, no formatting)
 ./klein tokens --raw example.klein
-
-# Verbose output
-./klein tokens -v example.klein
 ```
 
 ### Parse

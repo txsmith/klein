@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -67,7 +67,7 @@ class BlockIndentTest {
               |x -> x|
             |
             """.trimIndent()
-        assertFailsWith<ParseError> { parseProgram(program) }
+        assertFailsWith<Abort> { parseProgram(program) }
     }
 
     // Binding a lambda works in any position (its `|` is mid-line after `=`, never a line start).

@@ -1,7 +1,7 @@
 package klein.parser
 
 import klein.surface.AppliedTypeExpr
-import klein.surface.ParseError
+import klein.surface.Abort
 import klein.surface.TypeVar
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -186,77 +186,77 @@ class TypeDefTest {
 
     @Test
     fun missingTypeKeyword() {
-        assertFailsWith<ParseError> { parseTypeDef("Bool = True | False") }
+        assertFailsWith<Abort> { parseTypeDef("Bool = True | False") }
     }
 
     @Test
     fun missingEquals() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool True | False") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool True | False") }
     }
 
     @Test
     fun missingConstructors() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool =") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool =") }
     }
 
     @Test
     fun lowercaseTypeName() {
-        assertFailsWith<ParseError> { parseTypeDef("type bool = True | False") }
+        assertFailsWith<Abort> { parseTypeDef("type bool = True | False") }
     }
 
     @Test
     fun lowercaseConstructorName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = true | false") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = true | false") }
     }
 
     @Test
     fun missingFieldType() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { value: }") }
     }
 
     @Test
     fun missingFieldName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { : Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { : Num }") }
     }
 
     @Test
     fun missingColon() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { value Num }") }
     }
 
     @Test
     fun unclosedBrace() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: Num") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { value: Num") }
     }
 
     @Test
     fun unclosedTypeParams() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box<'A = Box { value: 'A }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box<'A = Box { value: 'A }") }
     }
 
     @Test
     fun emptyTypeParams() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box<> = Box") }
+        assertFailsWith<Abort> { parseTypeDef("type Box<> = Box") }
     }
 
     @Test
     fun typeVarWithoutQuote() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box<A> = Box { value: A }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box<A> = Box { value: A }") }
     }
 
     @Test
     fun trailingPipe() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = True | False |") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = True | False |") }
     }
 
     @Test
     fun leadingPipe() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = | True | False") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = | True | False") }
     }
 
     @Test
     fun emptyBraces() {
-        assertFailsWith<ParseError> { parseTypeDef("type Empty = Empty { }") }
+        assertFailsWith<Abort> { parseTypeDef("type Empty = Empty { }") }
     }
 
     @Test
@@ -652,17 +652,17 @@ class TypeDefTest {
 
     @Test
     fun duplicateConstructorNames() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = True | True") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = True | True") }
     }
 
     @Test
     fun duplicateFieldNames() {
-        assertFailsWith<ParseError> { parseTypeDef("type Point = Point { x: Num, x: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Point = Point { x: Num, x: Num }") }
     }
 
     @Test
     fun duplicateTypeParams() {
-        assertFailsWith<ParseError> { parseTypeDef("type Pair<'A, 'A> = Pair { a: 'A, b: 'A }") }
+        assertFailsWith<Abort> { parseTypeDef("type Pair<'A, 'A> = Pair { a: 'A, b: 'A }") }
     }
 
     @Test
@@ -679,42 +679,42 @@ class TypeDefTest {
 
     @Test
     fun missingPipeBetweenConstructors() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = True False") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = True False") }
     }
 
     @Test
     fun commaInsteadOfPipe() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = True, False") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = True, False") }
     }
 
     @Test
     fun equalsInsteadOfColonInField() {
-        assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { a = Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Foo = Foo { a = Num }") }
     }
 
     @Test
     fun semicolonInsteadOfCommaInFields() {
-        assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { a: Num; b: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Foo = Foo { a: Num; b: Num }") }
     }
 
     @Test
     fun extraTokensAfterDefinition() {
-        assertFailsWith<ParseError> { parseTypeDef("type Unit = Unit extra") }
+        assertFailsWith<Abort> { parseTypeDef("type Unit = Unit extra") }
     }
 
     @Test
     fun reservedWordAsTypeName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Type = Foo") }
+        assertFailsWith<Abort> { parseTypeDef("type Type = Foo") }
     }
 
     @Test
     fun matchIsAReservedTypeName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Match = Match { v: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Match = Match { v: Num }") }
     }
 
     @Test
     fun matchIsAReservedConstructorName() {
-        assertFailsWith<ParseError> { parseTypeDef("type T = Match") }
+        assertFailsWith<Abort> { parseTypeDef("type T = Match") }
     }
 
     @Test
@@ -724,37 +724,37 @@ class TypeDefTest {
 
     @Test
     fun keywordAsFieldName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { if: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Foo = Foo { if: Num }") }
     }
 
     @Test
     fun underscoreAsFieldName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Foo = Foo { _: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Foo = Foo { _: Num }") }
     }
 
     @Test
     fun keywordAsConstructorName() {
-        assertFailsWith<ParseError> { parseTypeDef("type Foo = If | Then | Else") }
+        assertFailsWith<Abort> { parseTypeDef("type Foo = If | Then | Else") }
     }
 
     @Test
     fun parensInsteadOfBraces() {
-        assertFailsWith<ParseError> { parseTypeDef("type Option = None | Some ( value: Num )") }
+        assertFailsWith<Abort> { parseTypeDef("type Option = None | Some ( value: Num )") }
     }
 
     @Test
     fun bracketsInsteadOfBraces() {
-        assertFailsWith<ParseError> { parseTypeDef("type Option = None | Some [ value: Num ]") }
+        assertFailsWith<Abort> { parseTypeDef("type Option = None | Some [ value: Num ]") }
     }
 
     @Test
     fun malformedFunctionType() {
-        assertFailsWith<ParseError> { parseTypeDef("type Fn = Fn { f: -> Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Fn = Fn { f: -> Num }") }
     }
 
     @Test
     fun incompleteFunctionType() {
-        assertFailsWith<ParseError> { parseTypeDef("type Fn = Fn { f: Num -> }") }
+        assertFailsWith<Abort> { parseTypeDef("type Fn = Fn { f: Num -> }") }
     }
 
     @Test
@@ -980,7 +980,7 @@ class TypeDefTest {
 
     @Test
     fun multilineBadIndentation() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseProgram(
                 """
                 type Bool = True
@@ -992,7 +992,7 @@ class TypeDefTest {
 
     @Test
     fun typeInsideLambda() {
-        val error = assertFailsWith<ParseError> { parse("|x -> type Inner = Inner|") }
+        val error = assertFailsWith<Abort> { parse("|x -> type Inner = Inner|") }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
 
@@ -1004,7 +1004,7 @@ class TypeDefTest {
               type Inner = Inner
               42
             """.trimIndent()
-        val error = assertFailsWith<ParseError> { parseProgram(program) }
+        val error = assertFailsWith<Abort> { parseProgram(program) }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
 
@@ -1016,19 +1016,19 @@ class TypeDefTest {
               type Inner = Inner
               x
             """.trimIndent()
-        val error = assertFailsWith<ParseError> { parseProgram(program) }
+        val error = assertFailsWith<Abort> { parseProgram(program) }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
 
     @Test
     fun typeInsideRecord() {
-        val error = assertFailsWith<ParseError> { parse("{ f = type Inner = Inner }") }
+        val error = assertFailsWith<Abort> { parse("{ f = type Inner = Inner }") }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
 
     @Test
     fun typeInsideIfThen() {
-        val error = assertFailsWith<ParseError> { parse("if true then type T = T else 1") }
+        val error = assertFailsWith<Abort> { parse("if true then type T = T else 1") }
         assertEquals("Type definitions are only allowed at the top level", error.message)
     }
 
@@ -1078,7 +1078,7 @@ class TypeDefTest {
 
     @Test
     fun appliedTypeWithEmptyTypeArgs() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: List<> }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { value: List<> }") }
     }
 
     @Test
@@ -1656,7 +1656,7 @@ class TypeDefTest {
 
     @Test
     fun typeParamsFollowedByEqualsNeedsSpaceToAvoidGtEqToken() {
-        assertFailsWith<ParseError> { parseTypeDef("type X<'A>= X") }
+        assertFailsWith<Abort> { parseTypeDef("type X<'A>= X") }
     }
 
     @Test
@@ -1742,17 +1742,17 @@ class TypeDefTest {
 
     @Test
     fun doublePipeIsError() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bool = True || False") }
+        assertFailsWith<Abort> { parseTypeDef("type Bool = True || False") }
     }
 
     @Test
     fun extraClosingAngleBracket() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box<'A>> = Box { value: 'A }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box<'A>> = Box { value: 'A }") }
     }
 
     @Test
     fun missingOpeningAngleBracket() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box 'A> = Box { value: 'A }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box 'A> = Box { value: 'A }") }
     }
 
     @Test
@@ -1770,17 +1770,17 @@ class TypeDefTest {
 
     @Test
     fun nestedUnclosedBrace() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bad = Bad { r: { x: Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Bad = Bad { r: { x: Num }") }
     }
 
     @Test
     fun unclosedTypeArgs() {
-        assertFailsWith<ParseError> { parseTypeDef("type Bad = Bad { data: List<Num }") }
+        assertFailsWith<Abort> { parseTypeDef("type Bad = Bad { data: List<Num }") }
     }
 
     @Test
     fun multilineConstructorAtSameIndentAsTypeIsError() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseProgram(
                 """
                 type Bool = True
@@ -1792,14 +1792,14 @@ class TypeDefTest {
 
     @Test
     fun typeWithOnlyWhitespaceAfterEquals() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseTypeDef("type Empty =   ")
         }
     }
 
     @Test
     fun trailingCommaInAppliedTypeArgsNotSupported() {
-        assertFailsWith<ParseError> { parseTypeDef("type Box = Box { value: List<Num,> }") }
+        assertFailsWith<Abort> { parseTypeDef("type Box = Box { value: List<Num,> }") }
     }
 
     @Test
@@ -1881,7 +1881,7 @@ class TypeDefTest {
 
     @Test
     fun emptyRecordFieldTypeRejected() {
-        assertFailsWith<ParseError> { parseTypeDef("type Empty = Empty { config: {} }") }
+        assertFailsWith<Abort> { parseTypeDef("type Empty = Empty { config: {} }") }
     }
 
     @Test

@@ -114,11 +114,11 @@ class FieldAccessTest {
 
     @Test
     fun keywordAsFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.surface.ParseError> { parse("x.match") }
+        kotlin.test.assertFailsWith<klein.surface.Abort> { parse("x.match") }
     }
 
     @Test
     fun underscoreAsFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.surface.ParseError> { parse("x._") }
+        kotlin.test.assertFailsWith<klein.surface.Abort> { parse("x._") }
     }
 }

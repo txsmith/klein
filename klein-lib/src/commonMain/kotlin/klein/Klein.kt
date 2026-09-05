@@ -27,22 +27,21 @@ import klein.interp.Value
  * ```
  *
  * Exceptions never escape these functions; stage-internal aborts are converted to errors
- * in the result. The underlying throwing implementations ([Lexer], [parseProgram]) remain
- * available for tools that want them raw.
+ * in the result.
  */
 object Klein {
     fun tokenize(source: String): Checked<List<Token>> =
         try {
             Checked.success(Lexer(source).tokenize().toList())
-        } catch (e: LexerError) {
-            Checked.failure(e)
+        } catch (e: Abort) {
+            Checked.failure(e.diagnostic)
         }
 
     fun parse(tokens: List<Token>): Checked<Program> =
         try {
             Checked.success(parseProgram(tokens))
-        } catch (e: ParseError) {
-            Checked.failure(e)
+        } catch (e: Abort) {
+            Checked.failure(e.diagnostic)
         }
 
     /**
@@ -69,17 +68,11 @@ object Klein {
      * checked.
      */
     fun checkContract(contractSource: String): EnvironmentContract {
-        val tokens =
-            try {
-                Lexer(contractSource).tokenize().toList()
-            } catch (e: LexerError) {
-                throw KleinException(listOf(e))
-            }
         val contract =
             try {
-                parseContract(tokens)
-            } catch (e: ParseError) {
-                throw KleinException(listOf(e))
+                parseContract(Lexer(contractSource).tokenize().toList())
+            } catch (e: Abort) {
+                throw KleinException(listOf(e.diagnostic))
             }
         val checked = ContractChecker().check(contract)
         if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)

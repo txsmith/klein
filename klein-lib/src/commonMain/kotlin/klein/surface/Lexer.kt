@@ -1,18 +1,10 @@
 package klein.surface
 
-import klein.KleinError
 import klein.SourceSpan
 
 import klein.surface.TokenKind.*
 
-class LexerError(
-    override val message: String,
-    override val span: SourceSpan,
-    val nestingStack: List<String> = emptyList(),
-) : Exception(message),
-    KleinError
-
-class Lexer(
+internal class Lexer(
     private val source: String,
 ) {
     private var pos: Int = 0
@@ -90,7 +82,7 @@ class Lexer(
             c in "()[]{}" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
-                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1))
+                        ?: syntaxError("Unknown symbol", SourceSpan(start, start + 1))
                 advance(length)
                 listOf(token(kind, SourceSpan(start, pos)))
             }
@@ -111,13 +103,13 @@ class Lexer(
             c in "+*/%=<>!&,.;:@?" -> {
                 val (kind, length) =
                     TokenKind.matchSymbol(source, pos)
-                        ?: throw LexerError("Unknown symbol", SourceSpan(start, start + 1))
+                        ?: syntaxError("Unknown symbol", SourceSpan(start, start + 1))
                 advance(length)
                 listOf(token(kind, SourceSpan(start, pos)))
             }
 
             else -> {
-                throw LexerError("Unexpected character: '$c'", SourceSpan(start, start + 1))
+                syntaxError("Unexpected character: '$c'", SourceSpan(start, start + 1))
             }
         }
     }
@@ -186,7 +178,7 @@ class Lexer(
         advance('\'')
         val next = peek()
         if (next == null || !next.isUpperCase()) {
-            throw LexerError("Type variable must start with uppercase letter after '", SourceSpan(start, pos))
+            syntaxError("Type variable must start with uppercase letter after '", SourceSpan(start, pos))
         }
         val name = consumeWhile { it.isLetterOrDigit() || it == '_' }
         return token(TYPE_VAR, SourceSpan(start, pos), name)
@@ -203,7 +195,7 @@ class Lexer(
             }
         }
         if (consumeChar("\"") == null) {
-            throw LexerError("Unterminated string", SourceSpan(start, pos))
+            syntaxError("Unterminated string", SourceSpan(start, pos))
         }
         return token(STRING, SourceSpan(start, pos), content.toString())
     }
@@ -215,9 +207,9 @@ class Lexer(
         if (c != null) return escapes[c]!!
         val next = peek()
         if (next == null) {
-            throw LexerError("Invalid escape sequence", SourceSpan(pos - 1, pos))
+            syntaxError("Invalid escape sequence", SourceSpan(pos - 1, pos))
         } else {
-            throw LexerError("Invalid escape sequence: \\$next", SourceSpan(pos - 1, pos + 1))
+            syntaxError("Invalid escape sequence: \\$next", SourceSpan(pos - 1, pos + 1))
         }
     }
 
@@ -277,7 +269,7 @@ class Lexer(
         if (actual !=
             expected
         ) {
-            throw LexerError("Unexpected '$actual', expected '$expected'", SourceSpan(pos - 1, pos))
+            syntaxError("Unexpected '$actual', expected '$expected'", SourceSpan(pos - 1, pos))
         }
     }
 
@@ -288,7 +280,7 @@ class Lexer(
             advance()
         }
         if (pos < source.length && source[pos] == '\t') {
-            throw LexerError("Tabs are not allowed for indentation", SourceSpan(pos, pos + 1))
+            syntaxError("Tabs are not allowed for indentation", SourceSpan(pos, pos + 1))
         }
         return col
     }

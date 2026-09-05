@@ -40,7 +40,7 @@ fun main(args: Array<String>) {
     // Each command accepts its own flags; help/unknown commands (null) skip flag validation.
     val knownFlags: Set<String>? =
         when (command) {
-            "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
+            "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw")
             "check", "c", "run", "r" -> setOf("--stdin", "--raw", "--contract", "--release")
             "core" -> setOf("--stdin", "--raw")
             else -> null
@@ -55,7 +55,6 @@ fun main(args: Array<String>) {
     }
 
     val rawErrors = "--raw" in args
-    val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
     val contractIndex = args.indexOf("--contract")
     val releaseIndex = args.indexOf("--release")
@@ -68,11 +67,11 @@ fun main(args: Array<String>) {
     when (command) {
         "tokens", "t" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            tokenize(source, rawErrors, verbose)
+            tokenize(source, rawErrors)
         }
         "parse", "p" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            parse(source, rawErrors, verbose)
+            parse(source, rawErrors)
         }
         "check", "c" -> checkCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
         "run", "r" -> runCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
@@ -118,7 +117,6 @@ private fun printUsage() {
         Options:
           --stdin           Read from stdin instead of file
           --raw             Print raw errors with SourceSpan (for tooling)
-          --verbose         Show nesting stack on lexer errors (tokens, parse)
           --contract FILE   Check against a capability contract (check, run)
           --release N       Release to check the rule against (needs --contract)
         """.trimIndent(),
@@ -342,27 +340,15 @@ private fun revisioned(
     revision: RevisionNumber,
 ): String = if (revision.value == 1) name else "$name/${revision.value}"
 
-/**
- * Print every error from a stage result uniformly, plus any verbose stage-specific detail,
- * and exit non-zero. No-op when the result is clean.
- */
+/** Print every error from a stage result uniformly and exit non-zero. No-op when the result is clean. */
 private fun exitOnErrors(
     result: Checked<*>,
     source: String,
     rawErrors: Boolean,
-    verbose: Boolean = false,
 ) {
     if (!result.hasErrors) return
     for (error in result.diagnostics) {
         printError(source, error.span, error.message, rawErrors)
-        if (verbose && error is LexerError && error.nestingStack.isNotEmpty()) {
-            println("\nNesting stack:")
-            error.nestingStack.forEach { println("  $it") }
-        }
-        if (verbose && error is ParseError) {
-            println("\nCall stack:")
-            printFormattedStackTrace(error)
-        }
     }
     exitProcess(1)
 }
@@ -370,10 +356,9 @@ private fun exitOnErrors(
 private fun tokenize(
     source: String,
     rawOutput: Boolean,
-    verbose: Boolean,
 ) {
     val result = Klein.tokenize(source)
-    exitOnErrors(result, source, rawOutput, verbose)
+    exitOnErrors(result, source, rawOutput)
     for (token in result.output!!) {
         println(token.prettyPrint())
     }
@@ -382,10 +367,9 @@ private fun tokenize(
 private fun parse(
     source: String,
     rawOutput: Boolean,
-    verbose: Boolean,
 ) {
     val result = Klein.tokenize(source).andThen(Klein::parse)
-    exitOnErrors(result, source, rawOutput, verbose)
+    exitOnErrors(result, source, rawOutput)
     for (stmt in result.output!!.stmts) {
         println(stmt.prettyPrint())
     }
@@ -477,30 +461,6 @@ private fun printError(
     } else {
         print(span.formatInSource(source, contextLines = 5, message = message))
     }
-}
-
-private fun printFormattedStackTrace(e: Throwable) {
-    val pattern = Regex("""kfun:klein\.([^+]+).+/klein/(\w+\.kt):(\d+)""")
-    val frames =
-        e
-            .stackTraceToString()
-            .lines()
-            .mapNotNull { line ->
-                pattern.find(line)?.let { match ->
-                    val (func, file, lineNum) = match.destructured
-                    val funcName =
-                        func
-                            .replace(Regex("""Parser[.#]"""), "")
-                            .replace("#internal", "")
-                            .substringBefore("(")
-                            .substringBefore("{")
-                            .trim()
-                    "$funcName:$lineNum"
-                }
-            }.filter { !it.startsWith("ParseError") }
-            .reversed()
-
-    println(frames.joinToString(" -> "))
 }
 
 @OptIn(ExperimentalForeignApi::class)

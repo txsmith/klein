@@ -3,7 +3,7 @@
 package klein.lexer
 
 import klein.surface.Lexer
-import klein.surface.LexerError
+import klein.surface.Abort
 import klein.surface.TokenKind.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -183,21 +183,21 @@ class IndentTest {
     @Test
     fun tabsInIndentationThrows() {
         val program = "x =\n\t1"
-        val error = assertFailsWith<LexerError> { Lexer(program).tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer(program).tokenize().toList() }
         assertEquals("Tabs are not allowed for indentation", error.message)
     }
 
     @Test
     fun tabsAfterSpacesInIndentationThrows() {
         val program = "x =\n    1\n\t2"
-        val error = assertFailsWith<LexerError> { Lexer(program).tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer(program).tokenize().toList() }
         assertEquals("Tabs are not allowed for indentation", error.message)
     }
 
     @Test
     fun tabsInIndentationInsideParensThrows() {
         val program = "foo(\n    a,\n\tb)"
-        val error = assertFailsWith<LexerError> { Lexer(program).tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer(program).tokenize().toList() }
         assertEquals("Tabs are not allowed for indentation", error.message)
     }
 

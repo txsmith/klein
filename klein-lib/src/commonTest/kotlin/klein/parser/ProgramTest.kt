@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -81,7 +81,7 @@ class ProgramTest {
 
     @Test
     fun bindingsOnSameLineIsError() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseProgram("x = 1 y = 2")
         }
     }

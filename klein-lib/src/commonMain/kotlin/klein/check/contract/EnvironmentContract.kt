@@ -17,9 +17,8 @@ import klein.check.checkProgram
 import klein.core.CoreExpr
 import klein.core.PreludeBinding
 import klein.core.lowerWithPrelude
+import klein.surface.Abort
 import klein.surface.Lexer
-import klein.surface.LexerError
-import klein.surface.ParseError
 import klein.surface.Program
 import klein.surface.parseProgram
 
@@ -149,10 +148,8 @@ class EnvironmentContract internal constructor(
         val program =
             try {
                 parseProgram(Lexer(ruleSource).tokenize().toList())
-            } catch (e: LexerError) {
-                throw KleinException(listOf(e))
-            } catch (e: ParseError) {
-                throw KleinException(listOf(e))
+            } catch (e: Abort) {
+                throw KleinException(listOf(e.diagnostic))
             }
         val checked = checkProgram(program, surface.ruleTypeEnv, expected)
         if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)

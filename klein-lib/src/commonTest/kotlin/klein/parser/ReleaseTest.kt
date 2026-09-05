@@ -2,7 +2,7 @@ package klein.parser
 
 import klein.ReleaseNumber
 import klein.RevisionNumber
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -217,39 +217,39 @@ class ReleaseTest {
 
     @Test
     fun releaseZeroIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 0\n  Customer") }
+        assertFailsWith<Abort> { parseContract("release 0\n  Customer") }
     }
 
     @Test
     fun anEntryWithAValueIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 1\n  Customer = 3") }
+        assertFailsWith<Abort> { parseContract("release 1\n  Customer = 3") }
     }
 
     @Test
     fun anEntryThatIsACallIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 1\n  Customer(1)") }
+        assertFailsWith<Abort> { parseContract("release 1\n  Customer(1)") }
     }
 
     @Test
     fun twoNamesOnOneEntryLineIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 1\n  Customer creditScore") }
+        assertFailsWith<Abort> { parseContract("release 1\n  Customer creditScore") }
     }
 
     @Test
     fun anEntryWithANonNumericRevisionIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 1\n  Customer/next") }
+        assertFailsWith<Abort> { parseContract("release 1\n  Customer/next") }
     }
 
     @Test
     fun anEntryThatIsNotANameIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("release 1\n  42") }
+        assertFailsWith<Abort> { parseContract("release 1\n  42") }
     }
 
     // ── A release in a rule ──────────────────────────────────────────────────
 
     @Test
     fun aReleaseBlockInAProgramIsAParseError() {
-        val error = assertFailsWith<ParseError> { parseProgram("release 1\n  Customer") }
+        val error = assertFailsWith<Abort> { parseProgram("release 1\n  Customer") }
         assertTrue("contract" in error.message, error.message)
     }
 }
