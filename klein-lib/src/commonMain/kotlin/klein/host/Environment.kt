@@ -1,6 +1,6 @@
 package klein.host
 
-import klein.KleinError
+import klein.HostError
 import klein.KleinException
 import klein.RevisionNumber
 import klein.check.contract.ContractDeclaration
@@ -177,6 +177,4 @@ class Environment internal constructor(
 
 class RegistrationError internal constructor(
     override val message: String,
-) : KleinError {
-    override val span: klein.SourceSpan? = null
-}
+) : HostError

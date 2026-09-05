@@ -7,6 +7,7 @@ import klein.ReleaseNumber
 import klein.check.RuleType
 import klein.check.Type
 import klein.check.TypeError
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -40,12 +41,12 @@ private val contract = Klein.checkContract(CONTRACT)
 private fun check(
     rule: String,
     release: Int = 2,
-): RuleType = contract.check(rule, ReleaseNumber(release))
+): RuleType = contract.check(rule, ReleaseNumber(release)).orFail()
 
 private fun errorsFrom(
     rule: String,
     release: Int = 2,
-): List<KleinError> = assertFailsWith<KleinException> { check(rule, release) }.errors
+): List<KleinError> = contract.check(rule, ReleaseNumber(release)).diagnostics
 
 /** No rule-facing diagnostic may spell a revision, whatever channel it came out of. */
 private fun assertNoRevision(errors: List<KleinError>) {
@@ -87,7 +88,7 @@ class RuleAgainstReleaseTest {
 
     @Test
     fun aReleaseTheContractDoesNotHaveIsRefused() {
-        val error = assertFailsWith<UnknownRelease> { check("1", release = 9) }
+        val error = assertIs<UnknownRelease>(assertFailsWith<KleinException> { check("1", release = 9) }.errors.single())
         assertEquals(ReleaseNumber(9), error.number)
         assertEquals(listOf(ReleaseNumber(1), ReleaseNumber(2)), error.available)
     }
@@ -132,8 +133,8 @@ class RuleAgainstReleaseTest {
                   widen
                 """.trimIndent(),
             )
-        assertEquals("(Box<Shape>) -> Num", Type.print(contract.check("widen", ReleaseNumber(2))))
-        assertEquals(Type.TNum, contract.check("widen(Box(Circle(1)))", ReleaseNumber(2)))
+        assertEquals("(Box<Shape>) -> Num", Type.print(contract.check("widen", ReleaseNumber(2)).orFail()))
+        assertEquals(Type.TNum, contract.check("widen(Box(Circle(1)))", ReleaseNumber(2)).orFail())
     }
 
     /** A recursive type arrives as a reference, so a rule can walk it. */
@@ -150,7 +151,7 @@ class RuleAgainstReleaseTest {
             )
         assertEquals(
             "Tree?",
-            Type.print(contract.check("fun left(t: Tree): Tree? = t.left\nleft(Tree(1, null))", ReleaseNumber(2))),
+            Type.print(contract.check("fun left(t: Tree): Tree? = t.left\nleft(Tree(1, null))", ReleaseNumber(2)).orFail()),
         )
     }
 

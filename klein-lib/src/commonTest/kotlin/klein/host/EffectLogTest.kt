@@ -4,6 +4,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -44,7 +45,7 @@ class EffectLogTest {
 
     private var asks = 0
 
-    private fun compile(rule: String) = contract.compileRule(rule, ReleaseNumber(1))
+    private fun compile(rule: String) = contract.compileRule(rule, ReleaseNumber(1)).orFail()
 
     private fun makeHost(
         transact: (() -> Unit) -> Unit = { it() },
@@ -495,7 +496,7 @@ class EffectLogTest {
         val fresh = Klein.checkContract(LENDING)
         val resumed =
             fresh.implement { immediate("customer") { gold }; immediate("threshold") { Value.VNum(620.0) }; deferred("creditScore") {} }
-                .run(fresh.compileRule(STANDARD, ReleaseNumber(1)), log = parked.log + parked.toReply(Value.VNum(500.0)))
+                .run(fresh.compileRule(STANDARD, ReleaseNumber(1)).orFail(), log = parked.log + parked.toReply(Value.VNum(500.0)))
         assertEquals(Value.VBool(false), assertIs<RunOutcome.Completed>(resumed).value)
     }
 

@@ -11,6 +11,7 @@ import klein.check.Type.*
 import klein.check.TypeEnv
 import klein.check.TypeError
 import klein.check.infer
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -21,14 +22,20 @@ import kotlin.test.assertTrue
 /** The diagnostics a bad contract throws. A contract that checks returns instead, so the positive
  *  cases below simply call [Klein.checkContract] and let it speak for itself. */
 private fun contractErrors(src: String): List<KleinError> =
-    assertFailsWith<KleinException> { Klein.checkContract(src) }.errors
+    assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src) }.errors.single()).diagnostics
 
 /** Check [rule] against [src]'s release [release], answering its type. */
 private fun ruleAgainst(
     src: String,
     rule: String,
     release: Int = 1,
-): Type<Nothing?> = Klein.checkContract(src).check(rule, ReleaseNumber(release))
+): Type<Nothing?> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).orFail()
+
+private fun ruleErrors(
+    src: String,
+    rule: String,
+    release: Int = 1,
+): List<KleinError> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).diagnostics
 
 /**
  * Checking a capability contract, through what a caller can observe: whether [Klein.checkContract]
@@ -429,8 +436,8 @@ tier(Customer(1, "gold"))""", release = 2),
 
     @Test
     fun aFieldFromAnotherRevisionIsNotThere() {
-        val errors = assertFailsWith<KleinException> { ruleAgainst(twoRevisions, "fun t(c: Customer): String = c.tier") }
-        assertIs<TypeError.MissingField>(errors.errors.single())
+        val errors = ruleErrors(twoRevisions, "fun t(c: Customer): String = c.tier")
+        assertIs<TypeError.MissingField>(errors.single())
     }
 
     @Test
@@ -597,11 +604,8 @@ tier(Customer(1, "gold"))""", release = 2),
 
     @Test
     fun aRuleMisusingACapabilityIsRejected() {
-        val errors =
-            assertFailsWith<KleinException> {
-                ruleAgainst("fun creditCheck(c: Num): Num\n\nrelease 1\n  creditCheck", """creditCheck("nope")""")
-            }
-        assertIs<TypeError.TypeMismatch>(errors.errors.single())
+        val errors = ruleErrors("fun creditCheck(c: Num): Num\n\nrelease 1\n  creditCheck", """creditCheck("nope")""")
+        assertIs<TypeError.TypeMismatch>(errors.single())
     }
 
     // ── environment isolation ────────────────────────────────────────────────

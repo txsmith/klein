@@ -5,6 +5,7 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -148,7 +149,7 @@ class EncodingTest {
     @Test
     fun aDecodedLogReplaysIdenticallyToTheOriginal() {
         val contract = Klein.checkContract(LENDING)
-        val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1))
+        val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1)).orFail()
         var asks = 0
         fun makeHost() =
             contract.implement {

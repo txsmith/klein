@@ -1,15 +1,13 @@
 package klein.host
 
-import klein.KleinError
+import klein.HostError
 import klein.KleinException
 import klein.SourceSpan
 import klein.interp.Value
 
 class UnreadableLog internal constructor(
     override val message: String,
-) : KleinError {
-    override val span: SourceSpan? get() = null
-}
+) : HostError
 
 private val MAGIC = byteArrayOf('K'.code.toByte(), 'L'.code.toByte(), 'O'.code.toByte(), 'G'.code.toByte())
 private const val VERSION = 1

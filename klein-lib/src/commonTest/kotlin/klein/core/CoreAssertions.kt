@@ -4,6 +4,7 @@ import klein.ReleaseNumber
 import klein.SourceSpan
 import klein.check.contract.EnvironmentContract
 import klein.surface.Lexer
+import klein.orFail
 import kotlin.test.assertEquals
 
 private val Z = SourceSpan.zero
@@ -126,7 +127,7 @@ internal fun assertRuleLowersTo(
     release: ReleaseNumber,
     expected: String,
 ) {
-    val edition = contract.compileRule(rule.trimIndent().trim(), release)
+    val edition = contract.compileRule(rule.trimIndent().trim(), release).orFail()
     assertEquals(expected.trimIndent().trim(), CorePrinter.print(edition.core))
 }
 

@@ -11,6 +11,8 @@ data class Checked<out T>(
 ) {
     val hasErrors: Boolean get() = diagnostics.isNotEmpty()
 
+    fun <R> map(transform: (T) -> R): Checked<R> = Checked(output?.let(transform), diagnostics)
+
     fun <R> andThen(next: (T) -> Checked<R>): Checked<R> =
         if (output == null || hasErrors) Checked(null, diagnostics) else next(output)
 

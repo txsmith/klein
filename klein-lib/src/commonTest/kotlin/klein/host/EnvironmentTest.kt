@@ -7,7 +7,9 @@ import klein.RevisionNumber
 import klein.check.Type
 import klein.check.TypeError
 import klein.check.contract.ContractDeclaration
+import klein.check.contract.InvalidContract
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -223,14 +225,16 @@ class EnvironmentTest {
                     """.trimIndent(),
                 )
             }
-        assertEquals(2, error.errors.size, "expected both unknown types: ${error.errors}")
-        assertTrue(error.errors.all { it is TypeError.UnboundVariable })
+        val diagnostics = assertIs<InvalidContract>(error.errors.single()).diagnostics
+        assertEquals(2, diagnostics.size, "expected both unknown types: $diagnostics")
+        assertTrue(diagnostics.all { it is TypeError.UnboundVariable })
     }
 
     @Test
     fun registrationErrorsAreNotReportedWhenTheContractItselfFailed() {
         val error = assertFailsWith<KleinException> { load("fun a(x: Nope): Num") { immediate("ghost") { Value.VUnit } } }
-        assertEquals(1, error.errors.size, "contract errors should short-circuit: ${error.errors}")
+        val invalid = assertIs<InvalidContract>(error.errors.single())
+        assertEquals(1, invalid.diagnostics.size, "contract errors should short-circuit: ${invalid.diagnostics}")
     }
 
     @Test
@@ -249,7 +253,7 @@ class EnvironmentTest {
         val contract = Klein.checkContract(CONTRACT)
         assertEquals(
             Type.TNum,
-            contract.check("""creditCheck(Customer(1, "ada")) + maxRetries""", ReleaseNumber(1)),
+            contract.check("""creditCheck(Customer(1, "ada")) + maxRetries""", ReleaseNumber(1)).orFail(),
         )
     }
 
@@ -280,9 +284,8 @@ class EnvironmentTest {
         assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
 
         // The same contract, from a rule's side: `maxRetries` is not vocabulary release 1 gave it.
-        val unbound =
-            assertFailsWith<KleinException> { Klein.checkContract(PARTLY_EXPOSED).check("maxRetries", ReleaseNumber(1)) }
-        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.errors.single()).name)
+        val unbound = Klein.checkContract(PARTLY_EXPOSED).check("maxRetries", ReleaseNumber(1))
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.diagnostics.single()).name)
     }
 
     // --- per-run supply: the lambda-less marker (2a; a run supplying it is 2b) ---

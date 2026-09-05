@@ -7,6 +7,7 @@ import klein.check.TypeEnv
 import klein.check.checkProgram
 import klein.check.contract.ContractChecker
 import klein.check.contract.EnvironmentContract
+import klein.check.contract.InvalidContract
 import klein.core.CoreExpr
 import klein.interp.Execution
 import klein.interp.Interpreter
@@ -63,19 +64,19 @@ object Klein {
      * `contract.check(ruleSource, ReleaseNumber(2))`, and `contract.implement { … }` when the host
      * also needs to run them.
      *
-     * Throws [KleinException] carrying every diagnostic. There is no [Checked] here because
-     * there is no partial answer worth having: holding an [EnvironmentContract] means the contract
-     * checked.
+     * The contract is the host's own document, so a contract that does not check is the host's
+     * fault: this throws [KleinException] carrying one [InvalidContract] with every diagnostic,
+     * rather than returning a [Checked]. Holding an [EnvironmentContract] means the contract checked.
      */
     fun checkContract(contractSource: String): EnvironmentContract {
         val contract =
             try {
                 parseContract(Lexer(contractSource).tokenize().toList())
             } catch (e: Abort) {
-                throw KleinException(listOf(e.diagnostic))
+                throw KleinException(listOf(InvalidContract(listOf(e.diagnostic))))
             }
         val checked = ContractChecker().check(contract)
-        if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
+        if (checked.errors.isNotEmpty()) throw KleinException(listOf(InvalidContract(checked.errors)))
         return checked.contract
     }
 
