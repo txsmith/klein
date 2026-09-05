@@ -38,7 +38,7 @@ private fun evaluate(
 ): Value {
     val core = contract.compileValue(source, ReleaseNumber(1), answerTypeOf(demandedBy))
     val executed = Klein.execute(core)
-    assertEquals(emptyList(), executed.errors)
+    assertEquals(emptyList(), executed.diagnostics)
     return executed.output!!
 }
 
@@ -114,7 +114,7 @@ class CompileValueTest {
             """.trimIndent()
         val core = contract.compileValue(source, ReleaseNumber(2), answerTypeOf("creditScore"))
         val executed = Klein.execute(core)
-        assertEquals(emptyList(), executed.errors)
+        assertEquals(emptyList(), executed.diagnostics)
         assertEquals(Value.VNum(9.0), executed.output)
     }
 

@@ -201,7 +201,7 @@ klein-lang/
 │   │   ├── commonMain/kotlin/klein/
 │   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
 │   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
-│   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── Checked.kt        # Uniform stage result: output plus diagnostics; compose stages with andThen
 │   │   │   ├── Numbering.kt      # RevisionNumber and ReleaseNumber value classes
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization

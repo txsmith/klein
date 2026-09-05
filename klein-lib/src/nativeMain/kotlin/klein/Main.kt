@@ -250,7 +250,7 @@ private fun prompt(
         try {
             val executed = Klein.execute(contract.compileValue(line, release, declaration.answerType))
             if (executed.hasErrors) {
-                executed.errors.forEach { printError(line, it.span, it.message, rawErrors) }
+                executed.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }
                 continue
             }
             val value = executed.output!!
@@ -347,13 +347,13 @@ private fun revisioned(
  * and exit non-zero. No-op when the result is clean.
  */
 private fun exitOnErrors(
-    result: StageResult<*>,
+    result: Checked<*>,
     source: String,
     rawErrors: Boolean,
     verbose: Boolean = false,
 ) {
     if (!result.hasErrors) return
-    for (error in result.errors) {
+    for (error in result.diagnostics) {
         printError(source, error.span, error.message, rawErrors)
         if (verbose && error is LexerError && error.nestingStack.isNotEmpty()) {
             println("\nNesting stack:")

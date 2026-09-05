@@ -99,7 +99,7 @@ class CompileRuleTest {
     fun aConstructorOnlyEditionExecutesToAValue() {
         val edition = compile("""Customer(1, "gold").tier == "gold"""")
         val result = Klein.execute(edition.core)
-        assertEquals(emptyList(), result.errors)
+        assertEquals(emptyList(), result.diagnostics)
         assertEquals(Value.VBool(true), result.output)
     }
 

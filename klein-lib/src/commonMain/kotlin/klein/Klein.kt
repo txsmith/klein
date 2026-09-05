@@ -15,11 +15,11 @@ import klein.interp.Value
 
 /**
  * Library entry point: the pipeline stages, each a total function with the uniform
- * [StageResult] error surface. Stages take the previous stage's output — composition is
- * the caller's, via [StageResult.andThen]:
+ * [Checked] error surface. Stages take the previous stage's output — composition is
+ * the caller's, via [Checked.andThen]:
  *
  * ```
- * val result: StageResult<Value> =
+ * val result: Checked<Value> =
  *     Klein
  *         .tokenize(source)
  *         .andThen(Klein::parse)
@@ -31,32 +31,32 @@ import klein.interp.Value
  * available for tools that want them raw.
  */
 object Klein {
-    fun tokenize(source: String): StageResult<List<Token>> =
+    fun tokenize(source: String): Checked<List<Token>> =
         try {
-            StageResult.success(Lexer(source).tokenize().toList())
+            Checked.success(Lexer(source).tokenize().toList())
         } catch (e: LexerError) {
-            StageResult.failure(e)
+            Checked.failure(e)
         }
 
-    fun parse(tokens: List<Token>): StageResult<Program> =
+    fun parse(tokens: List<Token>): Checked<Program> =
         try {
-            StageResult.success(parseProgram(tokens))
+            Checked.success(parseProgram(tokens))
         } catch (e: ParseError) {
-            StageResult.failure(e)
+            Checked.failure(e)
         }
 
     /**
      * The checker synthesizes a type even for ill-typed programs, so the result can carry
-     * both an output and errors; [StageResult.andThen] still refuses to continue past
+     * both an output and errors; [Checked.andThen] still refuses to continue past
      * errors. [env] is mutated with the program's bindings — pass your own to inspect
      * them afterwards, or to pre-bind host types.
      */
     fun check(
         program: Program,
         env: RuleEnv = TypeEnv.empty(),
-    ): StageResult<RuleType> {
+    ): Checked<RuleType> {
         val checked = checkProgram(program, env)
-        return StageResult(checked.type, checked.errors)
+        return Checked(checked.type, checked.errors)
     }
 
     /**
@@ -64,7 +64,7 @@ object Klein {
      * `contract.check(ruleSource, ReleaseNumber(2))`, and `contract.implement { … }` when the host
      * also needs to run them.
      *
-     * Throws [KleinException] carrying every diagnostic. There is no [StageResult] here because
+     * Throws [KleinException] carrying every diagnostic. There is no [Checked] here because
      * there is no partial answer worth having: holding an [EnvironmentContract] means the contract
      * checked.
      */
@@ -91,7 +91,7 @@ object Klein {
      * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
      * stage carries no errors — it either produces IR or throws.
      */
-    fun lower(program: Program): StageResult<CoreExpr> = StageResult.success(klein.core.lower(program))
+    fun lower(program: Program): Checked<CoreExpr> = Checked.success(klein.core.lower(program))
 
     /**
      * Run lowered [CoreExpr] on the [Interpreter] to completion. This entry point runs without an
@@ -99,11 +99,11 @@ object Klein {
      * error rather than driven; a failed run (division by zero, etc.) becomes a stage failure.
      * Invariant violations propagate: they are interpreter/lowerer bugs, not user diagnostics.
      */
-    fun execute(program: CoreExpr): StageResult<Value> =
+    fun execute(program: CoreExpr): Checked<Value> =
         when (val exec = Interpreter.start(program)) {
-            is Execution.Done -> StageResult.success(exec.value)
-            is Execution.Failure -> StageResult.failure(exec.error)
+            is Execution.Done -> Checked.success(exec.value)
+            is Execution.Failure -> Checked.failure(exec.error)
             is Execution.AwaitingHost ->
-                StageResult.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
+                Checked.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
         }
 }

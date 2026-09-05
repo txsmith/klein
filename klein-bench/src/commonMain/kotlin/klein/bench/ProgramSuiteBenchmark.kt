@@ -3,7 +3,7 @@ package klein.bench
 import klein.Klein
 import klein.core.CoreExpr
 import klein.surface.Program
-import klein.StageResult
+import klein.Checked
 import klein.surface.Token
 import klein.check.RuleType
 import klein.interp.Value
@@ -43,27 +43,27 @@ class ProgramSuiteBenchmark {
         tokens = Klein.tokenize(source).output ?: error("benchmark program '$name' does not lex")
         program = Klein.parse(tokens).output ?: error("benchmark program '$name' does not parse")
         val checked = Klein.check(program)
-        check(checked.errors.isEmpty()) { "benchmark program '$name' has type errors: ${checked.errors}" }
+        check(checked.diagnostics.isEmpty()) { "benchmark program '$name' has type errors: ${checked.diagnostics}" }
         core = Klein.lower(program).output ?: error("benchmark program '$name' does not lower")
     }
 
     @Benchmark
-    fun lex(): StageResult<List<Token>> = Klein.tokenize(source)
+    fun lex(): Checked<List<Token>> = Klein.tokenize(source)
 
     @Benchmark
-    fun parse(): StageResult<Program> = Klein.parse(tokens)
+    fun parse(): Checked<Program> = Klein.parse(tokens)
 
     @Benchmark
-    fun typecheck(): StageResult<RuleType> = Klein.check(program)
+    fun typecheck(): Checked<RuleType> = Klein.check(program)
 
     @Benchmark
-    fun lower(): StageResult<CoreExpr> = Klein.lower(program)
+    fun lower(): Checked<CoreExpr> = Klein.lower(program)
 
     @Benchmark
-    fun eval(): StageResult<Value> = Klein.execute(core)
+    fun eval(): Checked<Value> = Klein.execute(core)
 
     @Benchmark
-    fun endToEnd(): StageResult<Value> =
+    fun endToEnd(): Checked<Value> =
         Klein
             .tokenize(source)
             .andThen(Klein::parse)
