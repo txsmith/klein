@@ -47,6 +47,15 @@ worklist; and derived answers with provenance, so an answer a migration synthesi
 data is distinguishable in the log from one the host actually gave — the one `Turn` schema
 addition the toolkit requires. Needs `Parked` and edition serialization from the host map.
 
+Migrating a rule's *source* (re-pinning a type, adapting a call to a revised signature) is an
+AST transformation, never text editing, and it produces a new edition: rewrite the tree, compile
+the result against the new pins (spec/edition.md §Migration), and the old artifact stays as it
+was. The stored form stays text, what the author wrote; the tree is parsed from it when a
+migration needs it and printed back afterwards. For that round trip to change only what the
+migration touched, the tree carries **trivia** (comments, whitespace, literal spelling) and the
+printer is lossless over it. That printer is the formatter under Editor + tooling; today's
+`surface/PrettyPrint` is a debugging aid, not that.
+
 ## Editor + tooling
 
 The standalone-components tier: a rule editor embedding the checker — the library compiles to JS,
