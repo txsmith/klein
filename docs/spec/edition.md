@@ -56,8 +56,10 @@ encoded: the same edition has the same checksum on every platform and in every e
 
 ## Decoding
 
-Decoding takes an encoded artifact and yields the edition, together with whether the stored Core
-was used or the edition was re-derived, and if re-derived, why:
+Decoding takes an encoded artifact and answers the edition, together with whether the stored
+Core was used or the edition was re-derived, and if re-derived, why. Like compiling, it answers
+diagnostics instead of an edition when re-derivation finds the source no longer checks (see
+Errors). In order:
 
 - The artifact is read; one that cannot be read is an error and yields nothing.
 - The checksum is recomputed from the decoded contents. If it differs from the stored one, the
@@ -81,12 +83,13 @@ Re-derivation compiles the recorded source against the recorded pins, not agains
 The pins are exactly the names the source uses, each at one revision; together with everything
 those declarations' signatures reach, they form a complete typing surface, the same one the run
 uses to check answers. The source is parsed and checked against that surface, lowered, and its
-pins are computed again. The recomputed pins must equal the recorded pins; this is the **pin
-fixpoint**. For an intact artifact it holds by construction, since the pins were computed from
-that source; it fails only when the contract has changed underneath:
+pins are computed again: the names it uses, at the recorded revisions. A recorded pin the source
+does not use is dropped, not an error. For an intact artifact the pins come out as recorded,
+since they were computed from that source; re-derivation fails only when the contract has
+changed underneath:
 
-- A pin names a revision the contract no longer declares: reported per name, the same failure the
-  run's pre-flight check reports for an unservable pin.
+- A pin names a revision the contract no longer declares: thrown per pin, the same host error
+  the run's pre-flight check throws.
 - The source no longer checks against the pinned signatures, because a declaration was edited in
   place: the checker's diagnostics.
 
@@ -106,8 +109,8 @@ the artifact too, or re-derivation will silently produce a different program.
 
 An artifact is never migrated. A migration produces a **new edition** from an old one's recorded
 inputs: the source, possibly transformed, compiled against pins that may point at other
-revisions. Compiling against pins is the same operation as re-derivation, with the fixpoint as the
-check that the new pins are exactly what the new source uses. Moving a rule from `creditScore/1`
+revisions. Compiling against pins is the same operation as re-derivation: the pins given may cover more
+than the source uses, and the new edition pins exactly what it used. Moving a rule from `creditScore/1`
 to `creditScore/2` is compiling its source against pins that say `creditScore/2`: the source is
 checked against revision 2's signature, and either it fits or the diagnostics say what must
 change. How the toolkit transforms source, and what the host keeps as the editable form of a
@@ -145,15 +148,22 @@ same contents and produce exactly the same checksum.
 
 ## Errors
 
-Every error is a `KleinException` carrying one or more diagnostics:
+Errors follow [host-integration.md](./host-integration.md) §Errors: a host error is thrown, a
+diagnostic is returned.
+
+Host errors, thrown, one per fault:
 
 - **Unreadable**: the artifact cannot be read. Names what was expected and where.
-- **Re-derivation failures**: the checker's diagnostics, with spans into the source, or one
-  diagnostic per pin the contract no longer declares.
+- **Unknown pin**: a recorded pin names a revision the contract does not declare. One per pin,
+  the same error the run's pre-flight check throws.
 
-Nothing here is an outcome: an artifact either yields an edition or fails with an error. A host
-that gets an error has an artifact that is damaged, or one written against a contract that has
-since changed incompatibly.
+Diagnostics, returned beside no edition: re-derivation found that the source no longer checks
+against the pinned signatures, because a declaration was edited in place. They carry spans into
+the recorded source.
+
+Nothing here is an outcome: decoding answers an edition, or diagnostics, or throws. A host that
+gets a host error has an artifact that is damaged or one written against a contract that has
+since dropped a revision; a host that gets diagnostics has a rule that needs its author.
 
 ## What the host owns
 
