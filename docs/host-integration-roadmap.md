@@ -39,6 +39,14 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 [spec/effect-log.md](./spec/effect-log.md); the decision record is
 [replay-is-ordinal-migration-is-host-policy](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
 
+**One error architecture.** Two kinds of error, split by what they are about. A `Diagnostic` is
+about a document and has a span; checking or compiling returns it in a `Checked`, and a failed run
+carries it in its outcome and its log. A `HostError` is about the environment and has no span; it
+is only ever thrown, inside the one public `KleinException`, one error per fault with its fields
+kept. A contract that does not check is a host error carrying the contract's diagnostics. The
+lexer, parser and machine unwind with internal exceptions that never cross a public function. The
+rules are in spec/host-integration.md (§Errors).
+
 ## What is left
 
 

@@ -520,6 +520,29 @@ it, restoring the revision lets it finish, and the removal ships again later.
   by the real checker, run **where the rules live** (the org's store, the org's process). No
   subtype shortcut substitutes for it; the shortcuts only shrink how often it runs.
 
+## Errors
+
+Klein reports two kinds of error, and the kind decides how it reaches the host.
+
+A **diagnostic** is about a document: a rule, a contract, or an answer typed in Klein. It always
+has a span, because there is text to point at. Diagnostics are addressed to whoever wrote the
+document, so they are returned, never thrown: checking or compiling a rule answers the rule's
+type or edition together with its diagnostics, a rule that fails at runtime ends in a failed
+outcome carrying its diagnostics, and the effect log stores them in its failure entry.
+
+A **host error** is about the environment: a registration the contract does not declare, a pin
+the contract does not declare, a handler that is missing, a log entry that does not fit the
+contract, a replay that diverges, a call or an answer of the wrong type, a release the contract
+does not have, stored bytes that do not decode. It has no span. It means the host program is
+wrong, so it is thrown, always inside the one public exception, which carries a list of them,
+one per fault, each with the fields the host needs to inspect it.
+
+The contract is the host's own document, so a contract that does not check is a host error that
+carries the contract's diagnostics as its detail. An exception from the host's own code (a
+handler, an initiation, the persistence callback, the transaction wrapper) passes through
+unwrapped. Nothing else is thrown across the boundary; anything else that escapes is a bug in
+Klein.
+
 ## Host responsibilities
 
 The "by procedure" half of the agreement, gathered in one place. The host:
