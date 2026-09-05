@@ -1,7 +1,6 @@
 package klein.host
 
-import klein.KleinError
-import klein.SourceSpan
+import klein.Diagnostic
 import klein.interp.Value
 
 data class Call(
@@ -9,15 +8,6 @@ data class Call(
     val args: List<Value>,
 ) {
     fun print() = args.joinToString(", ", "$name(", ")") { Value.print(it) }
-}
-
-data class Diagnostic(
-    val message: String,
-    val span: SourceSpan?,
-) {
-    companion object {
-        internal fun of(error: KleinError) = Diagnostic(error.message, error.span)
-    }
 }
 
 sealed interface LogEntry {

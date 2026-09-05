@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -111,19 +111,19 @@ class BindingTest {
 
     @Test
     fun missingValue() {
-        val error = assertFailsWith<ParseError> { parseStmt("x =") }
+        val error = assertFailsWith<Abort> { parseStmt("x =") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun keywordAsName() {
-        val error = assertFailsWith<ParseError> { parseStmt("true = 1") }
+        val error = assertFailsWith<Abort> { parseStmt("true = 1") }
         assertEquals("Expected identifier, got keyword 'true'", error.message)
     }
 
     @Test
     fun underscoreAsName() {
-        val error = assertFailsWith<ParseError> { parseStmt("_ = 1") }
+        val error = assertFailsWith<Abort> { parseStmt("_ = 1") }
         assertEquals("_ (underscore) cannot be used as a name", error.message)
     }
 
@@ -174,12 +174,12 @@ class BindingTest {
 
     @Test
     fun annotatedDestructuringIsRejected() {
-        assertFailsWith<ParseError> { parseStmt("{ name }: Person = x") }
+        assertFailsWith<Abort> { parseStmt("{ name }: Person = x") }
     }
 
     @Test
     fun emptyDestructuringPatternIsRejected() {
-        assertFailsWith<ParseError> { parseStmt("{} = x") }
+        assertFailsWith<Abort> { parseStmt("{} = x") }
     }
 
     @Test
@@ -196,26 +196,26 @@ class BindingTest {
 
     @Test
     fun bareConstructorIsNotABinding() {
-        assertFailsWith<ParseError> { parseStmt("Circle = x") }
+        assertFailsWith<Abort> { parseStmt("Circle = x") }
     }
 
     @Test
     fun literalPatternsAreNotBindings() {
-        assertFailsWith<ParseError> { parseStmt("42 = x") }
-        assertFailsWith<ParseError> { parseStmt("-1 = x") }
-        assertFailsWith<ParseError> { parseStmt("\"a\" = x") }
-        assertFailsWith<ParseError> { parseStmt("true = x") }
-        assertFailsWith<ParseError> { parseStmt("null = x") }
+        assertFailsWith<Abort> { parseStmt("42 = x") }
+        assertFailsWith<Abort> { parseStmt("-1 = x") }
+        assertFailsWith<Abort> { parseStmt("\"a\" = x") }
+        assertFailsWith<Abort> { parseStmt("true = x") }
+        assertFailsWith<Abort> { parseStmt("null = x") }
     }
 
     @Test
     fun literalInDestructuringFieldIsRejected() {
-        assertFailsWith<ParseError> { parseStmt("{ a = 1 } = p") }
+        assertFailsWith<Abort> { parseStmt("{ a = 1 } = p") }
     }
 
     @Test
     fun numberAsName() {
-        val error = assertFailsWith<ParseError> { parseStmt("123 = 1") }
+        val error = assertFailsWith<Abort> { parseStmt("123 = 1") }
         assertTrue(error.message!!.startsWith("Expected newline but got '='"))
     }
 

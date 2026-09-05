@@ -4,7 +4,9 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -62,8 +64,8 @@ private val everyEntryKind: EffectLog =
         LogEntry.Reply(Call("many", everyValueShape), Value.VNull) +
         LogEntry.Failure(
             listOf(
-                Diagnostic("Division by zero", SourceSpan(3, 17)),
-                Diagnostic("environment error — no span ✗", null),
+                RuntimeError("Division by zero", SourceSpan(3, 17)),
+                RuntimeError("'ünï' used before its binding was evaluated ✗", SourceSpan(0, 3)),
             ),
         )
 
@@ -177,7 +179,7 @@ class JsonEncodingTest {
     @Test
     fun aDecodedLogReplaysIdenticallyToTheOriginal() {
         val contract = Klein.checkContract(LENDING)
-        val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1))
+        val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1)).orFail()
         var asks = 0
         fun makeHost() =
             contract.implement {
@@ -294,9 +296,9 @@ class JsonEncodingTest {
     }
 
     @Test
-    fun aDiagnosticWithHalfASpanIsUnreadable() {
+    fun aDiagnosticWithoutItsWholeSpanIsUnreadable() {
         val diagnostic = assertUnreadable(frame("""{"entry":"failure","errors":[{"message":"m","start":1}]}"""))
-        assertTrue(diagnostic.message.contains("both \"start\" and \"end\""), diagnostic.message)
+        assertTrue(diagnostic.message.contains("a diagnostic is missing its \"end\" field"), diagnostic.message)
     }
 
     @Test

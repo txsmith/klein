@@ -3,7 +3,7 @@
 package klein.lexer
 
 import klein.surface.Lexer
-import klein.surface.LexerError
+import klein.surface.Abort
 import klein.SourceSpan
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,20 +72,20 @@ class StringTest {
 
     @Test
     fun unterminatedString() {
-        val error = assertFailsWith<LexerError> { Lexer("\"hello").tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer("\"hello").tokenize().toList() }
         assertEquals("Unterminated string", error.message)
     }
 
     @Test
     fun unterminatedStringWithContent() {
-        val error = assertFailsWith<LexerError> { Lexer("let x = \"").tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer("let x = \"").tokenize().toList() }
         assertEquals("Unterminated string", error.message)
-        assertEquals(SourceSpan(8, 9), error.span)
+        assertEquals(SourceSpan(8, 9), error.diagnostic.span)
     }
 
     @Test
     fun unknownEscapeSequence() {
-        val error = assertFailsWith<LexerError> { Lexer(""""a\b"""").tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer(""""a\b"""").tokenize().toList() }
         assertEquals("""Invalid escape sequence: \b""", error.message)
     }
 
@@ -109,7 +109,7 @@ class StringTest {
 
     @Test
     fun incompleteEscapeSequence() {
-        val error = assertFailsWith<LexerError> { Lexer(""""a\"""").tokenize().toList() }
+        val error = assertFailsWith<Abort> { Lexer(""""a\"""").tokenize().toList() }
         assertEquals("Unterminated string", error.message)
     }
 }

@@ -35,7 +35,8 @@ import klein.surface.NullLiteral
 import klein.surface.Operator
 import klein.surface.OptionalTypeExpr
 import klein.surface.Param
-import klein.surface.ParseError
+import klein.surface.Abort
+import klein.surface.SyntaxError
 import klein.surface.parseContract
 import klein.surface.parseExpr
 import klein.surface.parseProgram
@@ -468,7 +469,7 @@ fun parseTypeDef(source: String): TypeDef<Nothing?> {
     val tokens = Lexer(source).tokenize().toList()
     val stmt = parseStmt(tokens)
     if (stmt !is TypeDefStmt) {
-        throw ParseError("Expected type definition", stmt.span)
+        throw Abort(SyntaxError("Expected type definition", stmt.span))
     }
     return stmt.typeDef
 }

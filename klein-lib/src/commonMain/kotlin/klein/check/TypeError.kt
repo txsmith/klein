@@ -1,11 +1,11 @@
 package klein.check
 
-import klein.KleinError
+import klein.Diagnostic
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.SourceSpan
 
-sealed class TypeError : KleinError {
+sealed class TypeError : Diagnostic {
     abstract override val span: SourceSpan
     abstract override val message: String
 

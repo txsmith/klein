@@ -1,7 +1,7 @@
 package klein.parser
 
 import klein.surface.FunDecl
-import klein.surface.ParseError
+import klein.surface.Abort
 import klein.surface.ValDecl
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -163,7 +163,7 @@ class ContractTest {
     @Test
     fun aDeclarationTypeDoesNotRunOnIntoALambda() {
         val error =
-            assertFailsWith<ParseError> {
+            assertFailsWith<Abort> {
                 parseContract(
                     """
                     handler: Num
@@ -178,59 +178,59 @@ class ContractTest {
 
     @Test
     fun aFunctionWithABodyIsRejected() {
-        val error = assertFailsWith<ParseError> { parseContract("fun creditCheck(c: Num): Num = c") }
+        val error = assertFailsWith<Abort> { parseContract("fun creditCheck(c: Num): Num = c") }
         assertTrue("creditCheck" in error.message, error.message)
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun aBindingWithAValueIsRejected() {
-        val error = assertFailsWith<ParseError> { parseContract("maxRetries: Num = 3") }
+        val error = assertFailsWith<Abort> { parseContract("maxRetries: Num = 3") }
         assertTrue("maxRetries" in error.message, error.message)
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun anUnannotatedBindingIsRejected() {
-        assertFailsWith<ParseError> { parseContract("maxRetries = 3") }
+        assertFailsWith<Abort> { parseContract("maxRetries = 3") }
     }
 
     @Test
     fun aBareExpressionIsRejected() {
-        val error = assertFailsWith<ParseError> { parseContract("1 + 2") }
+        val error = assertFailsWith<Abort> { parseContract("1 + 2") }
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun aDestructuringBindingIsRejected() {
-        val error = assertFailsWith<ParseError> { parseContract("{ name } = customer") }
+        val error = assertFailsWith<Abort> { parseContract("{ name } = customer") }
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun aFunWithNeitherReturnTypeNorBodyIsRejected() {
-        assertFailsWith<ParseError> { parseContract("fun mystery()") }
+        assertFailsWith<Abort> { parseContract("fun mystery()") }
     }
 
     // ── What a program rejects ───────────────────────────────────────────────
 
     @Test
     fun aBodilessFunInAProgramIsAParseError() {
-        val error = assertFailsWith<ParseError> { parseProgram("fun creditCheck(c: Num): Num") }
+        val error = assertFailsWith<Abort> { parseProgram("fun creditCheck(c: Num): Num") }
         assertTrue("creditCheck" in error.message, error.message)
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun aBodilessBindingInAProgramIsAParseError() {
-        val error = assertFailsWith<ParseError> { parseProgram("maxRetries: Num") }
+        val error = assertFailsWith<Abort> { parseProgram("maxRetries: Num") }
         assertTrue("maxRetries" in error.message, error.message)
         assertTrue("contract" in error.message, error.message)
     }
 
     @Test
     fun aBodilessBindingInsideABlockIsAParseError() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseProgram(
                 """
                 result =
@@ -243,7 +243,7 @@ class ContractTest {
 
     @Test
     fun aBodilessFunIsRejectedEvenWhenSomethingFollowsIt() {
-        assertFailsWith<ParseError> {
+        assertFailsWith<Abort> {
             parseProgram(
                 """
                 fun creditCheck(c: Num): Num

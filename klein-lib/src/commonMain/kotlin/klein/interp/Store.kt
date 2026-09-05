@@ -38,5 +38,5 @@ internal class Store {
         span: SourceSpan,
     ): Value =
         cells[addr]
-            ?: throw KleinRuntimeError("'$name' used before its binding was evaluated", span)
+            ?: runtimeError("'$name' used before its binding was evaluated", span)
 }

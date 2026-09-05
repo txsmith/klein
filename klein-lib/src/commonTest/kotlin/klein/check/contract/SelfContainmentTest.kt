@@ -1,19 +1,20 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
 import klein.check.Type.TNum
 import klein.check.TypeError
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-private fun contractErrors(src: String): List<KleinError> =
-    assertFailsWith<KleinException> { Klein.checkContract(src.trimIndent()) }.errors
+private fun contractErrors(src: String): List<Diagnostic> =
+    assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src.trimIndent()) }.errors.single()).diagnostics
 
 private fun notSelfContained(src: String): TypeError.ReleaseNotSelfContained =
     assertIs<TypeError.ReleaseNotSelfContained>(contractErrors(src).single())
@@ -91,7 +92,7 @@ class SelfContainmentTest {
                   creditScore/2
                 """.trimIndent(),
             )
-        assertEquals(TNum, contract.check("""creditScore(Customer(1, "gold"))""", ReleaseNumber(2)))
+        assertEquals(TNum, contract.check("""creditScore(Customer(1, "gold"))""", ReleaseNumber(2)).orFail())
     }
 
     @Test
@@ -288,7 +289,7 @@ class SelfContainmentTest {
                   Pick/2
                 """.trimIndent(),
             )
-        assertEquals(TNum, contract.check("fun r(p: Pick): Num = p.first.radius\nr(Pick(Circle(1)))", ReleaseNumber(2)))
+        assertEquals(TNum, contract.check("fun r(p: Pick): Num = p.first.radius\nr(Pick(Circle(1)))", ReleaseNumber(2)).orFail())
     }
 
     /** The walk terminates on a visited set, so a self-referential type is self-contained. */
@@ -305,7 +306,7 @@ class SelfContainmentTest {
             )
         assertEquals(
             "Tree?",
-            Type.print(contract.check("fun l(t: Tree): Tree? = t.left\nl(Tree(1, null))", ReleaseNumber(2))),
+            Type.print(contract.check("fun l(t: Tree): Tree? = t.left\nl(Tree(1, null))", ReleaseNumber(2)).orFail()),
         )
     }
 
@@ -324,7 +325,7 @@ class SelfContainmentTest {
             )
         assertEquals(
             "Edge?",
-            Type.print(contract.check("fun e(n: Node): Edge? = n.edge\ne(Node(null))", ReleaseNumber(2))),
+            Type.print(contract.check("fun e(n: Node): Edge? = n.edge\ne(Node(null))", ReleaseNumber(2)).orFail()),
         )
     }
 
@@ -353,7 +354,7 @@ class SelfContainmentTest {
     @Test
     fun aBuiltInTypeNeedsNoEntry() {
         val contract = Klein.checkContract("maxRetries: Num\n\nrelease 1\n  maxRetries")
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)))
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)).orFail())
     }
 
     /** A declaration no release exposes is not a root, so it may reach anything at all. */

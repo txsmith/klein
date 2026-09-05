@@ -185,6 +185,6 @@ class SafeFieldAccessTest {
 
     @Test
     fun underscoreAsFieldIsRejected() {
-        kotlin.test.assertFailsWith<klein.surface.ParseError> { parse("x?._") }
+        kotlin.test.assertFailsWith<klein.surface.Abort> { parse("x?._") }
     }
 }

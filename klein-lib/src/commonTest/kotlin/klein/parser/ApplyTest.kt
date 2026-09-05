@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -110,25 +110,25 @@ class ApplyTest {
 
     @Test
     fun unclosedCall() {
-        val error = assertFailsWith<ParseError> { parse("f(1") }
+        val error = assertFailsWith<Abort> { parse("f(1") }
         assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun unclosedCallWithMultipleArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(1, 2") }
+        val error = assertFailsWith<Abort> { parse("f(1, 2") }
         assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun trailingCommaInArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(1,)") }
+        val error = assertFailsWith<Abort> { parse("f(1,)") }
         assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test
     fun doubleCommaInArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(1,,2)") }
+        val error = assertFailsWith<Abort> { parse("f(1,,2)") }
         assertEquals("Expected expression, got ','", error.message)
     }
 
@@ -188,13 +188,13 @@ class ApplyTest {
 
     @Test
     fun keywordAndAsCallee() {
-        val error = assertFailsWith<ParseError> { parse("and(1)") }
+        val error = assertFailsWith<Abort> { parse("and(1)") }
         assertEquals("Expected expression, got Keyword(AND)", error.message)
     }
 
     @Test
     fun keywordOrAsCallee() {
-        val error = assertFailsWith<ParseError> { parse("or(1)") }
+        val error = assertFailsWith<Abort> { parse("or(1)") }
         assertEquals("Expected expression, got Keyword(OR)", error.message)
     }
 
@@ -257,55 +257,55 @@ class ApplyTest {
 
     @Test
     fun leadingCommaInArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(,1)") }
+        val error = assertFailsWith<Abort> { parse("f(,1)") }
         assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun missingCommaBetweenArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(1 2)") }
+        val error = assertFailsWith<Abort> { parse("f(1 2)") }
         assertEquals("Expected ')', got Number(2)", error.message)
     }
 
     @Test
     fun nestedUnclosedCall() {
-        val error = assertFailsWith<ParseError> { parse("f(g(1)") }
+        val error = assertFailsWith<Abort> { parse("f(g(1)") }
         assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun callWithUnclosedLambdaArg() {
-        val error = assertFailsWith<ParseError> { parse("f(|x -> x)") }
+        val error = assertFailsWith<Abort> { parse("f(|x -> x)") }
         assertEquals("Expected '|', got ')'", error.message)
     }
 
     @Test
     fun emptyParensAsCallee() {
-        val error = assertFailsWith<ParseError> { parse("()(1)") }
+        val error = assertFailsWith<Abort> { parse("()(1)") }
         assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test
     fun justCommaInArgs() {
-        val error = assertFailsWith<ParseError> { parse("f(,)") }
+        val error = assertFailsWith<Abort> { parse("f(,)") }
         assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun plusNotUnary() {
-        val error = assertFailsWith<ParseError> { parse("f(+)") }
+        val error = assertFailsWith<Abort> { parse("f(+)") }
         assertEquals("Expected expression, got '+'", error.message)
     }
 
     @Test
     fun multipleTrailingCommas() {
-        val error = assertFailsWith<ParseError> { parse("f(1,,)") }
+        val error = assertFailsWith<Abort> { parse("f(1,,)") }
         assertEquals("Expected expression, got ','", error.message)
     }
 
     @Test
     fun openParenAtEof() {
-        val error = assertFailsWith<ParseError> { parse("f(") }
+        val error = assertFailsWith<Abort> { parse("f(") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 

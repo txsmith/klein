@@ -6,12 +6,10 @@ import klein.check.RuleEnv
 import klein.check.TypeEnv
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
-import klein.check.contract.UnknownRelease
+import klein.check.contract.InvalidContract
 import klein.core.CorePrinter
-import klein.host.RunFailure
 import klein.host.RunOutcome
 import klein.host.implement
-import klein.interp.KleinRuntimeError
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -40,7 +38,7 @@ fun main(args: Array<String>) {
     // Each command accepts its own flags; help/unknown commands (null) skip flag validation.
     val knownFlags: Set<String>? =
         when (command) {
-            "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw", "--verbose", "-v")
+            "tokens", "t", "parse", "p" -> setOf("--stdin", "--raw")
             "check", "c", "run", "r" -> setOf("--stdin", "--raw", "--contract", "--release")
             "core" -> setOf("--stdin", "--raw")
             else -> null
@@ -55,7 +53,6 @@ fun main(args: Array<String>) {
     }
 
     val rawErrors = "--raw" in args
-    val verbose = "--verbose" in args || "-v" in args
     val useStdin = "--stdin" in args
     val contractIndex = args.indexOf("--contract")
     val releaseIndex = args.indexOf("--release")
@@ -68,11 +65,11 @@ fun main(args: Array<String>) {
     when (command) {
         "tokens", "t" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            tokenize(source, rawErrors, verbose)
+            tokenize(source, rawErrors)
         }
         "parse", "p" -> {
             val source = getSource(useStdin, fileArg) ?: return
-            parse(source, rawErrors, verbose)
+            parse(source, rawErrors)
         }
         "check", "c" -> checkCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
         "run", "r" -> runCmd(useStdin, fileArg, contractPath, releaseArg, rawErrors)
@@ -118,7 +115,6 @@ private fun printUsage() {
         Options:
           --stdin           Read from stdin instead of file
           --raw             Print raw errors with SourceSpan (for tooling)
-          --verbose         Show nesting stack on lexer errors (tokens, parse)
           --contract FILE   Check against a capability contract (check, run)
           --release N       Release to check the rule against (needs --contract)
         """.trimIndent(),
@@ -152,8 +148,9 @@ private fun checkCmd(
     }
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val type = withRuleDiagnostics(ruleSource, rawErrors) { contract.check(ruleSource, release) }
-    println("rule : ${Type.print(type)}")
+    val checked = orExit { contract.check(ruleSource, release) }
+    exitOnErrors(checked, ruleSource, rawErrors)
+    println("rule : ${Type.print(checked.output!!)}")
     println("✓ Type checks against release ${release.value}")
 }
 
@@ -183,7 +180,9 @@ private fun runCmd(
     val contract = loadContract(contractPath, rawErrors)
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val edition = withRuleDiagnostics(ruleSource, rawErrors) { contract.compileRule(ruleSource, release) }
+    val compiled = orExit { contract.compileRule(ruleSource, release) }
+    exitOnErrors(compiled, ruleSource, rawErrors)
+    val edition = compiled.output!!
     val canPrompt = !useStdin && isatty(STDIN_FILENO) == 1
     val answers = mutableMapOf<String, Value>()
     val environment =
@@ -192,14 +191,7 @@ private fun runCmd(
                 immediate("${d.name}/${d.revision.value}") { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
             }
         }
-    val outcome =
-        try {
-            withRuleDiagnostics(ruleSource, rawErrors) { environment.run(edition) }
-        } catch (e: RunFailure) {
-            printError(ruleSource, null, e.error.message, rawErrors)
-            exitProcess(1)
-        }
-    when (outcome) {
+    when (val outcome = orExit { environment.run(edition) }) {
         is RunOutcome.Completed -> println(Value.print(outcome.value))
         is RunOutcome.Failed -> {
             outcome.diagnostics.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
@@ -214,9 +206,8 @@ private fun runCmd(
 
 private class UnanswerableCapability(
     call: String,
-) : KleinError {
+) : HostError {
     override val message = "cannot answer '$call': interactive run needs a terminal, and stdin is not one"
-    override val span: SourceSpan? = null
 }
 
 /**
@@ -247,18 +238,19 @@ private fun prompt(
         print("$call = ? ")
         fflush(null)
         val line = readLine() ?: throw KleinException(listOf(UnanswerableCapability(call)))
-        try {
-            val executed = Klein.execute(contract.compileValue(line, release, declaration.answerType))
-            if (executed.hasErrors) {
-                executed.errors.forEach { printError(line, it.span, it.message, rawErrors) }
-                continue
-            }
-            val value = executed.output!!
-            answers[call] = value
-            return value
-        } catch (e: KleinException) {
-            e.errors.forEach { printError(line, it.span, it.message, rawErrors) }
+        val compiled = contract.compileValue(line, release, declaration.answerType)
+        if (compiled.hasErrors) {
+            compiled.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }
+            continue
         }
+        val executed = Klein.execute(compiled.output!!)
+        if (executed.hasErrors) {
+            executed.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }
+            continue
+        }
+        val value = executed.output!!
+        answers[call] = value
+        return value
     }
 }
 
@@ -271,7 +263,13 @@ private fun loadContract(
     return try {
         Klein.checkContract(source)
     } catch (e: KleinException) {
-        e.errors.forEach { printError(source, it.span, it.message, rawErrors) }
+        e.errors.forEach { error ->
+            if (error is InvalidContract) {
+                error.diagnostics.forEach { printError(source, it.span, it.message, rawErrors) }
+            } else {
+                println("Error: ${error.message}")
+            }
+        }
         exitProcess(1)
     }
 }
@@ -305,23 +303,14 @@ private fun parseReleaseNumber(
     }
 }
 
-/** Run a contract operation on [ruleSource], exiting non-zero with every diagnostic on failure. */
-private fun <T> withRuleDiagnostics(
-    ruleSource: String,
-    rawErrors: Boolean,
-    operation: () -> T,
-): T = try {
-    operation()
-} catch (e: UnknownRelease) {
-    println("Error: ${e.message}")
-    exitProcess(1)
-} catch (e: KleinException) {
-    e.errors.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
-    exitProcess(1)
-} catch (e: KleinRuntimeError) {
-    printError(ruleSource, e.span, e.message, rawErrors)
-    exitProcess(1)
-}
+/** Run one library operation, exiting non-zero with every host error it throws. */
+private fun <T> orExit(operation: () -> T): T =
+    try {
+        operation()
+    } catch (e: KleinException) {
+        e.errors.forEach { println("Error: ${it.message}") }
+        exitProcess(1)
+    }
 
 private fun printContractSummary(contract: EnvironmentContract) {
     contract.declarations.forEach { d ->
@@ -342,27 +331,15 @@ private fun revisioned(
     revision: RevisionNumber,
 ): String = if (revision.value == 1) name else "$name/${revision.value}"
 
-/**
- * Print every error from a stage result uniformly, plus any verbose stage-specific detail,
- * and exit non-zero. No-op when the result is clean.
- */
+/** Print every error from a stage result uniformly and exit non-zero. No-op when the result is clean. */
 private fun exitOnErrors(
-    result: StageResult<*>,
+    result: Checked<*>,
     source: String,
     rawErrors: Boolean,
-    verbose: Boolean = false,
 ) {
     if (!result.hasErrors) return
-    for (error in result.errors) {
+    for (error in result.diagnostics) {
         printError(source, error.span, error.message, rawErrors)
-        if (verbose && error is LexerError && error.nestingStack.isNotEmpty()) {
-            println("\nNesting stack:")
-            error.nestingStack.forEach { println("  $it") }
-        }
-        if (verbose && error is ParseError) {
-            println("\nCall stack:")
-            printFormattedStackTrace(error)
-        }
     }
     exitProcess(1)
 }
@@ -370,10 +347,9 @@ private fun exitOnErrors(
 private fun tokenize(
     source: String,
     rawOutput: Boolean,
-    verbose: Boolean,
 ) {
     val result = Klein.tokenize(source)
-    exitOnErrors(result, source, rawOutput, verbose)
+    exitOnErrors(result, source, rawOutput)
     for (token in result.output!!) {
         println(token.prettyPrint())
     }
@@ -382,10 +358,9 @@ private fun tokenize(
 private fun parse(
     source: String,
     rawOutput: Boolean,
-    verbose: Boolean,
 ) {
     val result = Klein.tokenize(source).andThen(Klein::parse)
-    exitOnErrors(result, source, rawOutput, verbose)
+    exitOnErrors(result, source, rawOutput)
     for (stmt in result.output!!.stmts) {
         println(stmt.prettyPrint())
     }
@@ -477,30 +452,6 @@ private fun printError(
     } else {
         print(span.formatInSource(source, contextLines = 5, message = message))
     }
-}
-
-private fun printFormattedStackTrace(e: Throwable) {
-    val pattern = Regex("""kfun:klein\.([^+]+).+/klein/(\w+\.kt):(\d+)""")
-    val frames =
-        e
-            .stackTraceToString()
-            .lines()
-            .mapNotNull { line ->
-                pattern.find(line)?.let { match ->
-                    val (func, file, lineNum) = match.destructured
-                    val funcName =
-                        func
-                            .replace(Regex("""Parser[.#]"""), "")
-                            .replace("#internal", "")
-                            .substringBefore("(")
-                            .substringBefore("{")
-                            .trim()
-                    "$funcName:$lineNum"
-                }
-            }.filter { !it.startsWith("ParseError") }
-            .reversed()
-
-    println(frames.joinToString(" -> "))
 }
 
 @OptIn(ExperimentalForeignApi::class)

@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -15,7 +15,7 @@ class RecordTest {
 
     @Test
     fun emptyRecordTypeRejected() {
-        assertFailsWith<ParseError> { parseProgram("fun f(x: {}) = x") }
+        assertFailsWith<Abort> { parseProgram("fun f(x: {}) = x") }
     }
 
     @Test
@@ -123,44 +123,44 @@ class RecordTest {
 
     @Test
     fun unclosedBrace() {
-        assertFailsWith<ParseError> { parse("{ a = 1") }
+        assertFailsWith<Abort> { parse("{ a = 1") }
     }
 
     @Test
     fun numberAsKey() {
-        assertFailsWith<ParseError> { parse("{ 123 = 1 }") }
+        assertFailsWith<Abort> { parse("{ 123 = 1 }") }
     }
 
     @Test
     fun stringAsKey() {
-        assertFailsWith<ParseError> { parse("{ \"key\" = 1 }") }
+        assertFailsWith<Abort> { parse("{ \"key\" = 1 }") }
     }
 
     @Test
     fun randomSymbolsInBraces() {
-        assertFailsWith<ParseError> { parse("{ + - * }") }
+        assertFailsWith<Abort> { parse("{ + - * }") }
     }
 
     @Test
     fun keywordsInBraces() {
-        assertFailsWith<ParseError> { parse("{ if then else }") }
-        assertFailsWith<ParseError> { parse("{ match = 1 }") }
+        assertFailsWith<Abort> { parse("{ if then else }") }
+        assertFailsWith<Abort> { parse("{ match = 1 }") }
     }
 
     @Test
     fun underscoreAsFieldName() {
-        assertFailsWith<ParseError> { parse("{ _ = 1 }") }
-        assertFailsWith<ParseError> { parse("{ _ }") }
+        assertFailsWith<Abort> { parse("{ _ = 1 }") }
+        assertFailsWith<Abort> { parse("{ _ }") }
     }
 
     @Test
     fun missingValue() {
-        assertFailsWith<ParseError> { parse("{ a = }") }
+        assertFailsWith<Abort> { parse("{ a = }") }
     }
 
     @Test
     fun missingEqualsOrComma() {
-        assertFailsWith<ParseError> { parse("{ a 1 }") }
+        assertFailsWith<Abort> { parse("{ a 1 }") }
     }
 
     @Test

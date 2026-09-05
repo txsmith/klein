@@ -2,7 +2,7 @@ package klein.parser
 
 import klein.surface.DoubleLiteral
 import klein.surface.IntLiteral
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -210,67 +210,67 @@ class BasicExprTest {
 
     @Test
     fun unexpectedOperatorAtStart() {
-        val error = assertFailsWith<ParseError> { parse("* 2") }
+        val error = assertFailsWith<Abort> { parse("* 2") }
         assertEquals("Expected expression, got '*'", error.message)
     }
 
     @Test
     fun unexpectedEof() {
-        val error = assertFailsWith<ParseError> { parse("") }
+        val error = assertFailsWith<Abort> { parse("") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun unclosedParen() {
-        val error = assertFailsWith<ParseError> { parse("(1 + 2") }
+        val error = assertFailsWith<Abort> { parse("(1 + 2") }
         assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun unclosedNestedParen() {
-        val error = assertFailsWith<ParseError> { parse("((1 + 2)") }
+        val error = assertFailsWith<Abort> { parse("((1 + 2)") }
         assertEquals("Expected ')', got Eof", error.message)
     }
 
     @Test
     fun incompleteIfExpression() {
-        val error = assertFailsWith<ParseError> { parse("if") }
+        val error = assertFailsWith<Abort> { parse("if") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingRightOperand() {
-        val error = assertFailsWith<ParseError> { parse("1 +") }
+        val error = assertFailsWith<Abort> { parse("1 +") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingOperandAfterNot() {
-        val error = assertFailsWith<ParseError> { parse("not") }
+        val error = assertFailsWith<Abort> { parse("not") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun missingOperandAfterNegation() {
-        val error = assertFailsWith<ParseError> { parse("-") }
+        val error = assertFailsWith<Abort> { parse("-") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 
     @Test
     fun emptyParens() {
-        val error = assertFailsWith<ParseError> { parse("()") }
+        val error = assertFailsWith<Abort> { parse("()") }
         assertEquals("Expected expression, got ')'", error.message)
     }
 
     @Test
     fun errorSpanForUnclosedParen() {
-        val error = assertFailsWith<ParseError> { parse("(42") }
-        assertEquals(3, error.span.start)
+        val error = assertFailsWith<Abort> { parse("(42") }
+        assertEquals(3, error.diagnostic.span.start)
     }
 
     @Test
     fun errorSpanForUnexpectedOperator() {
-        val error = assertFailsWith<ParseError> { parse("1 + * 2") }
-        assertEquals(4, error.span.start)
+        val error = assertFailsWith<Abort> { parse("1 + * 2") }
+        assertEquals(4, error.diagnostic.span.start)
     }
 }

@@ -1,12 +1,13 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
 import klein.check.Type.TNum
 import klein.check.TypeError
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,8 +27,8 @@ private val DECLARATIONS =
 /** [DECLARATIONS] followed by [releases], so each test writes only the blocks it is about. */
 private fun contractWith(releases: String) = "$DECLARATIONS\n\n${releases.trimIndent()}"
 
-private fun contractErrors(src: String): List<KleinError> =
-    assertFailsWith<KleinException> { Klein.checkContract(src) }.errors
+private fun contractErrors(src: String): List<Diagnostic> =
+    assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src) }.errors.single()).diagnostics
 
 /**
  * `contracts.md` §Releases as the checker enforces it: an entry points at a declaration, and what a
@@ -50,8 +51,8 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)))
-        assertEquals(TNum, contract.check("fun id(c: Customer): Num = c.id\nid(Customer(1))", ReleaseNumber(1)))
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)).orFail())
+        assertEquals(TNum, contract.check("fun id(c: Customer): Num = c.id\nid(Customer(1))", ReleaseNumber(1)).orFail())
     }
 
     @Test
@@ -72,8 +73,8 @@ class ReleaseTypeCheckTest {
     fun anEmptyBlockIsLegalAndExposesNothing() {
         val contract = Klein.checkContract(contractWith("release 2"))
         assertEquals(listOf(ReleaseNumber(2)), contract.releases)
-        val error = assertFailsWith<KleinException> { contract.check("maxRetries", ReleaseNumber(2)) }
-        assertIs<TypeError.UnboundVariable>(error.errors.single())
+        val error = contract.check("maxRetries", ReleaseNumber(2))
+        assertIs<TypeError.UnboundVariable>(error.diagnostics.single())
     }
 
     // A capability may be declared and implemented ahead of the release that exposes it.
@@ -179,7 +180,7 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)))
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)).orFail())
     }
 
     @Test
@@ -199,10 +200,8 @@ class ReleaseTypeCheckTest {
                 ),
             )
         val rule = "fun tier(c: Customer): String = c.tier"
-        assertEquals(Type.TStr, contract.check("$rule\ntier(Customer(1, \"gold\"))", ReleaseNumber(2)))
-        assertIs<TypeError.MissingField>(
-            assertFailsWith<KleinException> { contract.check(rule, ReleaseNumber(1)) }.errors.single(),
-        )
+        assertEquals(Type.TStr, contract.check("$rule\ntier(Customer(1, \"gold\"))", ReleaseNumber(2)).orFail())
+        assertIs<TypeError.MissingField>(contract.check(rule, ReleaseNumber(1)).diagnostics.single())
     }
 
     /** An empty block anywhere but first states a release identical to the one before it. */
@@ -220,7 +219,7 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)))
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(2)).orFail())
     }
 
     // ── Adding and removing names ────────────────────────────────────────────
@@ -240,9 +239,9 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)))
-        val error = assertFailsWith<KleinException> { contract.check("maxRetries", ReleaseNumber(2)) }
-        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(error.errors.single()).name)
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)).orFail())
+        val error = contract.check("maxRetries", ReleaseNumber(2))
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(error.diagnostics.single()).name)
     }
 
     @Test
@@ -259,8 +258,8 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        val error = assertFailsWith<KleinException> { contract.check("fun f(c: Customer): Num = c.id", ReleaseNumber(2)) }
-        assertEquals("Customer", assertIs<TypeError.UnboundVariable>(error.errors.first()).name)
+        val error = contract.check("fun f(c: Customer): Num = c.id", ReleaseNumber(2))
+        assertEquals("Customer", assertIs<TypeError.UnboundVariable>(error.diagnostics.first()).name)
     }
 
     @Test
@@ -280,7 +279,7 @@ class ReleaseTypeCheckTest {
                     """,
                 ),
             )
-        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(3)))
+        assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(3)).orFail())
     }
 
     @Test
@@ -410,7 +409,7 @@ class ReleaseTypeCheckTest {
             )
         val rule = """fun tier(c: Customer): String = c.tier
 creditScore(Customer(1, "gold")) + maxRetries"""
-        assertEquals(before.check(rule, ReleaseNumber(2)), after.check(rule, ReleaseNumber(2)))
+        assertEquals(before.check(rule, ReleaseNumber(2)).orFail(), after.check(rule, ReleaseNumber(2)).orFail())
         assertEquals(listOf(ReleaseNumber(2)), after.releases)
     }
 

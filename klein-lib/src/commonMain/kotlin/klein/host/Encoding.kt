@@ -1,15 +1,15 @@
 package klein.host
 
-import klein.KleinError
+import klein.Diagnostic
+import klein.HostError
 import klein.KleinException
 import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
 
 class UnreadableLog internal constructor(
     override val message: String,
-) : KleinError {
-    override val span: SourceSpan? get() = null
-}
+) : HostError
 
 private val MAGIC = byteArrayOf('K'.code.toByte(), 'L'.code.toByte(), 'O'.code.toByte(), 'G'.code.toByte())
 private const val VERSION = 1
@@ -109,19 +109,11 @@ private fun ByteReader.readCall() = Call(readString(), List(readCount()) { readV
 
 private fun ByteWriter.writeDiagnostic(diagnostic: Diagnostic) {
     writeString(diagnostic.message)
-    val span = diagnostic.span
-    writeBoolean(span != null)
-    if (span != null) {
-        writeInt(span.start)
-        writeInt(span.end)
-    }
+    writeInt(diagnostic.span.start)
+    writeInt(diagnostic.span.end)
 }
 
-private fun ByteReader.readDiagnostic(): Diagnostic {
-    val message = readString()
-    val span = if (readBoolean()) SourceSpan(readInt(), readInt()) else null
-    return Diagnostic(message, span)
-}
+private fun ByteReader.readDiagnostic(): Diagnostic = RuntimeError(readString(), SourceSpan(readInt(), readInt()))
 
 private fun ByteWriter.writeValue(value: Value) {
     when (value) {

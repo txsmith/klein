@@ -96,9 +96,6 @@ echo "x = 1 + 2" | ./klein tokens --stdin
 
 # Raw output (just tokens, no formatting)
 ./klein tokens --raw example.klein
-
-# Verbose output
-./klein tokens -v example.klein
 ```
 
 ### Parse
@@ -201,11 +198,15 @@ klein-lang/
 │   │   ├── commonMain/kotlin/klein/
 │   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
 │   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
-│   │   │   ├── StageResult.kt    # Uniform stage result + KleinError; compose stages with andThen
+│   │   │   ├── Checked.kt        # Output plus diagnostics, what checking a document returns; compose with andThen
+│   │   │   ├── Diagnostic.kt     # A fault in a document (rule, contract, answer): message + span; returned, never thrown
+│   │   │   ├── HostError.kt      # A fault in the environment (registration, pin, log, release, bytes): no span; only thrown
+│   │   │   ├── KleinException.kt # The one public exception: a list of HostErrors
 │   │   │   ├── Numbering.kt      # RevisionNumber and ReleaseNumber value classes
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization
 │   │   │   │   ├── Parser.kt       # Parsing
+│   │   │   │   ├── SyntaxError.kt  # The lexer's and parser's diagnostic, plus the internal abort that carries it
 │   │   │   │   ├── Ast.kt          # Surface AST definitions
 │   │   │   │   ├── Token.kt        # Token types
 │   │   │   │   └── PrettyPrint.kt  # AST pretty-printing
@@ -218,7 +219,7 @@ klein-lang/
 │   │   │   │   ├── Machine.kt      # Two-stack machine + Execution (Done | AwaitingHost), one-shot resume/clone
 │   │   │   │   ├── Store.kt        # The store: write-once cells behind integer addresses
 │   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
-│   │   │   │   └── KleinRuntimeError.kt
+│   │   │   │   └── RuntimeError.kt # The rule's own runtime failure, a diagnostic; the machine unwinds with an internal abort
 │   │   │   ├── check/            # The Operation Bidi bidirectional checker
 │   │   │   │   ├── Checker.kt              # synth / check driver (checkProgram facade)
 │   │   │   │   ├── Type.kt                 # The type tree (skolems, foralls, revision witness) + printer
@@ -232,14 +233,18 @@ klein-lang/
 │   │   │   │   ├── ValueTypes.kt           # infer(Value): the runtime answer's type, for the resume boundary
 │   │   │   │   └── contract/     # Contracts, revisions, releases
 │   │   │   │       ├── ContractChecker.kt      # Contract checking, release folding, self-containment
-│   │   │   │       ├── EnvironmentContract.kt  # check / compileRule / compileValue per release
+│   │   │   │       ├── EnvironmentContract.kt  # check / compileRule / compileValue per release; UnknownRelease, InvalidContract
+│   │   │   │       ├── UnknownPin.kt           # The one pin error: an edition pins what the contract does not declare
 │   │   │   │       ├── ResolvedRelease.kt      # A release materialised: types + revisions, bindingFor
-│   │   │   │       ├── UsedCapabilities.kt     # The used-capability pass (expression, type, pattern positions)
+│   │   │   │       ├── UsedCapabilities.kt     # The used-capability pass (expression, type, pattern positions); CapabilityInAnswer
 │   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map
 │   │   │   │       └── Projection.kt           # strip(): the one ContractType -> RuleType crossing
 │   │   │   └── host/             # The embedding surface a host calls
-│   │   │       ├── Environment.kt  # implement { }, Registry, Handler (immediate and deferred), Capability
-│   │   │       └── Runner.kt       # Environment.run: pre-flight pin check, suspend/resume loop, answer check
+│   │   │       ├── Environment.kt    # implement { }, Registry, Handler (immediate and deferred), run; RegistrationError
+│   │   │       ├── PreFlightChecks.kt # Pin and log checks before a run; MissingHandler, LogTypeMismatch
+│   │   │       ├── Runner.kt         # The suspend/resume loop; Diverged, CallTypeMismatch, HandlerTypeMismatch
+│   │   │       ├── EffectLog.kt      # EffectLog, LogEntry, Call, RunOutcome's log
+│   │   │       └── Encoding.kt, JsonEncoding.kt  # The two codecs; UnreadableLog
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/

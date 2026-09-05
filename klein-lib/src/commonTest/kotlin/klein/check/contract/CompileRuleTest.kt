@@ -9,6 +9,7 @@ import klein.core.Bind
 import klein.core.EnterScope
 import klein.core.assertRuleLowersTo
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -42,7 +43,7 @@ private val contract = Klein.checkContract(CONTRACT)
 private fun compile(
     rule: String,
     release: Int = 1,
-): Edition = contract.compileRule(rule.trimIndent(), ReleaseNumber(release))
+): Edition = contract.compileRule(rule.trimIndent(), ReleaseNumber(release)).orFail()
 
 private fun preludeNames(edition: Edition): List<String> = (edition.core as EnterScope).stmts.map { (it as Bind).name }
 
@@ -99,19 +100,19 @@ class CompileRuleTest {
     fun aConstructorOnlyEditionExecutesToAValue() {
         val edition = compile("""Customer(1, "gold").tier == "gold"""")
         val result = Klein.execute(edition.core)
-        assertEquals(emptyList(), result.errors)
+        assertEquals(emptyList(), result.diagnostics)
         assertEquals(Value.VBool(true), result.output)
     }
 
     @Test
     fun anUnexposedNameIsStillUnbound() {
-        val errors = assertFailsWith<KleinException> { compile("riskBand(customer)", release = 1) }.errors
+        val errors = contract.compileRule("riskBand(customer)", ReleaseNumber(1)).diagnostics
         assertEquals("riskBand", assertIs<TypeError.UnboundVariable>(errors.single()).name)
     }
 
     @Test
     fun unknownReleasePropagates() {
-        assertFailsWith<UnknownRelease> { compile("1", release = 9) }
+        assertIs<UnknownRelease>(assertFailsWith<KleinException> { compile("1", release = 9) }.errors.single())
     }
 
     // ── golden confirmations of the assembly ─────────────────────────────────

@@ -1,39 +1,46 @@
 package klein.check.contract
 
-import klein.KleinError
+import klein.Diagnostic
 import klein.SourceSpan
 import klein.surface.*
 
-/**
- * An answer that names a capability of the release it was asked under. Answers may use the
- * release's types, so answering a prompt never triggers more prompts.
- */
-class CapabilityInAnswer(
+data class CapabilityInAnswer(
     val name: String,
-) : KleinError {
+    override val span: SourceSpan,
+) : Diagnostic {
     override val message = "'$name' is a capability; an answer may use the release's types but not its capabilities"
-    override val span: SourceSpan? = null
 }
+
+internal data class Mention(
+    val name: String,
+    val span: SourceSpan,
+)
 
 internal fun usedCapabilities(
     program: Program,
     exposed: Set<String>,
-): Set<String> {
+): Set<String> = capabilityMentions(program, exposed).mapTo(linkedSetOf()) { it.name }
+
+internal fun capabilityMentions(
+    program: Program,
+    exposed: Set<String>,
+): Set<Mention> {
     val walk =
         object {
             fun mention(
                 name: String,
+                span: SourceSpan,
                 bound: Set<String>,
-            ): Set<String> = if (name in exposed && name !in bound) setOf(name) else emptySet()
+            ): Set<Mention> = if (name in exposed && name !in bound) setOf(Mention(name, span)) else emptySet()
 
             fun typeExpr(
                 t: TypeExpr<Nothing?>?,
                 bound: Set<String>,
-            ): Set<String> =
+            ): Set<Mention> =
                 when (t) {
                     null, is TypeVar -> emptySet()
-                    is TypeName -> mention(t.name, bound)
-                    is AppliedTypeExpr -> mention(t.name, bound) + t.args.flatMapTo(mutableSetOf()) { typeExpr(it, bound) }
+                    is TypeName -> mention(t.name, t.span, bound)
+                    is AppliedTypeExpr -> mention(t.name, t.span, bound) + t.args.flatMapTo(mutableSetOf()) { typeExpr(it, bound) }
                     is FunctionTypeExpr ->
                         t.paramTypes.flatMapTo(mutableSetOf()) { typeExpr(it, bound) } + typeExpr(t.returnType, bound)
                     is TupleTypeExpr -> t.elements.flatMapTo(mutableSetOf()) { typeExpr(it, bound) }
@@ -44,12 +51,12 @@ internal fun usedCapabilities(
             fun pattern(
                 p: Pattern,
                 bound: Set<String>,
-            ): Set<String> = if (p is DataPattern && p.tag != null) mention(p.tag, bound) else emptySet()
+            ): Set<Mention> = if (p is DataPattern && p.tag != null) mention(p.tag, p.span, bound) else emptySet()
 
             fun typeDef(
                 d: TypeDef<Nothing?>,
                 bound: Set<String>,
-            ): Set<String> =
+            ): Set<Mention> =
                 d.constructors.flatMapTo(mutableSetOf()) { ctor ->
                     ctor.fields.flatMapTo(mutableSetOf()) { typeExpr(it.type, bound) }
                 }
@@ -58,14 +65,14 @@ internal fun usedCapabilities(
                 params: List<Param<Nothing?>>,
                 body: Expr,
                 bound: Set<String>,
-            ): Set<String> =
+            ): Set<Mention> =
                 params.flatMapTo(mutableSetOf()) { typeExpr(it.typeAnnotation, bound) } +
                     expr(body, bound + params.map { it.name })
 
             fun matchArm(
                 arm: MatchArm,
                 bound: Set<String>,
-            ): Set<String> {
+            ): Set<Mention> {
                 val armBound = bound + arm.pattern.boundNames
                 return pattern(arm.pattern, bound) +
                     (arm.guard?.let { expr(it, armBound) } ?: emptySet()) +
@@ -75,9 +82,9 @@ internal fun usedCapabilities(
             fun expr(
                 e: Expr,
                 bound: Set<String>,
-            ): Set<String> =
+            ): Set<Mention> =
                 when (e) {
-                    is Ident -> mention(e.name, bound)
+                    is Ident -> mention(e.name, e.span, bound)
                     is IntLiteral, is DoubleLiteral, is StringLiteral, is BoolLiteral, is NullLiteral, is ImplicitParam -> emptySet()
                     is Lambda -> params(e.params, e.body, bound)
                     is Block -> stmts(e.stmts, bound)
@@ -92,7 +99,7 @@ internal fun usedCapabilities(
             fun stmt(
                 s: Stmt,
                 bound: Set<String>,
-            ): Set<String> =
+            ): Set<Mention> =
                 when (s) {
                     is Val -> typeExpr(s.typeAnnotation, bound) + expr(s.value, bound)
                     is PatternVal -> pattern(s.pattern, bound) + expr(s.value, bound)
@@ -104,7 +111,7 @@ internal fun usedCapabilities(
             fun stmts(
                 stmts: List<Stmt>,
                 outer: Set<String>,
-            ): Set<String> {
+            ): Set<Mention> {
                 val bound = outer + stmts.flatMap { it.binders }
                 return stmts.flatMapTo(mutableSetOf()) { stmt(it, bound) }
             }

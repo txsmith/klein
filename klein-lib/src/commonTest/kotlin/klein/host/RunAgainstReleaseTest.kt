@@ -1,10 +1,14 @@
 package klein.host
 
+import klein.HostError
 import klein.Klein
+import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.Edition
+import klein.check.contract.UnknownPin
 import klein.interp.Value
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -40,7 +44,7 @@ private fun Environment.runToValue(
     registerHandlers: HandlerRegistry.() -> Unit = {},
 ): Value = assertIs<RunOutcome.Completed>(run(edition, registerHandlers = registerHandlers)).value
 
-private fun Environment.runToFailure(edition: Edition): RunError = assertFailsWith<RunFailure> { run(edition) }.error
+private fun Environment.runToFailure(edition: Edition): HostError = assertFailsWith<KleinException> { run(edition) }.errors.single()
 
 /** The execution narrative: the editions [LendingExampleTest] only checks, run against a live host. */
 class RunAgainstReleaseTest {
@@ -52,7 +56,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        assertEquals(Value.VBool(true), env.runToValue(contract.compileRule(CREDIT_RULE, ReleaseNumber(1))))
+        assertEquals(Value.VBool(true), env.runToValue(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()))
     }
 
     @Test
@@ -64,7 +68,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { asks++; gold }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val edition = contract.compileRule("creditScore(customer) + creditScore(customer)", ReleaseNumber(1))
+        val edition = contract.compileRule("creditScore(customer) + creditScore(customer)", ReleaseNumber(1)).orFail()
         assertEquals(Value.VNum(1400.0), env.runToValue(edition))
         assertEquals(1, asks)
     }
@@ -78,7 +82,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 immediate("creditScore") { asks++; scoreByTier(it) }
             }
-        val edition = contract.compileRule("creditScore(customer) + creditScore(customer)", ReleaseNumber(1))
+        val edition = contract.compileRule("creditScore(customer) + creditScore(customer)", ReleaseNumber(1)).orFail()
         val outcome = assertIs<RunOutcome.Completed>(env.run(edition))
         assertEquals(Value.VNum(1400.0), outcome.value)
         assertEquals(2, asks)
@@ -94,13 +98,13 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val direct = env.runToValue(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)))
+        val direct = env.runToValue(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail())
         val throughBinding =
             """
             f = creditScore
             f(customer) >= 620
             """.trimIndent()
-        val indirect = env.runToValue(contract.compileRule(throughBinding, ReleaseNumber(1)))
+        val indirect = env.runToValue(contract.compileRule(throughBinding, ReleaseNumber(1)).orFail())
         assertEquals(direct, indirect)
         assertEquals(Value.VBool(true), indirect)
     }
@@ -125,8 +129,8 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { Value.VNum(600.0) }
                 immediate("creditScore/2") { Value.VNum(700.0) }
             }
-        assertEquals(Value.VBool(false), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(1))))
-        assertEquals(Value.VBool(true), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(2))))
+        assertEquals(Value.VBool(false), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(1)).orFail()))
+        assertEquals(Value.VBool(true), env.runToValue(contract.compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()))
     }
 
     @Test
@@ -144,7 +148,7 @@ class RunAgainstReleaseTest {
                   creditScore/2
                 """.trimIndent(),
             )
-        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(1))
+        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(1)).orFail()
 
         var asked = false
         val drained =
@@ -157,7 +161,7 @@ class RunAgainstReleaseTest {
                 """.trimIndent(),
             ).implement { immediate("creditScore/2") { asked = true; Value.VNum(700.0) } }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
         assertEquals("creditScore", pin.name)
         assertEquals(RevisionNumber(1), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -178,7 +182,7 @@ class RunAgainstReleaseTest {
                   creditScore/2
                 """.trimIndent(),
             )
-        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(2))
+        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()
 
         var asked = false
         val rolledBack =
@@ -194,7 +198,7 @@ class RunAgainstReleaseTest {
                 """.trimIndent(),
             ).implement { immediate("creditScore") { asked = true; Value.VNum(700.0) } }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(rolledBack.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(rolledBack.runToFailure(edition))
         assertEquals("creditScore", pin.name)
         assertEquals(RevisionNumber(2), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -208,7 +212,7 @@ class RunAgainstReleaseTest {
             fun f(c: Customer): Num = creditScore(c)
             f(customer)
             """.trimIndent()
-        val edition = contract.compileRule(rule, ReleaseNumber(1))
+        val edition = contract.compileRule(rule, ReleaseNumber(1)).orFail()
         assertTrue("Customer" in edition.pins, "the edition should pin the annotated type: ${edition.pins}")
         val env =
             contract.implement {
@@ -225,7 +229,7 @@ class RunAgainstReleaseTest {
             fun f(c: Customer): Num = creditScore(c)
             f(customer)
             """.trimIndent()
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(rule, ReleaseNumber(1))
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(rule, ReleaseNumber(1)).orFail()
 
         var asked = false
         val drained =
@@ -243,7 +247,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
 
-        val pin = assertIs<UnservedPin>(assertIs<RunError.UnservablePins>(drained.runToFailure(edition)).problems.single())
+        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
         assertEquals("Customer", pin.name)
         assertEquals(RevisionNumber(1), pin.revision)
         assertFalse(asked, "the pin check should reject the edition before any capability is asked")
@@ -257,9 +261,9 @@ class RunAgainstReleaseTest {
                 immediate("customer")
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
 
-        val missing = assertIs<MissingHandler>(assertIs<RunError.UnservablePins>(env.runToFailure(edition)).problems.single())
+        val missing = assertIs<MissingHandler>(env.runToFailure(edition))
         assertEquals("customer", missing.name)
         assertEquals(RevisionNumber(1), missing.revision)
 
@@ -274,7 +278,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { basic }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         assertEquals(Value.VBool(false), env.runToValue(edition))
         assertEquals(Value.VBool(true), env.runToValue(edition) { immediate("customer") { gold } })
     }
@@ -287,7 +291,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { basic }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val edition = contract.compileRule("""creditScore(Customer(1, "gold")) >= 620""", ReleaseNumber(1))
+        val edition = contract.compileRule("""creditScore(Customer(1, "gold")) >= 620""", ReleaseNumber(1)).orFail()
         assertEquals(Value.VBool(true), env.runToValue(edition))
     }
 
@@ -299,8 +303,8 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 immediate("creditScore") { Value.VStr("hi") }
             }
-        val error = env.runToFailure(contract.compileRule("1 + $CREDIT_RULE", ReleaseNumber(1)))
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val error = env.runToFailure(contract.compileRule("1 + $CREDIT_RULE", ReleaseNumber(1)).orFail())
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("creditScore", mismatch.call)
         assertEquals("'creditScore' answered with String where the contract declares Num", mismatch.message)
     }
@@ -313,8 +317,8 @@ class RunAgainstReleaseTest {
                 immediate("customer") { Value.VStruct("Customer", mapOf("id" to Value.VStr("one"), "tier" to Value.VStr("gold"))) }
                 immediate("creditScore") { scoreByTier(it) }
             }
-        val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)))
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail())
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("customer", mismatch.call)
         assertEquals("'customer' answered with { id: String, tier: String } where the contract declares Customer", mismatch.message)
     }
@@ -336,7 +340,7 @@ class RunAgainstReleaseTest {
                     Value.VStruct(null, mapOf("id" to Value.VNum(1.0), "tier" to Value.VStr("gold"), "region" to Value.VStr("EU")))
                 }
             }
-        assertEquals(Value.VStr("gold"), env.runToValue(contract.compileRule("customer.tier", ReleaseNumber(1))))
+        assertEquals(Value.VStr("gold"), env.runToValue(contract.compileRule("customer.tier", ReleaseNumber(1)).orFail()))
     }
 
     @Test
@@ -354,14 +358,14 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 immediate("creditScore") { closure }
             }
-        val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)))
-        val mismatch = assertIs<RunError.HandlerTypeMismatch>(error)
+        val error = env.runToFailure(contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail())
+        val mismatch = assertIs<HandlerTypeMismatch>(error)
         assertEquals("'creditScore' answered with a function where the contract declares Num", mismatch.message)
     }
 
     @Test
     fun anEditionRunsAgainstAContractEditedInPlaceAtTheSameRevision() {
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         val widened =
             Klein.checkContract(
                 LENDING_CONTRACT.replace("fun creditScore(c: Customer): Num", "fun creditScore(c: { id: Num, tier: String }): Num"),
@@ -374,7 +378,7 @@ class RunAgainstReleaseTest {
 
     @Test
     fun aCallWhoseArgumentNoLongerFitsTheEditedContractIsCallTypeMismatch() {
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var asked = false
         val narrowed =
             Klein.checkContract(
@@ -384,8 +388,8 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { narrowed.run(edition, persist = persisted::add) }
-        val mismatch = assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { narrowed.run(edition, persist = persisted::add) }
+        val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with Customer where the contract declares String", mismatch.message)
         assertFalse(asked, "the argument check should reject the call before the handler runs")
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
@@ -393,7 +397,7 @@ class RunAgainstReleaseTest {
 
     @Test
     fun aCallWhoseArityNoLongerMatchesTheEditedContractIsCallTypeMismatch() {
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var asked = false
         val widened =
             Klein.checkContract(
@@ -403,8 +407,8 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) }
             }
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<RunFailure> { widened.run(edition, persist = persisted::add) }
-        val mismatch = assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { widened.run(edition, persist = persisted::add) }
+        val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with 1 argument where the contract declares 2", mismatch.message)
         assertFalse(asked, "the arity check should reject the call before the handler runs")
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
@@ -412,7 +416,7 @@ class RunAgainstReleaseTest {
 
     @Test
     fun aDeferredInitiationIsNotRunWhenTheArgumentNoLongerFits() {
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var initiated = false
         val narrowed =
             Klein.checkContract(
@@ -421,15 +425,15 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold }
                 deferred("creditScore") { initiated = true }
             }
-        val failure = assertFailsWith<RunFailure> { narrowed.run(edition) }
-        assertIs<RunError.CallTypeMismatch>(failure.error)
+        val failure = assertFailsWith<KleinException> { narrowed.run(edition) }
+        assertIs<CallTypeMismatch>(failure.errors.single())
         assertFalse(initiated, "the argument check should reject the call before the initiation runs")
     }
 
     @Test
     fun replayedCallsAreNotArgumentCheckedAgainstTheEditedContract() {
         val original = Klein.checkContract(LENDING_CONTRACT)
-        val edition = original.compileRule(CREDIT_RULE, ReleaseNumber(1))
+        val edition = original.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         val recording =
             original.implement {
                 immediate("customer") { gold }

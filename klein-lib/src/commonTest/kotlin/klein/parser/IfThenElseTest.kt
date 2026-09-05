@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -192,7 +192,7 @@ class IfThenElseTest {
 
     @Test
     fun missingThen() {
-        val error = assertFailsWith<ParseError> { parse("if x else y") }
+        val error = assertFailsWith<Abort> { parse("if x else y") }
         assertEquals("Expected 'then', got Keyword(ELSE)", error.message)
     }
 
@@ -400,19 +400,19 @@ class IfThenElseTest {
 
     @Test
     fun missingCondition() {
-        val error = assertFailsWith<ParseError> { parse("if then y else z") }
+        val error = assertFailsWith<Abort> { parse("if then y else z") }
         assertEquals("Expected expression, got Keyword(THEN)", error.message)
     }
 
     @Test
     fun missingThenBranch() {
-        val error = assertFailsWith<ParseError> { parse("if x then else z") }
+        val error = assertFailsWith<Abort> { parse("if x then else z") }
         assertEquals("Expected expression, got Keyword(ELSE)", error.message)
     }
 
     @Test
     fun missingElseBranch() {
-        val error = assertFailsWith<ParseError> { parse("if x then y else") }
+        val error = assertFailsWith<Abort> { parse("if x then y else") }
         assertEquals("Expected expression, got Eof", error.message)
     }
 

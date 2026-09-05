@@ -1,6 +1,6 @@
 package klein.host
 
-import klein.KleinError
+import klein.HostError
 import klein.KleinException
 import klein.RevisionNumber
 import klein.check.contract.ContractDeclaration
@@ -136,11 +136,11 @@ class Environment internal constructor(
      * registrations.
      *
      * A rule that fails at runtime is a normal result: [RunOutcome.Failed] carries its diagnostics and
-     * the log so far. Everything else Klein detects — a bad registration, an unservable pin, a recorded
-     * answer that does not fit the contract, a divergence, a call whose arguments do not fit the
-     * contract, a handler answering the wrong type — is host
-     * misuse and throws [RunFailure]; an exception from the host's own code (a handler, an initiation,
-     * [persist], `transact`) escapes unwrapped. A call to a deferred capability runs its initiation,
+     * the log so far. Everything else Klein detects is the host's fault and throws [KleinException]
+     * carrying one error per fault: [RegistrationError], [klein.check.contract.UnknownPin],
+     * [MissingHandler], [LogTypeMismatch], [Diverged], [CallTypeMismatch], [HandlerTypeMismatch].
+     * An exception from the host's own code (a handler, an initiation, [persist], `transact`)
+     * escapes unwrapped. A call to a deferred capability runs its initiation,
      * records nothing, and returns [RunOutcome.Parked]; resume by calling run again with
      * `parked.toReply(answer)` appended to the log.
      *
@@ -154,12 +154,12 @@ class Environment internal constructor(
         registerHandlers: HandlerRegistry.() -> Unit = {},
     ): RunOutcome {
         val handlers = HandlerRegistry(contract.declarations).apply(registerHandlers)
-        if (handlers.errors.isNotEmpty()) throw RunFailure(RunError.InvalidRegistration(handlers.errors))
+        if (handlers.errors.isNotEmpty()) throw KleinException(handlers.errors)
         val pinProblems = checkPins(edition, handlers)
-        if (pinProblems.isNotEmpty()) throw RunFailure(RunError.UnservablePins(pinProblems))
+        if (pinProblems.isNotEmpty()) throw KleinException(pinProblems)
         if (log != null) {
             val logProblems = checkLog(edition, log)
-            if (logProblems.isNotEmpty()) throw RunFailure(RunError.LogTypeMismatch(logProblems))
+            if (logProblems.isNotEmpty()) throw KleinException(logProblems)
         }
         return Run(this, edition, handlers, persist, log).start()
     }
@@ -177,6 +177,4 @@ class Environment internal constructor(
 
 class RegistrationError internal constructor(
     override val message: String,
-) : KleinError {
-    override val span: klein.SourceSpan? = null
-}
+) : HostError

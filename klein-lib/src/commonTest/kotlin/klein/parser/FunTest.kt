@@ -1,6 +1,6 @@
 package klein.parser
 
-import klein.surface.ParseError
+import klein.surface.Abort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -133,58 +133,58 @@ class FunTest {
 
     @Test
     fun missingFunctionName() {
-        assertFailsWith<ParseError> { parseProgram("fun (x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun (x) = x") }
     }
 
     @Test
     fun missingParens() {
-        assertFailsWith<ParseError> { parseProgram("fun double x = x * 2") }
+        assertFailsWith<Abort> { parseProgram("fun double x = x * 2") }
     }
 
     @Test
     fun missingEquals() {
-        assertFailsWith<ParseError> { parseProgram("fun double(x) x * 2") }
+        assertFailsWith<Abort> { parseProgram("fun double(x) x * 2") }
     }
 
     @Test
     fun missingBody() {
-        assertFailsWith<ParseError> { parseProgram("fun double(x) =") }
+        assertFailsWith<Abort> { parseProgram("fun double(x) =") }
     }
 
     @Test
     fun funWithKeywordAsName() {
-        assertFailsWith<ParseError> { parseProgram("fun if(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun then(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun else(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun true(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun false(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun and(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun or(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun not(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun fun(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun match(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun if(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun then(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun else(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun true(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun false(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun and(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun or(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun not(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun fun(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun match(x) = x") }
     }
 
     @Test
     fun funWithUnderscoreAsName() {
-        assertFailsWith<ParseError> { parseProgram("fun _(x: Num): Num = x") }
+        assertFailsWith<Abort> { parseProgram("fun _(x: Num): Num = x") }
     }
 
     @Test
     fun funWithKeywordAsParamName() {
-        assertFailsWith<ParseError> { parseProgram("fun f(if: Num): Num = 1") }
+        assertFailsWith<Abort> { parseProgram("fun f(if: Num): Num = 1") }
     }
 
     @Test
     fun funWithSymbolAsName() {
-        assertFailsWith<ParseError> { parseProgram("fun +(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun .(x) = x") }
-        assertFailsWith<ParseError> { parseProgram("fun |(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun +(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun .(x) = x") }
+        assertFailsWith<Abort> { parseProgram("fun |(x) = x") }
     }
 
     @Test
     fun funInsideLambda() {
-        val error = assertFailsWith<ParseError> { parse("|x -> fun inner(y) = y|") }
+        val error = assertFailsWith<Abort> { parse("|x -> fun inner(y) = y|") }
         assertEquals("Function definitions are only allowed at the top level", error.message)
     }
 
@@ -196,7 +196,7 @@ class FunTest {
               fun nested(x) = x
               nested(1)
             """.trimIndent()
-        val error = assertFailsWith<ParseError> { parseProgram(program) }
+        val error = assertFailsWith<Abort> { parseProgram(program) }
         assertEquals("Function definitions are only allowed at the top level", error.message)
     }
 
@@ -208,13 +208,13 @@ class FunTest {
               fun inner(y) = y
               inner(x)
             """.trimIndent()
-        val error = assertFailsWith<ParseError> { parseProgram(program) }
+        val error = assertFailsWith<Abort> { parseProgram(program) }
         assertEquals("Function definitions are only allowed at the top level", error.message)
     }
 
     @Test
     fun funInsideRecord() {
-        val error = assertFailsWith<ParseError> { parse("{ f = fun nested(x) = x }") }
+        val error = assertFailsWith<Abort> { parse("{ f = fun nested(x) = x }") }
         assertEquals("Function definitions are only allowed at the top level", error.message)
     }
 }

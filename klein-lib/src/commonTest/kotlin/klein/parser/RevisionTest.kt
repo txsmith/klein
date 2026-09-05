@@ -2,7 +2,7 @@ package klein.parser
 
 import klein.RevisionNumber
 import klein.surface.FunDecl
-import klein.surface.ParseError
+import klein.surface.Abort
 import klein.surface.TypeDefStmt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -223,26 +223,26 @@ class RevisionTest {
 
     @Test
     fun revisionZeroIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("fun creditScore/0(c: Num): Num") }
+        assertFailsWith<Abort> { parseContract("fun creditScore/0(c: Num): Num") }
     }
 
     @Test
     fun aNonNumericRevisionIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("fun creditScore/next(c: Num): Num") }
-        assertFailsWith<ParseError> { parseContract("type Customer/next = Customer { id: Num }") }
+        assertFailsWith<Abort> { parseContract("fun creditScore/next(c: Num): Num") }
+        assertFailsWith<Abort> { parseContract("type Customer/next = Customer { id: Num }") }
     }
 
     @Test
     fun aRevisionOnAFunctionDefinitionIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("fun creditScore/2(c: Num): Num = c") }
-        assertFailsWith<ParseError> { parseContract("fun creditScore/1(c: Num): Num = c") }
+        assertFailsWith<Abort> { parseContract("fun creditScore/2(c: Num): Num = c") }
+        assertFailsWith<Abort> { parseContract("fun creditScore/1(c: Num): Num = c") }
     }
 
     @Test
     fun aRevisionOnABindingIsAParseError() {
-        assertFailsWith<ParseError> { parseContract("maxRetries/2: Num = 3") }
-        assertFailsWith<ParseError> { parseContract("maxRetries/2 = 3") }
-        assertFailsWith<ParseError> { parseContract("maxRetries/1 = 3") }
+        assertFailsWith<Abort> { parseContract("maxRetries/2: Num = 3") }
+        assertFailsWith<Abort> { parseContract("maxRetries/2 = 3") }
+        assertFailsWith<Abort> { parseContract("maxRetries/1 = 3") }
     }
 
     // --- a revision in a program is a parse error, in every position ---
@@ -252,7 +252,7 @@ class RevisionTest {
         name: String,
         revision: Int,
     ) {
-        val error = assertFailsWith<ParseError>("expected a revision rejection in: $src") { parseProgram(src) }
+        val error = assertFailsWith<Abort>("expected a revision rejection in: $src") { parseProgram(src) }
         assertTrue("$name/$revision" in error.message, error.message)
         assertTrue("contract" in error.message, error.message)
     }

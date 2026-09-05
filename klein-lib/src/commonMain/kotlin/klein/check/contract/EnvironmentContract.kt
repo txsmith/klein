@@ -1,5 +1,8 @@
 package klein.check.contract
 
+import klein.Checked
+import klein.Diagnostic
+import klein.HostError
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
@@ -17,23 +20,25 @@ import klein.check.checkProgram
 import klein.core.CoreExpr
 import klein.core.PreludeBinding
 import klein.core.lowerWithPrelude
+import klein.surface.Abort
 import klein.surface.Lexer
-import klein.surface.LexerError
-import klein.surface.ParseError
 import klein.surface.Program
 import klein.surface.parseProgram
 
-/**
- * A request naming a release the contract does not have — retired last week, or never written.
- * Not a diagnostic: it has no span to point at, and neither file is wrong; the *request* is.
- */
 class UnknownRelease(
     val number: ReleaseNumber,
     val available: List<ReleaseNumber>,
-) : Exception(
+) : HostError {
+    override val message =
         "release ${number.value} is not in this contract; " +
-            if (available.isEmpty()) "it has none" else "it has ${available.joinToString { it.value.toString() }}",
-    )
+            if (available.isEmpty()) "it has none" else "it has ${available.joinToString { it.value.toString() }}"
+}
+
+class InvalidContract(
+    val diagnostics: List<Diagnostic>,
+) : HostError {
+    override val message get() = diagnostics.joinToString("\n") { "${it.message} at ${it.span}" }
+}
 
 /** One accepted declaration: what the host must implement, and what a release may point at. */
 sealed class ContractDeclaration {
@@ -94,74 +99,83 @@ class EnvironmentContract internal constructor(
     private val resolvedPins = mutableMapOf<Map<String, RevisionNumber>, ResolvedSurface>()
 
     /**
-     * Type-check [ruleSource] against exactly [release], and answer its type. Throws
-     * [UnknownRelease] for a number this contract does not have, and [KleinException] for anything
-     * wrong with the rule.
+     * Type-check [ruleSource] against exactly [release]. The rule is the author's document, so its
+     * diagnostics come back in the [Checked]; only a release this contract does not have is the
+     * caller's fault and throws [KleinException] carrying [UnknownRelease].
      */
     fun check(
         ruleSource: String,
         release: ReleaseNumber,
-    ): RuleType = parseAndCheck(ruleSource, resolveRelease(release)).second
+    ): Checked<RuleType> = parseAndCheck(ruleSource, resolveRelease(release)).map { it.type }
 
     fun compileRule(
         ruleSource: String,
         release: ReleaseNumber,
-    ): Edition {
+    ): Checked<Edition> {
         val resolvedRelease = resolveRelease(release)
-        val (program, _) = parseAndCheck(ruleSource, resolvedRelease)
-        val used = usedCapabilities(program, resolvedRelease.exposedRevisions.keys)
-        val pins = used.associateWith { resolvedRelease.exposedRevisions.getValue(it) }
-        val prelude = used.mapNotNull { resolvedRelease.bindingFor(it) }
-        return Edition(lowerWithPrelude(program, prelude), release, pins)
+        return parseAndCheck(ruleSource, resolvedRelease).andThen { rule ->
+            val used = usedCapabilities(rule.program, resolvedRelease.exposedRevisions.keys)
+            val pins = used.associateWith { resolvedRelease.exposedRevisions.getValue(it) }
+            val prelude = used.mapNotNull { resolvedRelease.bindingFor(it) }
+            Checked.success(Edition(lowerWithPrelude(rule.program, prelude), release, pins))
+        }
     }
 
     /**
      * Compile [source] as a pure expression of type [expected] against [release] — a host answering
      * a capability call in Klein rather than in its own language. Unlike an [Edition], the result
      * needs no pins and no environment: an answer may use the release's types but not its
-     * capabilities, so `Klein.execute` is enough to evaluate it. Throws [KleinException] carrying
-     * the checker's diagnostics for a mismatch, and [CapabilityInAnswer] for each capability named.
+     * capabilities, so `Klein.execute` is enough to evaluate it. The [Checked] carries the checker's
+     * diagnostics for a mismatch, and a [CapabilityInAnswer] for each capability named.
      */
     fun compileValue(
         source: String,
         release: ReleaseNumber,
         expected: RuleType,
-    ): CoreExpr {
+    ): Checked<CoreExpr> {
         val resolvedRelease = resolveRelease(release)
-        val (program, _) = parseAndCheck(source, resolvedRelease, expected)
-        val used = usedCapabilities(program, resolvedRelease.exposedRevisions.keys)
-        val capabilities =
-            used.sorted().filter {
-                when (resolvedRelease.bindingFor(it)) {
-                    is PreludeBinding.Function, is PreludeBinding.Value -> true
-                    is PreludeBinding.Ctor, null -> false
-                }
+        return parseAndCheck(source, resolvedRelease, expected).andThen { rule ->
+            val mentions = capabilityMentions(rule.program, resolvedRelease.exposedRevisions.keys)
+            val capabilities =
+                mentions
+                    .filter {
+                        when (resolvedRelease.bindingFor(it.name)) {
+                            is PreludeBinding.Function, is PreludeBinding.Value -> true
+                            is PreludeBinding.Ctor, null -> false
+                        }
+                    }.sortedBy { it.span.start }
+                    .distinctBy { it.name }
+            if (capabilities.isNotEmpty()) {
+                Checked(null, capabilities.map { CapabilityInAnswer(it.name, it.span) })
+            } else {
+                Checked.success(lowerWithPrelude(rule.program, mentions.mapNotNull { resolvedRelease.bindingFor(it.name) }.distinct()))
             }
-        if (capabilities.isNotEmpty()) throw KleinException(capabilities.map { CapabilityInAnswer(it) })
-        return lowerWithPrelude(program, used.mapNotNull { resolvedRelease.bindingFor(it) })
+        }
     }
+
+    private class CheckedRule(
+        val program: Program,
+        val type: RuleType,
+    )
 
     private fun parseAndCheck(
         ruleSource: String,
         surface: ResolvedSurface,
         expected: RuleType? = null,
-    ): Pair<Program, RuleType> {
+    ): Checked<CheckedRule> {
         val program =
             try {
                 parseProgram(Lexer(ruleSource).tokenize().toList())
-            } catch (e: LexerError) {
-                throw KleinException(listOf(e))
-            } catch (e: ParseError) {
-                throw KleinException(listOf(e))
+            } catch (e: Abort) {
+                return Checked.failure(e.diagnostic)
             }
         val checked = checkProgram(program, surface.ruleTypeEnv, expected)
-        if (checked.errors.isNotEmpty()) throw KleinException(checked.errors)
-        return program to checked.type
+        return Checked(CheckedRule(program, checked.type), checked.errors)
     }
 
     internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
         resolved.getOrPut(release) {
-            val revisions = releaseSurfaces[release] ?: throw UnknownRelease(release, releases)
+            val revisions = releaseSurfaces[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
             resolveSurface(revisions)
         }
 

@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 internal fun execSource(source: String): Execution {
     val program = parseProgram(source.trimIndent().trim())
     val checked = Klein.check(program)
-    check(!checked.hasErrors) { "type errors in test program: ${checked.errors}" }
+    check(!checked.hasErrors) { "type errors in test program: ${checked.diagnostics}" }
     return Interpreter.start(lower(program))
 }
 

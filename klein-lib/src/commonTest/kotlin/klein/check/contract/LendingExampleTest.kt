@@ -5,6 +5,7 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
 import klein.check.TypeError
+import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,7 +18,13 @@ private fun check(
     contract: String,
     rule: String,
     release: Int,
-) = Klein.checkContract(contract.trimIndent()).check(rule, ReleaseNumber(release))
+) = Klein.checkContract(contract.trimIndent()).check(rule, ReleaseNumber(release)).orFail()
+
+private fun checkErrors(
+    contract: String,
+    rule: String,
+    release: Int,
+) = Klein.checkContract(contract.trimIndent()).check(rule, ReleaseNumber(release)).diagnostics
 
 /**
  * `host-integration.md` §"Evolution, concretely" — one environment followed through a year: a new
@@ -107,8 +114,8 @@ class LendingExampleTest {
     @Test
     fun theRuleOnTheUntouchedReleaseIsUnaffected() {
         assertEquals(Type.TStr, check(newShape, "customer.name", release = 1))
-        val error = assertFailsWith<KleinException> { check(newShape, "customer.name", release = 2) }
-        assertIs<TypeError.MissingField>(error.errors.single())
+        val errors = checkErrors(newShape, "customer.name", release = 2)
+        assertIs<TypeError.MissingField>(errors.single())
     }
 
     // Re-pointing `Customer` without re-pointing the capabilities that take it is what
@@ -119,7 +126,8 @@ class LendingExampleTest {
             assertFailsWith<KleinException> {
                 Klein.checkContract(newShape.trimIndent().replace("  creditScore/3", "  creditScore/2"))
             }
-        assertEquals("Customer/1", assertIs<TypeError.ReleaseNotSelfContained>(error.errors.single()).unreachable)
+        val invalid = assertIs<InvalidContract>(error.errors.single())
+        assertEquals("Customer/1", assertIs<TypeError.ReleaseNotSelfContained>(invalid.diagnostics.single()).unreachable)
     }
 
     // ── 4. An edit in place ──────────────────────────────────────────────────
@@ -160,6 +168,7 @@ class LendingExampleTest {
     fun aRetiredReleaseCannotBeCompiledAgainstAgain() {
         val contract = Klein.checkContract(retired.trimIndent())
         assertEquals(listOf(ReleaseNumber(2)), contract.releases)
-        assertEquals(ReleaseNumber(1), assertFailsWith<UnknownRelease> { contract.check(STANDARD, ReleaseNumber(1)) }.number)
+        val error = assertFailsWith<KleinException> { contract.check(STANDARD, ReleaseNumber(1)) }
+        assertEquals(ReleaseNumber(1), assertIs<UnknownRelease>(error.errors.single()).number)
     }
 }
