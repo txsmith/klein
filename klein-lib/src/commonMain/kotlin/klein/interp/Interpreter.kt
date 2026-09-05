@@ -90,8 +90,8 @@ internal class Interpreter private constructor(
     internal fun run(): Execution =
         try {
             crank()
-        } catch (e: KleinRuntimeError) {
-            Execution.Failure(e)
+        } catch (e: Abort) {
+            Execution.Failure(e.diagnostic)
         }
 
     private fun crank(): Execution {
@@ -249,7 +249,7 @@ internal class Interpreter private constructor(
         value: Double,
         expr: PrimApp,
     ): Double {
-        if (value == 0.0) throw KleinRuntimeError("Division by zero", expr.span)
+        if (value == 0.0) runtimeError("Division by zero", expr.span)
         return value
     }
 
@@ -391,7 +391,7 @@ internal sealed class Execution {
     ) : Execution()
 
     class Failure(
-        val error: KleinRuntimeError,
+        val error: RuntimeError,
     ) : Execution()
 
     class AwaitingHost internal constructor(

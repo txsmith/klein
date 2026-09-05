@@ -10,7 +10,7 @@ import klein.check.contract.EnvironmentContract
 import klein.core.CoreExpr
 import klein.interp.Execution
 import klein.interp.Interpreter
-import klein.interp.KleinRuntimeError
+import klein.interp.RuntimeError
 import klein.interp.Value
 
 /**
@@ -97,6 +97,6 @@ object Klein {
             is Execution.Done -> Checked.success(exec.value)
             is Execution.Failure -> Checked.failure(exec.error)
             is Execution.AwaitingHost ->
-                Checked.failure(KleinRuntimeError("unhandled host call '${exec.call}'", exec.span))
+                Checked.failure(RuntimeError("unhandled host call '${exec.call}'", exec.span))
         }
 }

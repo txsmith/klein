@@ -26,7 +26,7 @@ results, only memory behavior and trace fidelity:
 loop — so untrusted rule authors can't loop forever. Deterministic step count doubles as a
 reproducible cost metric (quotas, regression alerts) independent of wall clock.
 
-**Error traces.** `KleinRuntimeError` grows a `trace`; the CLI renders Klein stack traces;
+**Error traces.** `RuntimeError` grows a `trace`; the CLI renders Klein stack traces;
 a suspension exposes its location.
 
 ## Machine-side, not IR-side — for now

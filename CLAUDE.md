@@ -215,7 +215,7 @@ klein-lang/
 │   │   │   │   ├── Machine.kt      # Two-stack machine + Execution (Done | AwaitingHost), one-shot resume/clone
 │   │   │   │   ├── Store.kt        # The store: write-once cells behind integer addresses
 │   │   │   │   ├── Value.kt        # Runtime values (VStruct for records and data, VClos closures)
-│   │   │   │   └── KleinRuntimeError.kt
+│   │   │   │   └── RuntimeError.kt      # The rule's own runtime failure, a diagnostic value
 │   │   │   ├── check/            # The Operation Bidi bidirectional checker
 │   │   │   │   ├── Checker.kt              # synth / check driver (checkProgram facade)
 │   │   │   │   ├── Type.kt                 # The type tree (skolems, foralls, revision witness) + printer

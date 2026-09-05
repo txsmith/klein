@@ -11,7 +11,6 @@ import klein.core.CorePrinter
 import klein.host.RunFailure
 import klein.host.RunOutcome
 import klein.host.implement
-import klein.interp.KleinRuntimeError
 import klein.interp.Value
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -315,9 +314,6 @@ private fun <T> withRuleDiagnostics(
     exitProcess(1)
 } catch (e: KleinException) {
     e.errors.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
-    exitProcess(1)
-} catch (e: KleinRuntimeError) {
-    printError(ruleSource, e.span, e.message, rawErrors)
     exitProcess(1)
 }
 

@@ -80,7 +80,7 @@ practice; if it bites in Klein, the rule can be revisited.
 
 No rule above catches every case without also rejecting safe programs, so the
 runtime error stays as the last line of defense, and its classification stays
-as-is: it is a program error (a `KleinRuntimeError` with the offending read's
+as-is: it is a program error (a `RuntimeError` with the offending read's
 location), not an internal one, because a checked program can reach it. The
 machine never computes with an uninitialized slot — the alternatives in the
 table above that silently produce `0`/`null` are the outcome this design

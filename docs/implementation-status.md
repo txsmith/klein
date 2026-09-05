@@ -134,7 +134,7 @@ evolution).
 |---------|-------|
 | Core IR | `Literal`, `Var(depth, slot)`, `Lambda`, `Apply`, `PrimApp`, `MakeData`, `FieldGet`, `HostCall`, `EnterScope`, `Match` — slot-addressed, types erased |
 | Lowering | Positional val visibility with hoisted `fun`s/constructors; desugars `if`/`and`/`or`/`?.`/safe calls (`SafeApply`) to `match`; scrutinee/receiver hoisting; constructor eta-expansion; implicit param via the environment |
-| Machine | Flat-loop two-stack CESK; tail calls run in constant control space; fail-fast `KleinRuntimeError` with spans; malformed IR throws `InvariantViolation` |
+| Machine | Flat-loop two-stack CESK; tail calls run in constant control space; fail-fast `RuntimeError` with spans; malformed IR throws `InvariantViolation` |
 | Values | `VStruct` unifies records and data (nullable tag); structural equality |
 | Match | Tag/literal/default arms, guards with first-match fallthrough, per-arm scopes |
 | Suspension | `Execution.Done \| AwaitingHost \| Failure` with one-shot `resume` and `clone` — a runtime error is a terminal interpreter state; `lowerWithPrelude` emits `HostCall` for contract capabilities (eta-lambda for functions, bare nullary call for values) |

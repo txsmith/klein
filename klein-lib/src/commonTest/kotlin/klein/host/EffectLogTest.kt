@@ -3,7 +3,6 @@ package klein.host
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
-import klein.interp.KleinRuntimeError
 import klein.interp.Value
 import kotlin.test.Test
 import kotlin.test.assertEquals
