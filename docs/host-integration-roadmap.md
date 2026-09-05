@@ -47,7 +47,7 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
-    ED["Edition serialization<br/>source + pins, release as provenance"]
+    ED["Edition serialization<br/>source + Core + stamp + checksum"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
@@ -92,7 +92,8 @@ equal bytes) have no consumer: replay compares decoded values in memory, and not
 content-addresses anything. The v1 reconciler does not hash at all; it recompiles everything.
 Hashing arrives later as a staged optimization, described under Reconciliation below: whole
 pin sets first, then per pin. Deterministic encoding suffices for both (the log codec for
-values, the printed type for signatures).
+values, the printed type for signatures), just as it does for the edition checksum under Edition
+serialization, which hashes a structural walk of the data rather than any stored bytes.
 
 The numeric commitments stand on their own: encodings commit to today's doubles knowingly, and
 exact rationals stay a later semantics change paid for with a wipe — the version stamp on
@@ -103,28 +104,22 @@ pending evaluation spec.
 
 ### Edition serialization
 
-An edition's stored form is **source + pin map**, version-stamped, with the release number kept
-as provenance only: it feeds the reconciler's report and the migration nudge ("authored against
-release 2, current is 5"), and nothing loads through it. Per the source-is-truth ADR the Core is
-a cache, so loading an edition re-derives it rather than decoding it, and a stamp mismatch means
-discard and re-derive, never migrate. Flat fields, a trivial encoding, no Core tree encoding in
-v1.
-
-Re-derivation goes through the pin surface, not the release: pins are exactly the names the rule
-source wrote, `resolvePins` closes them into the full typing surface, and the recompile must
-emit the same pin map it was given (a fixpoint check; divergence means the contract changed
-under the edition, the same failure class as an unserved pin at run time). Removing a release
-therefore stays a compile-time act: it forces migration at the next edit and touches nothing
-already compiled, parked runs included. This rests on one invariant: everything a release
-contributes to compilation is captured in the stored form. Today that is only the
-name-to-revision surface; the result sink is the first feature that will test it. The
-stored-Core cache is a pure performance option: pin-based re-derivation needs only what the run
-itself needs (the pinned revisions still declared), so its old second job, replaying editions of
-retired releases, is gone.
-
-Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
-signal reconciliation exists to act on. Replay is the consumer that forces this item: it needs
-something durable to replay *against*.
+The rules are in [spec/edition.md](./spec/edition.md), written before the implementation so the
+suites come from it. An edition at rest is an immutable build artifact, the compiled output with
+a verbatim record of its inputs, encoded as JSON for inspection: source, language version, pins,
+the Core as an opaque base64 blob with a lowerer-version header, and an
+integrity checksum. Decoding tells the host when it re-derived and why, and re-derivation goes
+through the pin surface with the pin fixpoint, which is what makes removing a release a
+compile-time act that touches nothing already compiled. Migrations never touch an artifact; they
+produce a new edition through the same compile-against-pins path. Replay is the consumer that forces this item: it needs
+something durable to replay *against*. What is left is the implementation: `Edition` gains its
+source, a binary Core codec (the log codec's byte primitives, made internal), the JSON artifact
+codec sharing the log codec's JSON machinery, `Environment.decodeEdition`, and
+`EnvironmentContract.recompile` behind it. Keeping the Core binary is deliberate: nobody reads or
+edits base64, so Core never becomes a public format. Two design notes for later features: the
+stored form must capture everything a release contributes to compilation (the result sink is the
+first feature that will test that), and the checksum needs only a deterministic walk, not a
+canonical form, so the canonical-form dissolution above stands.
 
 ### Diagnostic severity
 
