@@ -16,6 +16,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[spec/host-integration.md](./docs/spec/host-integration.md)** - How rules and a host evolve independently: environments, capabilities, revisions, releases, editions, pins, reconciliation, drain
 - **[spec/contracts.md](./docs/spec/contracts.md)** - The v1 contract language: declarations without definitions, revisions, releases, the two checking modes; sections marked implemented vs target
 - **[spec/effect-log.md](./docs/spec/effect-log.md)** - The effect log and the unified `run`: the record's shape, replay, divergence, outcomes, `Parked`, the two codecs
+- **[spec/edition.md](./docs/spec/edition.md)** - Editions at rest: the immutable artifact and its contents, the language and lowerer versions, the integrity checksum, decoding, re-derivation through pins, migration as a new edition
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
