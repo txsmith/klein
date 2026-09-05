@@ -1,7 +1,7 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
@@ -27,7 +27,7 @@ private val DECLARATIONS =
 /** [DECLARATIONS] followed by [releases], so each test writes only the blocks it is about. */
 private fun contractWith(releases: String) = "$DECLARATIONS\n\n${releases.trimIndent()}"
 
-private fun contractErrors(src: String): List<KleinError> =
+private fun contractErrors(src: String): List<Diagnostic> =
     assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src) }.errors.single()).diagnostics
 
 /**

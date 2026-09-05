@@ -1,7 +1,7 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 
 /** The diagnostics a bad contract throws. A contract that checks returns instead, so the positive
  *  cases below simply call [Klein.checkContract] and let it speak for itself. */
-private fun contractErrors(src: String): List<KleinError> =
+private fun contractErrors(src: String): List<Diagnostic> =
     assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src) }.errors.single()).diagnostics
 
 /** Check [rule] against [src]'s release [release], answering its type. */
@@ -35,7 +35,7 @@ private fun ruleErrors(
     src: String,
     rule: String,
     release: Int = 1,
-): List<KleinError> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).diagnostics
+): List<Diagnostic> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).diagnostics
 
 /**
  * Checking a capability contract, through what a caller can observe: whether [Klein.checkContract]

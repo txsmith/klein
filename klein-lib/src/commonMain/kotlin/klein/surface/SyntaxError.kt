@@ -1,12 +1,12 @@
 package klein.surface
 
-import klein.KleinError
+import klein.Diagnostic
 import klein.SourceSpan
 
 data class SyntaxError(
     override val message: String,
     override val span: SourceSpan,
-) : KleinError
+) : Diagnostic
 
 internal class Abort(
     val diagnostic: SyntaxError,

@@ -1,7 +1,7 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-private fun contractErrors(src: String): List<KleinError> =
+private fun contractErrors(src: String): List<Diagnostic> =
     assertIs<InvalidContract>(assertFailsWith<KleinException> { Klein.checkContract(src.trimIndent()) }.errors.single()).diagnostics
 
 private fun notSelfContained(src: String): TypeError.ReleaseNotSelfContained =

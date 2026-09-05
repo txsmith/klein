@@ -1,7 +1,9 @@
 package klein.host
 
+import klein.Diagnostic
 import klein.KleinException
 import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
 
 private const val FORMAT_MARKER = "klein-effect-log"
@@ -97,13 +99,10 @@ private fun StringBuilder.writeCall(call: Call) {
 private fun StringBuilder.writeDiagnostic(diagnostic: Diagnostic) {
     append("{\"message\":")
     writeText(diagnostic.message)
-    val span = diagnostic.span
-    if (span != null) {
-        append(",\"start\":")
-        append(span.start)
-        append(",\"end\":")
-        append(span.end)
-    }
+    append(",\"start\":")
+    append(diagnostic.span.start)
+    append(",\"end\":")
+    append(diagnostic.span.end)
     append('}')
 }
 
@@ -222,18 +221,9 @@ private fun toDiagnostic(json: Json): Diagnostic {
     json.expectOnly("a diagnostic", "message", "start", "end")
     val messageJson = json.expectField("message", "a diagnostic")
     if (messageJson !is Json.JStr) reject("a diagnostic's \"message\" must be a string")
-    val startJson = json.fields["start"]
-    val endJson = json.fields["end"]
-    if ((startJson == null) != (endJson == null)) reject("a diagnostic's span needs both \"start\" and \"end\"")
-    val span =
-        if (startJson != null && endJson != null) {
-            val start = toWholeNumber(startJson, "a span's \"start\"")
-            val end = toWholeNumber(endJson, "a span's \"end\"")
-            SourceSpan(start, end)
-        } else {
-            null
-        }
-    return Diagnostic(messageJson.value, span)
+    val start = toWholeNumber(json.expectField("start", "a diagnostic"), "a span's \"start\"")
+    val end = toWholeNumber(json.expectField("end", "a diagnostic"), "a span's \"end\"")
+    return RuntimeError(messageJson.value, SourceSpan(start, end))
 }
 
 private fun toValue(json: Json): Value =

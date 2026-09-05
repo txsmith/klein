@@ -1,7 +1,7 @@
 package klein.check.contract
 
 import klein.Klein
-import klein.KleinError
+import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.RuleType
@@ -46,10 +46,10 @@ private fun check(
 private fun errorsFrom(
     rule: String,
     release: Int = 2,
-): List<KleinError> = contract.check(rule, ReleaseNumber(release)).diagnostics
+): List<Diagnostic> = contract.check(rule, ReleaseNumber(release)).diagnostics
 
 /** No rule-facing diagnostic may spell a revision, whatever channel it came out of. */
-private fun assertNoRevision(errors: List<KleinError>) {
+private fun assertNoRevision(errors: List<Diagnostic>) {
     val revision = Regex("""/\d""")
     errors.forEach { assertTrue(!revision.containsMatchIn(it.message), "revision leaked: ${it.message}") }
 }

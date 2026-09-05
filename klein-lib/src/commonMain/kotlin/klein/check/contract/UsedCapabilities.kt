@@ -1,13 +1,13 @@
 package klein.check.contract
 
-import klein.KleinError
+import klein.Diagnostic
 import klein.SourceSpan
 import klein.surface.*
 
 data class CapabilityInAnswer(
     val name: String,
     override val span: SourceSpan,
-) : KleinError {
+) : Diagnostic {
     override val message = "'$name' is a capability; an answer may use the release's types but not its capabilities"
 }
 

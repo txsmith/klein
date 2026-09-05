@@ -3,6 +3,8 @@ package klein.host
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
+import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -330,7 +332,7 @@ class EffectLogTest {
 
     @Test
     fun aRecordedFailureTheRunDoesNotReproduceDiverges() {
-        val log = makeLog("customer" to gold) + makeScore(gold) + LogEntry.Failure(listOf(Diagnostic("Division by zero", null)))
+        val log = makeLog("customer" to gold) + makeScore(gold) + LogEntry.Failure(listOf(RuntimeError("Division by zero", SourceSpan(0, 1))))
         val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
         assertEquals(2, diverged.at)
         assertEquals(0, asks)

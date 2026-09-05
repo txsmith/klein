@@ -1,5 +1,6 @@
 package klein.host
 
+import klein.Diagnostic
 import klein.HostError
 import klein.KleinException
 import klein.RevisionNumber
@@ -175,7 +176,7 @@ internal class Run(
     private fun finish(end: Execution): RunOutcome =
         when (end) {
             is Execution.Failure -> {
-                val failure = LogEntry.Failure(listOf(Diagnostic.of(end.error)))
+                val failure = LogEntry.Failure(listOf(end.error))
                 transact { persist(failure) }
                 log += failure
                 RunOutcome.Failed(failure.errors, log)
@@ -201,7 +202,7 @@ internal class Run(
             when (recorded) {
                 is LogEntry.Reply -> recorded.call == call
                 is LogEntry.Result -> execution is Execution.Done && recorded.value == execution.value
-                is LogEntry.Failure -> execution is Execution.Failure && recorded.errors == listOf(Diagnostic.of(execution.error))
+                is LogEntry.Failure -> execution is Execution.Failure && recorded.errors == listOf(execution.error)
                 is LogEntry.Start -> throw IllegalStateException("the start entry is replayed by name, not by position")
             }
         if (matches) return null

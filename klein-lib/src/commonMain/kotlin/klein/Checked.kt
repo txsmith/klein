@@ -1,13 +1,8 @@
 package klein
 
-interface KleinError {
-    val message: String
-    val span: SourceSpan?
-}
-
 data class Checked<out T>(
     val output: T?,
-    val diagnostics: List<KleinError>,
+    val diagnostics: List<Diagnostic>,
 ) {
     val hasErrors: Boolean get() = diagnostics.isNotEmpty()
 
@@ -19,6 +14,6 @@ data class Checked<out T>(
     companion object {
         fun <T> success(output: T): Checked<T> = Checked(output, emptyList())
 
-        fun <T> failure(error: KleinError): Checked<T> = Checked(null, listOf(error))
+        fun <T> failure(diagnostic: Diagnostic): Checked<T> = Checked(null, listOf(diagnostic))
     }
 }

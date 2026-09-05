@@ -1,8 +1,8 @@
 package klein.check.contract
 
 import klein.Checked
+import klein.Diagnostic
 import klein.HostError
-import klein.KleinError
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
@@ -35,9 +35,9 @@ class UnknownRelease(
 }
 
 class InvalidContract(
-    val diagnostics: List<KleinError>,
+    val diagnostics: List<Diagnostic>,
 ) : HostError {
-    override val message get() = diagnostics.joinToString("\n") { it.span?.let { span -> "${it.message} at $span" } ?: it.message }
+    override val message get() = diagnostics.joinToString("\n") { "${it.message} at ${it.span}" }
 }
 
 /** One accepted declaration: what the host must implement, and what a release may point at. */

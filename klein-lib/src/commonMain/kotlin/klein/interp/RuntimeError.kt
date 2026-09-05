@@ -1,12 +1,12 @@
 package klein.interp
 
-import klein.KleinError
+import klein.Diagnostic
 import klein.SourceSpan
 
 data class RuntimeError(
     override val message: String,
     override val span: SourceSpan,
-) : KleinError
+) : Diagnostic
 
 internal class Abort(
     val diagnostic: RuntimeError,

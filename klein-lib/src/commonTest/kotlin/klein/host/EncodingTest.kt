@@ -4,6 +4,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -62,8 +63,8 @@ private val everyEntryKind: EffectLog =
         LogEntry.Reply(Call("many", everyValueShape), Value.VNull) +
         LogEntry.Failure(
             listOf(
-                Diagnostic("Division by zero", SourceSpan(3, 17)),
-                Diagnostic("environment error — no span ✗", null),
+                RuntimeError("Division by zero", SourceSpan(3, 17)),
+                RuntimeError("'ünï' used before its binding was evaluated ✗", SourceSpan(0, 3)),
             ),
         )
 
@@ -225,8 +226,8 @@ class EncodingTest {
 
     @Test
     fun aByteThatIsNotABooleanIsUnreadable() {
-        val failureWithBadSpanFlag = byteArrayOf(3, 0, 0, 0, 1, 0, 0, 0, 1, 'm'.code.toByte(), 7)
-        assertTrue(assertUnreadable(frame(failureWithBadSpanFlag)).message.contains("expected a boolean byte, found 7"))
+        val resultWithBadBool = byteArrayOf(2, 2, 7)
+        assertTrue(assertUnreadable(frame(resultWithBadBool)).message.contains("expected a boolean byte, found 7"))
     }
 
     @Test

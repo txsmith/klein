@@ -4,6 +4,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -63,8 +64,8 @@ private val everyEntryKind: EffectLog =
         LogEntry.Reply(Call("many", everyValueShape), Value.VNull) +
         LogEntry.Failure(
             listOf(
-                Diagnostic("Division by zero", SourceSpan(3, 17)),
-                Diagnostic("environment error — no span ✗", null),
+                RuntimeError("Division by zero", SourceSpan(3, 17)),
+                RuntimeError("'ünï' used before its binding was evaluated ✗", SourceSpan(0, 3)),
             ),
         )
 
@@ -295,9 +296,9 @@ class JsonEncodingTest {
     }
 
     @Test
-    fun aDiagnosticWithHalfASpanIsUnreadable() {
+    fun aDiagnosticWithoutItsWholeSpanIsUnreadable() {
         val diagnostic = assertUnreadable(frame("""{"entry":"failure","errors":[{"message":"m","start":1}]}"""))
-        assertTrue(diagnostic.message.contains("both \"start\" and \"end\""), diagnostic.message)
+        assertTrue(diagnostic.message.contains("a diagnostic is missing its \"end\" field"), diagnostic.message)
     }
 
     @Test
