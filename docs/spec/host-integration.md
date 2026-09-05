@@ -140,15 +140,24 @@ contract.
 ### Edition
 
 A compiled artifact of one version of a rule. A version is what an author creates by editing rule
-source. An edition is that version compiled: the program lowered to Klein Core, the release it was
-compiled against, plus a map recording, for each capability and type the rule uses, the name it
-wrote, the revision that release pointed at, and a hash of the declared signature. Each entry of
-that map is a **pin**.
+source. An edition is that version compiled: the program lowered to Klein Core, plus a map recording,
+for each capability and type the rule uses, the name it wrote and the revision the release it was
+compiled against pointed at. Each entry of that map is a **pin**. The stored form of an edition,
+and how loading rebuilds it from source and pins without any release, is
+[edition.md](./edition.md).
 
-The release is not written in the rule. It travels with the compile request — in the shipped
-editor, a dropdown beside the rule — so it is chosen once, per rule, by a person. Recompiling
-reuses the release the previous edition recorded. Selecting a different one is the deliberate act
-that moves a rule forward, and the only thing that ever does.
+An edition is how an accepted rule is stored. It carries the source it was compiled from,
+verbatim, so an accepted version needs no store of its own. Everything that can run is an
+edition. Rule text that is not an edition is the host's to store, wherever and however it likes:
+a draft, work in progress, a proposal awaiting review, or text that does not compile against the
+current contract. Klein has no opinion about such text beyond `check`. It becomes an edition when
+it compiles.
+
+The release is not written in the rule, and it is not part of the edition. It travels with the
+compile request (in the shipped editor, a dropdown beside the rule), so it is chosen once, per
+rule, by a person. The host keeps it beside the rule as author metadata, with the author and the
+time. Recompiling reuses the release the host recorded for the rule. Selecting a different one is
+the deliberate act that moves a rule forward, and the only thing that ever does.
 
 One version accrues editions as capability contracts evolve. Recompiling the same source against
 a changed contract makes a new edition next to the old ones. Editions are never edited and only

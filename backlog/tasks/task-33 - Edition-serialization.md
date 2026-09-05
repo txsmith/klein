@@ -4,7 +4,7 @@ title: Edition serialization
 status: To Do
 assignee: []
 created_date: '2026-09-04 12:19'
-updated_date: '2026-09-04 14:18'
+updated_date: '2026-09-05 09:11'
 labels:
   - host-boundary
 dependencies: []
@@ -14,9 +14,8 @@ ordinal: 33000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The stored form is source + pin map, version-stamped, with the release number kept as provenance only (for the reconciler report and the migration nudge; nothing loads through it). Per the source-is-truth ADR the Core is a cache: loading re-derives it, and a stamp mismatch means discard and re-derive, never migrate.
-Re-derivation goes through the pin surface, not the release: pins are exactly the names the rule source wrote, resolvePins closes them into the typing surface, and the recompile must emit the same pin map it was given (fixpoint check; divergence is the same failure class as an unserved pin at run time). Removing a release therefore stays a compile-time act: it forces migration at the next edit and touches nothing already compiled.
-Invariant this rests on: everything a release contributes to compilation is captured in the stored form. Today that is only the name-to-revision surface; the result sink is the first feature that will test it.
-The stored-Core cache is a pure performance option: pin-based re-derivation needs only what the run needs (the pinned revisions still declared), so the old "replay a retired release" job is gone.
-Stored pins diverging from fresh re-derivation is not a storage fault; it is the signal reconciliation acts on. Replay forces this item: it needs something durable to replay against.
+The rules are in docs/spec/edition.md: an edition at rest is an immutable build artifact (compiled output + verbatim record of its inputs): source, language version, pins, the Core with its lowerer version, an integrity checksum over the whole. The release is NOT in the artifact: it is author metadata the host keeps beside the rule. Two versions and their reactions (language: migration trigger; lowerer: discard and re-derive); decoding with its two re-derivation reasons; re-derivation through the pin surface with the pin fixpoint; migrations produce new editions through the same compile-against-pins path and never touch an artifact. Encodings are the embedding API concern, not the spec.
+First encoding: JSON for inspection (source and pins readable), the Core as an opaque binary blob in base64 opening with a magic and the lowerer version, checksum as hex. Strict reading like the log codec.
+API: Edition becomes core + pins + source (the release field goes; compileRule still takes a release, it just does not record it). Edition.toJson(); Environment.decodeEdition(text): EditionDecodeResult(edition, rederived: Rederivation?) with enum Rederivation { LowererChanged, ChecksumMismatch }. Unreadable text or blob throws KleinException(UnreadableEdition).
+Files: Language VERSION constant (surface); check/contract/Edition (+ source, - release); EnvironmentContract.recompile (internal) + per-pin unservable errors; host/CoreEncoding (binary Core codec with magic + version, reusing ByteWriter/ByteReader from Encoding.kt made internal); host/Base64 (or kotlin.io.encoding.Base64); host/JsonText (shared JSON reader/writer extracted from JsonEncoding); host/EditionJson (toJson, decode, checksum FNV-1a 64 over the contents, UnreadableEdition); host/Environment.decodeEdition. Tests written against the spec: CoreEncodingTest (every node kind round-trips, truncated prefixes unreadable), EditionJsonTest (round trip, hand-written artifact, every rejection, checksum mismatch and lowerer change re-derive with the reason, checksum identical across reformatting, damaged + unrecompilable errors), RecompileTest (fixpoint holds for an intact artifact, each contract-drift failure per name, release removed still decodes).
 <!-- SECTION:DESCRIPTION:END -->
