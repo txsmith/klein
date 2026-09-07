@@ -1,11 +1,13 @@
 package klein.check.contract
 
 import klein.Klein
+import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.core.PreludeBinding
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -109,6 +111,30 @@ class ResolvedSurfaceTest {
     @Test
     fun aTypeOnlyNameHasARevisionThoughItBindsNothing() {
         assertEquals(RevisionNumber(2), resolve().exposedRevisions["Shape"])
+    }
+
+    // ── resolvePins ──────────────────────────────────────────────────────────
+
+    @Test
+    fun resolvePinsAcceptsADeclarationATypeAndAConstructor() {
+        val surface = contract.resolvePins(mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Circle" to RevisionNumber(2)))
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["riskBand"])
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["Flag"])
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["On"])
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["Shape"])
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["Circle"])
+        assertEquals(RevisionNumber(2), surface.exposedRevisions["Customer"])
+    }
+
+    @Test
+    fun resolvePinsThrowsAnUnknownPinPerUnknownNameOrRevision() {
+        val pins = mapOf("creditScore" to RevisionNumber(1), "riskBand" to RevisionNumber(1), "Flag" to RevisionNumber(1), "nobody" to RevisionNumber(1))
+        val errors = assertFailsWith<KleinException> { contract.resolvePins(pins) }.errors
+        assertEquals(
+            listOf("riskBand" to RevisionNumber(1), "Flag" to RevisionNumber(1), "nobody" to RevisionNumber(1)),
+            errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision },
+        )
+        assertEquals("the edition pins 'nobody' revision 1, which the contract does not declare", errors.last().message)
     }
 
     // ── the two halves agree ─────────────────────────────────────────────────

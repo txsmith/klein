@@ -7,7 +7,6 @@ import klein.check.RuleType
 import klein.check.Subtyping
 import klein.check.Type
 import klein.check.contract.Edition
-import klein.check.contract.UnknownPin
 import klein.check.infer
 import klein.interp.Value
 
@@ -28,24 +27,14 @@ class LogTypeMismatch internal constructor(
     override val message get() = "log entry $at holds $answerType for '$name' where the contract declares ${Type.print(declaredType)}"
 }
 
-internal fun Environment.checkPins(
+internal fun Environment.missingHandlers(
     edition: Edition,
     handlers: HandlerRegistry,
-): List<HostError> {
-    val problems = mutableListOf<HostError>()
-    for ((name, revision) in edition.pins) {
-        val capability = getCapabilityDeclaration(name, revision)
-        when {
-            capability != null ->
-                if (handlers.registered[name to revision] == null && getHandler(name, revision) == null) {
-                    problems.add(MissingHandler(name, revision))
-                }
-            contract.declaresVocabulary(name, revision) -> {}
-            else -> problems.add(UnknownPin(name, revision))
-        }
-    }
-    return problems
-}
+): List<MissingHandler> =
+    edition.pins
+        .filter { (name, revision) -> getCapabilityDeclaration(name, revision) != null }
+        .filter { (name, revision) -> handlers.registered[name to revision] == null && getHandler(name, revision) == null }
+        .map { (name, revision) -> MissingHandler(name, revision) }
 
 internal fun Environment.checkLog(
     edition: Edition,

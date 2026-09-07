@@ -305,5 +305,5 @@ private fun Environment.resolveHandler(
     val revision = pins.getValue(name)
     return handlers.registered[name to revision]
         ?: getHandler(name, revision)
-        ?: throw IllegalStateException("no handler for '$name' although checkPins passed")
+        ?: throw IllegalStateException("no handler for '$name' although missingHandlers passed")
 }
