@@ -52,14 +52,15 @@ class EffectLogTest {
     private fun makeHost(
         transact: (() -> Unit) -> Unit = { it() },
         vararg overrides: Pair<String, (List<Value>) -> Value>,
-    ) = contract.implement(transact) {
+    ): Environment {
         val handlers =
             mapOf<String, (List<Value>) -> Value>(
                 "customer" to { gold },
                 "threshold" to { Value.VNum(620.0) },
                 "creditScore" to { scoreByTier(it) },
             ) + overrides
-        handlers.forEach { (name, answer) -> immediate(name) { asks++; answer(it) } }
+        val registrations = handlers.map { (name, answer) -> immediate(name) { asks++; answer(it) } }
+        return contract.implement(*registrations.toTypedArray(), transact = transact)
     }
 
     private fun makeLog(vararg inputs: Pair<String, Value>) = EffectLog(LogEntry.Start(mapOf(*inputs)))
@@ -133,7 +134,7 @@ class EffectLogTest {
     fun aRunRegistrationForAnUndeclaredNameThrows() {
         val failure =
             assertFailsWith<KleinException> {
-                makeHost().run(compile(STANDARD), registerHandlers = { immediate("nope") { Value.VUnit } })
+                makeHost().run(compile(STANDARD), immediate("nope") { Value.VUnit })
             }
         val problem = assertIs<RegistrationError>(failure.errors.single())
         assertEquals("'nope' revision 1 is registered but the contract does not declare it", problem.message)
@@ -144,7 +145,7 @@ class EffectLogTest {
     fun aRunRegistrationDeferringAValueThrows() {
         val failure =
             assertFailsWith<KleinException> {
-                makeHost().run(compile(STANDARD), registerHandlers = { deferred("customer") {} })
+                makeHost().run(compile(STANDARD), deferred("customer") {})
             }
         val problem = assertIs<RegistrationError>(failure.errors.single())
         assertEquals("'customer' is a value, which is read at start and cannot be deferred", problem.message)
@@ -154,9 +155,9 @@ class EffectLogTest {
     @Test
     fun aPreFlightErrorThrowsBeforeAnythingRuns() {
         var asked = false
-        val env = contract.implement { immediate("customer"); immediate("threshold"); immediate("creditScore") { asked = true; scoreByTier(it) } }
+        val env = contract.implement(immediate("customer"), immediate("threshold"), immediate("creditScore") { asked = true; scoreByTier(it) })
         val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD)) }
-        assertIs<MissingHandler>(failure.errors.single())
+        assertEquals(listOf("customer", "threshold"), failure.errors.map { assertIs<MissingHandler>(it).name })
         assertFalse(asked, "pre-flight should reject the run before any capability is asked")
     }
 
@@ -445,11 +446,12 @@ class EffectLogTest {
     private fun makeParkingHost(
         transact: (() -> Unit) -> Unit = { it() },
         initiate: (Call) -> Unit = {},
-    ) = contract.implement(transact) {
-        immediate("customer") { asks++; gold }
-        immediate("threshold") { asks++; Value.VNum(620.0) }
-        deferred("creditScore") { initiations++; initiate(it) }
-    }
+    ) = contract.implement(
+        immediate("customer") { asks++; gold },
+        immediate("threshold") { asks++; Value.VNum(620.0) },
+        deferred("creditScore") { initiations++; initiate(it) },
+        transact = transact,
+    )
 
     @Test
     fun aDeferredAskParksTheRunWithTheCallAndTheLogSoFar() {
@@ -497,7 +499,7 @@ class EffectLogTest {
         val parked = assertIs<RunOutcome.Parked>(makeParkingHost().run(compile(STANDARD)))
         val fresh = Klein.checkContract(LENDING)
         val resumed =
-            fresh.implement { immediate("customer") { gold }; immediate("threshold") { Value.VNum(620.0) }; deferred("creditScore") {} }
+            fresh.implement(immediate("customer") { gold }, immediate("threshold") { Value.VNum(620.0) }, deferred("creditScore") {})
                 .run(fresh.compileRule(STANDARD, ReleaseNumber(1)).orFail(), log = parked.log + parked.toReply(Value.VNum(500.0)))
         assertEquals(Value.VBool(false), assertIs<RunOutcome.Completed>(resumed).value)
     }
@@ -521,8 +523,8 @@ class EffectLogTest {
 
     @Test
     fun aDeferredRegistrationSatisfiesCompletenessAndCountsAsAHandlerForThePinCheck() {
-        val env = contract.implement { immediate("customer"); immediate("threshold"); deferred("creditScore") {} }
-        val outcome = env.run(compile(STANDARD), registerHandlers = { immediate("customer") { gold } })
+        val env = contract.implement(immediate("customer"), immediate("threshold"), deferred("creditScore") {})
+        val outcome = env.run(compile(STANDARD), immediate("customer") { gold }, immediate("threshold") { Value.VNum(620.0) })
         assertIs<RunOutcome.Parked>(outcome)
     }
 
@@ -530,7 +532,7 @@ class EffectLogTest {
     fun aValueCannotBeDeferred() {
         val thrown =
             assertFailsWith<KleinException> {
-                contract.implement { deferred("customer") {}; immediate("threshold"); immediate("creditScore") }
+                contract.implement(deferred("customer") {}, immediate("threshold"), immediate("creditScore"))
             }
         assertEquals("'customer' is a value, which is read at start and cannot be deferred", thrown.errors.first().message)
     }
