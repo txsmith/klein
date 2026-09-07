@@ -27,15 +27,6 @@ class LogTypeMismatch internal constructor(
     override val message get() = "log entry $at holds $answerType for '$name' where the contract declares ${Type.print(declaredType)}"
 }
 
-internal fun Environment.missingHandlers(
-    edition: Edition,
-    handlers: HandlerRegistry,
-): List<MissingHandler> =
-    edition.pins
-        .filter { (name, revision) -> getCapabilityDeclaration(name, revision) != null }
-        .filter { (name, revision) -> handlers.registered[name to revision] == null && getHandler(name, revision) == null }
-        .map { (name, revision) -> MissingHandler(name, revision) }
-
 internal fun Environment.checkLog(
     edition: Edition,
     log: EffectLog,
