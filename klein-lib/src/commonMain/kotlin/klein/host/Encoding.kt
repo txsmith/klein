@@ -35,7 +35,14 @@ fun encode(log: EffectLog): ByteArray {
     return out.toByteArray()
 }
 
-fun decode(bytes: ByteArray): EffectLog {
+fun decode(bytes: ByteArray): EffectLog =
+    try {
+        readLog(bytes)
+    } catch (malformed: MalformedBytes) {
+        reject(malformed.message)
+    }
+
+private fun readLog(bytes: ByteArray): EffectLog {
     val input = ByteReader(bytes)
     if (bytes.size < MAGIC.size + 1 || !MAGIC.contentEquals(input.readBytes(MAGIC.size))) {
         reject("not an effect log: the bytes do not open with the effect log stamp")
@@ -165,105 +172,4 @@ private fun <T> ByteReader.readMap(readEntry: ByteReader.() -> T): Map<String, T
     val map = LinkedHashMap<String, T>(count)
     repeat(count) { map[readString()] = readEntry() }
     return map
-}
-
-private class ByteWriter {
-    private var buffer = ByteArray(256)
-    private var size = 0
-
-    fun writeByte(value: Int) {
-        ensureRoom(1)
-        buffer[size++] = value.toByte()
-    }
-
-    fun writeBytes(bytes: ByteArray) {
-        ensureRoom(bytes.size)
-        bytes.copyInto(buffer, size)
-        size += bytes.size
-    }
-
-    fun writeBoolean(value: Boolean) = writeByte(if (value) 1 else 0)
-
-    fun writeInt(value: Int) {
-        ensureRoom(4)
-        for (shift in 24 downTo 0 step 8) buffer[size++] = (value ushr shift).toByte()
-    }
-
-    fun writeLong(value: Long) {
-        ensureRoom(8)
-        for (shift in 56 downTo 0 step 8) buffer[size++] = (value ushr shift).toByte()
-    }
-
-    fun writeString(value: String) {
-        val bytes = value.encodeToByteArray()
-        writeInt(bytes.size)
-        writeBytes(bytes)
-    }
-
-    fun toByteArray(): ByteArray = buffer.copyOf(size)
-
-    private fun ensureRoom(count: Int) {
-        if (size + count > buffer.size) buffer = buffer.copyOf(maxOf(buffer.size * 2, size + count))
-    }
-}
-
-private class ByteReader(
-    private val bytes: ByteArray,
-) {
-    private var position = 0
-
-    val isExhausted: Boolean get() = position == bytes.size
-    val remaining: Int get() = bytes.size - position
-
-    fun readByte(): Int {
-        ensureAvailable(1)
-        return bytes[position++].toInt() and 0xFF
-    }
-
-    fun readBytes(count: Int): ByteArray {
-        ensureAvailable(count)
-        return bytes.copyOfRange(position, position + count).also { position += count }
-    }
-
-    fun readBoolean(): Boolean =
-        when (val byte = readByte()) {
-            0 -> false
-            1 -> true
-            else -> reject("expected a boolean byte, found $byte")
-        }
-
-    fun readInt(): Int {
-        ensureAvailable(4)
-        var value = 0
-        repeat(4) { value = (value shl 8) or (bytes[position++].toInt() and 0xFF) }
-        return value
-    }
-
-    fun readLong(): Long {
-        ensureAvailable(8)
-        var value = 0L
-        repeat(8) { value = (value shl 8) or (bytes[position++].toLong() and 0xFF) }
-        return value
-    }
-
-    fun readCount(): Int {
-        val count = readInt()
-        if (count < 0 || count > remaining) reject("implausible count $count at offset ${position - 4} with $remaining bytes left")
-        return count
-    }
-
-    fun readString(): String {
-        val encoded = readBytes(readCount())
-        return try {
-            encoded.decodeToString(throwOnInvalidSequence = true)
-        } catch (ignored: CharacterCodingException) {
-            reject("malformed UTF-8 in a string at offset ${position - encoded.size}")
-        }
-    }
-
-    private fun ensureAvailable(count: Int) {
-        if (count < 0 || position + count > bytes.size) {
-            reject("the log ends early: needed $count more bytes at offset $position of ${bytes.size}")
-        }
-    }
 }
