@@ -80,3 +80,6 @@ Your application provides `customer`, `order`, and `totalWeight`. Klein computes
 
 Klein is in early development.
 
+## License
+
+Klein is released under the [Apache License 2.0](./LICENSE).

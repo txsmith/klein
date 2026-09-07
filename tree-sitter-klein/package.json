@@ -2,6 +2,8 @@
   "name": "tree-sitter-klein",
   "version": "0.1.0",
   "description": "Tree-sitter grammar for the Klein language",
+  "license": "Apache-2.0",
+  "repository": "github:txsmith/klein",
   "main": "bindings/node",
   "types": "bindings/node",
   "keywords": [
