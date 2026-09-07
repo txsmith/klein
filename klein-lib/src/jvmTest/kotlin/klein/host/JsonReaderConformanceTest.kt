@@ -8,7 +8,7 @@ import java.nio.charset.CodingErrorAction
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-class JsonTestSuiteTest {
+class JsonReaderConformanceTest {
     private val suite: List<File> =
         File(checkNotNull(javaClass.getResource("/json-test-suite/test_parsing")).toURI())
             .listFiles()
