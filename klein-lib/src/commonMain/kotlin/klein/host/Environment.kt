@@ -155,8 +155,9 @@ class Environment internal constructor(
     ): RunOutcome {
         val handlers = HandlerRegistry(contract.declarations).apply(registerHandlers)
         if (handlers.errors.isNotEmpty()) throw KleinException(handlers.errors)
-        val pinProblems = checkPins(edition, handlers)
-        if (pinProblems.isNotEmpty()) throw KleinException(pinProblems)
+        contract.resolvePins(edition.pins)
+        val missing = missingHandlers(edition, handlers)
+        if (missing.isNotEmpty()) throw KleinException(missing)
         if (log != null) {
             val logProblems = checkLog(edition, log)
             if (logProblems.isNotEmpty()) throw KleinException(logProblems)

@@ -89,11 +89,9 @@ class EnvironmentContract internal constructor(
     // Encapsulates all types defined in the contract
     private val contractTypeEnv: ContractEnv,
     // The full set of revisioned names per release
-    private val releaseSurfaces: Map<ReleaseNumber, Map<String, RevisionNumber>>,
+    private val releasePins: Map<ReleaseNumber, Map<String, RevisionNumber>>,
 ) {
-    val releases: List<ReleaseNumber> get() = releaseSurfaces.keys.toList()
-
-    private val resolved = mutableMapOf<ReleaseNumber, ResolvedSurface>()
+    val releases: List<ReleaseNumber> get() = releasePins.keys.toList()
 
     // TODO: this is where hashing a pin set would come in handy. A Map as Map keys is not great...
     private val resolvedPins = mutableMapOf<Map<String, RevisionNumber>, ResolvedSurface>()
@@ -111,13 +109,18 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         ruleSource: String,
         release: ReleaseNumber,
+    ): Checked<Edition> = compile(ruleSource, getReleasePins(release))
+
+    internal fun compile(
+        source: String,
+        pins: Map<String, RevisionNumber>,
     ): Checked<Edition> {
-        val resolvedRelease = resolveRelease(release)
-        return parseAndCheck(ruleSource, resolvedRelease).andThen { rule ->
-            val used = usedCapabilities(rule.program, resolvedRelease.exposedRevisions.keys)
-            val pins = used.associateWith { resolvedRelease.exposedRevisions.getValue(it) }
-            val prelude = used.mapNotNull { resolvedRelease.bindingFor(it) }
-            Checked.success(Edition(lowerWithPrelude(rule.program, prelude), release, pins))
+        val surface = resolvePins(pins)
+        return parseAndCheck(source, surface).andThen { rule ->
+            val used = usedCapabilities(rule.program, surface.exposedRevisions.keys)
+            val editionPins = used.associateWith { surface.exposedRevisions.getValue(it) }
+            val prelude = used.mapNotNull { surface.bindingFor(it) }
+            Checked.success(Edition(lowerWithPrelude(rule.program, prelude), editionPins, source))
         }
     }
 
@@ -173,11 +176,10 @@ class EnvironmentContract internal constructor(
         return Checked(CheckedRule(program, checked.type), checked.errors)
     }
 
-    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
-        resolved.getOrPut(release) {
-            val revisions = releaseSurfaces[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
-            resolveSurface(revisions)
-        }
+    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface = resolvePins(getReleasePins(release))
+
+    private fun getReleasePins(release: ReleaseNumber): Map<String, RevisionNumber> =
+        releasePins[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
     internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
         resolvedPins.getOrPut(pins) {
@@ -187,6 +189,7 @@ class EnvironmentContract internal constructor(
             // `resolveRelease` doesn't need this because each release as written in a contract file is demanded to be transitive closure already.
             val surface = mutableMapOf<String, RevisionNumber>()
             val roots = mutableListOf<ContractType>()
+            val unknown = mutableListOf<UnknownPin>()
             for ((name, revision) in pins) {
                 val declaration = declarations.firstOrNull { it.name == name && it.revision == revision }
                 if (declaration != null) {
@@ -198,18 +201,16 @@ class EnvironmentContract internal constructor(
                 if (contractTypeEnv.lookupTypeDef(typeName, revision) != null) {
                     surface[typeName] = revision
                     roots.addAll(contractTypeEnv.declaredFields(typeName, revision))
+                } else {
+                    unknown.add(UnknownPin(name, revision))
                 }
             }
+            if (unknown.isNotEmpty()) throw KleinException(unknown)
             for (reached in roots.reachableTypes(contractTypeEnv)) {
                 if (reached is Type.TRef) surface[reached.name] = reached.revision
             }
             resolveSurface(surface)
         }
-
-    internal fun declaresVocabulary(
-        name: String,
-        revision: RevisionNumber,
-    ): Boolean = contractTypeEnv.lookupTypeDef(name, revision) != null || contractTypeEnv.lookupConstructor(name, revision) != null
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {
         val projected = TypeEnv.empty<Nothing?>()
