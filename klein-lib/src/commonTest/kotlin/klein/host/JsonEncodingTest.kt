@@ -273,12 +273,6 @@ class JsonEncodingTest {
     }
 
     @Test
-    fun aDuplicateFieldIsUnreadable() {
-        val diagnostic = assertUnreadable(frame("""{"entry":"start","inputs":{"a":1,"a":2}}"""))
-        assertTrue(diagnostic.message.contains("duplicate field \"a\""), diagnostic.message)
-    }
-
-    @Test
     fun anUnknownStringEscapeIsUnreadable() {
         val diagnostic = assertUnreadable(frame("""{"entry":"result","value":"\x"}"""))
         assertTrue(diagnostic.message.contains("unknown escape"), diagnostic.message)

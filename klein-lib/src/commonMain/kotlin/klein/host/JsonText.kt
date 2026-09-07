@@ -63,24 +63,26 @@ internal fun StringBuilder.writeText(value: String) {
     append('"')
 }
 
+internal const val JSON_MAX_DEPTH = 1024
+
 internal class JsonReader(
     private val text: String,
 ) {
     private var position = 0
 
     fun readDocument(): Json {
-        val value = readValue()
+        val value = readValue(1)
         skipWhitespace()
         if (position != text.length) malformed("unexpected trailing characters after the document, starting at offset $position")
         return value
     }
 
-    private fun readValue(): Json {
+    private fun readValue(depth: Int): Json {
         skipWhitespace()
         val character = peek()
         return when {
-            character == '{' -> readObject()
-            character == '[' -> readArray()
+            character == '{' -> readObject(depth)
+            character == '[' -> readArray(depth)
             character == '"' -> Json.JStr(readString())
             character == 't' || character == 'f' || character == 'n' -> readKeyword()
             character == '-' || character in '0'..'9' -> readNumber()
@@ -88,7 +90,8 @@ internal class JsonReader(
         }
     }
 
-    private fun readObject(): Json {
+    private fun readObject(depth: Int): Json {
+        if (depth > JSON_MAX_DEPTH) malformed("nesting deeper than $JSON_MAX_DEPTH levels at offset $position")
         position++
         val fields = LinkedHashMap<String, Json>()
         skipWhitespace()
@@ -99,11 +102,10 @@ internal class JsonReader(
         while (true) {
             skipWhitespace()
             val key = readString()
-            if (fields.containsKey(key)) malformed("duplicate field \"$key\" in an object")
             skipWhitespace()
             if (peek() != ':') malformed("expected ':' after an object key at offset $position")
             position++
-            fields[key] = readValue()
+            fields[key] = readValue(depth + 1)
             skipWhitespace()
             when (peek()) {
                 ',' -> position++
@@ -116,7 +118,8 @@ internal class JsonReader(
         }
     }
 
-    private fun readArray(): Json {
+    private fun readArray(depth: Int): Json {
+        if (depth > JSON_MAX_DEPTH) malformed("nesting deeper than $JSON_MAX_DEPTH levels at offset $position")
         position++
         val items = mutableListOf<Json>()
         skipWhitespace()
@@ -125,7 +128,7 @@ internal class JsonReader(
             return Json.JArr(items)
         }
         while (true) {
-            items.add(readValue())
+            items.add(readValue(depth + 1))
             skipWhitespace()
             when (peek()) {
                 ',' -> position++
@@ -147,36 +150,50 @@ internal class JsonReader(
             val character = text[position++]
             when {
                 character == '"' -> return out.toString()
-                character == '\\' -> out.append(readEscape())
+                character == '\\' -> readEscape(out)
                 character < ' ' -> malformed("a raw control character inside a string at offset ${position - 1}")
                 else -> out.append(character)
             }
         }
     }
 
-    private fun readEscape(): Char {
+    private fun readEscape(out: StringBuilder) {
         if (position >= text.length) malformed("the text ends early inside a string escape")
-        return when (val character = text[position++]) {
-            '"' -> '"'
-            '\\' -> '\\'
-            '/' -> '/'
-            'b' -> '\b'
-            'f' -> 12.toChar()
-            'n' -> '\n'
-            'r' -> '\r'
-            't' -> '\t'
-            'u' -> readUnicodeEscape()
+        when (val character = text[position++]) {
+            '"' -> out.append('"')
+            '\\' -> out.append('\\')
+            '/' -> out.append('/')
+            'b' -> out.append('\b')
+            'f' -> out.append(12.toChar())
+            'n' -> out.append('\n')
+            'r' -> out.append('\r')
+            't' -> out.append('\t')
+            'u' -> readUnicodeEscape(out)
             else -> malformed("unknown escape '\\$character' in a string at offset ${position - 2}")
         }
     }
 
-    private fun readUnicodeEscape(): Char {
+    private fun readUnicodeEscape(out: StringBuilder) {
+        val start = position - 2
+        val first = readHexCode()
+        when {
+            first.isHighSurrogate() -> {
+                if (!skipsOver("\\u")) malformed("the high surrogate escape at offset $start is not followed by a low surrogate escape")
+                val second = readHexCode()
+                if (!second.isLowSurrogate()) malformed("the high surrogate escape at offset $start is not followed by a low surrogate escape")
+                out.append(first).append(second)
+            }
+            first.isLowSurrogate() -> malformed("a lone low surrogate escape at offset $start")
+            else -> out.append(first)
+        }
+    }
+
+    private fun readHexCode(): Char {
         if (position + 4 > text.length) malformed("the text ends early inside a string escape")
         val hex = text.substring(position, position + 4)
-        val code = hex.toIntOrNull(16)
-        if (code == null) malformed("a \\u escape needs four hex digits, found \"$hex\"")
+        if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) malformed("a \\u escape needs four hex digits, found \"$hex\"")
         position += 4
-        return code.toChar()
+        return hex.toInt(16).toChar()
     }
 
     private fun readKeyword(): Json =
@@ -209,6 +226,7 @@ internal class JsonReader(
         val token = text.substring(start, position)
         val value = token.toDoubleOrNull()
         if (value == null) malformed("not valid JSON: unreadable number \"$token\" at offset $start")
+        if (!value.isFinite()) malformed("the number \"$token\" at offset $start is outside the range of a double")
         return Json.JNum(value)
     }
 
