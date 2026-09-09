@@ -203,7 +203,7 @@ klein-lang/
 │   │   │   ├── Diagnostic.kt     # A fault in a document (rule, contract, answer): message + span; returned, never thrown
 │   │   │   ├── HostError.kt      # A fault in the environment (registration, pin, log, release, bytes): no span; only thrown
 │   │   │   ├── KleinException.kt # The one public exception: a list of HostErrors
-│   │   │   ├── Numbering.kt      # RevisionNumber and ReleaseNumber value classes
+│   │   │   ├── Numbering.kt      # RevisionNumber, ReleaseNumber, LanguageVersion and CompilerVersion value classes
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization
 │   │   │   │   ├── Parser.kt       # Parsing
@@ -249,8 +249,9 @@ klein-lang/
 │   │   │       └── codec/            # The encodings, apart from what they encode; depends on host, never the reverse
 │   │   │           ├── BinaryPrimitives.kt, JsonPrimitives.kt                # ByteWriter/ByteReader; the Json tree and JsonReader
 │   │   │           ├── EffectLogBinaryEncoding.kt, EffectLogJsonEncoding.kt  # The effect log's two codecs; UnreadableLog
-│   │   │           ├── EditionChecksum.kt                                    # The artifact's integrity checksum, shared by its codecs
-│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the checksum on read
+│   │   │           ├── CoreBinaryEncoding.kt                                 # The Core blob: encodeCore, decodeCore, readCoreVersion; one CompilerVersion byte, then the tree
+│   │   │           ├── EditionChecksum.kt                                    # The artifact's integrity checksum over language, source, pins and the Core bytes, shared by its codecs
+│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the checksum, then the Core's version, on read
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/

@@ -46,3 +46,14 @@ value class LanguageVersion(
         val CURRENT = LanguageVersion(1)
     }
 }
+
+@JvmInline
+value class CompilerVersion(
+    val value: Int,
+) {
+    override fun toString(): String = value.toString()
+
+    companion object {
+        val CURRENT = CompilerVersion(1)
+    }
+}

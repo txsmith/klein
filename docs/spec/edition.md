@@ -138,7 +138,7 @@ might read:
   "language": 1,
   "pins": { "Customer": 2, "creditScore": 1 },
   "source": "score = creditScore(customer)\nif score > 600 then Approve else Decline",
-  "core": "S0NPUgEAAAAG...",
+  "core": "AQgAAAABAA...",
   "checksum": "9a3f0c1e77b2d4a8"
 }
 ```
