@@ -1,9 +1,12 @@
-package klein.host
+package klein.host.codec
 
 import klein.Diagnostic
 import klein.HostError
 import klein.KleinException
 import klein.SourceSpan
+import klein.host.Call
+import klein.host.EffectLog
+import klein.host.LogEntry
 import klein.interp.RuntimeError
 import klein.interp.Value
 
@@ -26,7 +29,7 @@ private const val VALUE_NULL = 3
 private const val VALUE_UNIT = 4
 private const val VALUE_STRUCT = 5
 
-fun encode(log: EffectLog): ByteArray {
+fun encodeBinary(log: EffectLog): ByteArray {
     val out = ByteWriter()
     out.writeBytes(MAGIC)
     out.writeByte(VERSION)
@@ -35,7 +38,7 @@ fun encode(log: EffectLog): ByteArray {
     return out.toByteArray()
 }
 
-fun decode(bytes: ByteArray): EffectLog =
+fun decodeBinary(bytes: ByteArray): EffectLog =
     try {
         readLog(bytes)
     } catch (malformed: MalformedBytes) {

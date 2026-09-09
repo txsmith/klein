@@ -1,4 +1,4 @@
-package klein.host
+package klein.host.codec
 
 internal class MalformedBytes(
     override val message: String,

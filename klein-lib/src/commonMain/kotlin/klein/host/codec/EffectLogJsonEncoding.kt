@@ -1,8 +1,11 @@
-package klein.host
+package klein.host.codec
 
 import klein.Diagnostic
 import klein.KleinException
 import klein.SourceSpan
+import klein.host.Call
+import klein.host.EffectLog
+import klein.host.LogEntry
 import klein.interp.RuntimeError
 import klein.interp.Value
 
@@ -246,12 +249,4 @@ private fun toValueMap(json: Json, owner: String): Map<String, Value> {
     val values = LinkedHashMap<String, Value>(json.fields.size)
     json.fields.forEach { (name, field) -> values[name] = toValue(field) }
     return values
-}
-
-private fun toWholeNumber(json: Json, owner: String): Int {
-    if (json !is Json.JNum) reject("$owner must be a whole number")
-    val value = json.value
-    val whole = value.toInt()
-    if (whole.toDouble() != value) reject("$owner must be a whole number")
-    return whole
 }

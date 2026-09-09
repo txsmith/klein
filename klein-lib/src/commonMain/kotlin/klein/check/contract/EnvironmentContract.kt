@@ -4,6 +4,7 @@ import klein.Checked
 import klein.Diagnostic
 import klein.HostError
 import klein.KleinException
+import klein.LanguageVersion
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.ConstructorInfo
@@ -109,9 +110,9 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         ruleSource: String,
         release: ReleaseNumber,
-    ): Checked<Edition> = compile(ruleSource, getReleasePins(release))
+    ): Checked<Edition> = compileRule(ruleSource, getReleasePins(release))
 
-    internal fun compile(
+    fun compileRule(
         source: String,
         pins: Map<String, RevisionNumber>,
     ): Checked<Edition> {
@@ -120,7 +121,7 @@ class EnvironmentContract internal constructor(
             val used = usedCapabilities(rule.program, surface.exposedRevisions.keys)
             val editionPins = used.associateWith { surface.exposedRevisions.getValue(it) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(lowerWithPrelude(rule.program, prelude), editionPins, source))
+            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
         }
     }
 

@@ -56,26 +56,27 @@ encoded: the same edition has the same checksum on every platform and in every e
 
 ## Decoding
 
-Decoding takes an encoded artifact and answers the edition, together with whether the stored
-Core was used or the edition was re-derived, and if re-derived, why. Like compiling, it answers
-diagnostics instead of an edition when re-derivation finds the source no longer checks (see
-Errors). In order:
+Decoding takes an encoded artifact and answers one of two things: the edition, **fresh**, with
+its stored Core; or the recorded inputs, **stale**, with the reason the stored Core must not be
+used. Decoding never compiles. Re-deriving a stale edition is the host's next step: it hands the
+recorded inputs to the contract, which compiles them, and like any compile that answers
+diagnostics instead of an edition when the source no longer checks (see Errors). In order:
 
 - The artifact is read; one that cannot be read is an error and yields nothing.
-- The checksum is recomputed from the decoded contents. If it differs from the stored one, the
-  stored Core is ignored and the edition is re-derived: reason **checksum mismatch**.
-- Otherwise, if the Core's lowerer version is not the current one, the stored Core is ignored and
-  the edition is re-derived: reason **lowerer changed**.
-- Otherwise the stored Core is used as is.
+- The reader recomputes the checksum from what it read, before the Core is opened. If it differs
+  from the stored one, the artifact is stale: reason **checksum mismatch**.
+- Otherwise, if the Core's lowerer version is not the current one, the artifact is stale: reason
+  **lowerer changed**.
+- Otherwise the edition is fresh, with the stored Core as is.
 
-A re-derived edition is a fresh compile from the recorded inputs, and the artifact it came from is
-stale: its Core is out of date or damaged. The host should store the re-derived edition's
-artifact in its place. Until it does, every decode re-derives again. Decoding never writes
-anything itself.
+A stale artifact still yields its recorded inputs whole, so a rule whose source no longer checks
+can still be read, shown, and migrated. A re-derived edition is a fresh compile from those
+inputs, and the artifact it came from is out of date or damaged. The host should store the
+re-derived edition's artifact in its place. Until it does, every decode answers stale again.
+Decoding never writes anything itself.
 
-Decoding needs the contract only on the re-derivation path. An intact, current artifact yields an
-edition without compiling; its pins are still checked against the contract when the edition is
-run, as for any edition.
+Decoding needs no contract. A fresh edition is ready to run without compiling; its pins are
+still checked against the contract when the edition is run, as for any edition.
 
 ## Re-derivation
 
