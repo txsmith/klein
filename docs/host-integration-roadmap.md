@@ -39,6 +39,19 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 [spec/effect-log.md](./spec/effect-log.md); the decision record is
 [replay-is-ordinal-migration-is-host-policy](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
 
+**Editions at rest.** An edition is stored as an immutable artifact: its source and language
+version, its pins, its Core as an opaque blob carrying the compiler version, and a checksum over
+the whole. Decoding needs no contract and never compiles: it answers the edition fresh, or the
+recorded inputs stale with the reason (checksum mismatch, compiler changed), and the host
+re-derives a stale one with `compileRule(source, pins)`, the one compilation, which the release
+form now delegates to. Re-derivation goes through the pins, never a release, so removing a
+release touches nothing already compiled. Along the way handler registrations became values and
+the registry immutable, and the pin check moved to the one place that resolves pins. The rules
+are in [spec/edition.md](./spec/edition.md). Two notes for later features: the artifact must
+capture everything a release contributes to compilation (the result sink is the first feature
+that will test that), and the checksum needs only a deterministic walk, not a canonical form, so
+the canonical-form dissolution below stands.
+
 **One error architecture.** Two kinds of error, split by what they are about. A `Diagnostic` is
 about a document and has a span; checking or compiling returns it in a `Checked`, and a failed run
 carries it in its outcome and its log. A `HostError` is about the environment and has no span; it
@@ -55,13 +68,11 @@ rules are in spec/host-integration.md (§Errors).
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
-    ED["Edition serialization<br/>source + Core + stamp + checksum"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
     TRACE["Call markers, trace modes,<br/>fuel, error traces"]
 
-    ED --> RECON
     SEV --> RECON
 ```
 
@@ -109,26 +120,6 @@ anything stored keeps that reversible. The `Long` round-trip rule — a host typ
 `Num` only if every value survives without silent loss — waits until a real host binds one. The
 value-identity rulings replay needs (`-0.0` vs `0.0`, NaN canonicalization) belong to the
 pending evaluation spec.
-
-### Edition serialization
-
-The rules are in [spec/edition.md](./spec/edition.md), written before the implementation so the
-suites come from it. An edition at rest is an immutable build artifact, the compiled output with
-a verbatim record of its inputs, encoded as JSON for inspection: source, language version, pins,
-the Core as an opaque base64 blob with a lowerer-version header, and an
-integrity checksum. Decoding tells the host when it re-derived and why, and re-derivation goes
-through the pin surface with the pin fixpoint, which is what makes removing a release a
-compile-time act that touches nothing already compiled. Migrations never touch an artifact; they
-produce a new edition through the same compile-against-pins path. Replay is the consumer that forces this item: it needs
-something durable to replay *against*. What is left is the implementation: `Edition` gains its
-source, a binary Core codec (the log codec's byte primitives, made internal), the JSON artifact
-codec sharing the log codec's JSON machinery, decoding that answers either a fresh edition or the
-recorded inputs with the reason they are stale, and a public `compileRule(source, pins)` on the
-contract for the host to re-derive them. Keeping the Core binary is deliberate: nobody reads or
-edits base64, so Core never becomes a public format. Two design notes for later features: the
-stored form must capture everything a release contributes to compilation (the result sink is the
-first feature that will test that), and the checksum needs only a deterministic walk, not a
-canonical form, so the canonical-form dissolution above stands.
 
 ### Diagnostic severity
 
