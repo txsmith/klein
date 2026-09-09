@@ -35,3 +35,25 @@ value class ReleaseNumber(
 ) {
     override fun toString(): String = value.toString()
 }
+
+@JvmInline
+value class LanguageVersion(
+    val value: Int,
+) {
+    override fun toString(): String = value.toString()
+
+    companion object {
+        val CURRENT = LanguageVersion(1)
+    }
+}
+
+@JvmInline
+value class CompilerVersion(
+    val value: Int,
+) {
+    override fun toString(): String = value.toString()
+
+    companion object {
+        val CURRENT = CompilerVersion(1)
+    }
+}

@@ -1,9 +1,15 @@
-package klein.host
+package klein.host.codec
 
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.host.Call
+import klein.host.EffectLog
+import klein.host.LogEntry
+import klein.host.RunOutcome
+import klein.host.immediate
+import klein.host.implement
 import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
@@ -69,7 +75,7 @@ private val everyEntryKind: EffectLog =
             ),
         )
 
-class JsonEncodingTest {
+class EffectLogJsonEncodingTest {
     private fun roundTrip(log: EffectLog) = decodeJson(encodeJson(log))
 
     private fun assertUnreadable(text: String): UnreadableLog {
@@ -182,13 +188,13 @@ class JsonEncodingTest {
         val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1)).orFail()
         var asks = 0
         fun makeHost() =
-            contract.implement {
-                immediate("customer") { asks++; gold }
+            contract.implement(
+                immediate("customer") { asks++; gold },
                 immediate("creditScore") { args ->
                     asks++
                     Value.VNum(if (assertIs<Value.VStruct>(args.single()).fields["tier"] == Value.VStr("gold")) 700.0 else 500.0)
-                }
-            }
+                },
+            )
         val live = assertIs<RunOutcome.Completed>(makeHost().run(rule))
         val fromOriginal = assertIs<RunOutcome.Completed>(makeHost().run(rule, log = live.log))
         asks = 0
@@ -338,6 +344,12 @@ class JsonEncodingTest {
             val diagnostic = assertUnreadable(document)
             assertTrue(diagnostic.message.contains("unexpected field \"x\""), diagnostic.message)
         }
+    }
+
+    @Test
+    fun aDuplicateFieldIsUnreadable() {
+        val diagnostic = assertUnreadable(frame("""{"entry":"result","value":1,"value":2}"""))
+        assertTrue(diagnostic.message.contains("duplicate field \"value\""), diagnostic.message)
     }
 
     @Test

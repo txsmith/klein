@@ -140,6 +140,7 @@ evolution).
 | Suspension | `Execution.Done \| AwaitingHost \| Failure` with one-shot `resume` and `clone` — a runtime error is a terminal interpreter state; `lowerWithPrelude` emits `HostCall` for contract capabilities (eta-lambda for functions, bare nullary call for values) |
 | Host boundary | `Environment.run(edition, log?, persist, registerHandlers)` — start, replay, and resume in one call behind pre-flight pin and log checks; outcomes `Completed`/`Failed`/`Parked` carry the log; host misuse throws `KleinException` with one error per fault; each ask's handler, answer check, and persist share one `transact` unit |
 | Effect log | `EffectLog(start, replies, ending)` — malformed shapes unrepresentable; `deferred` registrations park the run, and appending the answer to the log and running again resumes it; binary (`encode`/`decode`) and JSON (`encodeJson`/`decodeJson`) codecs, version-stamped, raw-bit number fidelity |
+| Editions at rest | `encodeEditionJson`/`decodeEditionJson` per [spec/edition.md](spec/edition.md): source, language version, pins, the Core as a versioned binary blob, a checksum over the whole; decoding answers `Fresh` or `Stale` with its reason and never compiles; `compileRule(source, pins)` re-derives. Machine state is never serialized, per the persist-the-log ADR |
 | CLI | `run`/`r` executes, `core` dumps the lowered IR; `run --contract … --release N` runs a rule as an interactive host, prompting for each capability answer |
 
 ### Pending
@@ -147,4 +148,3 @@ evolution).
 | Feature | Notes |
 |---------|-------|
 | Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
-| Persistence | Edition storage (source + release + pins); machine state is never serialized, per the persist-the-log ADR — see [host-integration-roadmap.md](host-integration-roadmap.md) |

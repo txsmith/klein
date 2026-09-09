@@ -5,6 +5,7 @@ import klein.ReleaseNumber
 import klein.check.contract.EnvironmentContract
 import klein.host.Environment
 import klein.host.RunOutcome
+import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
 import java.io.File
@@ -22,12 +23,12 @@ class LendingHost(
     private val contract: EnvironmentContract = Klein.checkContract(contractSource)
 
     private val environment: Environment =
-        contract.implement {
-            immediate("creditScore") { Value.VNum(650.0) }
-            immediate("creditScore/2") { scoreByTier(it) }
-            immediate("customer")
-            immediate("customer/2")
-        }
+        contract.implement(
+            immediate("creditScore") { Value.VNum(650.0) },
+            immediate("creditScore/2") { scoreByTier(it) },
+            immediate("customer"),
+            immediate("customer/2"),
+        )
 
     fun decide(
         ruleSource: String,
@@ -37,14 +38,15 @@ class LendingHost(
         val edition =
             compiled.output
                 ?: throw IllegalArgumentException("the rule does not compile:\n" + compiled.diagnostics.joinToString("\n") { it.message })
-        return environment.run(edition) {
+        return environment.run(
+            edition,
             immediate("customer") {
                 customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"))
-            }
+            },
             immediate("customer/2") {
                 customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"), "tier" to Value.VStr("gold"))
-            }
-        }
+            },
+        )
     }
 }
 

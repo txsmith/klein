@@ -1,4 +1,4 @@
-package klein.host
+package klein.host.codec
 
 internal class MalformedBytes(
     override val message: String,
@@ -102,7 +102,7 @@ internal class ByteReader(
 
     private fun ensureAvailable(count: Int) {
         if (count < 0 || position + count > bytes.size) {
-            malformed("the log ends early: needed $count more bytes at offset $position of ${bytes.size}")
+            malformed("the input ends early: needed $count more bytes at offset $position of ${bytes.size}")
         }
     }
 }

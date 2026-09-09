@@ -16,6 +16,7 @@ Klein is designed to let tech-savvy business users write rules, validations, and
 - **[spec/host-integration.md](./docs/spec/host-integration.md)** - How rules and a host evolve independently: environments, capabilities, revisions, releases, editions, pins, reconciliation, drain
 - **[spec/contracts.md](./docs/spec/contracts.md)** - The v1 contract language: declarations without definitions, revisions, releases, the two checking modes; sections marked implemented vs target
 - **[spec/effect-log.md](./docs/spec/effect-log.md)** - The effect log and the unified `run`: the record's shape, replay, divergence, outcomes, `Parked`, the two codecs
+- **[spec/edition.md](./docs/spec/edition.md)** - Editions at rest: the immutable artifact and its contents, the language and lowerer versions, the integrity checksum, decoding, re-derivation through pins, migration as a new edition
 
 Specs are **living contracts** — the current rules, updated in place as the language evolves, and what the test suites are written against. ADRs (below) are the immutable decision history.
 - **[calling-conventions.md](./docs/calling-conventions.md)** - Function definitions, positional arguments, records, tuples, extension methods, and the tilde operator
@@ -202,7 +203,7 @@ klein-lang/
 │   │   │   ├── Diagnostic.kt     # A fault in a document (rule, contract, answer): message + span; returned, never thrown
 │   │   │   ├── HostError.kt      # A fault in the environment (registration, pin, log, release, bytes): no span; only thrown
 │   │   │   ├── KleinException.kt # The one public exception: a list of HostErrors
-│   │   │   ├── Numbering.kt      # RevisionNumber and ReleaseNumber value classes
+│   │   │   ├── Numbering.kt      # RevisionNumber, ReleaseNumber, LanguageVersion and CompilerVersion value classes
 │   │   │   ├── surface/          # Surface syntax: what the parser produces, the checker consumes
 │   │   │   │   ├── Lexer.kt        # Tokenization
 │   │   │   │   ├── Parser.kt       # Parsing
@@ -244,7 +245,13 @@ klein-lang/
 │   │   │       ├── PreFlightChecks.kt # Pin and log checks before a run; MissingHandler, LogTypeMismatch
 │   │   │       ├── Runner.kt         # The suspend/resume loop; Diverged, CallTypeMismatch, HandlerTypeMismatch
 │   │   │       ├── EffectLog.kt      # EffectLog, LogEntry, Call, RunOutcome's log
-│   │   │       └── Encoding.kt, JsonEncoding.kt  # The two codecs; UnreadableLog
+│   │   │       ├── DecodedEdition.kt # What decoding an artifact answers: Fresh (the edition) or Stale (the recorded inputs and why); UnreadableEdition
+│   │   │       └── codec/            # The encodings, apart from what they encode; depends on host, never the reverse
+│   │   │           ├── BinaryPrimitives.kt, JsonPrimitives.kt                # ByteWriter/ByteReader; the Json tree and JsonReader
+│   │   │           ├── EffectLogBinaryEncoding.kt, EffectLogJsonEncoding.kt  # The effect log's two codecs; UnreadableLog
+│   │   │           ├── CoreBinaryEncoding.kt                                 # The Core blob: encodeCore, decodeCore, readCoreVersion; one CompilerVersion byte, then the tree
+│   │   │           ├── EditionChecksum.kt                                    # The artifact's integrity checksum over language, source, pins and the Core bytes, shared by its codecs
+│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the checksum, then the Core's version, on read
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/

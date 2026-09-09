@@ -18,111 +18,115 @@ internal sealed interface Handler {
     ) : Handler
 }
 
+class HandlerRegistration internal constructor(
+    val name: String,
+    internal val handler: Handler?,
+)
+
+fun immediate(
+    name: String,
+    answer: (List<Value>) -> Value,
+) = HandlerRegistration(name, Handler.Immediate(answer))
+
+fun immediate(name: String) = HandlerRegistration(name, null)
+
+fun deferred(
+    name: String,
+    initiate: (Call) -> Unit,
+) = HandlerRegistration(name, Handler.Deferred(initiate))
+
 class HandlerRegistry internal constructor(
     val declarations: List<ContractDeclaration>,
+    private val entries: Map<Pair<String, RevisionNumber>, Handler?>,
 ) {
-    internal val registered = mutableMapOf<Pair<String, RevisionNumber>, Handler?>()
-    internal val errors = mutableListOf<RegistrationError>()
-
-    fun immediate(
-        name: String,
-        answer: (List<Value>) -> Value,
-    ) {
-        val (parsedName, revision) = parse(name) ?: return
-        register(parsedName, revision, Handler.Immediate(answer))
-    }
-
-    fun immediate(name: String) {
-        val (parsedName, revision) = parse(name) ?: return
-        register(parsedName, revision, null)
-    }
-
-    fun deferred(
-        name: String,
-        initiate: (Call) -> Unit,
-    ) {
-        val (parsedName, revision) = parse(name) ?: return
-        if (declarations.any { it.name == parsedName && it.revision == revision && it is ContractDeclaration.Value }) {
-            errors.add(RegistrationError("'$parsedName' is a value, which is read at start and cannot be deferred"))
-            return
+    companion object {
+        internal fun fromRegistrations(
+            declarations: List<ContractDeclaration>,
+            registrations: List<HandlerRegistration>,
+        ): HandlerRegistry {
+            val entries = mutableMapOf<Pair<String, RevisionNumber>, Handler?>()
+            val errors = mutableListOf<RegistrationError>()
+            for (registration in registrations) {
+                val parsed = parse(registration.name)
+                if (parsed == null) {
+                    errors.add(malformed(registration.name))
+                    continue
+                }
+                val (name, revision) = parsed
+                val declaration = declarations.firstOrNull { it.name == name && it.revision == revision }
+                when {
+                    declaration == null ->
+                        errors.add(RegistrationError("'$name' revision ${revision.value} is registered but the contract does not declare it"))
+                    registration.handler is Handler.Deferred && declaration is ContractDeclaration.Value ->
+                        errors.add(RegistrationError("'$name' is a value, which is read at start and cannot be deferred"))
+                    name to revision in entries ->
+                        errors.add(RegistrationError("'$name' revision ${revision.value} is registered more than once"))
+                    else -> entries[name to revision] = registration.handler
+                }
+            }
+            if (errors.isNotEmpty()) throw KleinException(errors)
+            return HandlerRegistry(declarations, entries)
         }
-        register(parsedName, revision, Handler.Deferred(initiate))
-    }
 
-    private fun parse(name: String): Pair<String, RevisionNumber>? {
-        val slash = name.indexOf('/')
-        if (slash < 0) return name to RevisionNumber(1)
-        val revision = name.substring(slash + 1).toIntOrNull()
-        if (slash == 0 || revision == null || revision < 1) {
-            errors.add(RegistrationError("'$name' is not a declared name: a revision suffix is '/' and a number, as the contract writes it"))
-            return null
+        private fun parse(name: String): Pair<String, RevisionNumber>? {
+            val slash = name.indexOf('/')
+            if (slash < 0) return name to RevisionNumber(1)
+            val revision = name.substring(slash + 1).toIntOrNull()
+            if (slash == 0 || revision == null || revision < 1) return null
+            return name.substring(0, slash) to RevisionNumber(revision)
         }
-        return name.substring(0, slash) to RevisionNumber(revision)
+
+        private fun malformed(name: String) =
+            RegistrationError("'$name' is not a declared name: a revision suffix is '/' and a number, as the contract writes it")
     }
 
-    private fun register(
+    operator fun plus(other: HandlerRegistry): HandlerRegistry = HandlerRegistry(declarations, entries + other.entries)
+
+    internal fun getHandler(
         name: String,
         revision: RevisionNumber,
-        handler: Handler?,
-    ) {
-        if (declarations.none { it.name == name && it.revision == revision }) {
-            errors.add(
-                RegistrationError("'$name' revision ${revision.value} is registered but the contract does not declare it"),
-            )
-            return
-        }
-        if (name to revision in registered) {
-            errors.add(RegistrationError("'$name' revision ${revision.value} is registered more than once"))
-            return
-        }
-        registered[name to revision] = handler
-    }
+    ): Handler? = entries[name to revision]
+
+    internal fun unregistered(): List<RegistrationError> =
+        declarations
+            .filter { (it.name to it.revision) !in entries }
+            .map { RegistrationError("'${it.name}' revision ${it.revision.value} is declared by the contract but no implementation is registered") }
+
+    internal fun missingHandlers(): List<MissingHandler> =
+        declarations
+            .filter { entries[it.name to it.revision] == null }
+            .map { MissingHandler(it.name, it.revision) }
 }
 
 /**
- * Bind a checked contract to a running host: run [register], require a registration for every
- * declared `(name, revision)` — an immediate implementation, a deferred one whose ask parks the run
- * after its initiation lambda has run, or the lambda-less marker whose implementation arrives with
- * each run. Throws [KleinException] if any
- * declaration is unregistered, any registration names something undeclared, or anything is
- * registered twice. [transact] wraps every unit of a run that pairs host work with a log write —
- * an ask's handler, answer check, and `persist` — so a DB host can commit both together. It must
- * run its block and let an exception from it propagate; catching one breaks the run.
+ * Bind a checked contract to a running host: require a registration for every declared
+ * `(name, revision)` — an immediate implementation, a deferred one whose ask parks the run after its
+ * initiation lambda has run, or the lambda-less marker whose implementation arrives with each run.
+ * Throws [KleinException] if any declaration is unregistered, any registration names something
+ * undeclared, or anything is registered twice. [transact] wraps every unit of a run that pairs host
+ * work with a log write — an ask's handler, answer check, and `persist` — so a DB host can commit
+ * both together. It must run its block and let an exception from it propagate; catching one breaks
+ * the run.
  *
  * An extension declared in `klein.host` rather than a member of [EnvironmentContract]: `klein.host`
  * depends on `klein.check`, so a member returning an [Environment] would point that arrow both
  * ways. It reads identically at the call site and leaves the checker unaware that hosts exist.
  */
 fun EnvironmentContract.implement(
+    vararg registrations: HandlerRegistration,
     transact: (block: () -> Unit) -> Unit = { it() },
-    register: HandlerRegistry.() -> Unit = {},
 ): Environment {
-    val registry = HandlerRegistry(declarations).apply(register)
-    declarations
-        .filter { (it.name to it.revision) !in registry.registered }
-        .forEach {
-            registry.errors.add(
-                RegistrationError(
-                    "'${it.name}' revision ${it.revision.value} is declared by the contract " +
-                        "but no implementation is registered",
-                ),
-            )
-        }
-    if (registry.errors.isNotEmpty()) throw KleinException(registry.errors)
-
-    val handlers =
-        declarations
-            .mapNotNull { declaration ->
-                registry.registered.getValue(declaration.name to declaration.revision)?.let { (declaration.name to declaration.revision) to it }
-            }.toMap()
-    return Environment(this, handlers, transact)
+    val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList())
+    val unregistered = registry.unregistered()
+    if (unregistered.isNotEmpty()) throw KleinException(unregistered)
+    return Environment(this, registry, transact)
 }
 
 /** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
  *  has it. Checking rules needs none of this — that is [EnvironmentContract]'s job. */
 class Environment internal constructor(
-    internal val contract: EnvironmentContract,
-    private val handlers: Map<Pair<String, RevisionNumber>, Handler>,
+    val contract: EnvironmentContract,
+    internal val registry: HandlerRegistry,
     internal val transact: (block: () -> Unit) -> Unit,
 ) {
     val capabilities: List<ContractDeclaration> get() = contract.declarations
@@ -132,8 +136,8 @@ class Environment internal constructor(
     /**
      * Start, resume, and replay are this one call. A null [log] starts fresh; otherwise the log is
      * replayed first (start values by name, replies by position) and every call past the
-     * end of the log is answered by [registerHandlers], or failing that by the environment's own
-     * registrations.
+     * end of the log is answered by the run's [registrations], or failing that by the environment's
+     * own.
      *
      * A rule that fails at runtime is a normal result: [RunOutcome.Failed] carries its diagnostics and
      * the log so far. Everything else Klein detects is the host's fault and throws [KleinException]
@@ -149,25 +153,20 @@ class Environment internal constructor(
      */
     fun run(
         edition: Edition,
+        vararg registrations: HandlerRegistration,
         log: EffectLog? = null,
         persist: (LogEntry) -> Unit = {},
-        registerHandlers: HandlerRegistry.() -> Unit = {},
     ): RunOutcome {
-        val handlers = HandlerRegistry(contract.declarations).apply(registerHandlers)
-        if (handlers.errors.isNotEmpty()) throw KleinException(handlers.errors)
-        val pinProblems = checkPins(edition, handlers)
-        if (pinProblems.isNotEmpty()) throw KleinException(pinProblems)
+        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList())
+        contract.resolvePins(edition.pins)
+        val missing = handlers.missingHandlers()
+        if (missing.isNotEmpty()) throw KleinException(missing)
         if (log != null) {
             val logProblems = checkLog(edition, log)
             if (logProblems.isNotEmpty()) throw KleinException(logProblems)
         }
         return Run(this, edition, handlers, persist, log).start()
     }
-
-    internal fun getHandler(
-        name: String,
-        revision: RevisionNumber,
-    ): Handler? = handlers[name to revision]
 
     internal fun getCapabilityDeclaration(
         name: String,

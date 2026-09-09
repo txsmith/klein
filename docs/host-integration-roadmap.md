@@ -39,6 +39,19 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 [spec/effect-log.md](./spec/effect-log.md); the decision record is
 [replay-is-ordinal-migration-is-host-policy](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
 
+**Editions at rest.** An edition is stored as an immutable artifact: its source and language
+version, its pins, its Core as an opaque blob carrying the compiler version, and a checksum over
+the whole. Decoding needs no contract and never compiles: it answers the edition fresh, or the
+recorded inputs stale with the reason (checksum mismatch, compiler changed), and the host
+re-derives a stale one with `compileRule(source, pins)`, the one compilation, which the release
+form now delegates to. Re-derivation goes through the pins, never a release, so removing a
+release touches nothing already compiled. Along the way handler registrations became values and
+the registry immutable, and the pin check moved to the one place that resolves pins. The rules
+are in [spec/edition.md](./spec/edition.md). Two notes for later features: the artifact must
+capture everything a release contributes to compilation (the result sink is the first feature
+that will test that), and the checksum needs only a deterministic walk, not a canonical form, so
+the canonical-form dissolution below stands.
+
 **One error architecture.** Two kinds of error, split by what they are about. A `Diagnostic` is
 about a document and has a span; checking or compiling returns it in a `Checked`, and a failed run
 carries it in its outcome and its log. A `HostError` is about the environment and has no span; it
@@ -55,13 +68,11 @@ rules are in spec/host-integration.md (§Errors).
     SINK["Result sink<br/>a release nominates where the answer goes"]
     DERIVE["Capability derivation API<br/>typed host handlers"]
 
-    ED["Edition serialization<br/>source + pins, release as provenance"]
     SEV["Diagnostic severity<br/>soundness vs degeneracy"]
     RECON["Reconciliation + drain"]
 
     TRACE["Call markers, trace modes,<br/>fuel, error traces"]
 
-    ED --> RECON
     SEV --> RECON
 ```
 
@@ -100,7 +111,8 @@ equal bytes) have no consumer: replay compares decoded values in memory, and not
 content-addresses anything. The v1 reconciler does not hash at all; it recompiles everything.
 Hashing arrives later as a staged optimization, described under Reconciliation below: whole
 pin sets first, then per pin. Deterministic encoding suffices for both (the log codec for
-values, the printed type for signatures).
+values, the printed type for signatures), just as it does for the edition checksum under Edition
+serialization, which hashes a structural walk of the data rather than any stored bytes.
 
 The numeric commitments stand on their own: encodings commit to today's doubles knowingly, and
 exact rationals stay a later semantics change paid for with a wipe — the version stamp on
@@ -108,31 +120,6 @@ anything stored keeps that reversible. The `Long` round-trip rule — a host typ
 `Num` only if every value survives without silent loss — waits until a real host binds one. The
 value-identity rulings replay needs (`-0.0` vs `0.0`, NaN canonicalization) belong to the
 pending evaluation spec.
-
-### Edition serialization
-
-An edition's stored form is **source + pin map**, version-stamped, with the release number kept
-as provenance only: it feeds the reconciler's report and the migration nudge ("authored against
-release 2, current is 5"), and nothing loads through it. Per the source-is-truth ADR the Core is
-a cache, so loading an edition re-derives it rather than decoding it, and a stamp mismatch means
-discard and re-derive, never migrate. Flat fields, a trivial encoding, no Core tree encoding in
-v1.
-
-Re-derivation goes through the pin surface, not the release: pins are exactly the names the rule
-source wrote, `resolvePins` closes them into the full typing surface, and the recompile must
-emit the same pin map it was given (a fixpoint check; divergence means the contract changed
-under the edition, the same failure class as an unserved pin at run time). Removing a release
-therefore stays a compile-time act: it forces migration at the next edit and touches nothing
-already compiled, parked runs included. This rests on one invariant: everything a release
-contributes to compilation is captured in the stored form. Today that is only the
-name-to-revision surface; the result sink is the first feature that will test it. The
-stored-Core cache is a pure performance option: pin-based re-derivation needs only what the run
-itself needs (the pinned revisions still declared), so its old second job, replaying editions of
-retired releases, is gone.
-
-Stored pins diverging from a fresh re-derivation is not a storage fault; it is exactly the
-signal reconciliation exists to act on. Replay is the consumer that forces this item: it needs
-something durable to replay *against*.
 
 ### Diagnostic severity
 
