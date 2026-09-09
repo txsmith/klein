@@ -1,10 +1,10 @@
 ---
 id: TASK-33
 title: Edition serialization
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-04 12:19'
-updated_date: '2026-09-07 18:11'
+updated_date: '2026-09-09 11:02'
 labels:
   - host-boundary
 dependencies: []
@@ -18,3 +18,9 @@ The rules are in docs/spec/edition.md: an edition at rest is an immutable build 
 Design notes with types, signatures, and the order of work: edition-serialization-design.md in the worktree root (untracked). One compilation, compile(source, pins); compileRule delegates to it with the release exposed names. LanguageVersion and CompilerVersion are value classes beside RevisionNumber. The Core blob comes last; the store-and-load loop works without it first.
 First encoding: JSON for inspection (source and pins readable), the Core as an opaque binary blob in base64 whose first byte is the compiler version (no magic: the checksum vouches for the bytes before the blob is opened), checksum as hex. Strict reading like the log codec.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented on the edition-serialization branch (PR #31): spec/edition.md, compileRule(source, pins), immutable handler registry, the JSON artifact with checksum, the binary Core blob under CompilerVersion, decoding as Fresh or Stale.
+<!-- SECTION:FINAL_SUMMARY:END -->
