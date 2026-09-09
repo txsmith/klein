@@ -10,6 +10,7 @@ internal fun editionChecksum(
     language: LanguageVersion,
     source: String,
     pins: Map<String, RevisionNumber>,
+    coreBytes: ByteArray,
 ): Long {
     val out = ByteWriter()
     out.writeInt(language.value)
@@ -18,6 +19,7 @@ internal fun editionChecksum(
         out.writeString(name)
         out.writeInt(pins.getValue(name).value)
     }
+    out.writeBytes(coreBytes)
     var hash = FNV_OFFSET_BASIS
     for (byte in out.toByteArray()) {
         hash = hash xor (byte.toLong() and 0xFF)

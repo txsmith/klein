@@ -17,6 +17,8 @@ import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
 import klein.orFail
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -49,6 +51,9 @@ private val creditPins = pins("creditScore" to 1, "customer" to 1)
 
 private fun hex(checksum: Long): String = checksum.toULong().toString(16).padStart(16, '0')
 
+@OptIn(ExperimentalEncodingApi::class)
+private fun base64(bytes: ByteArray): String = Base64.encode(bytes)
+
 private fun lendingHost(contract: EnvironmentContract): Environment =
     contract.implement(
         immediate("customer") { gold },
@@ -58,20 +63,18 @@ private fun lendingHost(contract: EnvironmentContract): Environment =
         },
     )
 
-private fun compileCredit(): Edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
+private fun assertCreditCompiles(): Edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
 
-private fun stale(text: String): DecodedEdition.Stale = assertIs<DecodedEdition.Stale>(decodeEditionJson(text))
+private fun assertStale(text: String): DecodedEdition.Stale = assertIs<DecodedEdition.Stale>(decodeEditionJson(text))
 
-private fun rederive(stale: DecodedEdition.Stale): Edition = contract.compileRule(stale.source, stale.pins).orFail()
+private fun assertFresh(text: String): Edition = assertIs<DecodedEdition.Fresh>(decodeEditionJson(text)).edition
 
-private fun assertSameStale(
-    expected: DecodedEdition.Stale,
-    actual: DecodedEdition.Stale,
-) {
-    assertEquals(expected.language, actual.language)
-    assertEquals(expected.pins, actual.pins)
-    assertEquals(expected.source, actual.source)
-    assertEquals(expected.reason, actual.reason)
+private fun assertRederives(stale: DecodedEdition.Stale): Edition = contract.compileRule(stale.source, stale.pins).orFail()
+
+private fun assertStaleCredit(): DecodedEdition.Stale {
+    val foreign = creditCore.copyOf()
+    foreign[0] = 2
+    return assertStale(documentWithCore(foreign))
 }
 
 private fun assertSameEdition(
@@ -84,7 +87,9 @@ private fun assertSameEdition(
     assertEquals(expected.source, actual.source)
 }
 
-private val creditChecksum = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins)
+private val creditCore = encodeCore(assertCreditCompiles().core)
+
+private val creditChecksum = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore)
 
 private val validFields: Map<String, String> =
     mapOf(
@@ -93,6 +98,7 @@ private val validFields: Map<String, String> =
         "language" to "1",
         "pins" to """{"creditScore":1,"customer":1}""",
         "source" to "\"$CREDIT_RULE\"",
+        "core" to "\"${base64(creditCore)}\"",
         "checksum" to "\"${hex(creditChecksum)}\"",
     )
 
@@ -102,6 +108,12 @@ private fun document(vararg overrides: Pair<String, String?>): String {
     return fields.entries.joinToString(",", "{", "}") { (name, value) -> "\"$name\":$value" }
 }
 
+private fun documentWithCore(core: ByteArray): String =
+    document(
+        "core" to "\"${base64(core)}\"",
+        "checksum" to "\"${hex(editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, core))}\"",
+    )
+
 class EditionJsonEncodingTest {
     private fun assertUnreadable(text: String): UnreadableEdition {
         val thrown = assertFailsWith<KleinException> { decodeEditionJson(text) }
@@ -109,27 +121,25 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anEditionEncodedDecodedAndRederivedRunsIdenticallyToTheOriginal() {
-        val edition = compileCredit()
-        val decoded = stale(encodeEditionJson(edition))
-        assertEquals(Rederivation.NotStored, decoded.reason)
-        val rederived = rederive(decoded)
-        assertSameEdition(edition, rederived)
+    fun anEditionEncodedAndDecodedIsFreshAndRunsIdenticallyToTheOriginal() {
+        val edition = assertCreditCompiles()
+        val decoded = assertFresh(encodeEditionJson(edition))
+        assertSameEdition(edition, decoded)
         val original = assertIs<RunOutcome.Completed>(lendingHost(contract).run(edition))
-        val fromRederived = assertIs<RunOutcome.Completed>(lendingHost(contract).run(rederived))
-        assertEquals(Value.VBool(true), fromRederived.value)
-        assertEquals(original.value, fromRederived.value)
-        assertEquals(original.log, fromRederived.log)
+        val fromDecoded = assertIs<RunOutcome.Completed>(lendingHost(contract).run(decoded))
+        assertEquals(Value.VBool(true), fromDecoded.value)
+        assertEquals(original.value, fromDecoded.value)
+        assertEquals(original.log, fromDecoded.log)
     }
 
     @Test
     fun aCompiledEditionCarriesTheCurrentLanguageVersion() {
-        assertEquals(LanguageVersion.CURRENT, compileCredit().language)
+        assertEquals(LanguageVersion.CURRENT, assertCreditCompiles().language)
     }
 
     @Test
     fun theDecodedInputsAreTheEditionsInputs() {
-        val decoded = stale(encodeEditionJson(compileCredit()))
+        val decoded = assertFresh(encodeEditionJson(assertCreditCompiles()))
         assertEquals(LanguageVersion.CURRENT, decoded.language)
         assertEquals(creditPins, decoded.pins)
         assertEquals(CREDIT_RULE, decoded.source)
@@ -142,17 +152,27 @@ class EditionJsonEncodingTest {
             score = creditScore(customer)
             score > 600
             """.trimIndent()
-        val text = encodeEditionJson(contract.compileRule(rule, ReleaseNumber(1)).orFail())
-        val checksum = hex(editionChecksum(LanguageVersion(1), rule, creditPins))
+        val edition = contract.compileRule(rule, ReleaseNumber(1)).orFail()
+        val text = encodeEditionJson(edition)
+        val core = encodeCore(edition.core)
+        val checksum = hex(editionChecksum(LanguageVersion(1), rule, creditPins, core))
         val expected =
             """{"format":"klein-edition","version":1,"language":1,"pins":{"creditScore":1,"customer":1},""" +
-                """"source":"score = creditScore(customer)\nscore > 600","checksum":"$checksum"}"""
+                """"source":"score = creditScore(customer)\nscore > 600","core":"${base64(core)}","checksum":"$checksum"}"""
         assertEquals(expected, text)
     }
 
     @Test
+    fun theCoreIsWrittenAsBase64OfTheCoreBlob() {
+        val text = encodeEditionJson(assertCreditCompiles())
+        val written = Regex("\"core\":\"([^\"]*)\"").find(text)?.groupValues?.get(1)
+        assertEquals(base64(creditCore), written)
+        assertTrue(written!!.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '+' || it == '/' || it == '=' })
+    }
+
+    @Test
     fun theChecksumIsWrittenAsSixteenLowercaseHexDigits() {
-        val text = encodeEditionJson(compileCredit())
+        val text = encodeEditionJson(assertCreditCompiles())
         val written = Regex("\"checksum\":\"([^\"]*)\"").find(text)?.groupValues?.get(1)
         assertEquals(hex(creditChecksum), written)
         assertEquals(16, written?.length)
@@ -169,20 +189,20 @@ class EditionJsonEncodingTest {
               "language": 1,
               "pins": { "creditScore": 1, "customer": 1 },
               "source": "creditScore(customer) >= 620",
+              "core": "${base64(creditCore)}",
               "checksum": "${hex(creditChecksum)}"
             }
             """.trimIndent()
-        val decoded = stale(text)
-        assertEquals(Rederivation.NotStored, decoded.reason)
-        assertSameEdition(compileCredit(), rederive(decoded))
+        assertSameEdition(assertCreditCompiles(), assertFresh(text))
     }
 
     @Test
-    fun reformattedTextDecodesToTheSameInputs() {
+    fun reformattedTextDecodesToTheSameEdition() {
         val reformatted =
             """
             {
               "checksum" : "${hex(creditChecksum)}",
+              "core": "${base64(creditCore)}",
               "pins": {"customer": 1.0, "creditScore": 1e0},
               "source": "creditScore(customer) >= 620",
               "version": 1.0,
@@ -190,7 +210,7 @@ class EditionJsonEncodingTest {
               "format": "klein-edition"
             }
             """.trimIndent()
-        assertSameStale(stale(encodeEditionJson(compileCredit())), stale(reformatted))
+        assertSameEdition(assertFresh(encodeEditionJson(assertCreditCompiles())), assertFresh(reformatted))
     }
 
     @Test
@@ -201,40 +221,101 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun theChecksumDependsOnLanguageSourceAndPins() {
-        val base = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins)
-        assertTrue(base != editionChecksum(LanguageVersion(2), CREDIT_RULE, creditPins))
-        assertTrue(base != editionChecksum(LanguageVersion(1), "$CREDIT_RULE ", creditPins))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 2, "customer" to 1)))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1)))
+    fun theChecksumDependsOnLanguageSourcePinsAndCore() {
+        val base = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore)
+        assertTrue(base != editionChecksum(LanguageVersion(2), CREDIT_RULE, creditPins, creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), "$CREDIT_RULE ", creditPins, creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 2, "customer" to 1), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore.copyOf(creditCore.size - 1)))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore + byteArrayOf(0)))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, byteArrayOf(2) + creditCore.copyOfRange(1, creditCore.size)))
     }
 
     @Test
     fun theChecksumIgnoresTheOrderThePinsAreGivenIn() {
-        val forward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 1, "customer" to 1))
-        val backward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "creditScore" to 1))
+        val forward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 1, "customer" to 1), creditCore)
+        val backward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "creditScore" to 1), creditCore)
         assertEquals(forward, backward)
     }
 
     @Test
-    fun anEditedSourceIsAChecksumMismatchAndRederivesFromTheEditedSource() {
-        val decoded = stale(document("source" to "\"creditScore(customer) >= 800\""))
+    fun aFlippedBlobByteIsAChecksumMismatchAndRederivesFromTheRecordedInputs() {
+        val damaged = creditCore.copyOf()
+        damaged[damaged.size - 1] = (damaged[damaged.size - 1].toInt() xor 0x01).toByte()
+        val decoded = assertStale(document("core" to "\"${base64(damaged)}\""))
         assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
-        val rederived = rederive(decoded)
+        assertEquals(CREDIT_RULE, decoded.source)
+        assertEquals(creditPins, decoded.pins)
+        val rederived = assertRederives(decoded)
+        assertSameEdition(assertCreditCompiles(), rederived)
+        assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(lendingHost(contract).run(rederived)).value)
+    }
+
+    @Test
+    fun aForeignLowererVersionBehindAMatchingChecksumIsLowererChanged() {
+        val foreign = creditCore.copyOf()
+        foreign[0] = 2
+        val decoded = assertStale(documentWithCore(foreign))
+        assertEquals(Rederivation.LowererChanged, decoded.reason)
+        assertEquals(CREDIT_RULE, decoded.source)
+        assertEquals(creditPins, decoded.pins)
+        val rederived = assertRederives(decoded)
+        assertSameEdition(assertCreditCompiles(), rederived)
+        assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(lendingHost(contract).run(rederived)).value)
+    }
+
+    @Test
+    fun aForeignLowererVersionWithAStaleChecksumIsAChecksumMismatch() {
+        val foreign = creditCore.copyOf()
+        foreign[0] = 2
+        assertEquals(Rederivation.ChecksumMismatch, assertStale(document("core" to "\"${base64(foreign)}\"")).reason)
+    }
+
+    @Test
+    fun aDamagedBlobBehindAMatchingChecksumIsUnreadable() {
+        val truncated = creditCore.copyOf(creditCore.size - 1)
+        assertTrue(assertUnreadable(documentWithCore(truncated)).message.contains("ends early"))
+        val trailing = creditCore + byteArrayOf(0)
+        assertTrue(assertUnreadable(documentWithCore(trailing)).message.contains("trailing"))
+        val unknownNode = creditCore.copyOf()
+        unknownNode[1] = 42
+        assertTrue(assertUnreadable(documentWithCore(unknownNode)).message.contains("unknown Core node tag 42"))
+        assertTrue(assertUnreadable(documentWithCore(byteArrayOf(1))).message.contains("ends early"))
+    }
+
+    @Test
+    fun anEmptyBlobBehindAMatchingChecksumIsUnreadable() {
+        assertTrue(assertUnreadable(documentWithCore(byteArrayOf())).message.contains("empty"))
+    }
+
+    @Test
+    fun malformedBase64InTheCoreIsUnreadable() {
+        listOf("\"!!!!\"", "\"AQ*\"", "\"${base64(creditCore)}#\"").forEach { text ->
+            val message = assertUnreadable(document("core" to text)).message
+            assertTrue(message.contains("base64"), message)
+        }
+    }
+
+    @Test
+    fun anEditedSourceIsAChecksumMismatchAndRederivesFromTheEditedSource() {
+        val decoded = assertStale(document("source" to "\"creditScore(customer) >= 800\""))
+        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        val rederived = assertRederives(decoded)
         assertEquals("creditScore(customer) >= 800", rederived.source)
         assertEquals(Value.VBool(false), assertIs<RunOutcome.Completed>(lendingHost(contract).run(rederived)).value)
     }
 
     @Test
     fun anEditedPinIsAChecksumMismatchAndRederivesAgainstTheEditedPins() {
-        val decoded = stale(document("pins" to """{"Customer":1,"creditScore":1,"customer":1}"""))
+        val decoded = assertStale(document("pins" to """{"Customer":1,"creditScore":1,"customer":1}"""))
         assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
-        assertEquals(creditPins, rederive(decoded).pins)
+        assertEquals(creditPins, assertRederives(decoded).pins)
     }
 
     @Test
     fun aPinEditedToARevisionTheContractLacksIsAnUnknownPin() {
-        val decoded = stale(document("pins" to """{"creditScore":2,"customer":1}"""))
+        val decoded = assertStale(document("pins" to """{"creditScore":2,"customer":1}"""))
         assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
         val errors = assertFailsWith<KleinException> { contract.compileRule(decoded.source, decoded.pins) }.errors
         val unknown = assertIs<UnknownPin>(errors.single())
@@ -243,14 +324,14 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aWellFormedChecksumThatDoesNotMatchIsAMismatchNotUnreadable() {
-        val decoded = stale(document("checksum" to "\"fedcba9876543210\""))
+        val decoded = assertStale(document("checksum" to "\"fedcba9876543210\""))
         assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
         assertEquals(CREDIT_RULE, decoded.source)
     }
 
     @Test
     fun anUnknownLanguageVersionIsUnreadableNamingBothVersions() {
-        val checksum = hex(editionChecksum(LanguageVersion(7), CREDIT_RULE, creditPins))
+        val checksum = hex(editionChecksum(LanguageVersion(7), CREDIT_RULE, creditPins, creditCore))
         val message = assertUnreadable(document("language" to "7", "checksum" to "\"$checksum\"")).message
         assertTrue(message.contains("7"), message)
         assertTrue(message.contains("1"), message)
@@ -264,7 +345,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aPinnedRevisionRemovedFromTheContractIsAnUnknownPinAndNoResult() {
-        val decoded = stale(encodeEditionJson(compileCredit()))
+        val decoded = assertStaleCredit()
         val withoutRevision1 =
             Klein.checkContract(
                 """
@@ -288,7 +369,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aDeclarationEditedInPlaceComesBackAsDiagnosticsAndTheInputsStayReadable() {
-        val decoded = stale(encodeEditionJson(compileCredit()))
+        val decoded = assertStaleCredit()
         val edited =
             Klein.checkContract(
                 """
@@ -338,7 +419,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun eachMissingFieldIsUnreadable() {
-        listOf("version", "language", "pins", "source", "checksum").forEach { name ->
+        listOf("version", "language", "pins", "source", "core", "checksum").forEach { name ->
             val message = assertUnreadable(document(name to null)).message
             assertTrue(message.contains("missing its \"$name\" field"), message)
         }
@@ -373,6 +454,7 @@ class EditionJsonEncodingTest {
         assertTrue(assertUnreadable(document("pins" to """{"creditScore":"1"}""")).message.contains("whole number"))
         assertTrue(assertUnreadable(document("pins" to """{"creditScore":0}""")).message.contains("1 or more"))
         assertTrue(assertUnreadable(document("source" to "1")).message.contains("source"))
+        assertTrue(assertUnreadable(document("core" to "1")).message.contains("core"))
         assertTrue(assertUnreadable(document("checksum" to "1")).message.contains("checksum"))
     }
 
@@ -391,7 +473,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun everyTruncatedPrefixIsUnreadable() {
-        val text = encodeEditionJson(compileCredit())
+        val text = encodeEditionJson(assertCreditCompiles())
         for (length in 0 until text.length) {
             assertUnreadable(text.substring(0, length))
         }
@@ -400,19 +482,17 @@ class EditionJsonEncodingTest {
     @Test
     fun anEmptyPinMapRoundTrips() {
         val edition = contract.compileRule("1 + 2", ReleaseNumber(1)).orFail()
-        val decoded = stale(encodeEditionJson(edition))
+        val decoded = assertFresh(encodeEditionJson(edition))
         assertEquals(emptyMap(), decoded.pins)
-        assertEquals(Rederivation.NotStored, decoded.reason)
-        assertSameEdition(edition, rederive(decoded))
+        assertSameEdition(edition, decoded)
     }
 
     @Test
     fun sourceTextWithEscapesRoundTrips() {
         val rule = "s = \"quote \\\" tab \\t héllo 日本語\"\ncreditScore(customer) >= 620"
         val edition = contract.compileRule(rule, ReleaseNumber(1)).orFail()
-        val decoded = stale(encodeEditionJson(edition))
+        val decoded = assertFresh(encodeEditionJson(edition))
         assertEquals(rule, decoded.source)
-        assertEquals(Rederivation.NotStored, decoded.reason)
-        assertSameEdition(edition, rederive(decoded))
+        assertSameEdition(edition, decoded)
     }
 }

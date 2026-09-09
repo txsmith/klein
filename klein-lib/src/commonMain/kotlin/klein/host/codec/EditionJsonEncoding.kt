@@ -1,5 +1,6 @@
 package klein.host.codec
 
+import klein.CompilerVersion
 import klein.KleinException
 import klein.LanguageVersion
 import klein.RevisionNumber
@@ -7,11 +8,15 @@ import klein.check.contract.Edition
 import klein.host.DecodedEdition
 import klein.host.Rederivation
 import klein.host.UnreadableEdition
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 private const val FORMAT_MARKER = "klein-edition"
 private const val JSON_VERSION = 1
 
+@OptIn(ExperimentalEncodingApi::class)
 fun encodeEditionJson(edition: Edition): String {
+    val coreBytes = encodeCore(edition.core)
     val out = StringBuilder()
     out.append("{\"format\":\"")
     out.append(FORMAT_MARKER)
@@ -28,8 +33,10 @@ fun encodeEditionJson(edition: Edition): String {
     }
     out.append("},\"source\":")
     out.writeText(edition.source)
-    out.append(",\"checksum\":\"")
-    out.append(editionChecksum(edition.language, edition.source, edition.pins).toULong().toString(16).padStart(16, '0'))
+    out.append(",\"core\":\"")
+    out.append(Base64.encode(coreBytes))
+    out.append("\",\"checksum\":\"")
+    out.append(editionChecksum(edition.language, edition.source, edition.pins, coreBytes).toULong().toString(16).padStart(16, '0'))
     out.append("\"}")
     return out.toString()
 }
@@ -46,7 +53,7 @@ private fun readEdition(text: String): DecodedEdition {
     if (document !is Json.JObj) reject("not a Klein edition: the document is not a JSON object")
     val marker = (document.fields["format"] as? Json.JStr)?.value
     if (marker != FORMAT_MARKER) reject("not a Klein edition: the document does not declare \"format\": \"$FORMAT_MARKER\"")
-    document.expectOnly("the document", "format", "version", "language", "pins", "source", "checksum")
+    document.expectOnly("the document", "format", "version", "language", "pins", "source", "core", "checksum")
     val version = toWholeNumber(document.expectField("version", "the document"), "the \"version\" field")
     if (version != JSON_VERSION) reject("unknown edition version $version; this library reads version $JSON_VERSION")
     val language = LanguageVersion(toWholeNumber(document.expectField("language", "the document"), "the \"language\" field"))
@@ -54,15 +61,31 @@ private fun readEdition(text: String): DecodedEdition {
     val sourceJson = document.expectField("source", "the document")
     if (sourceJson !is Json.JStr) reject("the document's \"source\" must be a string")
     val source = sourceJson.value
+    val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
     if (language != LanguageVersion.CURRENT) {
         reject("the edition was written in language version $language; this library reads language version ${LanguageVersion.CURRENT}")
     }
-    val reason = if (editionChecksum(language, source, pins) == checksum) Rederivation.NotStored else Rederivation.ChecksumMismatch
-    return DecodedEdition.Stale(language, pins, source, reason)
+    if (editionChecksum(language, source, pins, coreBytes) != checksum) {
+        return DecodedEdition.Stale(language, pins, source, Rederivation.ChecksumMismatch)
+    }
+    if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) {
+        return DecodedEdition.Stale(language, pins, source, Rederivation.LowererChanged)
+    }
+    return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
 }
 
 private fun reject(message: String): Nothing = throw KleinException(listOf(UnreadableEdition(message)))
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun toCoreBytes(json: Json): ByteArray {
+    if (json !is Json.JStr) reject("the document's \"core\" must be a base64 string")
+    return try {
+        Base64.decode(json.value)
+    } catch (malformed: IllegalArgumentException) {
+        reject("the document's \"core\" is not valid base64: ${malformed.message}")
+    }
+}
 
 private fun toPins(json: Json): Map<String, RevisionNumber> {
     if (json !is Json.JObj) reject("the document's \"pins\" must be an object of names to revisions")
