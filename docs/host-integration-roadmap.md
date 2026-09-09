@@ -115,16 +115,16 @@ pending evaluation spec.
 The rules are in [spec/edition.md](./spec/edition.md), written before the implementation so the
 suites come from it. An edition at rest is an immutable build artifact, the compiled output with
 a verbatim record of its inputs, encoded as JSON for inspection: source, language version, pins,
-the Core as an opaque base64 blob with a compiler-version header, and an
-integrity checksum. Decoding never compiles: it returns the edition fresh, or the recorded
-inputs stale with the reason, and the host re-derives from those. Re-derivation goes
+the Core as an opaque base64 blob with a lowerer-version header, and an
+integrity checksum. Decoding tells the host when it re-derived and why, and re-derivation goes
 through the pin surface with the pin fixpoint, which is what makes removing a release a
 compile-time act that touches nothing already compiled. Migrations never touch an artifact; they
 produce a new edition through the same compile-against-pins path. Replay is the consumer that forces this item: it needs
 something durable to replay *against*. What is left is the implementation: `Edition` gains its
 source, a binary Core codec (the log codec's byte primitives, made internal), the JSON artifact
-codec sharing the log codec's JSON machinery, `Environment.decodeEdition`, and
-`EnvironmentContract.recompile` for the stale case. Keeping the Core binary is deliberate: nobody reads or
+codec sharing the log codec's JSON machinery, decoding that answers either a fresh edition or the
+recorded inputs with the reason they are stale, and a public `compileRule(source, pins)` on the
+contract for the host to re-derive them. Keeping the Core binary is deliberate: nobody reads or
 edits base64, so Core never becomes a public format. Two design notes for later features: the
 stored form must capture everything a release contributes to compilation (the result sink is the
 first feature that will test that), and the checksum needs only a deterministic walk, not a

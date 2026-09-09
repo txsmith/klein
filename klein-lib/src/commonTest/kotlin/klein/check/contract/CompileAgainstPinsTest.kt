@@ -57,7 +57,7 @@ class CompileAgainstPinsTest {
     @Test
     fun compilingAgainstAnEditionsOwnPinsYieldsTheSameEdition() {
         val fromRelease = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
-        assertSameEdition(fromRelease, contract.compile(CREDIT_RULE, fromRelease.pins).orFail())
+        assertSameEdition(fromRelease, contract.compileRule(CREDIT_RULE, fromRelease.pins).orFail())
     }
 
     @Test
@@ -73,7 +73,7 @@ class CompileAgainstPinsTest {
                 """.trimIndent(),
             )
         assertEquals(emptyList(), withoutRelease1.releases)
-        assertSameEdition(fromRelease, withoutRelease1.compile(CREDIT_RULE, fromRelease.pins).orFail())
+        assertSameEdition(fromRelease, withoutRelease1.compileRule(CREDIT_RULE, fromRelease.pins).orFail())
     }
 
     @Test
@@ -94,7 +94,7 @@ class CompileAgainstPinsTest {
                   creditScore/2
                 """.trimIndent(),
             )
-        val errors = assertFailsWith<KleinException> { withoutRevision1.compile(CREDIT_RULE, fromRelease.pins) }.errors
+        val errors = assertFailsWith<KleinException> { withoutRevision1.compileRule(CREDIT_RULE, fromRelease.pins) }.errors
         assertEquals(
             setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
@@ -118,14 +118,14 @@ class CompileAgainstPinsTest {
                   creditScore
                 """.trimIndent(),
             )
-        val checked = edited.compile(CREDIT_RULE, fromRelease.pins)
+        val checked = edited.compileRule(CREDIT_RULE, fromRelease.pins)
         assertNull(checked.output)
         assertTrue(checked.diagnostics.isNotEmpty())
     }
 
     @Test
     fun aPinTheSourceDoesNotUseIsDropped() {
-        val edition = contract.compile("customer.tier", pins("customer" to 1, "creditScore" to 1)).orFail()
+        val edition = contract.compileRule("customer.tier", pins("customer" to 1, "creditScore" to 1)).orFail()
         assertEquals(pins("customer" to 1), edition.pins)
     }
 
@@ -133,18 +133,18 @@ class CompileAgainstPinsTest {
     fun aWholeReleaseSurfaceAsPinsYieldsTheReleasesEdition() {
         val rule = "riskBand(customer, creditScore(customer) + Circle(2).area)"
         val release2 = pins("Customer" to 2, "customer" to 2, "Shape" to 2, "creditScore" to 2, "riskBand" to 2)
-        assertSameEdition(contract.compileRule(rule, ReleaseNumber(2)).orFail(), contract.compile(rule, release2).orFail())
+        assertSameEdition(contract.compileRule(rule, ReleaseNumber(2)).orFail(), contract.compileRule(rule, release2).orFail())
     }
 
     @Test
     fun aNameThePinsLackIsUnbound() {
-        val errors = contract.compile("riskBand(customer, 1)", pins("customer" to 2)).diagnostics
+        val errors = contract.compileRule("riskBand(customer, 1)", pins("customer" to 2)).diagnostics
         assertEquals("riskBand", assertIs<TypeError.UnboundVariable>(errors.single()).name)
     }
 
     @Test
     fun aSyntaxErrorComesBackAsADiagnostic() {
-        val checked = contract.compile("creditScore(", pins("creditScore" to 1))
+        val checked = contract.compileRule("creditScore(", pins("creditScore" to 1))
         assertNull(checked.output)
         assertEquals(1, checked.diagnostics.size)
     }

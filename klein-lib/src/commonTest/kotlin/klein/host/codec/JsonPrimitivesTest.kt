@@ -1,11 +1,11 @@
-package klein.host
+package klein.host.codec
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class JsonTextTest {
+class JsonPrimitivesTest {
     private fun read(text: String): Json = JsonReader(text).readDocument()
 
     private fun assertMalformed(text: String, fragment: String) {
@@ -66,6 +66,11 @@ class JsonTextTest {
         assertMalformed("[1e400]", "outside the range of a double")
         assertMalformed("[-1e400]", "outside the range of a double")
         assertMalformed("[123123e100000]", "outside the range of a double")
+    }
+
+    @Test
+    fun aDuplicateKeyInAnObjectIsRejected() {
+        assertMalformed("""{"a":1,"b":2,"a":3}""", "duplicate field \"a\"")
     }
 
     @Test

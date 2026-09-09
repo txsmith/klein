@@ -1,4 +1,4 @@
-package klein.host
+package klein.host.codec
 
 internal class MalformedJson(
     override val message: String,
@@ -30,6 +30,17 @@ internal fun Json.JObj.expectOnly(owner: String, vararg names: String) {
     val allowed = names.toSet()
     val unexpected = fields.keys.firstOrNull { it !in allowed }
     if (unexpected != null) malformed("unexpected field \"$unexpected\" in $owner")
+}
+
+internal fun toWholeNumber(
+    json: Json,
+    owner: String,
+): Int {
+    if (json !is Json.JNum) malformed("$owner must be a whole number")
+    val value = json.value
+    val whole = value.toInt()
+    if (whole.toDouble() != value) malformed("$owner must be a whole number")
+    return whole
 }
 
 internal fun StringBuilder.writeNumber(value: Double) {
@@ -101,7 +112,9 @@ internal class JsonReader(
         }
         while (true) {
             skipWhitespace()
+            val keyStart = position
             val key = readString()
+            if (key in fields) malformed("duplicate field \"$key\" in an object at offset $keyStart")
             skipWhitespace()
             if (peek() != ':') malformed("expected ':' after an object key at offset $position")
             position++

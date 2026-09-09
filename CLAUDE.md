@@ -245,7 +245,12 @@ klein-lang/
 │   │   │       ├── PreFlightChecks.kt # Pin and log checks before a run; MissingHandler, LogTypeMismatch
 │   │   │       ├── Runner.kt         # The suspend/resume loop; Diverged, CallTypeMismatch, HandlerTypeMismatch
 │   │   │       ├── EffectLog.kt      # EffectLog, LogEntry, Call, RunOutcome's log
-│   │   │       └── Encoding.kt, JsonEncoding.kt  # The two codecs; UnreadableLog
+│   │   │       ├── DecodedEdition.kt # What decoding an artifact answers: Fresh (the edition) or Stale (the recorded inputs and why); UnreadableEdition
+│   │   │       └── codec/            # The encodings, apart from what they encode; depends on host, never the reverse
+│   │   │           ├── BinaryPrimitives.kt, JsonPrimitives.kt                # ByteWriter/ByteReader; the Json tree and JsonReader
+│   │   │           ├── EffectLogBinaryEncoding.kt, EffectLogJsonEncoding.kt  # The effect log's two codecs; UnreadableLog
+│   │   │           ├── EditionChecksum.kt                                    # The artifact's integrity checksum, shared by its codecs
+│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the checksum on read
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/
