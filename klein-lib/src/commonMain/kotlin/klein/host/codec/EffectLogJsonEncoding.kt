@@ -219,12 +219,8 @@ private fun toObjectValue(json: Json.JObj): Value {
     return when {
         "bits" in keys -> {
             json.expectOnly("a raw-bits number", "bits")
-            val bitsJson = json.fields["bits"]
-            val bitsText = (bitsJson as? Json.JStr)?.value
-            val isHex = bitsText != null && bitsText.length == 16 && bitsText.all { it in '0'..'9' || it in 'a'..'f' }
-            if (bitsText == null || !isHex) reject("a number's \"bits\" must be a string of 16 lowercase hex digits")
-            val bits = bitsText.toULong(16)
-            Value.VNum(Double.fromBits(bits.toLong()))
+            val bits = parseHex16((json.fields["bits"] as? Json.JStr)?.value) ?: reject("a number's \"bits\" must be a string of 16 lowercase hex digits")
+            Value.VNum(Double.fromBits(bits))
         }
         "unit" in keys -> {
             json.expectOnly("a unit value", "unit")

@@ -49,7 +49,7 @@ private fun pins(vararg pins: Pair<String, Int>): Map<String, RevisionNumber> = 
 
 private val creditPins = pins("creditScore" to 1, "customer" to 1)
 
-private fun hex(checksum: Long): String = checksum.toULong().toString(16).padStart(16, '0')
+private fun hex(checksum: Long): String = hex16(checksum)
 
 @OptIn(ExperimentalEncodingApi::class)
 private fun base64(bytes: ByteArray): String = Base64.encode(bytes)

@@ -139,24 +139,26 @@ private fun ByteWriter.writeExpr(expr: CoreExpr) {
 }
 
 private fun ByteReader.readExpr(): CoreExpr =
-    when (val tag = readByte()) {
-        NODE_LITERAL -> Literal(readConstant(), readSpan())
-        NODE_VAR -> Var(readInt(), readInt(), readString(), readSpan())
-        NODE_LAMBDA -> Lambda(readInt(), readExpr(), readOptionalString(), readSpan())
-        NODE_APPLY -> Apply(readExpr(), readExprs(), readSpan())
-        NODE_PRIM_APP -> PrimApp(readPrim(), readExprs(), readSpan())
-        NODE_MAKE_DATA -> {
-            val dataTag = readOptionalString()
-            val fieldNames = readStrings()
-            val args = readExprs()
-            if (fieldNames.size != args.size) reject("a data node names ${fieldNames.size} fields but carries ${args.size} arguments")
-            MakeData(dataTag, fieldNames, args, readSpan())
+    nested {
+        when (val tag = readByte()) {
+            NODE_LITERAL -> Literal(readConstant(), readSpan())
+            NODE_VAR -> Var(readInt(), readInt(), readString(), readSpan())
+            NODE_LAMBDA -> Lambda(readInt(), readExpr(), readOptionalString(), readSpan())
+            NODE_APPLY -> Apply(readExpr(), readExprs(), readSpan())
+            NODE_PRIM_APP -> PrimApp(readPrim(), readExprs(), readSpan())
+            NODE_MAKE_DATA -> {
+                val dataTag = readOptionalString()
+                val fieldNames = readStrings()
+                val args = readExprs()
+                if (fieldNames.size != args.size) reject("a data node names ${fieldNames.size} fields but carries ${args.size} arguments")
+                MakeData(dataTag, fieldNames, args, readSpan())
+            }
+            NODE_FIELD_GET -> FieldGet(readExpr(), readString(), readSpan())
+            NODE_HOST_CALL -> HostCall(readString(), readExprs(), readSpan())
+            NODE_ENTER_SCOPE -> EnterScope(List(readCount()) { readStmt() }, readExpr(), readSpan())
+            NODE_MATCH -> Match(readExpr(), List(readCount()) { readArm() }, readSpan())
+            else -> reject("unknown Core node tag $tag")
         }
-        NODE_FIELD_GET -> FieldGet(readExpr(), readString(), readSpan())
-        NODE_HOST_CALL -> HostCall(readString(), readExprs(), readSpan())
-        NODE_ENTER_SCOPE -> EnterScope(List(readCount()) { readStmt() }, readExpr(), readSpan())
-        NODE_MATCH -> Match(readExpr(), List(readCount()) { readArm() }, readSpan())
-        else -> reject("unknown Core node tag $tag")
     }
 
 private fun ByteWriter.writeStmt(stmt: ScopeStmt) {

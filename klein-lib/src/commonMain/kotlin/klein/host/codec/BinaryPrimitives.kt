@@ -6,6 +6,8 @@ internal class MalformedBytes(
 
 private fun malformed(message: String): Nothing = throw MalformedBytes(message)
 
+internal const val BINARY_MAX_DEPTH = 512
+
 internal class ByteWriter {
     private var buffer = ByteArray(256)
     private var size = 0
@@ -50,9 +52,28 @@ internal class ByteReader(
     private val bytes: ByteArray,
 ) {
     private var position = 0
+    private var depth = 0
 
     val isExhausted: Boolean get() = position == bytes.size
     val remaining: Int get() = bytes.size - position
+
+    inline fun <T> nested(read: () -> T): T {
+        enter()
+        try {
+            return read()
+        } finally {
+            leave()
+        }
+    }
+
+    fun enter() {
+        if (depth >= BINARY_MAX_DEPTH) malformed("nesting deeper than $BINARY_MAX_DEPTH levels at offset $position")
+        depth++
+    }
+
+    fun leave() {
+        depth--
+    }
 
     fun readByte(): Int {
         ensureAvailable(1)

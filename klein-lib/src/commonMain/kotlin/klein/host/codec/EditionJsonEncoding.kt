@@ -36,7 +36,7 @@ fun encodeEditionJson(edition: Edition): String {
     out.append(",\"core\":\"")
     out.append(Base64.encode(coreBytes))
     out.append("\",\"checksum\":\"")
-    out.append(editionChecksum(edition.language, edition.source, edition.pins, coreBytes).toULong().toString(16).padStart(16, '0'))
+    out.append(hex16(editionChecksum(edition.language, edition.source, edition.pins, coreBytes)))
     out.append("\"}")
     return out.toString()
 }
@@ -98,9 +98,5 @@ private fun toPins(json: Json): Map<String, RevisionNumber> {
     return pins
 }
 
-private fun toChecksum(json: Json): Long {
-    val text = (json as? Json.JStr)?.value
-    val isHex = text != null && text.length == 16 && text.all { it in '0'..'9' || it in 'a'..'f' }
-    if (text == null || !isHex) reject("the document's \"checksum\" must be a string of 16 lowercase hex digits")
-    return text.toULong(16).toLong()
-}
+private fun toChecksum(json: Json): Long =
+    parseHex16((json as? Json.JStr)?.value) ?: reject("the document's \"checksum\" must be a string of 16 lowercase hex digits")

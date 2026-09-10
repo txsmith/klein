@@ -48,11 +48,17 @@ internal fun StringBuilder.writeNumber(value: Double) {
         // Kotlin/JS prints -0.0 as "0"; spell it out so the sign survives on every platform.
         if (value == 0.0 && value.toRawBits() != 0L) append("-0.0") else append(value)
     } else {
-        val bits = value.toRawBits().toULong().toString(16).padStart(16, '0')
         append("{\"bits\":\"")
-        append(bits)
+        append(hex16(value.toRawBits()))
         append("\"}")
     }
+}
+
+internal fun hex16(bits: Long): String = bits.toULong().toString(16).padStart(16, '0')
+
+internal fun parseHex16(text: String?): Long? {
+    if (text == null || text.length != 16 || !text.all { it in '0'..'9' || it in 'a'..'f' }) return null
+    return text.toULong(16).toLong()
 }
 
 internal fun StringBuilder.writeText(value: String) {

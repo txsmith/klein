@@ -230,6 +230,29 @@ class EffectLogBinaryEncodingTest {
         assertTrue(assertUnreadable(frame(byteArrayOf(2, 99))).message.contains("unknown value kind 99"))
     }
 
+    private val oneFieldNamedA = byteArrayOf(5, 0, 0, 0, 0, 1, 0, 0, 0, 1, 'a'.code.toByte())
+
+    private fun nestedStructs(levels: Int): ByteArray =
+        byteArrayOf(2) + (1..levels).fold(byteArrayOf()) { acc, _ -> acc + oneFieldNamedA } + byteArrayOf(4)
+
+    @Test
+    fun structsNestedUpToTheLimitDecode() {
+        val log = decodeBinary(frame(startBytes, nestedStructs(BINARY_MAX_DEPTH - 1)))
+        assertIs<LogEntry.Result>(log.ending)
+    }
+
+    @Test
+    fun structsNestedDeeperThanTheLimitAreUnreadableNotACrash() {
+        val diagnostic = assertUnreadable(frame(startBytes, nestedStructs(BINARY_MAX_DEPTH * 4)))
+        assertTrue(diagnostic.message.contains("nesting deeper than $BINARY_MAX_DEPTH levels"))
+    }
+
+    @Test
+    fun aDuplicateFieldNameInAStructIsUnreadable() {
+        val twoFieldsBothNamedA = byteArrayOf(2, 5, 0, 0, 0, 0, 2, 0, 0, 0, 1, 'a'.code.toByte(), 4, 0, 0, 0, 1, 'a'.code.toByte(), 4)
+        assertTrue(assertUnreadable(frame(startBytes, twoFieldsBothNamedA)).message.contains("duplicate name \"a\""))
+    }
+
     @Test
     fun aByteThatIsNotABooleanIsUnreadable() {
         val resultWithBadBool = byteArrayOf(2, 2, 7)
