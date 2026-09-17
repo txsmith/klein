@@ -45,14 +45,16 @@ private fun compile(
     release: Int = 1,
 ): Edition = contract.compileRule(rule.trimIndent(), ReleaseNumber(release)).orFail()
 
+private fun pins(vararg pins: Pair<String, Int>): Map<String, RevisionNumber> = pins.associate { (name, revision) -> name to RevisionNumber(revision) }
+
 private fun preludeNames(edition: Edition): List<String> = (edition.core as EnterScope).stmts.map { (it as Bind).name }
 
 class CompileRuleTest {
     @Test
     fun theSameRuleAgainstTwoReleasesYieldsDifferentPins() {
         val rule = "creditScore(customer)"
-        assertEquals(mapOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1)), compile(rule, release = 1).pins)
-        assertEquals(mapOf("creditScore" to RevisionNumber(2), "customer" to RevisionNumber(1)), compile(rule, release = 2).pins)
+        assertEquals(pins("creditScore" to 1, "customer" to 1, "Customer" to 1), compile(rule, release = 1).pins)
+        assertEquals(pins("creditScore" to 2, "customer" to 1, "Customer" to 1), compile(rule, release = 2).pins)
     }
 
     @Test
@@ -63,27 +65,37 @@ class CompileRuleTest {
     }
 
     @Test
-    fun pinsContainOnlyNamesTheRuleUsed() {
-        assertEquals(setOf("customer"), compile("customer.tier").pins.keys)
+    fun pinsCoverOnlyWhatTheRuleReaches() {
+        assertEquals(setOf("customer", "Customer"), compile("customer.tier").pins.keys)
     }
 
     @Test
-    fun aSumTypesConstructorIsPinnedAndInThePreludeThoughNoReleaseEntryNamesIt() {
-        val edition = compile("Circle(9).area")
-        assertEquals(mapOf("Circle" to RevisionNumber(2)), edition.pins)
-        assertEquals(listOf("Circle"), preludeNames(edition))
+    fun usingAConstructorPinsItsTypeAndEveryConstructor() {
+        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), compile("Circle(9).area").pins)
     }
 
     @Test
-    fun aTypeOnlyUsePinsTheTypeAndAddsNothingToThePrelude() {
+    fun onlyTheUsedConstructorEntersThePrelude() {
+        assertEquals(listOf("Circle"), preludeNames(compile("Circle(9).area")))
+    }
+
+    @Test
+    fun annotatingWithAContractTypePinsItAndItsConstructors() {
         val edition = compile("fun process(s: Shape): Num = s.area")
-        assertEquals(mapOf("Shape" to RevisionNumber(2)), edition.pins)
-        assertEquals(emptyList(), preludeNames(edition))
+        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), edition.pins)
+    }
+
+    @Test
+    fun annotatingWithAContractTypeBindsNothingInThePrelude() {
+        assertEquals(emptyList(), preludeNames(compile("fun process(s: Shape): Num = s.area")))
     }
 
     @Test
     fun theSameTypeOnlyRuleAgainstTheRepointedReleasePinsTheNewRevision() {
-        assertEquals(mapOf("Shape" to RevisionNumber(3)), compile("fun process(s: Shape): Num = s.area", release = 2).pins)
+        assertEquals(
+            pins("Shape" to 3, "Circle" to 3, "Square" to 3, "Dot" to 3),
+            compile("fun process(s: Shape): Num = s.area", release = 2).pins,
+        )
     }
 
     @Test
@@ -95,7 +107,7 @@ class CompileRuleTest {
                 1
                 """,
             )
-        assertEquals(mapOf("Shape" to RevisionNumber(2)), edition.pins)
+        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), edition.pins)
     }
 
     @Test

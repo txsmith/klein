@@ -46,7 +46,7 @@ private val gold = Value.VStruct("Customer", mapOf("id" to Value.VNum(1.0), "tie
 
 private fun pins(vararg pins: Pair<String, Int>): Map<String, RevisionNumber> = pins.associate { (name, revision) -> name to RevisionNumber(revision) }
 
-private val creditPins = pins("creditScore" to 1, "customer" to 1)
+private val creditPins = pins("creditScore" to 1, "customer" to 1, "Customer" to 1)
 
 private fun hex(checksum: Long): String = hex16(checksum)
 
@@ -95,7 +95,7 @@ private val validFields: Map<String, String> =
         "format" to "\"klein-edition\"",
         "version" to "1",
         "language" to "1",
-        "pins" to """{"creditScore":1,"customer":1}""",
+        "pins" to """{"Customer":1,"creditScore":1,"customer":1}""",
         "source" to "\"$CREDIT_RULE\"",
         "core" to "\"${base64(creditCore)}\"",
         "checksum" to "\"${hex(creditChecksum)}\"",
@@ -156,7 +156,7 @@ class EditionJsonEncodingTest {
         val core = encodeCore(edition.core)
         val checksum = hex(editionChecksum(LanguageVersion(1), rule, creditPins, core))
         val expected =
-            """{"format":"klein-edition","version":1,"language":1,"pins":{"creditScore":1,"customer":1},""" +
+            """{"format":"klein-edition","version":1,"language":1,"pins":{"Customer":1,"creditScore":1,"customer":1},""" +
                 """"source":"score = creditScore(customer)\nscore > 600","core":"${base64(core)}","checksum":"$checksum"}"""
         assertEquals(expected, text)
     }
@@ -186,7 +186,7 @@ class EditionJsonEncodingTest {
               "format": "klein-edition",
               "version": 1,
               "language": 1,
-              "pins": { "creditScore": 1, "customer": 1 },
+              "pins": { "Customer": 1, "creditScore": 1, "customer": 1 },
               "source": "creditScore(customer) >= 620",
               "core": "${base64(creditCore)}",
               "checksum": "${hex(creditChecksum)}"
@@ -202,7 +202,7 @@ class EditionJsonEncodingTest {
             {
               "checksum" : "${hex(creditChecksum)}",
               "core": "${base64(creditCore)}",
-              "pins": {"customer": 1.0, "creditScore": 1e0},
+              "pins": {"customer": 1.0, "creditScore": 1e0, "Customer": 1},
               "source": "creditScore(customer) >= 620",
               "version": 1.0,
               "language": 1,
@@ -224,8 +224,8 @@ class EditionJsonEncodingTest {
         val base = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore)
         assertTrue(base != editionChecksum(LanguageVersion(2), CREDIT_RULE, creditPins, creditCore))
         assertTrue(base != editionChecksum(LanguageVersion(1), "$CREDIT_RULE ", creditPins, creditCore))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 2, "customer" to 1), creditCore))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 2, "customer" to 1, "Customer" to 1), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "Customer" to 1), creditCore))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore.copyOf(creditCore.size - 1)))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore + byteArrayOf(0)))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, byteArrayOf(2) + creditCore.copyOfRange(1, creditCore.size)))
@@ -233,8 +233,8 @@ class EditionJsonEncodingTest {
 
     @Test
     fun theChecksumIgnoresTheOrderThePinsAreGivenIn() {
-        val forward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 1, "customer" to 1), creditCore)
-        val backward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "creditScore" to 1), creditCore)
+        val forward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("Customer" to 1, "creditScore" to 1, "customer" to 1), creditCore)
+        val backward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "creditScore" to 1, "Customer" to 1), creditCore)
         assertEquals(forward, backward)
     }
 
@@ -306,9 +306,10 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anEditedPinIsAChecksumMismatchAndRederivesAgainstTheEditedPins() {
-        val decoded = assertStale(document("pins" to """{"Customer":1,"creditScore":1,"customer":1}"""))
+    fun aRemovedPinIsAChecksumMismatchAndRederivationRestoresIt() {
+        val decoded = assertStale(document("pins" to """{"creditScore":1,"customer":1}"""))
         assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
+        assertEquals(pins("creditScore" to 1, "customer" to 1), decoded.pins)
         assertEquals(creditPins, assertRederives(decoded).pins)
     }
 
@@ -378,7 +379,7 @@ class EditionJsonEncodingTest {
             )
         val errors = assertFailsWith<KleinException> { withoutRevision1.compileRule(decoded.source, decoded.pins) }.errors
         assertEquals(
-            setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1)),
+            setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
         )
     }
@@ -457,7 +458,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aDuplicatePinIsUnreadable() {
-        val message = assertUnreadable(document("pins" to """{"creditScore":1,"creditScore":1,"customer":1}""")).message
+        val message = assertUnreadable(document("pins" to """{"Customer":1,"creditScore":1,"creditScore":1,"customer":1}""")).message
         assertTrue(message.contains("duplicate"), message)
     }
 

@@ -119,7 +119,7 @@ class EnvironmentContract internal constructor(
         val surface = resolvePins(pins)
         return parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface.exposedRevisions.keys)
-            val editionPins = used.associateWith { surface.exposedRevisions.getValue(it) }
+            val editionPins = resolvePins(used.associateWith { surface.exposedRevisions.getValue(it) }).exposedRevisions
             val prelude = used.mapNotNull { surface.bindingFor(it) }
             Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
         }
@@ -184,9 +184,9 @@ class EnvironmentContract internal constructor(
 
     internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
         resolvedPins.getOrPut(pins) {
-            // Editions only pin things explicitly mentioned in their source,
-            // but those pinned things can lead (implicitly) to more pins being part of the actual full surface.
-            // Therefore we compute the transitive closure of exposed pins here.
+            // The pins given here need not be closed: a hand-written or migrated set, or the names a
+            // source used, can lead (implicitly) to more pins being part of the actual full surface.
+            // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
             // A release goes through the same path; the contract checker already demands it be closed, so the closure adds nothing.
             val surface = mutableMapOf<String, RevisionNumber>()
             val roots = mutableListOf<ContractType>()

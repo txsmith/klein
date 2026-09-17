@@ -254,6 +254,32 @@ class RunAgainstReleaseTest {
     }
 
     @Test
+    fun removingATypeTheRuleReachesThroughOtherPinsIsRejectedBeforeAnyCall() {
+        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
+        assertEquals(RevisionNumber(1), edition.pins["Customer"], "the closure should pin the type creditScore reaches: ${edition.pins}")
+
+        var asked = false
+        val drained =
+            Klein.checkContract(
+                """
+                customer: { id: Num, tier: String }
+                fun creditScore(c: { id: Num, tier: String }): Num
+
+                release 1
+                  customer
+                  creditScore
+                """.trimIndent(),
+            ).implement(
+                immediate("customer") { asked = true; gold },
+                immediate("creditScore") { asked = true; Value.VNum(700.0) },
+            )
+
+        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
+        assertEquals("Customer", pin.name)
+        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
+    }
+
+    @Test
     fun aRunThatForgetsASuppliedCapabilityIsMissingImplementation() {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
