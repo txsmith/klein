@@ -164,12 +164,15 @@ class CompileAgainstPinsTest {
     }
 
     @Test
-    fun callingACapabilityPinsTheConstructorsOfTheTypesInItsSignature() {
+    fun callingACapabilityPinsASumTypeInItsSignatureWithoutItsConstructors() {
         val edition = contract.compileRule("shapeOf(customer).area", ReleaseNumber(2)).orFail()
-        assertEquals(
-            pins("shapeOf" to 2, "customer" to 2, "Customer" to 2, "Shape" to 2, "Circle" to 2, "Square" to 2),
-            edition.pins,
-        )
+        assertEquals(pins("shapeOf" to 2, "customer" to 2, "Customer" to 2, "Shape" to 2), edition.pins)
+    }
+
+    @Test
+    fun aConstructorGivenAsAPinResolvesToItsType() {
+        val edition = contract.compileRule("Circle(2).area", pins("Circle" to 2)).orFail()
+        assertEquals(pins("Shape" to 2), edition.pins)
     }
 
     @Test
@@ -182,7 +185,7 @@ class CompileAgainstPinsTest {
     fun aTypeReachedOnlyThroughAConstructorFieldIsPinned() {
         val edition = contract.compileRule("payment(customer)", ReleaseNumber(2)).orFail()
         assertEquals(
-            pins("payment" to 2, "customer" to 2, "Customer" to 2, "Payment" to 2, "Card" to 2, "Cash" to 2, "CardDetails" to 1),
+            pins("payment" to 2, "customer" to 2, "Customer" to 2, "Payment" to 2, "CardDetails" to 1),
             edition.pins,
         )
     }

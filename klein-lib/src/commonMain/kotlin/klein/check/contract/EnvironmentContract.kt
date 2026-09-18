@@ -118,8 +118,8 @@ class EnvironmentContract internal constructor(
     ): Checked<Edition> {
         val surface = resolvePins(pins)
         return parseAndCheck(source, surface).andThen { rule ->
-            val used = usedCapabilities(rule.program, surface.exposedRevisions.keys)
-            val editionPins = resolvePins(used.associateWith { surface.exposedRevisions.getValue(it) }).exposedRevisions
+            val used = usedCapabilities(rule.program, surface::isExposed)
+            val editionPins = resolvePins(used.associateWith(surface::getRevision)).pins
             val prelude = used.mapNotNull { surface.bindingFor(it) }
             Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
         }
@@ -139,7 +139,7 @@ class EnvironmentContract internal constructor(
     ): Checked<CoreExpr> {
         val resolvedRelease = resolveRelease(release)
         return parseAndCheck(source, resolvedRelease, expected).andThen { rule ->
-            val mentions = capabilityMentions(rule.program, resolvedRelease.exposedRevisions.keys)
+            val mentions = capabilityMentions(rule.program, resolvedRelease::isExposed)
             val capabilities =
                 mentions
                     .filter {
@@ -215,16 +215,11 @@ class EnvironmentContract internal constructor(
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {
         val projected = TypeEnv.empty<Nothing?>()
-        val exposedRevisions = mutableMapOf<String, RevisionNumber>()
         for ((name, revision) in surface) {
             expose(name, revision, projected)
-            exposedRevisions[name] = revision
-            contractTypeEnv.constructorsOf(name, revision).forEach {
-                expose(it.name, revision, projected)
-                exposedRevisions[it.name] = revision
-            }
+            contractTypeEnv.constructorsOf(name, revision).forEach { expose(it.name, revision, projected) }
         }
-        return ResolvedSurface(projected, exposedRevisions)
+        return ResolvedSurface(projected, surface)
     }
 
     /** Turns the ContractEnv entries into RuleEnv entries for one name at one revision. */
@@ -256,8 +251,14 @@ class EnvironmentContract internal constructor(
 internal class ResolvedSurface(
     // The typing environment a rule checks against: each exposed name at a determined revision
     val ruleTypeEnv: RuleEnv,
-    val exposedRevisions: Map<String, RevisionNumber>,
+    val pins: Map<String, RevisionNumber>,
 ) {
+    fun isExposed(name: String): Boolean =
+        ruleTypeEnv.lookup(name) != null || ruleTypeEnv.lookupTypeDef(name) != null || ruleTypeEnv.lookupConstructor(name, null) != null
+
+    fun getRevision(name: String): RevisionNumber =
+        pins[name] ?: pins.getValue(ruleTypeEnv.lookupConstructor(name, null)!!.parentType)
+
     /** Null for a name that lowering erases: exposed types bind nothing, only their constructors do. */
     fun bindingFor(name: String): PreludeBinding? {
         ruleTypeEnv.lookupConstructor(name, null)?.let { return PreludeBinding.Ctor(name, it.fields.keys.toList()) }

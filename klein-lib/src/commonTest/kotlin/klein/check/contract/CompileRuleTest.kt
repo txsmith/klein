@@ -70,8 +70,8 @@ class CompileRuleTest {
     }
 
     @Test
-    fun usingAConstructorPinsItsTypeAndEveryConstructor() {
-        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), compile("Circle(9).area").pins)
+    fun usingAConstructorPinsItsTypeNotTheConstructor() {
+        assertEquals(pins("Shape" to 2), compile("Circle(9).area").pins)
     }
 
     @Test
@@ -80,9 +80,9 @@ class CompileRuleTest {
     }
 
     @Test
-    fun annotatingWithAContractTypePinsItAndItsConstructors() {
+    fun annotatingWithAContractTypePinsIt() {
         val edition = compile("fun process(s: Shape): Num = s.area")
-        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), edition.pins)
+        assertEquals(pins("Shape" to 2), edition.pins)
     }
 
     @Test
@@ -92,10 +92,7 @@ class CompileRuleTest {
 
     @Test
     fun theSameTypeOnlyRuleAgainstTheRepointedReleasePinsTheNewRevision() {
-        assertEquals(
-            pins("Shape" to 3, "Circle" to 3, "Square" to 3, "Dot" to 3),
-            compile("fun process(s: Shape): Num = s.area", release = 2).pins,
-        )
+        assertEquals(pins("Shape" to 3), compile("fun process(s: Shape): Num = s.area", release = 2).pins)
     }
 
     @Test
@@ -107,7 +104,7 @@ class CompileRuleTest {
                 1
                 """,
             )
-        assertEquals(pins("Shape" to 2, "Circle" to 2, "Square" to 2), edition.pins)
+        assertEquals(pins("Shape" to 2), edition.pins)
     }
 
     @Test

@@ -18,12 +18,12 @@ internal data class Mention(
 
 internal fun usedCapabilities(
     program: Program,
-    exposed: Set<String>,
-): Set<String> = capabilityMentions(program, exposed).mapTo(linkedSetOf()) { it.name }
+    isExposed: (String) -> Boolean,
+): Set<String> = capabilityMentions(program, isExposed).mapTo(linkedSetOf()) { it.name }
 
 internal fun capabilityMentions(
     program: Program,
-    exposed: Set<String>,
+    isExposed: (String) -> Boolean,
 ): Set<Mention> {
     val walk =
         object {
@@ -31,7 +31,7 @@ internal fun capabilityMentions(
                 name: String,
                 span: SourceSpan,
                 bound: Set<String>,
-            ): Set<Mention> = if (name in exposed && name !in bound) setOf(Mention(name, span)) else emptySet()
+            ): Set<Mention> = if (isExposed(name) && name !in bound) setOf(Mention(name, span)) else emptySet()
 
             fun typeExpr(
                 t: TypeExpr<Nothing?>?,
