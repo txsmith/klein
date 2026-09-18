@@ -7,6 +7,7 @@ import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
+import klein.check.contract.Pin
 import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.Environment
@@ -44,11 +45,29 @@ private val contract = Klein.checkContract(LENDING)
 
 private val gold = Value.VStruct("Customer", mapOf("id" to Value.VNum(1.0), "tier" to Value.VStr("gold")))
 
-private fun pins(vararg pins: Pair<String, Int>): Map<String, RevisionNumber> = pins.associate { (name, revision) -> name to RevisionNumber(revision) }
+private fun pins(vararg pins: Pair<String, Int>): Map<String, Pin> =
+    pins.associate { (name, revision) -> name to Pin(RevisionNumber(revision), contract.hashOf(name, RevisionNumber(revision))!!) }
 
 private val creditPins = pins("creditScore" to 1, "customer" to 1, "Customer" to 1)
 
 private fun hex(checksum: Long): String = hex16(checksum)
+
+private fun pinJson(
+    name: String,
+    pin: Pin = creditPins.getValue(name),
+): String = """"$name":{"revision":${pin.revision.value},"hash":"${hex(pin.hash)}"}"""
+
+private fun pinsJson(pins: Map<String, Pin>): String = pins.keys.sorted().joinToString(",", "{", "}") { pinJson(it, pins.getValue(it)) }
+
+private fun Map<String, Pin>.changeRevision(
+    name: String,
+    revision: Int,
+): Map<String, Pin> = this + (name to Pin(RevisionNumber(revision), getValue(name).hash))
+
+private fun Map<String, Pin>.changeHash(
+    name: String,
+    hash: Long,
+): Map<String, Pin> = this + (name to Pin(getValue(name).revision, hash))
 
 @OptIn(ExperimentalEncodingApi::class)
 private fun base64(bytes: ByteArray): String = Base64.encode(bytes)
@@ -82,7 +101,7 @@ private fun assertSameEdition(
 ) {
     assertEquals(expected.language, actual.language)
     assertEquals(expected.core, actual.core)
-    assertEquals(expected.pins, actual.pins)
+    assertEquals(expected.pinsWithHash, actual.pinsWithHash)
     assertEquals(expected.source, actual.source)
 }
 
@@ -95,7 +114,7 @@ private val validFields: Map<String, String> =
         "format" to "\"klein-edition\"",
         "version" to "1",
         "language" to "1",
-        "pins" to """{"Customer":1,"creditScore":1,"customer":1}""",
+        "pins" to pinsJson(creditPins),
         "source" to "\"$CREDIT_RULE\"",
         "core" to "\"${base64(creditCore)}\"",
         "checksum" to "\"${hex(creditChecksum)}\"",
@@ -140,7 +159,7 @@ class EditionJsonEncodingTest {
     fun theDecodedInputsAreTheEditionsInputs() {
         val decoded = assertFresh(encodeEditionJson(assertCreditCompiles()))
         assertEquals(LanguageVersion.CURRENT, decoded.language)
-        assertEquals(creditPins, decoded.pins)
+        assertEquals(creditPins, decoded.pinsWithHash)
         assertEquals(CREDIT_RULE, decoded.source)
     }
 
@@ -156,7 +175,7 @@ class EditionJsonEncodingTest {
         val core = encodeCore(edition.core)
         val checksum = hex(editionChecksum(LanguageVersion(1), rule, creditPins, core))
         val expected =
-            """{"format":"klein-edition","version":1,"language":1,"pins":{"Customer":1,"creditScore":1,"customer":1},""" +
+            """{"format":"klein-edition","version":1,"language":1,"pins":${pinsJson(creditPins)},""" +
                 """"source":"score = creditScore(customer)\nscore > 600","core":"${base64(core)}","checksum":"$checksum"}"""
         assertEquals(expected, text)
     }
@@ -186,7 +205,11 @@ class EditionJsonEncodingTest {
               "format": "klein-edition",
               "version": 1,
               "language": 1,
-              "pins": { "Customer": 1, "creditScore": 1, "customer": 1 },
+              "pins": {
+                "Customer": { "revision": 1, "hash": "${hex(creditPins.getValue("Customer").hash)}" },
+                "creditScore": { "revision": 1, "hash": "${hex(creditPins.getValue("creditScore").hash)}" },
+                "customer": { "revision": 1, "hash": "${hex(creditPins.getValue("customer").hash)}" }
+              },
               "source": "creditScore(customer) >= 620",
               "core": "${base64(creditCore)}",
               "checksum": "${hex(creditChecksum)}"
@@ -202,7 +225,11 @@ class EditionJsonEncodingTest {
             {
               "checksum" : "${hex(creditChecksum)}",
               "core": "${base64(creditCore)}",
-              "pins": {"customer": 1.0, "creditScore": 1e0, "Customer": 1},
+              "pins": {
+                "customer": {"hash": "${hex(creditPins.getValue("customer").hash)}", "revision": 1.0},
+                "creditScore": {"revision": 1e0, "hash": "${hex(creditPins.getValue("creditScore").hash)}"},
+                "Customer": {"revision": 1, "hash": "${hex(creditPins.getValue("Customer").hash)}"}
+              },
               "source": "creditScore(customer) >= 620",
               "version": 1.0,
               "language": 1,
@@ -224,8 +251,9 @@ class EditionJsonEncodingTest {
         val base = editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore)
         assertTrue(base != editionChecksum(LanguageVersion(2), CREDIT_RULE, creditPins, creditCore))
         assertTrue(base != editionChecksum(LanguageVersion(1), "$CREDIT_RULE ", creditPins, creditCore))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("creditScore" to 2, "customer" to 1, "Customer" to 1), creditCore))
-        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "Customer" to 1), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins.changeRevision("creditScore", 2), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins.changeHash("creditScore", 0), creditCore))
+        assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins - "creditScore", creditCore))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore.copyOf(creditCore.size - 1)))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, creditCore + byteArrayOf(0)))
         assertTrue(base != editionChecksum(LanguageVersion(1), CREDIT_RULE, creditPins, byteArrayOf(2) + creditCore.copyOfRange(1, creditCore.size)))
@@ -235,6 +263,8 @@ class EditionJsonEncodingTest {
     fun theChecksumIgnoresTheOrderThePinsAreGivenIn() {
         val forward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("Customer" to 1, "creditScore" to 1, "customer" to 1), creditCore)
         val backward = editionChecksum(LanguageVersion(1), CREDIT_RULE, pins("customer" to 1, "creditScore" to 1, "Customer" to 1), creditCore)
+        assertEquals(listOf("Customer", "creditScore", "customer"), pins("Customer" to 1, "creditScore" to 1, "customer" to 1).keys.toList())
+        assertEquals(listOf("customer", "creditScore", "Customer"), pins("customer" to 1, "creditScore" to 1, "Customer" to 1).keys.toList())
         assertEquals(forward, backward)
     }
 
@@ -307,15 +337,23 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aRemovedPinIsAChecksumMismatchAndRederivationRestoresIt() {
-        val decoded = assertStale(document("pins" to """{"creditScore":1,"customer":1}"""))
+        val decoded = assertStale(document("pins" to pinsJson(creditPins - "Customer")))
         assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
-        assertEquals(pins("creditScore" to 1, "customer" to 1), decoded.pins)
-        assertEquals(creditPins, assertRederives(decoded).pins)
+        assertEquals(creditPins - "Customer", decoded.pins)
+        assertEquals(creditPins, assertRederives(decoded).pinsWithHash)
+    }
+
+    @Test
+    fun aTamperedPinHashIsAChecksumMismatchAndRederivationRestoresIt() {
+        val decoded = assertStale(document("pins" to pinsJson(creditPins.changeHash("creditScore", 0))))
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
+        assertEquals(Pin(RevisionNumber(1), 0), decoded.pins["creditScore"])
+        assertEquals(creditPins, assertRederives(decoded).pinsWithHash)
     }
 
     @Test
     fun aPinEditedToARevisionTheContractLacksIsAnUnknownPin() {
-        val decoded = assertStale(document("pins" to """{"creditScore":2,"customer":1}"""))
+        val decoded = assertStale(document("pins" to pinsJson(creditPins.changeRevision("creditScore", 2))))
         assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         val errors = assertFailsWith<KleinException> { contract.compileRule(decoded.source, decoded.pins) }.errors
         val unknown = assertIs<UnknownPin>(errors.single())
@@ -458,8 +496,20 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aDuplicatePinIsUnreadable() {
-        val message = assertUnreadable(document("pins" to """{"Customer":1,"creditScore":1,"creditScore":1,"customer":1}""")).message
+        val message = assertUnreadable(document("pins" to "{${pinJson("Customer")},${pinJson("creditScore")},${pinJson("creditScore")},${pinJson("customer")}}")).message
         assertTrue(message.contains("duplicate"), message)
+    }
+
+    @Test
+    fun eachMalformedPinIsUnreadable() {
+        val hash = hex(creditPins.getValue("creditScore").hash)
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":1}""")).message.contains("pin \"creditScore\""))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"revision":"1","hash":"$hash"}}""")).message.contains("whole number"))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"revision":0,"hash":"$hash"}}""")).message.contains("1 or more"))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"revision":1}}""")).message.contains("missing its \"hash\" field"))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"hash":"$hash"}}""")).message.contains("missing its \"revision\" field"))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"revision":1,"hash":"zz"}}""")).message.contains("16 lowercase hex digits"))
+        assertTrue(assertUnreadable(document("pins" to """{"creditScore":{"revision":1,"hash":"$hash","extra":1}}""")).message.contains("unexpected field \"extra\""))
     }
 
     @Test
@@ -468,8 +518,6 @@ class EditionJsonEncodingTest {
         assertTrue(assertUnreadable(document("version" to "1.5")).message.contains("whole number"))
         assertTrue(assertUnreadable(document("language" to "true")).message.contains("whole number"))
         assertTrue(assertUnreadable(document("pins" to "[]")).message.contains("pins"))
-        assertTrue(assertUnreadable(document("pins" to """{"creditScore":"1"}""")).message.contains("whole number"))
-        assertTrue(assertUnreadable(document("pins" to """{"creditScore":0}""")).message.contains("1 or more"))
         assertTrue(assertUnreadable(document("source" to "1")).message.contains("source"))
         assertTrue(assertUnreadable(document("core" to "1")).message.contains("core"))
         assertTrue(assertUnreadable(document("checksum" to "1")).message.contains("checksum"))

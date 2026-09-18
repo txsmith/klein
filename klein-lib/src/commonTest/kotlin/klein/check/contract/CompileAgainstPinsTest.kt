@@ -63,7 +63,7 @@ private fun assertSameEdition(
     actual: Edition,
 ) {
     assertEquals(expected.core, actual.core)
-    assertEquals(expected.pins, actual.pins)
+    assertEquals(expected.pinsWithHash, actual.pinsWithHash)
     assertEquals(expected.source, actual.source)
 }
 
@@ -170,6 +170,20 @@ class CompileAgainstPinsTest {
     }
 
     @Test
+    fun everyPinCarriesTheHashOfItsDeclaration() {
+        val edition = contract.compileRule("riskBand(customer, creditScore(customer) + Circle(2).area)", ReleaseNumber(2)).orFail()
+        assertEquals(setOf("riskBand", "customer", "creditScore", "Customer", "Shape"), edition.pinsWithHash.keys)
+        edition.pinsWithHash.forEach { (name, pin) -> assertEquals(contract.hashOf(name, pin.revision), pin.hash, "the hash of '$name'") }
+    }
+
+    @Test
+    fun compilingAgainstPinsIgnoresTheirRecordedHashes() {
+        val fromRelease = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
+        val tampered = fromRelease.pinsWithHash.mapValues { Pin(it.value.revision, it.value.hash + 1) }
+        assertSameEdition(fromRelease, contract.compileRule(CREDIT_RULE, tampered).orFail())
+    }
+
+    @Test
     fun aConstructorGivenAsAPinResolvesToItsType() {
         val edition = contract.compileRule("Circle(2).area", pins("Circle" to 2)).orFail()
         assertEquals(pins("Shape" to 2), edition.pins)
@@ -195,7 +209,7 @@ class CompileAgainstPinsTest {
         val annotated = contract.compileRule("fun f(c: Customer): Num = c.id\nf(customer)", ReleaseNumber(1)).orFail()
         val inferred = contract.compileRule("customer.id", ReleaseNumber(1)).orFail()
         assertEquals(pins("customer" to 1, "Customer" to 1), annotated.pins)
-        assertEquals(annotated.pins, inferred.pins)
+        assertEquals(annotated.pinsWithHash, inferred.pinsWithHash)
     }
 
     @Test

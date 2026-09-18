@@ -25,6 +25,7 @@ import klein.surface.Abort
 import klein.surface.Lexer
 import klein.surface.Program
 import klein.surface.parseProgram
+import kotlin.jvm.JvmName
 
 class UnknownRelease(
     val number: ReleaseNumber,
@@ -114,12 +115,21 @@ class EnvironmentContract internal constructor(
 
     fun compileRule(
         source: String,
+        pins: Map<String, Pin>,
+    ): Checked<Edition> = compileRule(source, pins.mapValues<String, Pin, RevisionNumber> { it.value.revision })
+
+    @JvmName("compileRuleAtRevisions")
+    fun compileRule(
+        source: String,
         pins: Map<String, RevisionNumber>,
     ): Checked<Edition> {
         val surface = resolvePins(pins)
         return parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
-            val editionPins = resolvePins(used.associateWith(surface::getRevision)).pins
+            val editionPins =
+                resolvePins(used.associateWith(surface::getRevision)).pins.mapValues { (name, revision) ->
+                    Pin(revision, hashOf(name, revision)!!)
+                }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
             Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
         }

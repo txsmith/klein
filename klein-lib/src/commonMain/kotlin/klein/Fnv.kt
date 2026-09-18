@@ -19,6 +19,10 @@ internal class Fnv {
         for (shift in 24 downTo 0 step 8) byte(value ushr shift)
     }
 
+    fun long(value: Long) {
+        for (shift in 56 downTo 0 step 8) byte((value ushr shift).toInt())
+    }
+
     fun string(value: String) {
         val encoded = value.encodeToByteArray()
         int(encoded.size)
