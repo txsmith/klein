@@ -68,7 +68,7 @@ private class Artifact(
         val unknown = pins.filter { (name, pin) -> contract.hashOf(name, pin.revision) == null }.map { (name, pin) -> UnknownPin(name, pin.revision) }
         if (unknown.isNotEmpty()) throw KleinException(unknown)
         if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
-        return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
+        return DecodedEdition.Intact(Edition(language, decodeCore(coreBytes), pins, source))
     }
 
     private fun stale(reason: StaleReason): DecodedEdition = DecodedEdition.Stale(language, pins, source, reason)

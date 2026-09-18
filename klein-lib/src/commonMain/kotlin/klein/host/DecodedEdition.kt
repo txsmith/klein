@@ -7,7 +7,7 @@ import klein.check.contract.Pin
 enum class StaleReason { ChecksumMismatch, LanguageChanged, CompilerChanged, DeclarationChanged }
 
 sealed interface DecodedEdition {
-    class Fresh internal constructor(
+    class Intact internal constructor(
         val edition: Edition,
     ) : DecodedEdition
 

@@ -88,7 +88,7 @@ private fun assertStale(
     against: EnvironmentContract = contract,
 ): DecodedEdition.Stale = assertIs<DecodedEdition.Stale>(against.decodeEditionJson(text))
 
-private fun assertFresh(text: String): Edition = assertIs<DecodedEdition.Fresh>(contract.decodeEditionJson(text)).edition
+private fun assertIntact(text: String): Edition = assertIs<DecodedEdition.Intact>(contract.decodeEditionJson(text)).edition
 
 private val RENAMED_PARAMETER =
     """
@@ -168,9 +168,9 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anEditionEncodedAndDecodedIsFreshAndRunsIdenticallyToTheOriginal() {
+    fun anEditionEncodedAndDecodedIsIntactAndRunsIdenticallyToTheOriginal() {
         val edition = assertCreditCompiles()
-        val decoded = assertFresh(encodeEditionJson(edition))
+        val decoded = assertIntact(encodeEditionJson(edition))
         assertSameEdition(edition, decoded)
         val original = assertIs<RunOutcome.Completed>(lendingHost(contract).run(edition))
         val fromDecoded = assertIs<RunOutcome.Completed>(lendingHost(contract).run(decoded))
@@ -186,7 +186,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun theDecodedInputsAreTheEditionsInputs() {
-        val decoded = assertFresh(encodeEditionJson(assertCreditCompiles()))
+        val decoded = assertIntact(encodeEditionJson(assertCreditCompiles()))
         assertEquals(LanguageVersion.CURRENT, decoded.language)
         assertEquals(creditPins, decoded.pinsWithHash)
         assertEquals(CREDIT_RULE, decoded.source)
@@ -244,7 +244,7 @@ class EditionJsonEncodingTest {
               "checksum": "${hex(creditChecksum)}"
             }
             """.trimIndent()
-        assertSameEdition(assertCreditCompiles(), assertFresh(text))
+        assertSameEdition(assertCreditCompiles(), assertIntact(text))
     }
 
     @Test
@@ -265,7 +265,7 @@ class EditionJsonEncodingTest {
               "format": "klein-edition"
             }
             """.trimIndent()
-        assertSameEdition(assertFresh(encodeEditionJson(assertCreditCompiles())), assertFresh(reformatted))
+        assertSameEdition(assertIntact(encodeEditionJson(assertCreditCompiles())), assertIntact(reformatted))
     }
 
     @Test
@@ -337,8 +337,8 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anArtifactDecodedAgainstTheContractItWasCompiledAgainstIsFresh() {
-        assertSameEdition(assertCreditCompiles(), assertIs<DecodedEdition.Fresh>(Klein.checkContract(LENDING).decodeEditionJson(document())).edition)
+    fun anArtifactDecodedAgainstTheContractItWasCompiledAgainstIsIntact() {
+        assertSameEdition(assertCreditCompiles(), assertIs<DecodedEdition.Intact>(Klein.checkContract(LENDING).decodeEditionJson(document())).edition)
     }
 
     @Test
@@ -603,7 +603,7 @@ class EditionJsonEncodingTest {
     @Test
     fun anEmptyPinMapRoundTrips() {
         val edition = contract.compileRule("1 + 2", ReleaseNumber(1)).orFail()
-        val decoded = assertFresh(encodeEditionJson(edition))
+        val decoded = assertIntact(encodeEditionJson(edition))
         assertEquals(emptyMap(), decoded.pins)
         assertSameEdition(edition, decoded)
     }
@@ -612,7 +612,7 @@ class EditionJsonEncodingTest {
     fun sourceTextWithEscapesRoundTrips() {
         val rule = "s = \"quote \\\" tab \\t héllo 日本語\"\ncreditScore(customer) >= 620"
         val edition = contract.compileRule(rule, ReleaseNumber(1)).orFail()
-        val decoded = assertFresh(encodeEditionJson(edition))
+        val decoded = assertIntact(encodeEditionJson(edition))
         assertEquals(rule, decoded.source)
         assertSameEdition(edition, decoded)
     }
