@@ -41,11 +41,14 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 
 **Editions at rest.** An edition is stored as an immutable artifact: its source and language
 version, its pins, its Core as an opaque blob carrying the compiler version, and a checksum over
-the whole. Decoding needs no contract and never compiles: it answers the edition fresh, or the
-recorded inputs stale with the reason (checksum mismatch, compiler changed), and the host
-re-derives a stale one with `compileRule(source, pins)`, the one compilation, which the release
-form now delegates to. Re-derivation goes through the pins, never a release, so removing a
-release touches nothing already compiled. Along the way handler registrations became values and
+the whole. To load a stored edition, the host decodes it against the contract and gets one of
+two things: the edition, when the artifact is intact; or the recorded inputs with a reason the stored Core
+cannot be used (the checksum does not match, the compiler changed, or a pinned declaration was
+edited in place). In the second case the host compiles the recorded inputs again with
+`compileRule(source, pins)`. Compiling against a release turns the release into its pin map and
+makes the same call. An edition pins every type and capability its source reaches, never a
+constructor, and each pin carries a hash of its declaration. Re-derivation goes through the
+pins, never a release, so removing a release touches nothing already compiled. Along the way handler registrations became values and
 the registry immutable, and the pin check moved to the one place that resolves pins. The rules
 are in [spec/edition.md](./spec/edition.md). Two notes for later features: the artifact must
 capture everything a release contributes to compilation (the result sink is the first feature
@@ -108,11 +111,9 @@ is decided here.
 Canonical form is no longer a deliverable. The value encoding already exists — the effect log's
 binary codec is version-stamped and deterministic — and canonical bytes (equal values encode to
 equal bytes) have no consumer: replay compares decoded values in memory, and nothing
-content-addresses anything. The v1 reconciler does not hash at all; it recompiles everything.
-Hashing arrives later as a staged optimization, described under Reconciliation below: whole
-pin sets first, then per pin. Deterministic encoding suffices for both (the log codec for
-values, the printed type for signatures), just as it does for the edition checksum under Edition
-serialization, which hashes a structural walk of the data rather than any stored bytes.
+content-addresses anything. Where a hash is needed, a deterministic walk of the data suffices;
+the edition checksum and the pin hash are both computed that way, as
+[spec/edition.md](./spec/edition.md) specifies.
 
 The numeric commitments stand on their own: encodings commit to today's doubles knowingly, and
 exact rationals stay a later semantics change paid for with a wipe — the version stamp on
@@ -136,10 +137,10 @@ drain queries — edition and parked-run counts per revision. There is no retire
 optimistic, stranded runs alert, and a revision stays restorable. Delivering failed-recompile
 reports to rule authors is the org's job, not the library's.
 
-Hashing is a later optimization, staged: first hash entire pin sets — a crude change detector,
-"did anything this edition sees change?" — then per-pin hashes to narrow which capability
-changed. The same pin-set hash would also serve as the surface-resolution memo key in
-`EnvironmentContract`.
+The change detector already exists: every pin carries the hash of its declaration, so
+the reconciler compares each edition's pins with the contract's declarations and recompiles only
+the editions where one differs. A hash of a whole pin set could still serve as the
+surface-resolution memo key in `EnvironmentContract`.
 
 ### Call markers, trace modes, error traces
 
@@ -151,9 +152,11 @@ observability starts to hurt. Tracked as the older issue #15.
 
 Small, unblocked, and easy to lose:
 
-- **No signature change-detector exists.** `CapabilityId` was deleted in the PR #28 review:
-  identity is `(name, revision)`, full stop. The reconciler still wants a cheap "did this
-  signature change" prefilter; add a hash as a pin-side field when reconciliation consumes it.
+- **An edition does not know which environment it belongs to.** Two environments in one
+  process may declare the same names, and an edition compiled under one and run under the other
+  is refused only when the revisions differ. An environment identity, recorded in the edition
+  and checked at the run's pre-flight, closes that; the pin hashes are not compared at run time
+  by decision.
 - **`klein-bench` is in no routine check** and silently stopped compiling for two phases.
 - **The surface-resolution memos are not thread-safe**, and `run` touches the pin memo on every
   call (twice when replaying: the pre-flight log check and the run itself). Two threads running
