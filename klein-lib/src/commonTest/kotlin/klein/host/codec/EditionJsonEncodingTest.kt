@@ -83,9 +83,38 @@ private fun lendingHost(contract: EnvironmentContract): Environment =
 
 private fun assertCreditCompiles(): Edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
 
-private fun assertStale(text: String): DecodedEdition.Stale = assertIs<DecodedEdition.Stale>(decodeEditionJson(text))
+private fun assertStale(
+    text: String,
+    against: EnvironmentContract = contract,
+): DecodedEdition.Stale = assertIs<DecodedEdition.Stale>(against.decodeEditionJson(text))
 
-private fun assertFresh(text: String): Edition = assertIs<DecodedEdition.Fresh>(decodeEditionJson(text)).edition
+private fun assertFresh(text: String): Edition = assertIs<DecodedEdition.Fresh>(contract.decodeEditionJson(text)).edition
+
+private val RENAMED_PARAMETER =
+    """
+    type Customer = Customer { id: Num, tier: String }
+
+    customer: Customer
+    fun creditScore(customer: Customer): Num
+
+    release 1
+      Customer
+      customer
+      creditScore
+    """.trimIndent()
+
+private val WITHOUT_REVISION_1 =
+    """
+    type Customer/2 = Customer { id: Num, name: String, tier: String }
+
+    customer/2: Customer/2
+    fun creditScore/2(c: Customer/2): Num
+
+    release 2
+      Customer/2
+      customer/2
+      creditScore/2
+    """.trimIndent()
 
 private fun assertRederives(stale: DecodedEdition.Stale): Edition = contract.compileRule(stale.source, stale.pins).orFail()
 
@@ -134,7 +163,7 @@ private fun documentWithCore(core: ByteArray): String =
 
 class EditionJsonEncodingTest {
     private fun assertUnreadable(text: String): UnreadableEdition {
-        val thrown = assertFailsWith<KleinException> { decodeEditionJson(text) }
+        val thrown = assertFailsWith<KleinException> { contract.decodeEditionJson(text) }
         return assertIs<UnreadableEdition>(thrown.errors.single())
     }
 
@@ -295,6 +324,47 @@ class EditionJsonEncodingTest {
     }
 
     @Test
+    fun aDeclarationEditedInPlaceBehindAMatchingChecksumIsDeclarationChanged() {
+        val edited = Klein.checkContract(RENAMED_PARAMETER)
+        val decoded = assertStale(document(), against = edited)
+        assertEquals(StaleReason.DeclarationChanged, decoded.reason)
+        assertEquals(CREDIT_RULE, decoded.source)
+        assertEquals(creditPins, decoded.pins)
+        val rederived = edited.compileRule(decoded.source, decoded.pins).orFail()
+        assertEquals(edited.hashOf("creditScore", RevisionNumber(1)), rederived.pinsWithHash.getValue("creditScore").hash)
+        assertEquals(creditPins.getValue("customer"), rederived.pinsWithHash.getValue("customer"))
+        assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(lendingHost(edited).run(rederived)).value)
+    }
+
+    @Test
+    fun anArtifactDecodedAgainstTheContractItWasCompiledAgainstIsFresh() {
+        assertSameEdition(assertCreditCompiles(), assertIs<DecodedEdition.Fresh>(Klein.checkContract(LENDING).decodeEditionJson(document())).edition)
+    }
+
+    @Test
+    fun aRecordedPinTheContractDoesNotDeclareIsAnUnknownPinAtDecode() {
+        val errors = assertFailsWith<KleinException> { Klein.checkContract(WITHOUT_REVISION_1).decodeEditionJson(document()) }.errors
+        assertEquals(
+            setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
+            errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
+        )
+    }
+
+    @Test
+    fun aChecksumMismatchIsReportedBeforeAChangedDeclaration() {
+        val decoded = assertStale(document("checksum" to "\"fedcba9876543210\""), against = Klein.checkContract(RENAMED_PARAMETER))
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
+    }
+
+    @Test
+    fun aCompilerChangeIsReportedBeforeAChangedDeclaration() {
+        val foreign = creditCore.copyOf()
+        foreign[0] = 2
+        val decoded = assertStale(documentWithCore(foreign), against = Klein.checkContract(RENAMED_PARAMETER))
+        assertEquals(StaleReason.CompilerChanged, decoded.reason)
+    }
+
+    @Test
     fun aForeignCompilerVersionWithAStaleChecksumIsAChecksumMismatch() {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
@@ -401,21 +471,7 @@ class EditionJsonEncodingTest {
     @Test
     fun aPinnedRevisionRemovedFromTheContractIsAnUnknownPinAndNoResult() {
         val decoded = assertStaleCredit()
-        val withoutRevision1 =
-            Klein.checkContract(
-                """
-                type Customer/2 = Customer { id: Num, name: String, tier: String }
-
-                customer/2: Customer/2
-                fun creditScore/2(c: Customer/2): Num
-
-                release 2
-                  Customer/2
-                  customer/2
-                  creditScore/2
-                """.trimIndent(),
-            )
-        val errors = assertFailsWith<KleinException> { withoutRevision1.compileRule(decoded.source, decoded.pins) }.errors
+        val errors = assertFailsWith<KleinException> { Klein.checkContract(WITHOUT_REVISION_1).compileRule(decoded.source, decoded.pins) }.errors
         assertEquals(
             setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),

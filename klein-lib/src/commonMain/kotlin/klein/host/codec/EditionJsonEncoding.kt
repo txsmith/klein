@@ -6,7 +6,9 @@ import klein.KleinException
 import klein.LanguageVersion
 import klein.RevisionNumber
 import klein.check.contract.Edition
+import klein.check.contract.EnvironmentContract
 import klein.check.contract.Pin
+import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.StaleReason
 import kotlin.io.encoding.Base64
@@ -50,14 +52,36 @@ fun encodeEditionJson(edition: Edition): String {
     return out.toString()
 }
 
-fun decodeEditionJson(text: String): DecodedEdition =
+fun EnvironmentContract.decodeEditionJson(text: String): DecodedEdition = readArtifact(text).decode(this)
+
+private class Artifact(
+    val language: LanguageVersion,
+    val pins: Map<String, Pin>,
+    val source: String,
+    val coreBytes: ByteArray,
+    val checksum: Long,
+) {
+    fun decode(contract: EnvironmentContract): DecodedEdition {
+        if (editionChecksum(language, source, pins, coreBytes) != checksum) return stale(StaleReason.ChecksumMismatch)
+        if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
+        if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
+        val unknown = pins.filter { (name, pin) -> contract.hashOf(name, pin.revision) == null }.map { (name, pin) -> UnknownPin(name, pin.revision) }
+        if (unknown.isNotEmpty()) throw KleinException(unknown)
+        if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
+        return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
+    }
+
+    private fun stale(reason: StaleReason): DecodedEdition = DecodedEdition.Stale(language, pins, source, reason)
+}
+
+private fun readArtifact(text: String): Artifact =
     try {
-        readEdition(text)
+        readDocument(text)
     } catch (malformed: MalformedJson) {
         reject(malformed.message)
     }
 
-private fun readEdition(text: String): DecodedEdition {
+private fun readDocument(text: String): Artifact {
     val document = JsonReader(text).readDocument()
     if (document !is Json.JObj) reject("not a Klein edition: the document is not a JSON object")
     val marker = (document.fields["format"] as? Json.JStr)?.value
@@ -72,16 +96,7 @@ private fun readEdition(text: String): DecodedEdition {
     val source = sourceJson.value
     val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
-    if (editionChecksum(language, source, pins, coreBytes) != checksum) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.ChecksumMismatch)
-    }
-    if (language != LanguageVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.LanguageChanged)
-    }
-    if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.CompilerChanged)
-    }
-    return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
+    return Artifact(language, pins, source, coreBytes, checksum)
 }
 
 private fun reject(message: String): Nothing = throw KleinException(listOf(UnreadableEdition(message)))
