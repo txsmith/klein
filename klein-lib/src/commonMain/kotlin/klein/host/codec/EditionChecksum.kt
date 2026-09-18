@@ -1,10 +1,8 @@
 package klein.host.codec
 
+import klein.Fnv
 import klein.LanguageVersion
 import klein.RevisionNumber
-
-private val FNV_OFFSET_BASIS = 0xcbf29ce484222325uL.toLong()
-private const val FNV_PRIME = 0x100000001b3L
 
 internal fun editionChecksum(
     language: LanguageVersion,
@@ -12,18 +10,13 @@ internal fun editionChecksum(
     pins: Map<String, RevisionNumber>,
     coreBytes: ByteArray,
 ): Long {
-    val out = ByteWriter()
-    out.writeInt(language.value)
-    out.writeString(source)
+    val fnv = Fnv()
+    fnv.int(language.value)
+    fnv.string(source)
     for (name in pins.keys.sorted()) {
-        out.writeString(name)
-        out.writeInt(pins.getValue(name).value)
+        fnv.string(name)
+        fnv.int(pins.getValue(name).value)
     }
-    out.writeBytes(coreBytes)
-    var hash = FNV_OFFSET_BASIS
-    for (byte in out.toByteArray()) {
-        hash = hash xor (byte.toLong() and 0xFF)
-        hash *= FNV_PRIME
-    }
-    return hash
+    fnv.bytes(coreBytes)
+    return fnv.result()
 }

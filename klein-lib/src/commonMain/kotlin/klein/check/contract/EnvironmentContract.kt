@@ -177,6 +177,15 @@ class EnvironmentContract internal constructor(
         return Checked(CheckedRule(program, checked.type), checked.errors)
     }
 
+    internal fun hashOf(
+        name: String,
+        revision: RevisionNumber,
+    ): Long? {
+        declarations.firstOrNull { it.name == name && it.revision == revision }?.let { return hashCapability(it) }
+        val typeName = contractTypeEnv.lookupConstructor(name, revision)?.parentType ?: name
+        return contractTypeEnv.hashTypeDefinition(typeName, revision)
+    }
+
     internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface = resolvePins(getReleasePins(release))
 
     private fun getReleasePins(release: ReleaseNumber): Map<String, RevisionNumber> =
