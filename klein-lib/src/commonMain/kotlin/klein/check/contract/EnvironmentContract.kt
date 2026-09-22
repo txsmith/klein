@@ -95,7 +95,7 @@ class EnvironmentContract internal constructor(
     val releases: List<ReleaseNumber> get() = releasePins.keys.toList()
 
     private val resolvedReleases: Map<ReleaseNumber, Lazy<ResolvedSurface>> =
-        releasePins.mapValues { (_, pins) -> lazy { resolvePins(pins) } }
+        releasePins.mapValues { (_, pins) -> lazy { resolvePins(pins).getOrThrow() } }
 
     /**
      * Type-check [ruleSource] against exactly [release]. The rule is the author's document, so its
@@ -121,7 +121,7 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         source: String,
         pins: Map<String, RevisionNumber>,
-    ): Checked<Edition> = compile(source, resolvePins(pins))
+    ): Checked<Edition> = compile(source, resolvePins(pins).getOrThrow())
 
     private fun compile(
         source: String,
@@ -129,7 +129,7 @@ class EnvironmentContract internal constructor(
     ): Checked<Edition> =
         parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
-            val editionSurface = resolvePins(used.associateWith(surface::getRevision))
+            val editionSurface = resolvePins(used.associateWith(surface::getRevision)).getOrThrow()
             val editionPins = editionSurface.pins.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
             Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
@@ -198,29 +198,7 @@ class EnvironmentContract internal constructor(
     internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
         resolvedReleases[release]?.value ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
-    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
-        when (val resolution = tryResolvePins(pins)) {
-            is PinResolution.Resolved -> resolution.surface
-            is PinResolution.Unknown -> throw KleinException(resolution.pins)
-        }
-
-    internal fun tryResolvePins(pins: Map<String, RevisionNumber>): PinResolution =
-        when (val closure = closePins(pins)) {
-            is Closure.Closed -> PinResolution.Resolved(resolveSurface(closure.pins))
-            is Closure.Unknown -> PinResolution.Unknown(closure.pins)
-        }
-
-    private sealed interface Closure {
-        class Closed(
-            val pins: Map<String, RevisionNumber>,
-        ) : Closure
-
-        class Unknown(
-            val pins: List<UnknownPin>,
-        ) : Closure
-    }
-
-    private fun closePins(pins: Map<String, RevisionNumber>): Closure {
+    internal fun resolvePins(pins: Map<String, RevisionNumber>): PinResolution {
         // The pins given here need not be closed: the names a source used, or pins recorded before the
         // contract changed, can lead (implicitly) to more pins being part of the actual full surface.
         // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
@@ -243,11 +221,11 @@ class EnvironmentContract internal constructor(
                 unknown.add(UnknownPin(name, revision))
             }
         }
-        if (unknown.isNotEmpty()) return Closure.Unknown(unknown)
+        if (unknown.isNotEmpty()) return PinResolution.Unknown(unknown)
         for ((reachedName, reachedRevision) in roots.reachableTypeNames(contractTypeEnv)) {
             surface[reachedName] = reachedRevision
         }
-        return Closure.Closed(surface)
+        return PinResolution.Resolved(resolveSurface(surface))
     }
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {
@@ -292,6 +270,12 @@ internal sealed interface PinResolution {
     class Unknown(
         val pins: List<UnknownPin>,
     ) : PinResolution
+
+    fun getOrThrow(): ResolvedSurface =
+        when (this) {
+            is Resolved -> surface
+            is Unknown -> throw KleinException(pins)
+        }
 }
 
 /** Each release or set of pins from an edition forms a surface of what the release exposes or what the edition demands */

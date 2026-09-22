@@ -67,7 +67,7 @@ private class Artifact(
         if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
         if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
         val surface =
-            when (val resolution = contract.tryResolvePins(pins.mapValues { it.value.revision })) {
+            when (val resolution = contract.resolvePins(pins.mapValues { it.value.revision })) {
                 is PinResolution.Resolved -> resolution.surface
                 is PinResolution.Unknown -> return unknownPins(resolution.pins)
             }
