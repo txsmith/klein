@@ -153,13 +153,13 @@ class EncodingTest {
         val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1)).orFail()
         var asks = 0
         fun makeHost() =
-            contract.implement {
-                immediate("customer") { asks++; gold }
+            contract.implement(
+                immediate("customer") { asks++; gold },
                 immediate("creditScore") { args ->
                     asks++
                     Value.VNum(if (assertIs<Value.VStruct>(args.single()).fields["tier"] == Value.VStr("gold")) 700.0 else 500.0)
-                }
-            }
+                },
+            )
         val live = assertIs<RunOutcome.Completed>(makeHost().run(rule))
         val fromOriginal = assertIs<RunOutcome.Completed>(makeHost().run(rule, log = live.log))
         asks = 0

@@ -3,7 +3,6 @@ package klein.host
 import klein.Diagnostic
 import klein.HostError
 import klein.KleinException
-import klein.RevisionNumber
 import klein.check.RuleType
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
@@ -67,7 +66,7 @@ class CallTypeMismatch internal constructor(
 internal class Run(
     val environment: Environment,
     val edition: Edition,
-    val handlers: HandlerRegistry,
+    val registry: HandlerRegistry,
     val persist: (LogEntry) -> Unit,
     val effectLog: EffectLog?,
 ) {
@@ -235,7 +234,8 @@ internal class Run(
 
     private fun askHandler(suspension: Execution.AwaitingHost): HandlerResponse {
         if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, resolvedPins)
-        return when (val handler = environment.resolveHandler(suspension.call, edition.pins, handlers)) {
+        return when (val handler = registry.getHandler(suspension.call, edition.pins.getValue(suspension.call))) {
+            null -> throw IllegalStateException("no handler for '${suspension.call}' although the pre-flight check passed")
             is Handler.Immediate -> {
                 val answer = handler.answer(suspension.args)
                 environment.checkAnswerType(suspension, resolvedPins, answer)
@@ -296,14 +296,3 @@ private fun Environment.checkCallTypes(
 }
 
 private fun describeArgumentCount(count: Int) = if (count == 1) "1 argument" else "$count arguments"
-
-private fun Environment.resolveHandler(
-    name: String,
-    pins: Map<String, RevisionNumber>,
-    handlers: HandlerRegistry,
-): Handler {
-    val revision = pins.getValue(name)
-    return handlers.registered[name to revision]
-        ?: getHandler(name, revision)
-        ?: throw IllegalStateException("no handler for '$name' although checkPins passed")
-}

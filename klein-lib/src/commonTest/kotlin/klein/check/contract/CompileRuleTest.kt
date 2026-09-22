@@ -56,8 +56,10 @@ class CompileRuleTest {
     }
 
     @Test
-    fun theEditionRecordsTheReleaseItWasCompiledAgainst() {
-        assertEquals(ReleaseNumber(2), compile("customer.tier", release = 2).release)
+    fun theEditionRecordsTheSourceItWasCompiledFromVerbatim() {
+        // We expect whitespace to be preserved
+        val source = "  customer.tier  "
+        assertEquals(source, contract.compileRule(source, ReleaseNumber(2)).orFail().source)
     }
 
     @Test

@@ -7,5 +7,5 @@ class UnknownPin(
     val name: String,
     val revision: RevisionNumber,
 ) : HostError {
-    override val message = "the edition pins '$name' revision ${revision.value}, which the contract does not declare"
+    override val message = "pin '$name' revision ${revision.value} names a revision the contract does not declare"
 }

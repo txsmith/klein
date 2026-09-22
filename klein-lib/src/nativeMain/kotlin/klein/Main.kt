@@ -9,6 +9,7 @@ import klein.check.contract.EnvironmentContract
 import klein.check.contract.InvalidContract
 import klein.core.CorePrinter
 import klein.host.RunOutcome
+import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
 import kotlin.system.exitProcess
@@ -185,12 +186,11 @@ private fun runCmd(
     val edition = compiled.output!!
     val canPrompt = !useStdin && isatty(STDIN_FILENO) == 1
     val answers = mutableMapOf<String, Value>()
-    val environment =
-        contract.implement {
-            declarations.forEach { d ->
-                immediate("${d.name}/${d.revision.value}") { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
-            }
+    val registrations =
+        contract.declarations.map { d ->
+            immediate("${d.name}/${d.revision.value}") { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
         }
+    val environment = contract.implement(*registrations.toTypedArray())
     when (val outcome = orExit { environment.run(edition) }) {
         is RunOutcome.Completed -> println(Value.print(outcome.value))
         is RunOutcome.Failed -> {
