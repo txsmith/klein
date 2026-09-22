@@ -189,10 +189,11 @@ records which edition it executes and its effect log. Through the edition's pins
 keeps revisions alive: the host may not remove a revision while a parked run may still ask it
 live.
 
-A run is guarded at both ends of the capability boundary. It refuses to start unless the host can
-answer every pin as compiled. A missing implementation or an undeclared revision fails the run
-before its first effect, naming the capability, so a rule never performs half its effects and
-then hits an unanswerable call. A declaration edited in place is caught when the edition's artifact
+A run is guarded at both ends of the capability boundary. It refuses to start unless the contract
+declares every pin as compiled and the host has an implementation for every declared capability,
+whether the edition calls it or not: the run does not know what the rule will ask until it runs.
+A missing implementation or an undeclared revision fails the run before its first effect, naming
+the capability, so a rule never performs half its effects and then hits an unanswerable call. A declaration edited in place is caught when the edition's artifact
 is loaded. Every answer is checked against the declared type as it arrives: a wrong-shaped answer 
 fails the run at that call, naming the capability, what it gave and what was declared, and the value
 never enters the program.
