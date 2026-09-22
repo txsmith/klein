@@ -352,19 +352,27 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aRecordedPinTheContractDoesNotDeclareIsDeclarationRemovedWithTheInputsWhole() {
+    fun aRecordedPinTheContractDoesNotDeclareIsUnknownPinsNamingEachOne() {
         val decoded = assertStale(document(), against = Klein.checkContract(WITHOUT_REVISION_1))
-        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
+        val reason = assertIs<StaleReason.UnknownPins>(decoded.reason)
+        assertEquals(
+            mapOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
+            reason.pins,
+        )
         assertEquals(LanguageVersion.CURRENT, decoded.language)
-        assertEquals(creditPins, decoded.pins)
         assertEquals(CREDIT_RULE, decoded.source)
     }
 
     @Test
-    fun rederivingFromInputsWithARemovedDeclarationIsAnUnknownPinPerPin() {
+    fun anUnknownPinIsLeftOutOfTheStaleInputs() {
+        val decoded = assertStale(document(), against = Klein.checkContract(WITHOUT_REVISION_1))
+        assertEquals(emptyMap(), decoded.pins)
+    }
+
+    @Test
+    fun rederivingAgainstTheRecordedPinsOfAnUnknownPinArtifactIsAnUnknownPinPerPin() {
         val without = Klein.checkContract(WITHOUT_REVISION_1)
-        val decoded = assertStale(document(), against = without)
-        val errors = assertFailsWith<KleinException> { without.compileRule(decoded.source, decoded.pins) }.errors
+        val errors = assertFailsWith<KleinException> { without.compileRule(CREDIT_RULE, creditPins) }.errors
         assertEquals(
             setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
@@ -397,8 +405,8 @@ class EditionJsonEncodingTest {
             """.trimIndent()
         val edition = Klein.checkContract(twoRevisions).compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()
         val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(rolledBack))
-        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
-        assertEquals(edition.pinsWithHash, decoded.pins)
+        assertEquals(mapOf("creditScore" to RevisionNumber(2)), assertIs<StaleReason.UnknownPins>(decoded.reason).pins)
+        assertEquals(emptyMap(), decoded.pins)
     }
 
     @Test
@@ -406,7 +414,8 @@ class EditionJsonEncodingTest {
         val edition = assertCreditCompiles()
         assertEquals(RevisionNumber(1), edition.pins["Customer"], "the closure should pin the type creditScore reaches: ${edition.pins}")
         val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(STRUCTURAL_LENDING))
-        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
+        assertEquals(mapOf("Customer" to RevisionNumber(1)), assertIs<StaleReason.UnknownPins>(decoded.reason).pins)
+        assertEquals(edition.pinsWithHash - "Customer", decoded.pins)
         assertEquals(edition.source, decoded.source)
     }
 

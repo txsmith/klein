@@ -8,6 +8,8 @@ import klein.RevisionNumber
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.Pin
+import klein.check.contract.PinResolution
+import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.StaleReason
 import kotlin.io.encoding.Base64
@@ -64,12 +66,21 @@ private class Artifact(
         if (editionChecksum(language, source, pins, coreBytes) != checksum) return stale(StaleReason.ChecksumMismatch)
         if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
         if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
-        val surface = contract.resolvePinsIfDeclared(pins.mapValues { it.value.revision }) ?: return stale(StaleReason.DeclarationRemoved)
+        val surface =
+            when (val resolution = contract.tryResolvePins(pins.mapValues { it.value.revision })) {
+                is PinResolution.Resolved -> resolution.surface
+                is PinResolution.Unknown -> return unknownPins(resolution.pins)
+            }
         if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
         return DecodedEdition.Intact(Edition(language, decodeCore(coreBytes), pins, source, surface))
     }
 
     private fun stale(reason: StaleReason): DecodedEdition = DecodedEdition.Stale(language, pins, source, reason)
+
+    private fun unknownPins(unknown: List<UnknownPin>): DecodedEdition {
+        val known = pins.filterKeys { name -> unknown.none { it.name == name } }
+        return DecodedEdition.Stale(language, known, source, StaleReason.UnknownPins(unknown.associate { it.name to it.revision }))
+    }
 }
 
 private fun readArtifact(text: String): Artifact =

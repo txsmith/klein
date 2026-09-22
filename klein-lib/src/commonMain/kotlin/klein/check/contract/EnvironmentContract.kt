@@ -199,15 +199,15 @@ class EnvironmentContract internal constructor(
         resolvedReleases[release]?.value ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
     internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
-        when (val closure = closePins(pins)) {
-            is Closure.Closed -> resolveSurface(closure.pins)
-            is Closure.Unknown -> throw KleinException(closure.pins)
+        when (val resolution = tryResolvePins(pins)) {
+            is PinResolution.Resolved -> resolution.surface
+            is PinResolution.Unknown -> throw KleinException(resolution.pins)
         }
 
-    internal fun resolvePinsIfDeclared(pins: Map<String, RevisionNumber>): ResolvedSurface? =
+    internal fun tryResolvePins(pins: Map<String, RevisionNumber>): PinResolution =
         when (val closure = closePins(pins)) {
-            is Closure.Closed -> resolveSurface(closure.pins)
-            is Closure.Unknown -> null
+            is Closure.Closed -> PinResolution.Resolved(resolveSurface(closure.pins))
+            is Closure.Unknown -> PinResolution.Unknown(closure.pins)
         }
 
     private sealed interface Closure {
@@ -282,6 +282,16 @@ class EnvironmentContract internal constructor(
             )
         }
     }
+}
+
+internal sealed interface PinResolution {
+    class Resolved(
+        val surface: ResolvedSurface,
+    ) : PinResolution
+
+    class Unknown(
+        val pins: List<UnknownPin>,
+    ) : PinResolution
 }
 
 /** Each release or set of pins from an edition forms a surface of what the release exposes or what the edition demands */

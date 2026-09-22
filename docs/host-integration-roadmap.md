@@ -42,9 +42,8 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 **Editions at rest.** An edition is stored as an immutable artifact: its source and language
 version, its pins, its Core as an opaque blob carrying the compiler version, and a checksum over
 the whole. To load a stored edition, the host decodes it against the contract and gets one of
-two things: the edition, when the artifact is intact; or the recorded inputs with a reason the stored Core
-cannot be used (the checksum does not match, the compiler changed, or a pinned declaration was
-removed or edited in place). In the second case the host compiles the recorded inputs again with
+two things: the edition, when the artifact is intact; or the recorded inputs with the reason the
+stored Core cannot be used, as the spec lists them. In the second case the host compiles the recorded inputs again with
 `compileRule(source, pins)`. Compiling against a release turns the release into its pin map and
 makes the same call. An edition pins every type and capability its source reaches, never a
 constructor, and each pin carries a hash of its declaration. Re-derivation goes through the
