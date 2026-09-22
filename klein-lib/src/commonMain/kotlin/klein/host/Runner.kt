@@ -268,7 +268,7 @@ private fun Environment.checkAnswerType(
     resolvedPins: ResolvedSurface,
     answer: Value,
 ) {
-    val revision = resolvedPins.exposedRevisions.getValue(suspension.call)
+    val revision = resolvedPins.pins.getValue(suspension.call)
     val declared = getCapabilityDeclaration(suspension.call, revision)!!.answerType
     if (!fitsDeclaredType(answer, declared, resolvedPins.ruleTypeEnv)) {
         throw KleinException(listOf(HandlerTypeMismatch(suspension.call, printType(answer, resolvedPins.ruleTypeEnv), declared)))
@@ -279,7 +279,7 @@ private fun Environment.checkCallTypes(
     suspension: Execution.AwaitingHost,
     resolvedPins: ResolvedSurface,
 ) {
-    val revision = resolvedPins.exposedRevisions.getValue(suspension.call)
+    val revision = resolvedPins.pins.getValue(suspension.call)
     val declaration = getCapabilityDeclaration(suspension.call, revision)
     val declared = (declaration as ContractDeclaration.Function).parameterTypes
     if (suspension.args.size != declared.size) {

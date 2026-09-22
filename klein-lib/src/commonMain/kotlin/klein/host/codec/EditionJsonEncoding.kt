@@ -6,6 +6,9 @@ import klein.KleinException
 import klein.LanguageVersion
 import klein.RevisionNumber
 import klein.check.contract.Edition
+import klein.check.contract.EnvironmentContract
+import klein.check.contract.Pin
+import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.StaleReason
 import kotlin.io.encoding.Base64
@@ -29,30 +32,56 @@ fun encodeEditionJson(edition: Edition): String {
     out.append(",\"language\":")
     out.append(edition.language.value)
     out.append(",\"pins\":{")
-    edition.pins.keys.sorted().forEachIndexed { index, name ->
+    edition.pinsWithHash.keys.sorted().forEachIndexed { index, name ->
+        val pin = edition.pinsWithHash.getValue(name)
         if (index > 0) out.append(',')
         out.writeText(name)
-        out.append(':')
-        out.append(edition.pins.getValue(name).value)
+        out.append(":{\"revision\":")
+        out.append(pin.revision.value)
+        out.append(",\"hash\":\"")
+        out.append(hex16(pin.hash))
+        out.append("\"}")
     }
     out.append("},\"source\":")
     out.writeText(edition.source)
     out.append(",\"core\":\"")
     out.append(Base64.encode(coreBytes))
     out.append("\",\"checksum\":\"")
-    out.append(hex16(editionChecksum(edition.language, edition.source, edition.pins, coreBytes)))
+    out.append(hex16(editionChecksum(edition.language, edition.source, edition.pinsWithHash, coreBytes)))
     out.append("\"}")
     return out.toString()
 }
 
-fun decodeEditionJson(text: String): DecodedEdition =
+fun EnvironmentContract.decodeEditionJson(text: String): DecodedEdition = readArtifact(text).decode(this)
+
+private class Artifact(
+    val language: LanguageVersion,
+    val pins: Map<String, Pin>,
+    val source: String,
+    val coreBytes: ByteArray,
+    val checksum: Long,
+) {
+    fun decode(contract: EnvironmentContract): DecodedEdition {
+        if (editionChecksum(language, source, pins, coreBytes) != checksum) return stale(StaleReason.ChecksumMismatch)
+        if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
+        if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
+        val unknown = pins.filter { (name, pin) -> contract.hashOf(name, pin.revision) == null }.map { (name, pin) -> UnknownPin(name, pin.revision) }
+        if (unknown.isNotEmpty()) throw KleinException(unknown)
+        if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
+        return DecodedEdition.Intact(Edition(language, decodeCore(coreBytes), pins, source))
+    }
+
+    private fun stale(reason: StaleReason): DecodedEdition = DecodedEdition.Stale(language, pins, source, reason)
+}
+
+private fun readArtifact(text: String): Artifact =
     try {
-        readEdition(text)
+        readDocument(text)
     } catch (malformed: MalformedJson) {
         reject(malformed.message)
     }
 
-private fun readEdition(text: String): DecodedEdition {
+private fun readDocument(text: String): Artifact {
     val document = JsonReader(text).readDocument()
     if (document !is Json.JObj) reject("not a Klein edition: the document is not a JSON object")
     val marker = (document.fields["format"] as? Json.JStr)?.value
@@ -67,16 +96,7 @@ private fun readEdition(text: String): DecodedEdition {
     val source = sourceJson.value
     val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
-    if (editionChecksum(language, source, pins, coreBytes) != checksum) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.ChecksumMismatch)
-    }
-    if (language != LanguageVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.LanguageChanged)
-    }
-    if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, StaleReason.CompilerChanged)
-    }
-    return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
+    return Artifact(language, pins, source, coreBytes, checksum)
 }
 
 private fun reject(message: String): Nothing = throw KleinException(listOf(UnreadableEdition(message)))
@@ -91,15 +111,24 @@ private fun toCoreBytes(json: Json): ByteArray {
     }
 }
 
-private fun toPins(json: Json): Map<String, RevisionNumber> {
-    if (json !is Json.JObj) reject("the document's \"pins\" must be an object of names to revisions")
-    val pins = LinkedHashMap<String, RevisionNumber>(json.fields.size)
-    json.fields.forEach { (name, revisionJson) ->
-        val revision = toWholeNumber(revisionJson, "the revision of pin \"$name\"")
-        if (revision < 1) reject("the revision of pin \"$name\" must be a whole number of 1 or more")
-        pins[name] = RevisionNumber(revision)
-    }
+private fun toPins(json: Json): Map<String, Pin> {
+    if (json !is Json.JObj) reject("the document's \"pins\" must be an object of names to pins")
+    val pins = LinkedHashMap<String, Pin>(json.fields.size)
+    json.fields.forEach { (name, pinJson) -> pins[name] = toPin(name, pinJson) }
     return pins
+}
+
+private fun toPin(
+    name: String,
+    json: Json,
+): Pin {
+    val owner = "pin \"$name\""
+    if (json !is Json.JObj) reject("$owner must be an object with a revision and a hash")
+    json.expectOnly(owner, "revision", "hash")
+    val revision = toWholeNumber(json.expectField("revision", owner), "the revision of $owner")
+    if (revision < 1) reject("the revision of $owner must be a whole number of 1 or more")
+    val hash = parseHex16((json.expectField("hash", owner) as? Json.JStr)?.value) ?: reject("the hash of $owner must be a string of 16 lowercase hex digits")
+    return Pin(RevisionNumber(revision), hash)
 }
 
 private fun toChecksum(json: Json): Long =

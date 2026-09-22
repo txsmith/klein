@@ -161,11 +161,7 @@ internal class ContractChecker {
             }
         }
         // One walk per release, so vocabulary shared by several entries expands once.
-        val reachableTRefs =
-            rootTypes.reachableTypes(env).mapNotNullTo(mutableSetOf()) {
-                if (it is Type.TRef) it.name to it.revision else null
-            }
-        for ((name, revision) in reachableTRefs - exposed) {
+        for ((name, revision) in rootTypes.reachableTypeNames(env) - exposed) {
             errors.add(TypeError.ReleaseNotSelfContained("$name/${revision.value}", release.number, release.span))
         }
     }
@@ -269,8 +265,9 @@ internal fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractT
                 // Arguments are walked whatever the expanded set says: `Box<Order/2>` and
                 // `Box<Foo/3>` are one entry under the same key but two references to follow.
                 type.typeArgs.forEach(::walk)
-                if (expanded.add(type.name to type.revision)) {
-                    env.declaredFields(type.name, type.revision).forEach(::walk)
+                val typeName = env.collapseToType(type.name, type.revision)
+                if (expanded.add(typeName to type.revision)) {
+                    env.declaredFields(typeName, type.revision).forEach(::walk)
                 }
             }
             else -> {}
@@ -280,6 +277,16 @@ internal fun List<ContractType>.reachableTypes(env: ContractEnv): List<ContractT
     forEach(::walk)
     return reached
 }
+
+internal fun List<ContractType>.reachableTypeNames(env: ContractEnv): Set<Pair<String, RevisionNumber>> =
+    reachableTypes(env).mapNotNullTo(linkedSetOf()) {
+        if (it is Type.TRef) env.collapseToType(it.name, it.revision) to it.revision else null
+    }
+
+internal fun ContractEnv.collapseToType(
+    name: String,
+    revision: RevisionNumber,
+): String = lookupConstructor(name, revision)?.parentType ?: name
 
 /**
  * The field types a named type declares, **one layer deep**: its own fields, and the fields of

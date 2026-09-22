@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 private val exposed = setOf("creditScore", "taxRate", "Customer", "Invoice", "Money", "Circle", "Person")
 
 private fun used(src: String): Set<String> =
-    usedCapabilities(parseProgram(Lexer(src.trimIndent()).tokenize().toList()), exposed)
+    usedCapabilities(parseProgram(Lexer(src.trimIndent()).tokenize().toList()), exposed::contains)
 
 class UsedCapabilitiesTest {
     @Test

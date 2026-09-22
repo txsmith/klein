@@ -73,6 +73,12 @@ What is in it:
 - every type the declaration reaches by name, with the revision it reaches it at, but not that
   type's own definition: a change there moves that type's own pin.
 
+Parameter names are in the hash even though a call is positional today. The tilde operator
+already turns a function's parameters into record fields by name (see
+[calling-conventions.md](../calling-conventions.md) §The Tilde Operator), and calling by name is
+where that leads. When it arrives, a renamed parameter is a changed signature, and the hash must
+already say so rather than be widened then.
+
 What is not in it: the declaration's own revision, which the pin records beside the hash; the
 order of record fields and of constructors; the names of type variables, which are numbered by
 first appearance. So `fun pick(x: 'A, y: 'A): 'A` and the same declaration written with `'T`
@@ -137,15 +143,16 @@ the artifact too, or re-derivation will silently produce a different program.
 ## Migration
 
 An artifact is never migrated. A migration produces a **new edition** from an old one's recorded
-inputs: the source, possibly transformed, compiled against pins that may point at other
-revisions. Compiling against pins is the same operation as re-derivation: the pins given may cover more
-than the rule depends on, and the new edition pins exactly what it depends on. Moving a rule from `creditScore/1`
-to `creditScore/2` is compiling its source against pins that say `creditScore/2`: the source is
-checked against revision 2's signature, and either it fits or the diagnostics say what must
-change. How the toolkit transforms source, and what the host keeps as the editable form of a
-rule, is the migration toolkit's concern ([roadmap.md](../roadmap.md) §Migration toolkit), not
-this spec's. The artifact records the source it was compiled from, verbatim, whatever produced
-it.
+source, possibly transformed, compiled against a release: the release the rule is moving to. A
+release is always the goal, because a rule is migrated when the release it was on is retired,
+and the pins of the new edition are computed from that release like any other compile. Moving a
+rule from `creditScore/1` to `creditScore/2` is compiling its source against a release that
+points at `creditScore/2`: the source is checked against revision 2's signature, and either it
+fits or the diagnostics say what must change. Compiling against recorded pins, with no release,
+is re-derivation only. How the toolkit transforms source, and what the host keeps as the editable
+form of a rule, is the migration toolkit's concern ([roadmap.md](../roadmap.md) §Migration
+toolkit), not this spec's. The artifact records the source it was compiled from, verbatim,
+whatever produced it.
 
 ## Encodings
 

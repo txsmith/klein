@@ -8,6 +8,7 @@ import klein.core.PreludeBinding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -95,22 +96,32 @@ class ResolvedSurfaceTest {
 
     @Test
     fun revisionsFollowTheReleaseSurface() {
-        assertEquals(RevisionNumber(1), resolve(1).exposedRevisions["creditScore"])
-        assertEquals(RevisionNumber(2), resolve().exposedRevisions["creditScore"])
-        assertNull(resolve(1).exposedRevisions["riskBand"])
+        assertEquals(RevisionNumber(1), resolve(1).pins["creditScore"])
+        assertEquals(RevisionNumber(2), resolve().pins["creditScore"])
+        assertNull(resolve(1).pins["riskBand"])
     }
 
     @Test
-    fun aSumTypesConstructorsHaveRevisionsThoughNoReleaseEntryNamesThem() {
-        val exposedRevisions = resolve().exposedRevisions
-        assertEquals(RevisionNumber(2), exposedRevisions["Circle"])
-        assertEquals(RevisionNumber(2), exposedRevisions["Square"])
-        assertNull(resolve(1).exposedRevisions["Circle"])
+    fun aSumTypesConstructorsAreExposedAtTheirTypesRevisionWithoutAPinOfTheirOwn() {
+        val surface = resolve()
+        assertTrue(surface.isExposed("Circle"))
+        assertTrue(surface.isExposed("Square"))
+        assertEquals(RevisionNumber(2), surface.getRevision("Circle"))
+        assertEquals(RevisionNumber(2), surface.getRevision("Square"))
+        assertNull(surface.pins["Circle"])
+        assertFalse(resolve(1).isExposed("Circle"))
     }
 
     @Test
-    fun aTypeOnlyNameHasARevisionThoughItBindsNothing() {
-        assertEquals(RevisionNumber(2), resolve().exposedRevisions["Shape"])
+    fun aTypeOnlyNameHasAPinThoughItBindsNothing() {
+        assertEquals(RevisionNumber(2), resolve().pins["Shape"])
+        assertEquals(RevisionNumber(2), resolve().getRevision("Shape"))
+    }
+
+    @Test
+    fun aNameTheReleaseDoesNotExposeIsNotExposed() {
+        assertFalse(resolve(1).isExposed("riskBand"))
+        assertFalse(resolve().isExposed("nobody"))
     }
 
     // ── resolvePins ──────────────────────────────────────────────────────────
@@ -118,12 +129,12 @@ class ResolvedSurfaceTest {
     @Test
     fun resolvePinsAcceptsADeclarationATypeAndAConstructor() {
         val surface = contract.resolvePins(mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Circle" to RevisionNumber(2)))
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["riskBand"])
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["Flag"])
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["On"])
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["Shape"])
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["Circle"])
-        assertEquals(RevisionNumber(2), surface.exposedRevisions["Customer"])
+        assertEquals(
+            mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Shape" to RevisionNumber(2), "Customer" to RevisionNumber(2)),
+            surface.pins,
+        )
+        assertTrue(surface.isExposed("On"))
+        assertTrue(surface.isExposed("Circle"))
     }
 
     @Test
@@ -140,17 +151,18 @@ class ResolvedSurfaceTest {
     // ── the two halves agree ─────────────────────────────────────────────────
 
     @Test
-    fun everyNameTypesBindsOrRegistersHasARevision() {
+    fun everyExposedNameResolvesToAPinAndEveryPinIsExposed() {
         for (release in contract.releases) {
-            val (ruleTypeEnv, exposedRevisions) = resolve(release.value).let { it.ruleTypeEnv to it.exposedRevisions }
+            val surface = resolve(release.value)
+            val ruleTypeEnv = surface.ruleTypeEnv
             contract.declarations.map { it.name }.distinct().forEach { name ->
-                if (ruleTypeEnv.lookup(name) != null) assertNotNull(exposedRevisions[name], "$name bound without a revision")
+                if (ruleTypeEnv.lookup(name) != null) assertNotNull(surface.pins[name], "$name bound without a pin")
             }
-            ruleTypeEnv.allTypeDefs().forEach { assertNotNull(exposedRevisions[it.name], "${it.name} registered without a revision") }
-            ruleTypeEnv.allConstructors().forEach { assertNotNull(exposedRevisions[it.name], "${it.name} registered without a revision") }
-            exposedRevisions.keys.forEach { name ->
-                val visible = ruleTypeEnv.lookup(name) != null || ruleTypeEnv.lookupTypeDef(name) != null || ruleTypeEnv.lookupConstructor(name, null) != null
-                assertTrue(visible, "$name has a revision but nothing in the rule type env")
+            ruleTypeEnv.allTypeDefs().forEach { assertTrue(surface.isExposed(it.name), "${it.name} registered but not exposed") }
+            ruleTypeEnv.allConstructors().forEach { assertEquals(surface.pins[it.parentType], surface.getRevision(it.name), "${it.name} registered without its type's pin") }
+            surface.pins.keys.forEach { name ->
+                val visible = ruleTypeEnv.lookup(name) != null || ruleTypeEnv.lookupTypeDef(name) != null
+                assertTrue(visible, "$name is pinned but nothing in the rule type env")
             }
         }
     }

@@ -20,24 +20,38 @@ private val CONTRACT =
     type Customer = Customer { id: Num, tier: String }
     type Customer/2 = Customer { id: Num, name: String, tier: String }
     type Shape/2 = Circle { area: Num } | Square { area: Num }
+    type Address = Address { city: String }
+    type Account = Account { address: Address, balance: Num }
+    type CardDetails = CardDetails { last4: String }
+    type Payment/2 = Card { details: CardDetails } | Cash
 
     customer: Customer
     customer/2: Customer/2
     fun creditScore(c: Customer): Num
     fun creditScore/2(c: Customer/2): Num
     fun riskBand/2(c: Customer/2, score: Num): String
+    fun account(id: Num): Account
+    fun shapeOf/2(c: Customer/2): Shape/2
+    fun payment/2(c: Customer/2): Payment/2
 
     release 1
       Customer
+      Address
+      Account
       customer
       creditScore
+      account
 
     release 2
       Customer/2
       customer/2
       Shape/2
+      CardDetails
+      Payment/2
       creditScore/2
       riskBand/2
+      shapeOf/2
+      payment/2
     """.trimIndent()
 
 private val contract = Klein.checkContract(CONTRACT)
@@ -49,7 +63,7 @@ private fun assertSameEdition(
     actual: Edition,
 ) {
     assertEquals(expected.core, actual.core)
-    assertEquals(expected.pins, actual.pins)
+    assertEquals(expected.pinsWithHash, actual.pinsWithHash)
     assertEquals(expected.source, actual.source)
 }
 
@@ -124,16 +138,127 @@ class CompileAgainstPinsTest {
     }
 
     @Test
-    fun aPinTheSourceDoesNotUseIsDropped() {
+    fun anUnreachedPinIsDropped() {
         val edition = contract.compileRule("customer.tier", pins("customer" to 1, "creditScore" to 1)).orFail()
-        assertEquals(pins("customer" to 1), edition.pins)
+        assertEquals(pins("customer" to 1, "Customer" to 1), edition.pins)
+    }
+
+    @Test
+    fun pinsBeyondTheClosureAreDropped() {
+        val release2 = pins("Customer" to 2, "customer" to 2, "Shape" to 2, "creditScore" to 2, "riskBand" to 2, "shapeOf" to 2)
+        val edition = contract.compileRule("creditScore(customer)", release2).orFail()
+        assertEquals(pins("creditScore" to 2, "customer" to 2, "Customer" to 2), edition.pins)
     }
 
     @Test
     fun aWholeReleaseSurfaceAsPinsYieldsTheReleasesEdition() {
         val rule = "riskBand(customer, creditScore(customer) + Circle(2).area)"
-        val release2 = pins("Customer" to 2, "customer" to 2, "Shape" to 2, "creditScore" to 2, "riskBand" to 2)
+        val release2 = pins("Customer" to 2, "customer" to 2, "Shape" to 2, "creditScore" to 2, "riskBand" to 2, "shapeOf" to 2)
         assertSameEdition(contract.compileRule(rule, ReleaseNumber(2)).orFail(), contract.compileRule(rule, release2).orFail())
+    }
+
+    @Test
+    fun callingACapabilityPinsTheTypesInItsSignature() {
+        val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
+        assertEquals(pins("creditScore" to 1, "customer" to 1, "Customer" to 1), edition.pins)
+    }
+
+    @Test
+    fun callingACapabilityPinsASumTypeInItsSignatureWithoutItsConstructors() {
+        val edition = contract.compileRule("shapeOf(customer).area", ReleaseNumber(2)).orFail()
+        assertEquals(pins("shapeOf" to 2, "customer" to 2, "Customer" to 2, "Shape" to 2), edition.pins)
+    }
+
+    @Test
+    fun everyPinCarriesTheHashOfItsDeclaration() {
+        val edition = contract.compileRule("riskBand(customer, creditScore(customer) + Circle(2).area)", ReleaseNumber(2)).orFail()
+        assertEquals(setOf("riskBand", "customer", "creditScore", "Customer", "Shape"), edition.pinsWithHash.keys)
+        edition.pinsWithHash.forEach { (name, pin) -> assertEquals(contract.hashOf(name, pin.revision), pin.hash, "the hash of '$name'") }
+    }
+
+    @Test
+    fun compilingAgainstPinsIgnoresTheirRecordedHashes() {
+        val fromRelease = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
+        val tampered = fromRelease.pinsWithHash.mapValues { Pin(it.value.revision, it.value.hash + 1) }
+        assertSameEdition(fromRelease, contract.compileRule(CREDIT_RULE, tampered).orFail())
+    }
+
+    @Test
+    fun aConstructorGivenAsAPinResolvesToItsType() {
+        val edition = contract.compileRule("Circle(2).area", pins("Circle" to 2)).orFail()
+        assertEquals(pins("Shape" to 2), edition.pins)
+    }
+
+    @Test
+    fun aConstructorReachedThroughASignatureIsPinnedAsItsType() {
+        val circles =
+            Klein.checkContract(
+                """
+                type Shape = Circle { area: Num } | Square { area: Num }
+                circle: Circle
+
+                release 1
+                  Shape
+                  circle
+                """.trimIndent(),
+            )
+        val edition = circles.compileRule("circle.area", ReleaseNumber(1)).orFail()
+        assertEquals(pins("circle" to 1, "Shape" to 1), edition.pins)
+    }
+
+    @Test
+    fun aConstructorReachedThroughASignaturePinsWhatItsSiblingArmsReach() {
+        val shapes =
+            Klein.checkContract(
+                """
+                type Point = Point { x: Num, y: Num }
+                type Shape = Circle { area: Num } | Square { corner: Point }
+                circle: Circle
+
+                release 1
+                  Point
+                  Shape
+                  circle
+                """.trimIndent(),
+            )
+        val edition = shapes.compileRule("circle.area", ReleaseNumber(1)).orFail()
+        assertEquals(pins("circle" to 1, "Shape" to 1, "Point" to 1), edition.pins)
+    }
+
+    @Test
+    fun aTypeReachedOnlyThroughAnotherTypeIsPinned() {
+        val edition = contract.compileRule("account(1).address.city", ReleaseNumber(1)).orFail()
+        assertEquals(pins("account" to 1, "Account" to 1, "Address" to 1), edition.pins)
+    }
+
+    @Test
+    fun aTypeReachedOnlyThroughAConstructorFieldIsPinned() {
+        val edition = contract.compileRule("payment(customer)", ReleaseNumber(2)).orFail()
+        assertEquals(
+            pins("payment" to 2, "customer" to 2, "Customer" to 2, "Payment" to 2, "CardDetails" to 1),
+            edition.pins,
+        )
+    }
+
+    @Test
+    fun annotatingATypeOrInferringItGivesTheSamePins() {
+        val annotated = contract.compileRule("fun f(c: Customer): Num = c.id\nf(customer)", ReleaseNumber(1)).orFail()
+        val inferred = contract.compileRule("customer.id", ReleaseNumber(1)).orFail()
+        assertEquals(pins("customer" to 1, "Customer" to 1), annotated.pins)
+        assertEquals(annotated.pinsWithHash, inferred.pinsWithHash)
+    }
+
+    @Test
+    fun pinsAloneAnswerWhichEditionsDependOnARevision() {
+        val editions =
+            mapOf(
+                "credit on 1" to contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail(),
+                "credit on 2" to contract.compileRule(CREDIT_RULE, ReleaseNumber(2)).orFail(),
+                "risk on 2" to contract.compileRule("riskBand(customer, 1)", ReleaseNumber(2)).orFail(),
+                "shape on 2" to contract.compileRule("Circle(2).area", ReleaseNumber(2)).orFail(),
+            )
+        val onCustomer2 = editions.filterValues { it.pins["Customer"] == RevisionNumber(2) }.keys
+        assertEquals(setOf("credit on 2", "risk on 2"), onCustomer2)
     }
 
     @Test
