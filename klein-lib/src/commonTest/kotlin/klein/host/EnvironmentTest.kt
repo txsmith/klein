@@ -158,8 +158,17 @@ class EnvironmentTest {
                     deferred("maxRetries/2") {},
                 )
             }
-        assertEquals(4, error.errors.size, "expected one error per fault: ${error.errors}")
+        assertEquals(5, error.errors.size, "expected one error per fault, plus 'creditCheck' left unregistered: ${error.errors}")
         assertTrue(error.errors.all { it is RegistrationError })
+    }
+
+    @Test
+    fun registrationFaultsAndUnregisteredDeclarationsAreReportedTogether() {
+        val error = assertFailsWith<KleinException> { load(CONTRACT, immediate("creditCheck/x") { Value.VNum(1.0) }) }
+        assertEquals(3, error.errors.size, "expected the malformed suffix and both unregistered declarations: ${error.errors}")
+        assertTrue(error.errors.all { it is RegistrationError })
+        assertTrue(error.message!!.contains("creditCheck/x"), "message should name the bad registration: ${error.message}")
+        assertTrue(error.message!!.contains("maxRetries"), "message should name the unregistered declaration: ${error.message}")
     }
 
     // Revisions are declared in the contract; registration names one that exists.
@@ -368,6 +377,7 @@ class EnvironmentTest {
                 contract.declarations,
                 listOf(immediate("creditCheck") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(5.0) }),
                 perRunAllowed = false,
+                errors = mutableListOf(),
             )
         val combined = boot + forRun
         assertEquals(emptyList(), combined.missingHandlers())
@@ -380,7 +390,12 @@ class EnvironmentTest {
         val contract = Klein.checkContract(CONTRACT)
         val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
         val forRun =
-            HandlerRegistry.fromRegistrations(contract.declarations, listOf(immediate("creditCheck") { Value.VNum(1.0) }), perRunAllowed = false)
+            HandlerRegistry.fromRegistrations(
+                contract.declarations,
+                listOf(immediate("creditCheck") { Value.VNum(1.0) }),
+                perRunAllowed = false,
+                errors = mutableListOf(),
+            )
         val combined = boot + forRun
         val maxRetries = assertIs<Handler.Immediate>(combined.getHandler("maxRetries", RevisionNumber(1)))
         assertEquals(Value.VNum(3.0), maxRetries.answer(emptyList()))

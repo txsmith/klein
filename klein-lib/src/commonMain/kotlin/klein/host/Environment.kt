@@ -44,9 +44,9 @@ class HandlerRegistry internal constructor(
             declarations: List<ContractDeclaration>,
             registrations: List<HandlerRegistration>,
             perRunAllowed: Boolean,
+            errors: MutableList<RegistrationError>,
         ): HandlerRegistry {
             val entries = mutableMapOf<Pair<String, RevisionNumber>, Handler?>()
-            val errors = mutableListOf<RegistrationError>()
             for (registration in registrations) {
                 val parsed = parse(registration.name)
                 if (parsed == null) {
@@ -67,7 +67,6 @@ class HandlerRegistry internal constructor(
                     else -> entries[name to revision] = registration.handler
                 }
             }
-            if (errors.isNotEmpty()) throw KleinException(errors)
             return HandlerRegistry(declarations, entries)
         }
 
@@ -119,9 +118,10 @@ fun EnvironmentContract.implement(
     vararg registrations: HandlerRegistration,
     transact: (block: () -> Unit) -> Unit = { it() },
 ): Environment {
-    val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList(), perRunAllowed = true)
-    val unregistered = registry.unregistered()
-    if (unregistered.isNotEmpty()) throw KleinException(unregistered)
+    val errors = mutableListOf<RegistrationError>()
+    val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList(), perRunAllowed = true, errors)
+    errors += registry.unregistered()
+    if (errors.isNotEmpty()) throw KleinException(errors)
     return Environment(this, registry, transact)
 }
 
@@ -160,7 +160,9 @@ class Environment internal constructor(
         log: EffectLog? = null,
         persist: (LogEntry) -> Unit = {},
     ): RunOutcome {
-        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false)
+        val errors = mutableListOf<RegistrationError>()
+        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors)
+        if (errors.isNotEmpty()) throw KleinException(errors)
         contract.resolvePins(edition.pins)
         val missing = handlers.missingHandlers()
         if (missing.isNotEmpty()) throw KleinException(missing)
