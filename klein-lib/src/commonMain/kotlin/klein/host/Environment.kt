@@ -28,7 +28,7 @@ fun immediate(
     answer: (List<Value>) -> Value,
 ) = HandlerRegistration(name, Handler.Immediate(answer))
 
-fun immediate(name: String) = HandlerRegistration(name, null)
+fun perRun(name: String) = HandlerRegistration(name, null)
 
 fun deferred(
     name: String,
@@ -43,6 +43,7 @@ class HandlerRegistry internal constructor(
         internal fun fromRegistrations(
             declarations: List<ContractDeclaration>,
             registrations: List<HandlerRegistration>,
+            perRunAllowed: Boolean,
         ): HandlerRegistry {
             val entries = mutableMapOf<Pair<String, RevisionNumber>, Handler?>()
             val errors = mutableListOf<RegistrationError>()
@@ -59,6 +60,8 @@ class HandlerRegistry internal constructor(
                         errors.add(RegistrationError("'$name' revision ${revision.value} is registered but the contract does not declare it"))
                     registration.handler is Handler.Deferred && declaration is ContractDeclaration.Value ->
                         errors.add(RegistrationError("'$name' is a value, which is read at start and cannot be deferred"))
+                    registration.handler == null && !perRunAllowed ->
+                        errors.add(RegistrationError("'$name' is supplied per run, so the run must give an implementation for it"))
                     name to revision in entries ->
                         errors.add(RegistrationError("'$name' revision ${revision.value} is registered more than once"))
                     else -> entries[name to revision] = registration.handler
@@ -101,7 +104,7 @@ class HandlerRegistry internal constructor(
 /**
  * Bind a checked contract to a running host: require a registration for every declared
  * `(name, revision)` — an immediate implementation, a deferred one whose ask parks the run after its
- * initiation lambda has run, or the lambda-less marker whose implementation arrives with each run.
+ * initiation lambda has run, or a per-run entry whose implementation arrives with each run.
  * Throws [KleinException] if any declaration is unregistered, any registration names something
  * undeclared, or anything is registered twice. [transact] wraps every unit of a run that pairs host
  * work with a log write — an ask's handler, answer check, and `persist` — so a DB host can commit
@@ -116,7 +119,7 @@ fun EnvironmentContract.implement(
     vararg registrations: HandlerRegistration,
     transact: (block: () -> Unit) -> Unit = { it() },
 ): Environment {
-    val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList())
+    val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList(), perRunAllowed = true)
     val unregistered = registry.unregistered()
     if (unregistered.isNotEmpty()) throw KleinException(unregistered)
     return Environment(this, registry, transact)
@@ -157,7 +160,7 @@ class Environment internal constructor(
         log: EffectLog? = null,
         persist: (LogEntry) -> Unit = {},
     ): RunOutcome {
-        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList())
+        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false)
         contract.resolvePins(edition.pins)
         val missing = handlers.missingHandlers()
         if (missing.isNotEmpty()) throw KleinException(missing)

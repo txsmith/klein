@@ -258,7 +258,7 @@ class RunAgainstReleaseTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
-                immediate("customer"),
+                perRun("customer"),
                 immediate("creditScore") { scoreByTier(it) },
             )
         val edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
@@ -270,13 +270,13 @@ class RunAgainstReleaseTest {
         assertEquals(Value.VBool(true), env.runToValue(edition, immediate("customer") { gold }))
     }
 
-    // A marker is a promise the run makes to the environment; the edition's pins do not shrink it.
+    // A per-run entry is a promise the run makes to the environment; the edition's pins do not shrink it.
     @Test
-    fun aRunMustCompleteEveryMarkerEvenOnesTheEditionNeverCalls() {
+    fun aRunMustImplementEveryPerRunEntryEvenOnesTheEditionNeverCalls() {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
-                immediate("customer"),
+                perRun("customer"),
                 immediate("creditScore") { scoreByTier(it) },
             )
         val edition = contract.compileRule("1 + 1", ReleaseNumber(1)).orFail()

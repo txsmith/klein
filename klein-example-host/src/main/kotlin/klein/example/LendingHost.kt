@@ -7,6 +7,7 @@ import klein.host.Environment
 import klein.host.RunOutcome
 import klein.host.immediate
 import klein.host.implement
+import klein.host.perRun
 import klein.interp.Value
 import java.io.File
 
@@ -26,8 +27,8 @@ class LendingHost(
         contract.implement(
             immediate("creditScore") { Value.VNum(650.0) },
             immediate("creditScore/2") { scoreByTier(it) },
-            immediate("customer"),
-            immediate("customer/2"),
+            perRun("customer"),
+            perRun("customer/2"),
         )
 
     fun decide(

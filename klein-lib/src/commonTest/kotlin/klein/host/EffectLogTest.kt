@@ -155,7 +155,7 @@ class EffectLogTest {
     @Test
     fun aPreFlightErrorThrowsBeforeAnythingRuns() {
         var asked = false
-        val env = contract.implement(immediate("customer"), immediate("threshold"), immediate("creditScore") { asked = true; scoreByTier(it) })
+        val env = contract.implement(perRun("customer"), perRun("threshold"), immediate("creditScore") { asked = true; scoreByTier(it) })
         val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD)) }
         assertEquals(listOf("customer", "threshold"), failure.errors.map { assertIs<MissingHandler>(it).name })
         assertFalse(asked, "pre-flight should reject the run before any capability is asked")
@@ -523,7 +523,7 @@ class EffectLogTest {
 
     @Test
     fun aDeferredRegistrationSatisfiesCompletenessAndCountsAsAHandlerForThePinCheck() {
-        val env = contract.implement(immediate("customer"), immediate("threshold"), deferred("creditScore") {})
+        val env = contract.implement(perRun("customer"), perRun("threshold"), deferred("creditScore") {})
         val outcome = env.run(compile(STANDARD), immediate("customer") { gold }, immediate("threshold") { Value.VNum(620.0) })
         assertIs<RunOutcome.Parked>(outcome)
     }
@@ -532,7 +532,7 @@ class EffectLogTest {
     fun aValueCannotBeDeferred() {
         val thrown =
             assertFailsWith<KleinException> {
-                contract.implement(deferred("customer") {}, immediate("threshold"), immediate("creditScore"))
+                contract.implement(deferred("customer") {}, perRun("threshold"), perRun("creditScore"))
             }
         assertEquals("'customer' is a value, which is read at start and cannot be deferred", thrown.errors.first().message)
     }

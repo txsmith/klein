@@ -300,41 +300,41 @@ class EnvironmentTest {
         assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.diagnostics.single()).name)
     }
 
-    // --- per-run supply: the lambda-less marker (2a; a run supplying it is 2b) ---
+    // --- per-run supply: registered at boot, implemented by each run ---
 
     @Test
-    fun aLambdaLessRegistrationSatisfiesCompleteness() {
+    fun aPerRunEntrySatisfiesCompleteness() {
         assertFailsWith<KleinException> { load(CONTRACT, immediate("maxRetries") { Value.VNum(3.0) }) }
-        val env = load(CONTRACT, immediate("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
+        val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
         assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
     }
 
     @Test
     fun aPerRunEntryHasNoImplementation() {
-        val env = load(CONTRACT, immediate("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
+        val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
         assertEquals(null, env.registry.getHandler("creditCheck", RevisionNumber(1)))
         assertIs<Handler.Immediate>(env.registry.getHandler("maxRetries", RevisionNumber(1)))
     }
 
     @Test
-    fun aPerRunMarkerNamesADeclaredRevision() {
-        val env = load("fun creditScore/2(c: Num): Num", immediate("creditScore/2"))
+    fun aPerRunEntryNamesADeclaredRevision() {
+        val env = load("fun creditScore/2(c: Num): Num", perRun("creditScore/2"))
         assertEquals(RevisionNumber(2), env.capabilities.single().revision)
         assertEquals(null, env.registry.getHandler("creditScore", RevisionNumber(2)))
     }
 
     @Test
-    fun aPerRunMarkerForAnUndeclaredNameFails() {
-        val error = assertFailsWith<KleinException> { loadAll(CONTRACT, immediate("nope")) }
+    fun aPerRunEntryForAnUndeclaredNameFails() {
+        val error = assertFailsWith<KleinException> { loadAll(CONTRACT, perRun("nope")) }
         assertTrue(error.message!!.contains("nope"), "message should name the capability: ${error.message}")
     }
 
     @Test
-    fun aPerRunMarkerCountsAsARegistrationForDuplicates() {
+    fun aPerRunEntryCountsAsARegistrationForDuplicates() {
         assertFailsWith<KleinException> {
             load(
                 CONTRACT,
-                immediate("creditCheck"),
+                perRun("creditCheck"),
                 immediate("creditCheck") { Value.VNum(1.0) },
                 immediate("maxRetries") { Value.VNum(3.0) },
             )
@@ -342,24 +342,34 @@ class EnvironmentTest {
     }
 
     @Test
-    fun aMarkerIsUnregisteredForNothingButMissingAHandler() {
-        val env = load(CONTRACT, immediate("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
+    fun aPerRunEntryIsUnregisteredForNothingButMissingAHandler() {
+        val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
         assertEquals(emptyList(), env.registry.unregistered())
         assertEquals(listOf("creditCheck"), env.registry.missingHandlers().map { it.name })
+    }
+
+    @Test
+    fun aPerRunEntryGivenToARunIsARegistrationError() {
+        val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
+        val edition = Klein.checkContract(CONTRACT).compileRule("maxRetries", ReleaseNumber(1)).orFail()
+        val error = assertFailsWith<KleinException> { env.run(edition, perRun("creditCheck")) }
+        val problem = assertIs<RegistrationError>(error.errors.single())
+        assertEquals("'creditCheck' is supplied per run, so the run must give an implementation for it", problem.message)
     }
 
     // --- combining registries: the run's entries win ---
 
     @Test
-    fun aLaterRegistryReplacesAMarkerAndABootHandler() {
+    fun aLaterRegistryReplacesAPerRunEntryAndABootHandler() {
         val contract = Klein.checkContract(CONTRACT)
-        val boot = contract.implement(immediate("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
-        val perRun =
+        val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
+        val forRun =
             HandlerRegistry.fromRegistrations(
                 contract.declarations,
                 listOf(immediate("creditCheck") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(5.0) }),
+                perRunAllowed = false,
             )
-        val combined = boot + perRun
+        val combined = boot + forRun
         assertEquals(emptyList(), combined.missingHandlers())
         val maxRetries = assertIs<Handler.Immediate>(combined.getHandler("maxRetries", RevisionNumber(1)))
         assertEquals(Value.VNum(5.0), maxRetries.answer(emptyList()))
@@ -368,9 +378,10 @@ class EnvironmentTest {
     @Test
     fun combiningLeavesTheLeftSideUntouchedWhereTheRightIsSilent() {
         val contract = Klein.checkContract(CONTRACT)
-        val boot = contract.implement(immediate("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
-        val perRun = HandlerRegistry.fromRegistrations(contract.declarations, listOf(immediate("creditCheck") { Value.VNum(1.0) }))
-        val combined = boot + perRun
+        val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
+        val forRun =
+            HandlerRegistry.fromRegistrations(contract.declarations, listOf(immediate("creditCheck") { Value.VNum(1.0) }), perRunAllowed = false)
+        val combined = boot + forRun
         val maxRetries = assertIs<Handler.Immediate>(combined.getHandler("maxRetries", RevisionNumber(1)))
         assertEquals(Value.VNum(3.0), maxRetries.answer(emptyList()))
         assertEquals(listOf("creditCheck"), boot.missingHandlers().map { it.name })
