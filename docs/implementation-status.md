@@ -147,4 +147,4 @@ evolution).
 | Feature | Notes |
 |---------|-------|
 | Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
-| Persistence | Edition storage (source + release + pins); machine state is never serialized, per the persist-the-log ADR — see [host-integration-roadmap.md](host-integration-roadmap.md) |
+| Persistence | Edition storage per [spec/edition.md](spec/edition.md): source, language version, pins, the Core with its compiler version, and a checksum; decoded fresh, or stale with a reason (checksum mismatch, language changed, compiler changed, declaration changed) for the host to re-derive from source. Machine state is never serialized, per the persist-the-log ADR |
