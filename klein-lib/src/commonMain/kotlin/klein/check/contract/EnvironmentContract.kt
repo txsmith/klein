@@ -202,8 +202,8 @@ class EnvironmentContract internal constructor(
     internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolvedPins.getOrPut(pins) { resolveSurface(closePins(pins)) }
 
     private fun closePins(pins: Map<String, RevisionNumber>): Map<String, RevisionNumber> {
-        // The pins given here need not be closed: a hand-written or migrated set, or the names a
-        // source used, can lead (implicitly) to more pins being part of the actual full surface.
+        // The pins given here need not be closed: the names a source used, or pins recorded before the
+        // contract changed, can lead (implicitly) to more pins being part of the actual full surface.
         // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
         // A release goes through the same path; the contract checker already demands it be closed, so the closure adds nothing.
         val surface = mutableMapOf<String, RevisionNumber>()

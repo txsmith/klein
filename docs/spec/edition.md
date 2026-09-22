@@ -143,15 +143,16 @@ the artifact too, or re-derivation will silently produce a different program.
 ## Migration
 
 An artifact is never migrated. A migration produces a **new edition** from an old one's recorded
-inputs: the source, possibly transformed, compiled against pins that may point at other
-revisions. Compiling against pins is the same operation as re-derivation: the pins given may cover more
-than the rule depends on, and the new edition pins exactly what it depends on. Moving a rule from `creditScore/1`
-to `creditScore/2` is compiling its source against pins that say `creditScore/2`: the source is
-checked against revision 2's signature, and either it fits or the diagnostics say what must
-change. How the toolkit transforms source, and what the host keeps as the editable form of a
-rule, is the migration toolkit's concern ([roadmap.md](../roadmap.md) §Migration toolkit), not
-this spec's. The artifact records the source it was compiled from, verbatim, whatever produced
-it.
+source, possibly transformed, compiled against a release: the release the rule is moving to. A
+release is always the goal, because a rule is migrated when the release it was on is retired,
+and the pins of the new edition are computed from that release like any other compile. Moving a
+rule from `creditScore/1` to `creditScore/2` is compiling its source against a release that
+points at `creditScore/2`: the source is checked against revision 2's signature, and either it
+fits or the diagnostics say what must change. Compiling against recorded pins, with no release,
+is re-derivation only. How the toolkit transforms source, and what the host keeps as the editable
+form of a rule, is the migration toolkit's concern ([roadmap.md](../roadmap.md) §Migration
+toolkit), not this spec's. The artifact records the source it was compiled from, verbatim,
+whatever produced it.
 
 ## Encodings
 
