@@ -17,8 +17,11 @@ keyed) is the host's, as it is for the effect log.
 An artifact holds:
 
 - the rule **source**, verbatim, and the **language version** it was written in;
-- the **pins**: each name the rule uses, at the revision it was compiled against;
-- the **Core**, opaque, with the **lowerer version** that produced it;
+- the **pins**: every declaration the edition depends on, the names the source wrote and every
+  declaration their signatures reach, each at the revision it was compiled against, with a hash
+  of that declaration as it was compiled against (a capability's signature, a type's
+  definition);
+- the **Core**, opaque, with the **compiler version** that produced it;
 - a **checksum** over the whole.
 
 The source, the language version, and the pins are the inputs: everything the loader needs to
@@ -35,63 +38,89 @@ the Core's layout is not part of this spec.
 The artifact carries two versions, each answered differently:
 
 - **The language version**, on the source. The source cannot be re-derived from anything, so a
-  version the parser no longer reads is not something loading can recover from: it is a
-  migration trigger, the migration toolkit's job (see [roadmap.md](../roadmap.md) §Migration
-  toolkit).
-- **The lowerer version**, on the Core. It changes when lowering produces different Core for the
-  same source. A stored Core whose lowerer version is not the current one is discarded and
+  version the parser no longer reads is not something loading can recover from: decoding
+  returns the artifact stale, reason **language changed**, and rewriting the source is the
+  migration toolkit's job (see [roadmap.md](../roadmap.md) §Migration toolkit).
+- **The compiler version**, on the Core. It changes when lowering produces different Core for the
+  same source. A stored Core whose compiler version is not the current one is discarded and
   re-derived.
 
 ## The checksum
 
-The checksum guards the artifact's integrity. It is a hash over the whole artifact: the language
-version, the source, the pins, the lowerer version, and the Core. An artifact is immutable, so a mismatch means the artifact is not what was written:
-a damaged or partial write, or a copy that was altered. The stored Core is then not to be trusted,
-because the machine runs Core unverified by decision (the
-[no-load-time-verifier ADR](../decisions/2026-07-20-no-load-time-verifier.md)), and the checksum
-is what stands in for that verifier.
+The checksum ties the stored Core to the inputs it was compiled from. It is a hash over the whole
+artifact: the language version, the source, the pins, the compiler version, and the Core. A
+mismatch means the Core and the inputs no longer agree. Because the source is truth, the response
+is to re-derive from the recorded inputs; a re-derivation that fails is the sign that something
+was actually damaged. The stored Core is never run after a mismatch.
 
 The hash is computed from the artifact's contents, so it does not depend on how the artifact is
 encoded: the same edition has the same checksum on every platform and in every encoding.
 
+## The pin hash
+
+Each pin carries a hash of the declaration it was compiled against, so that an edit to a
+signature or a type definition at an unchanged revision is visible to whatever reads the pins.
+The hash detects a change. It never decides whether the change was acceptable: recompiling the
+rule decides that. So it is not a cryptographic hash, and a collision costs one recompile that
+was skipped.
+
+The hash is computed from the checked declaration, walked as a tree, never from printed text.
+What is in it:
+
+- for a capability, its whole type: each parameter's name and type, in order, and the result;
+  for a value capability, its type;
+- for a type, its parameters and every constructor's name and fields, whatever the rule uses;
+- every type the declaration reaches by name, with the revision it reaches it at, but not that
+  type's own definition: a change there moves that type's own pin.
+
+What is not in it: the declaration's own revision, which the pin records beside the hash; the
+order of record fields and of constructors; the names of type variables, which are numbered by
+first appearance. So `fun pick(x: 'A, y: 'A): 'A` and the same declaration written with `'T`
+hash the same, while renaming a parameter or adding a constructor does not.
+
 ## Decoding
 
-Decoding takes an encoded artifact and answers the edition, together with whether the stored
-Core was used or the edition was re-derived, and if re-derived, why. Like compiling, it answers
-diagnostics instead of an edition when re-derivation finds the source no longer checks (see
-Errors). In order:
+Decoding takes an encoded artifact and the contract, and answers one of two things: the
+edition with its stored Core; or the recorded inputs without Core, with the reason the
+stored Core is stale and can not be used. Re-compiling a stale edition is the host's
+next step and may fail when the source no longer checks (see Errors). In order:
 
 - The artifact is read; one that cannot be read is an error and yields nothing.
-- The checksum is recomputed from the decoded contents. If it differs from the stored one, the
-  stored Core is ignored and the edition is re-derived: reason **checksum mismatch**.
-- Otherwise, if the Core's lowerer version is not the current one, the stored Core is ignored and
-  the edition is re-derived: reason **lowerer changed**.
-- Otherwise the stored Core is used as is.
+- The reader recomputes the checksum from what it read, before the Core is opened. If it differs
+  from the stored one, the artifact is stale: reason **checksum mismatch**.
+- Otherwise, if the source's language version is one the parser no longer reads, the artifact is
+  stale: reason **language changed**. Re-derivation cannot follow; the source must be migrated
+  first.
+- Otherwise, if the Core's compiler version is not the current one, the artifact is stale: reason
+  **compiler changed**.
+- Otherwise each recorded pin is looked up in the contract at its revision. A pin the contract
+  does not declare is an error (see Errors). A pin whose recorded hash differs from the
+  contract's declaration at that revision means a signature or a type was edited in place: the
+  artifact is stale, reason **declaration changed**.
+- Otherwise the artifact is intact, and the edition is returned with the stored Core as is.
 
-A re-derived edition is a fresh compile from the recorded inputs, and the artifact it came from is
-stale: its Core is out of date or damaged. The host should store the re-derived edition's
-artifact in its place. Until it does, every decode re-derives again. Decoding never writes
-anything itself.
+A stale artifact still yields its recorded inputs whole, so a rule whose source no longer checks
+can still be read, shown, and migrated. A re-derived edition is a fresh compile from those
+inputs, and the artifact it came from is out of date or damaged. The host should store the
+re-derived edition's artifact in its place. Until it does, every decode answers stale again.
+Decoding never writes anything itself.
 
-Decoding needs the contract only on the re-derivation path. An intact, current artifact yields an
-edition without compiling; its pins are still checked against the contract when the edition is
-run, as for any edition.
+Decoding reads the contract's declarations only to compare hashes. An intact artifact's edition
+is ready to run without compiling; the run still checks that the host implements every pinned
+revision, as for any edition. 
 
 ## Re-derivation
 
-Re-derivation compiles the recorded source against the recorded pins, not against a release.
-The pins are exactly the names the source uses, each at one revision; together with everything
-those declarations' signatures reach, they form a complete typing surface, the same one the run
-uses to check answers. The source is parsed and checked against that surface, lowered, and its
-pins are computed again: the names it uses, at the recorded revisions. A recorded pin the source
-does not use is dropped, not an error. For an intact artifact the pins come out as recorded,
-since they were computed from that source; re-derivation fails only when the contract has
-changed underneath:
+When the stored Core cannot be used, the host compiles the recorded source against the recorded
+pins. This is the same as a fresh compilation except it uses the recorded pins instead of a pre-determined release. The result is a new edition, with its pins computed again
+from what the source reaches; a recorded pin the source no longer reaches is dropped. Two things
+can go wrong, both because the contract changed since the artifact was written:
 
 - A pin names a revision the contract no longer declares: thrown per pin, the same host error
   the run's pre-flight check throws.
-- The source no longer checks against the pinned signatures, because a declaration was edited in
-  place: the checker's diagnostics.
+- A declaration was edited in place at a pinned revision: the source is compiled against it as
+  it now stands. Either the new edition carries the new hash, or the diagnostics say why the
+  source no longer fits.
 
 Because no artifact records a release and re-derivation never reads one, removing a release from a contract changes nothing
 about any existing edition. Loading, running, resuming a parked run, and re-deriving all go
@@ -110,7 +139,7 @@ the artifact too, or re-derivation will silently produce a different program.
 An artifact is never migrated. A migration produces a **new edition** from an old one's recorded
 inputs: the source, possibly transformed, compiled against pins that may point at other
 revisions. Compiling against pins is the same operation as re-derivation: the pins given may cover more
-than the source uses, and the new edition pins exactly what it used. Moving a rule from `creditScore/1`
+than the rule depends on, and the new edition pins exactly what it depends on. Moving a rule from `creditScore/1`
 to `creditScore/2` is compiling its source against pins that say `creditScore/2`: the source is
 checked against revision 2's signature, and either it fits or the diagnostics say what must
 change. How the toolkit transforms source, and what the host keeps as the editable form of a
@@ -135,15 +164,18 @@ might read:
   "format": "klein-edition",
   "version": 1,
   "language": 1,
-  "pins": { "Customer": 2, "creditScore": 1 },
+  "pins": {
+    "Customer": { "revision": 2, "hash": "3c8d1f0a9b7e6d54" },
+    "creditScore": { "revision": 1, "hash": "b41e0c9d2a7f5e63" }
+  },
   "source": "score = creditScore(customer)\nif score > 600 then Approve else Decline",
-  "core": "S0NPUgEAAAAG...",
+  "core": "AQgAAAABAA...",
   "checksum": "9a3f0c1e77b2d4a8"
 }
 ```
 
 Every part of the artifact is visible: the inputs as they are, the Core as an opaque
-unit carrying its lowerer version, and the checksum. A binary encoding would carry exactly the
+unit carrying its compiler version, and the checksum. A binary encoding would carry exactly the
 same contents and produce exactly the same checksum.
 
 ## Errors
@@ -157,11 +189,15 @@ Host errors, thrown, one per fault:
 - **Unknown pin**: a recorded pin names a revision the contract does not declare. One per pin,
   the same error the run's pre-flight check throws.
 
-Diagnostics, returned beside no edition: re-derivation found that the source no longer checks
-against the pinned signatures, because a declaration was edited in place. They carry spans into
-the recorded source.
+A declaration edited in place is not an error: decoding returns stale, reason declaration
+changed, and re-derivation says what changed through its diagnostics, if anything.
 
-Nothing here is an outcome: decoding answers an edition, or diagnostics, or throws. A host that
+Diagnostics, returned beside no edition: as from any compile. With matching declarations the
+recorded source checks as it did when the artifact was written, so diagnostics from
+re-derivation mean the compiler itself changed what it accepts, or a declaration was edited in
+place in a way the source does not fit. They carry spans into the recorded source.
+
+Nothing here is an outcome: decoding returns an edition, or stale inputs, or throws. A host that
 gets a host error has an artifact that is damaged or one written against a contract that has
 since dropped a revision; a host that gets diagnostics has a rule that needs its author.
 

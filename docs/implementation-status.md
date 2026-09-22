@@ -147,4 +147,4 @@ evolution).
 | Feature | Notes |
 |---------|-------|
 | Tracing & instrumentation | Full/budgeted/elided call recording, fuel |
-| Persistence | Edition storage per [spec/edition.md](spec/edition.md): source, language version, pins, the Core with its lowerer version, and a checksum; re-derived from source on a stale lowerer version or a checksum mismatch. Machine state is never serialized, per the persist-the-log ADR |
+| Persistence | Edition storage per [spec/edition.md](spec/edition.md): source, language version, pins, the Core with its compiler version, and a checksum; decoded fresh, or stale with a reason (checksum mismatch, language changed, compiler changed, declaration changed) for the host to re-derive from source. Machine state is never serialized, per the persist-the-log ADR |

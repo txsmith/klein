@@ -2,9 +2,9 @@
 
 **Status:** Current · **Date:** 2026-07-31
 
-A suspended run is persisted as exactly two things: a reference to its edition (source, release,
-and pin map, with the stored Core re-derived on a stamp or checksum mismatch, per source-is-truth),
-and the log of host answers so far —
+A suspended run is persisted as exactly two things: a reference to its edition (source and pins,
+with the stored Core re-derived on a stamp or checksum mismatch, per source-is-truth; the release
+is host metadata beside the rule, not part of the edition), and the log of host answers so far —
 the values it started with and the call responses.
 **Machine state is never serialized.** Cold resume re-runs the program from the start,
 feeding logged responses back until the log runs out, then continues live. The machine is

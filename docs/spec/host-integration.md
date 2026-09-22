@@ -140,9 +140,11 @@ contract.
 ### Edition
 
 A compiled artifact of one version of a rule. A version is what an author creates by editing rule
-source. An edition is that version compiled: the program lowered to Klein Core, plus a map recording,
-for each capability and type the rule uses, the name it wrote and the revision the release it was
-compiled against pointed at. Each entry of that map is a **pin**. The stored form of an edition,
+source. An edition is that version compiled: the program lowered to Klein Core, plus a map recording
+every declaration the edition depends on: for each name the rule wrote, and for every
+declaration those signatures reach, the revision the release it was compiled against pointed at
+and a hash of that declaration as it was compiled against (a capability's signature, a type's
+definition). Each entry of that map is a **pin**. The stored form of an edition,
 and how loading rebuilds it from source and pins without any release, is
 [edition.md](./edition.md).
 
@@ -171,26 +173,29 @@ pins. Compiling one source against two releases yields the same program with dif
 Pins bind each capability call in the compiled program to a host implementation. When a run
 starts or resumes, every call is dispatched to the implementation of exactly the pinned revision.
 
-Pins have two more jobs. During evolution, comparing pins against the current contract finds the
-editions a change affects and skips the rest. During serving, a host checks the pins against the
-revisions it implements to decide whether it can run the edition.
+Pins have two more jobs. During evolution, comparing each pin's recorded hash with the
+contract's current declaration finds the editions a change affects and skips the rest. During
+serving, a host checks the pins against the revisions it implements to decide whether it can run
+the edition, and when it loads an edition's artifact it compares the hashes with the
+declarations it holds (see [edition.md](./edition.md) §Decoding).
 
 ### Run
 
-One execution of one edition, from its triggering event to its final result. Because an edition is
-its rule checked and compiled against one release, the release a rule was checked against is the
-release it runs against — there is no way to run anything else. A run may suspend on
-a capability call and resume later, possibly weeks later. A suspended run is **parked**. A run
+One execution of one edition, from its triggering event to its final result. A run executes an
+edition against exactly its pins; no release is involved at run time, and there is no way to run
+a rule against anything but the declarations its edition was compiled against. A run may suspend
+on a capability call and resume later, possibly weeks later. A suspended run is **parked**. A run
 records which edition it executes and its effect log. Through the edition's pins, a parked run
 keeps revisions alive: the host may not remove a revision while a parked run may still ask it
 live.
 
 A run is guarded at both ends of the capability boundary. It refuses to start unless the host can
-answer every pin. A missing implementation or an undeclared revision fails the run before its
-first effect, naming the capability, so a rule never performs half its effects and then hits an
-unanswerable call. Every answer is checked against the declared type as it arrives: a wrong-shaped 
-answer fails the run at that call, naming the capability, what it gave and what was
-declared, and the value never enters the program. 
+answer every pin as compiled. A missing implementation or an undeclared revision fails the run
+before its first effect, naming the capability, so a rule never performs half its effects and
+then hits an unanswerable call. A declaration edited in place is caught when the edition's artifact
+is loaded. Every answer is checked against the declared type as it arrives: a wrong-shaped answer 
+fails the run at that call, naming the capability, what it gave and what was declared, and the value
+never enters the program.
 
 ### Turn
 
@@ -219,46 +224,54 @@ record's shape, replay, divergence, outcomes — are specified in [effect-log.md
 ### Reconciliation
 
 The act of recompiling rules against an evolved contract. When a signature is edited in place or a
-release is re-pointed, each affected rule's unchanged source is compiled again, against the same
-release it recorded. A clean check is the new edition. A failed check produces a report with the
-diagnostics, and the rule keeps running on its existing editions.
+release is re-pointed, each affected rule's unchanged source is compiled again: against the
+release the host recorded for the rule, which yields new pins. A clean check is the new edition.
+A failed check produces a report with the diagnostics, and the rule keeps running on its existing
+editions.
 
 Reconciliation never changes a rule's release. It recompiles rules where they stand, so an
-appended release affects nobody until an author selects it. How that report reaches the author is the org's
-choice: an email, a chat message, a warning in the rule editor.
+appended release affects nobody until an author selects it. How that report reaches the author is
+the org's choice: an email, a chat message, a warning in the rule editor.
 
-Reconciliation is incremental. Comparing each edition's pins against the current contract finds
-the affected rules and skips the rest. The pinned hash detects that a declaration changed. It
-never decides whether the change is acceptable. Recompilation decides that.
+Reconciliation is incremental, and pins are what make it so. A pin records a hash of the
+declaration the edition was compiled against, not only its name and revision, and the pins cover
+everything the edition reaches, so comparing each edition's pins with the contract's current
+declarations finds exactly the editions an in-place edit touched, and
+comparing them with what the rule's release now points at finds the editions a re-point touched.
+Everything else is untouched as a fact, not as a recompile that happened to change nothing. The
+comparison detects that a declaration changed. It never decides whether the change is acceptable.
+Recompilation decides that.
 
 Reconciliation is safe to perform at any time. Editions only accrue, and each host serves only
-editions whose pins it implements. Done early, the new editions sit unused until hosts catch up. Done
-after a rollback, migrating back is a lookup, because the old editions still exist. Done twice,
-pin comparison skips the finished work. In practice it happens when the fleet has converged on a
-new contract.
+editions whose pins it implements. Done early, the new editions sit unused until hosts catch up.
+Done after a rollback, migrating back is a lookup, because the old editions still exist. Done
+twice, the comparison finds nothing left to do. In practice it happens when the fleet has
+converged on a new contract.
 
 A failed recompile has two urgencies. Under a re-pointed release the rule waits safely, because
 the old revision is still declared and served. Under an in-place signature change there is no old
 revision to stay on once the fleet flips. When that failure is caught, in a CI check, at boot, or
 at first reconciliation, is future work.
 
-The hash also enforces the revision discipline. An incompatible in-place edit, or any edit to a
-type definition at an unchanged revision, appears as a hash mismatch and is reported as a
-contract error.
+The same comparison enforces the revision discipline. An edit to a type definition at an
+unchanged revision, like any in-place edit, shows as a pin mismatch on every edition that pins
+it, at reconciliation and when the edition's artifact is loaded; whether the edit was legitimate
+is what recompilation then answers.
 
 ### Drain
 
 The countdown to deleting a capability revision. Two counts fall toward zero: rules whose newest
 edition still pins the revision, and parked runs pinned to it. The first count falls through
 reconciliation and author edits. The second falls as parked runs finish. A run records its
-edition, and the edition carries both its release and its pins, so both counts are one join over
-data the host already stores.
+edition, the edition carries its pins, and the host keeps each rule's release beside the rule, so
+both counts are one join over data the host already stores.
 
 Retiring a release is not gated by any of this. Deleting a block is always allowed: it stops new
 compiles against that release and nothing else, since everything already running dispatches
 through pinned revisions. Retiring is what *begins* a drain rather than what waits for one — from
-that moment, rules recorded on the retired release cannot be recompiled, and hold their editions
-until someone moves them.
+that moment, rules recorded on the retired release cannot be compiled against it again (their
+editions still load and re-derive through their pins), so an author must choose another release
+before such a rule can change.
 
 So the release count is a decision aid, not a permission check. Watching it fall to zero as
 authors migrate is the patient path; retiring earlier is the blunt one, and it strands nobody —
@@ -294,8 +307,8 @@ and the next release is 3.
   other mechanism in this doc operates inside one environment.
 - **Rules** are written against an environment and compiled against one of its **releases**, which
   is chosen per rule and travels with the compile request; **compiling** produces an **edition**
-  that records that release and whose **pins** freeze exactly which capability/type versions it
-  touches.
+  whose **pins** freeze exactly which capability/type versions it touches and what they declared;
+  the host records the release beside the rule.
 - An **event** at an environment's invocation site targets a *rule*; the serving host runs the
   newest edition whose pins it implements, which is what makes a heterogeneous mid-deploy
   fleet safe.
@@ -393,7 +406,8 @@ Nothing migrates, and that is the point. Every rule is on release 1, and stays o
 until its author decides otherwise. The author of `eligibility-standard` selects release 2 and
 saves `creditScore(customer) >= 640`, reconsidering the threshold against the new bureau's scale.
 That is the judgment no machine could make. The rule source barely changed; what changed is which
-release it is compiled against. Its first edition records release 2 and pins `creditScore/2`.
+release it is compiled against. The host records release 2 for it, and its first edition pins
+`creditScore/2`, and still `customer` and `Customer` at revision 1, which it reaches as before.
 
 ```
 $ klein drain release 1
@@ -481,8 +495,8 @@ $ klein reconcile plan eligibility.klein
 2 rules untouched: they pin creditScore/1, which did not change
 ```
 
-The pinned hash of `creditScore/3` no longer matches, so whoever pinned it recompiles. The two
-rules on release 1 never pinned `/3`, so they are not checked further. Had a recompile failed
+The pinned hash of `creditScore/3` no longer matches the contract's declaration, so whoever
+pinned it recompiles. The two rules on release 1 never pinned `/3`, so they are not checked further. Had a recompile failed
 here, the change was not compatible after all, and the report gates the deployment: unlike a
 revision bump, an in-place change leaves no old world to wait on once the fleet flips.
 
@@ -522,9 +536,9 @@ it, restoring the revision lets it finish, and the removal ships again later.
 - Every edition is checked **exactly once, at creation**. Its source and its pinned dependencies
   are all immutable, so the verdict is permanent; evolution creates and supersedes editions, it
   never invalidates one.
-- Pin hash comparison skips everything untouched: a capability change re-checks only the rules
-  whose editions pin it. This is memoization, not a compatibility oracle — a hash mismatch means
-  "go run the checker", nothing more.
+- Pin comparison skips everything untouched: a capability change re-checks only the rules whose
+  editions pin a hash that differs from the contract's declaration. This is memoization, not a
+  compatibility oracle — a mismatch means "go run the checker", nothing more.
 - The authoritative question is always "does this rule compile against these versions", answered
   by the real checker, run **where the rules live** (the org's store, the org's process). No
   subtype shortcut substitutes for it; the shortcuts only shrink how often it runs.
@@ -556,8 +570,8 @@ Klein.
 
 The "by procedure" half of the agreement, gathered in one place. The host:
 
-- Stores rules, versions, editions, runs and effect logs. Guarantees are only as strong as this
-  storage.
+- Stores editions, each rule's release and author beside it, rule text that is not yet an
+  edition, runs and effect logs. Guarantees are only as strong as this storage.
 - Decides when turns run, and persists each run's effect log as the run hands it back. How
   durable, and how often, is the host's own choice.
 - Retries or abandons a turn whose handler failed. The log holds only completed turns, so a
