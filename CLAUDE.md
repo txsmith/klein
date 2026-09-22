@@ -238,7 +238,7 @@ klein-lang/
 │   │   │   │       ├── UnknownPin.kt           # The one pin error: an edition pins what the contract does not declare
 │   │   │   │       ├── ResolvedRelease.kt      # A release materialised: types + revisions, bindingFor
 │   │   │   │       ├── UsedCapabilities.kt     # The used-capability pass (expression, type, pattern positions); CapabilityInAnswer
-│   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map
+│   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map + the surface the pins resolve to
 │   │   │   │       └── Projection.kt           # strip(): the one ContractType -> RuleType crossing
 │   │   │   └── host/             # The embedding surface a host calls
 │   │   │       ├── Environment.kt    # implement { }, Registry, Handler (immediate and deferred), run; RegistrationError

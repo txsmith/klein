@@ -128,7 +128,7 @@ class ResolvedSurfaceTest {
 
     @Test
     fun resolvePinsAcceptsADeclarationATypeAndAConstructor() {
-        val surface = contract.resolvePins(mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Circle" to RevisionNumber(2)))
+        val surface = contract.resolvePins(mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Circle" to RevisionNumber(2))).getOrThrow()
         assertEquals(
             mapOf("riskBand" to RevisionNumber(2), "Flag" to RevisionNumber(2), "Shape" to RevisionNumber(2), "Customer" to RevisionNumber(2)),
             surface.pins,
@@ -138,9 +138,9 @@ class ResolvedSurfaceTest {
     }
 
     @Test
-    fun resolvePinsThrowsAnUnknownPinPerUnknownNameOrRevision() {
+    fun resolvePinsReportsAnUnknownPinPerUnknownNameOrRevision() {
         val pins = mapOf("creditScore" to RevisionNumber(1), "riskBand" to RevisionNumber(1), "Flag" to RevisionNumber(1), "nobody" to RevisionNumber(1))
-        val errors = assertFailsWith<KleinException> { contract.resolvePins(pins) }.errors
+        val errors = assertFailsWith<KleinException> { contract.resolvePins(pins).getOrThrow() }.errors
         assertEquals(
             listOf("riskBand" to RevisionNumber(1), "Flag" to RevisionNumber(1), "nobody" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision },

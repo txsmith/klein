@@ -144,9 +144,11 @@ source. An edition is that version compiled: the program lowered to Klein Core, 
 every declaration the edition depends on: for each name the rule wrote, and for every
 declaration those signatures reach, the revision the release it was compiled against pointed at
 and a hash of that declaration as it was compiled against (a capability's signature, a type's
-definition). Each entry of that map is a **pin**. The stored form of an edition,
-and how loading rebuilds it from source and pins without any release, is
-[edition.md](./edition.md).
+definition). Each entry of that map is a **pin**. The edition also carries its **surface**: the
+types and signatures those pins resolve to, built once by whatever made the edition, compiling
+or loading its artifact. The surface is not stored; loading rebuilds it from the pins. The
+stored form of an edition, and how loading rebuilds it from source and pins without any
+release, is [edition.md](./edition.md).
 
 An edition is how an accepted rule is stored. It carries the source it was compiled from,
 verbatim, so an accepted version needs no store of its own. Everything that can run is an
@@ -189,14 +191,16 @@ records which edition it executes and its effect log. Through the edition's pins
 keeps revisions alive: the host may not remove a revision while a parked run may still ask it
 live.
 
-A run is guarded at both ends of the capability boundary. It refuses to start unless the contract
-declares every pin as compiled and the host has an implementation for every declared capability,
-whether the edition calls it or not: the run does not know what the rule will ask until it runs.
-A missing implementation or an undeclared revision fails the run before its first effect, naming
-the capability, so a rule never performs half its effects and then hits an unanswerable call. A declaration edited in place is caught when the edition's artifact
-is loaded. Every answer is checked against the declared type as it arrives: a wrong-shaped answer 
-fails the run at that call, naming the capability, what it gave and what was declared, and the value
-never enters the program.
+A run is guarded at both ends of the capability boundary. It refuses to start unless the host
+has an implementation for every declared capability, whether the edition calls it or not: the
+run does not know what the rule will ask until it runs. A missing implementation fails the run
+before its first effect, naming the capability, so a rule never performs half its effects and
+then hits an unanswerable call. The run trusts the edition's pins and surface: an edition exists
+only because the contract compiled it or loaded its artifact, and both resolve the pins then. A
+pin the contract does not declare, or a declaration edited in place, is caught at that moment,
+never by a run. Every answer is checked against the declared type as it arrives, using the
+edition's surface: a wrong-shaped answer fails the run at that call, naming the capability, what
+it gave and what was declared, and the value never enters the program.
 
 ### Turn
 

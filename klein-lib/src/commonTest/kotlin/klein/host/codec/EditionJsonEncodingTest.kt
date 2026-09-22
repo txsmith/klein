@@ -116,6 +116,16 @@ private val WITHOUT_REVISION_1 =
       creditScore/2
     """.trimIndent()
 
+private val STRUCTURAL_LENDING =
+    """
+    customer: { id: Num, tier: String }
+    fun creditScore(c: { id: Num, tier: String }): Num
+
+    release 1
+      customer
+      creditScore
+    """.trimIndent()
+
 private fun assertRederives(stale: DecodedEdition.Stale): Edition = contract.compileRule(stale.source, stale.pins).orFail()
 
 private fun assertStaleCredit(): DecodedEdition.Stale {
@@ -342,12 +352,78 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aRecordedPinTheContractDoesNotDeclareIsAnUnknownPinAtDecode() {
-        val errors = assertFailsWith<KleinException> { Klein.checkContract(WITHOUT_REVISION_1).decodeEditionJson(document()) }.errors
+    fun aRecordedPinTheContractDoesNotDeclareIsUnknownPinsNamingEachOne() {
+        val decoded = assertStale(document(), against = Klein.checkContract(WITHOUT_REVISION_1))
+        val reason = assertIs<StaleReason.UnknownPins>(decoded.reason)
+        assertEquals(
+            mapOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
+            reason.pins,
+        )
+        assertEquals(LanguageVersion.CURRENT, decoded.language)
+        assertEquals(CREDIT_RULE, decoded.source)
+    }
+
+    @Test
+    fun anUnknownPinIsLeftOutOfTheStaleInputs() {
+        val decoded = assertStale(document(), against = Klein.checkContract(WITHOUT_REVISION_1))
+        assertEquals(emptyMap(), decoded.pins)
+    }
+
+    @Test
+    fun rederivingAgainstTheRecordedPinsOfAnUnknownPinArtifactIsAnUnknownPinPerPin() {
+        val without = Klein.checkContract(WITHOUT_REVISION_1)
+        val errors = assertFailsWith<KleinException> { without.compileRule(CREDIT_RULE, creditPins) }.errors
         assertEquals(
             setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
         )
+        assertEquals("pin 'Customer' revision 1 names a revision the contract does not declare", errors.map { it.message }.min())
+    }
+
+    @Test
+    fun aRollbackToBeforeAStillPinnedRevisionRefusesTheEditionWhenItIsLoaded() {
+        val twoRevisions =
+            """
+            fun creditScore(c: Num): Num
+            fun creditScore/2(c: Num): Num
+
+            release 1
+              creditScore
+
+            release 2
+              creditScore/2
+            """.trimIndent()
+        val rolledBack =
+            """
+            fun creditScore(c: Num): Num
+
+            release 1
+              creditScore
+
+            release 2
+              creditScore
+            """.trimIndent()
+        val edition = Klein.checkContract(twoRevisions).compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()
+        val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(rolledBack))
+        assertEquals(mapOf("creditScore" to RevisionNumber(2)), assertIs<StaleReason.UnknownPins>(decoded.reason).pins)
+        assertEquals(emptyMap(), decoded.pins)
+    }
+
+    @Test
+    fun removingOnlyATypeTheRuleReachesRefusesTheEditionWhenItIsLoaded() {
+        val edition = assertCreditCompiles()
+        assertEquals(RevisionNumber(1), edition.pins["Customer"], "the closure should pin the type creditScore reaches: ${edition.pins}")
+        val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(STRUCTURAL_LENDING))
+        assertEquals(mapOf("Customer" to RevisionNumber(1)), assertIs<StaleReason.UnknownPins>(decoded.reason).pins)
+        assertEquals(edition.pinsWithHash - "Customer", decoded.pins)
+        assertEquals(edition.source, decoded.source)
+    }
+
+    @Test
+    fun aDecodedEditionRunsOnItsOwnSurfaceWithoutTheHostResolvingItsPins() {
+        val decoded = assertIntact(encodeEditionJson(assertCreditCompiles()))
+        val hostWithoutTheType = lendingHost(Klein.checkContract(STRUCTURAL_LENDING))
+        assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(hostWithoutTheType.run(decoded)).value)
     }
 
     @Test

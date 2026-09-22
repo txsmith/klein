@@ -94,8 +94,8 @@ class EnvironmentContract internal constructor(
 ) {
     val releases: List<ReleaseNumber> get() = releasePins.keys.toList()
 
-    // TODO: this is where hashing a pin set would come in handy. A Map as Map keys is not great...
-    private val resolvedPins = mutableMapOf<Map<String, RevisionNumber>, ResolvedSurface>()
+    private val resolvedReleases: Map<ReleaseNumber, Lazy<ResolvedSurface>> =
+        releasePins.mapValues { (_, pins) -> lazy { resolvePins(pins).getOrThrow() } }
 
     /**
      * Type-check [ruleSource] against exactly [release]. The rule is the author's document, so its
@@ -110,7 +110,7 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         ruleSource: String,
         release: ReleaseNumber,
-    ): Checked<Edition> = compileRule(ruleSource, getReleasePins(release))
+    ): Checked<Edition> = compile(ruleSource, resolveRelease(release))
 
     fun compileRule(
         source: String,
@@ -121,18 +121,19 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         source: String,
         pins: Map<String, RevisionNumber>,
-    ): Checked<Edition> {
-        val surface = resolvePins(pins)
-        return parseAndCheck(source, surface).andThen { rule ->
+    ): Checked<Edition> = compile(source, resolvePins(pins).getOrThrow())
+
+    private fun compile(
+        source: String,
+        surface: ResolvedSurface,
+    ): Checked<Edition> =
+        parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
-            val editionPins =
-                closePins(used.associateWith(surface::getRevision)).mapValues { (name, revision) ->
-                    Pin(revision, hashOf(name, revision)!!)
-                }
+            val editionSurface = resolvePins(used.associateWith(surface::getRevision)).getOrThrow()
+            val editionPins = editionSurface.pins.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
+            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
         }
-    }
 
     /**
      * Compile [source] as a pure expression of type [expected] against [release] — a host answering
@@ -194,14 +195,10 @@ class EnvironmentContract internal constructor(
         return contractTypeEnv.hashTypeDefinition(contractTypeEnv.collapseToType(name, revision), revision)
     }
 
-    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface = resolvePins(getReleasePins(release))
+    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
+        resolvedReleases[release]?.value ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
-    private fun getReleasePins(release: ReleaseNumber): Map<String, RevisionNumber> =
-        releasePins[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
-
-    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolvedPins.getOrPut(pins) { resolveSurface(closePins(pins)) }
-
-    private fun closePins(pins: Map<String, RevisionNumber>): Map<String, RevisionNumber> {
+    internal fun resolvePins(pins: Map<String, RevisionNumber>): PinResolution {
         // The pins given here need not be closed: the names a source used, or pins recorded before the
         // contract changed, can lead (implicitly) to more pins being part of the actual full surface.
         // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
@@ -224,11 +221,11 @@ class EnvironmentContract internal constructor(
                 unknown.add(UnknownPin(name, revision))
             }
         }
-        if (unknown.isNotEmpty()) throw KleinException(unknown)
+        if (unknown.isNotEmpty()) return PinResolution.Unknown(unknown)
         for ((reachedName, reachedRevision) in roots.reachableTypeNames(contractTypeEnv)) {
             surface[reachedName] = reachedRevision
         }
-        return surface
+        return PinResolution.Resolved(resolveSurface(surface))
     }
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {
@@ -263,6 +260,22 @@ class EnvironmentContract internal constructor(
             )
         }
     }
+}
+
+internal sealed interface PinResolution {
+    class Resolved(
+        val surface: ResolvedSurface,
+    ) : PinResolution
+
+    class Unknown(
+        val pins: List<UnknownPin>,
+    ) : PinResolution
+
+    fun getOrThrow(): ResolvedSurface =
+        when (this) {
+            is Resolved -> surface
+            is Unknown -> throw KleinException(pins)
+        }
 }
 
 /** Each release or set of pins from an edition forms a surface of what the release exposes or what the edition demands */

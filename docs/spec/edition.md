@@ -100,20 +100,25 @@ next step and may fail when the source no longer checks (see Errors). In order:
 - Otherwise, if the Core's compiler version is not the current one, the artifact is stale: reason
   **compiler changed**.
 - Otherwise each recorded pin is looked up in the contract at its revision. A pin the contract
-  does not declare is an error (see Errors). A pin whose recorded hash differs from the
-  contract's declaration at that revision means a signature or a type was edited in place: the
-  artifact is stale, reason **declaration changed**.
+  does not declare makes the artifact stale, reason **unknown pins**: the reason names each
+  such pin, and the inputs returned leave them out, since nothing can compile against them. A
+  pin whose recorded hash differs from the contract's declaration at that revision means a
+  signature or a type was edited in place: the artifact is stale, reason **declaration
+  changed**.
 - Otherwise the artifact is intact, and the edition is returned with the stored Core as is.
 
-A stale artifact still yields its recorded inputs whole, so a rule whose source no longer checks
-can still be read, shown, and migrated. A re-derived edition is a fresh compile from those
+A stale artifact still yields its recorded inputs, so a rule whose source no longer checks can
+still be read, shown, and migrated. Whatever the reason, the source stays readable: the rule
+whose pins the contract no longer knows is the one that most needs migrating. A re-derived edition is a fresh compile from those
 inputs, and the artifact it came from is out of date or damaged. The host should store the
 re-derived edition's artifact in its place. Until it does, every decode answers stale again.
 Decoding never writes anything itself.
 
-Decoding reads the contract's declarations only to compare hashes. An intact artifact's edition
-is ready to run without compiling; the run still checks that the host implements every pinned
-revision, as for any edition. 
+Decoding resolves the recorded pins into the edition's surface: the types and signatures the
+rule was checked against, as the contract declares them at the pinned revisions. Compiling
+builds the same surface from the pins it computes. The edition carries it, and the run reads it
+from there: the run resolves nothing and asks the contract for nothing about the pins. An intact
+artifact's edition is ready to run without compiling, as any edition is.
 
 ## Re-derivation
 
@@ -122,8 +127,8 @@ pins. This is the same as a fresh compilation except it uses the recorded pins i
 from what the source reaches; a recorded pin the source no longer reaches is dropped. Two things
 can go wrong, both because the contract changed since the artifact was written:
 
-- A pin names a revision the contract no longer declares: thrown per pin, the same host error
-  the run's pre-flight check throws.
+- A pin names a revision the contract no longer declares: thrown per pin. Decoding already
+  named such pins in its reason, so this is a host re-deriving where it should migrate.
 - A declaration was edited in place at a pinned revision: the source is compiled against it as
   it now stands. Either the new edition carries the new hash, or the diagnostics say why the
   source no longer fits.
@@ -193,11 +198,13 @@ diagnostic is returned.
 Host errors, thrown, one per fault:
 
 - **Unreadable**: the artifact cannot be read. Names what was expected and where.
-- **Unknown pin**: a recorded pin names a revision the contract does not declare. One per pin,
-  the same error the run's pre-flight check throws.
+- **Unknown pin**: compiling against recorded pins, and a pin names a revision the contract
+  does not declare. One per pin, from the one step that resolves pins. Decoding does not throw
+  it, and a run never does: an edition exists only because the contract compiled or decoded it,
+  and its pins were resolved then.
 
-A declaration edited in place is not an error: decoding returns stale, reason declaration
-changed, and re-derivation says what changed through its diagnostics, if anything.
+Whatever decoding can explain is not an error: it returns the artifact stale with the reason,
+as §Decoding lists them.
 
 Diagnostics, returned beside no edition: as from any compile. With matching declarations the
 recorded source checks as it did when the artifact was written, so diagnostics from
@@ -205,8 +212,8 @@ re-derivation mean the compiler itself changed what it accepts, or a declaration
 place in a way the source does not fit. They carry spans into the recorded source.
 
 Nothing here is an outcome: decoding returns an edition, or stale inputs, or throws. A host that
-gets a host error has an artifact that is damaged or one written against a contract that has
-since dropped a revision; a host that gets diagnostics has a rule that needs its author.
+gets a host error has an artifact that is damaged, or re-derived where it should have migrated;
+a host that gets diagnostics has a rule that needs its author.
 
 ## What the host owns
 

@@ -42,14 +42,17 @@ round-trip through a binary and a JSON encoding, both version-stamped. The rules
 **Editions at rest.** An edition is stored as an immutable artifact: its source and language
 version, its pins, its Core as an opaque blob carrying the compiler version, and a checksum over
 the whole. To load a stored edition, the host decodes it against the contract and gets one of
-two things: the edition, when the artifact is intact; or the recorded inputs with a reason the stored Core
-cannot be used (the checksum does not match, the compiler changed, or a pinned declaration was
-edited in place). In the second case the host compiles the recorded inputs again with
+two things: the edition, when the artifact is intact; or the recorded inputs with the reason the
+stored Core cannot be used, as the spec lists them. In the second case the host compiles the recorded inputs again with
 `compileRule(source, pins)`. Compiling against a release turns the release into its pin map and
 makes the same call. An edition pins every type and capability its source reaches, never a
 constructor, and each pin carries a hash of its declaration. Re-derivation goes through the
-pins, never a release, so removing a release touches nothing already compiled. Along the way handler registrations became values and
-the registry immutable, and the pin check moved to the one place that resolves pins. The rules
+pins, never a release, so removing a release touches nothing already compiled. An edition
+carries the surface its pins resolve to, built once when it is compiled or decoded; a run reads
+it and never resolves pins, and the contract keeps no memo of resolved pin sets (each release
+keeps one lazily built surface, which is thread-safe). Along the way handler registrations
+became values and the registry immutable, and the pin check moved to the one step that
+resolves pins, shared by compiling and decoding. The rules
 are in [spec/edition.md](./spec/edition.md). Two notes for later features: the artifact must
 capture everything a release contributes to compilation (the result sink is the first feature
 that will test that), and the checksum needs only a deterministic walk, not a canonical form, so
@@ -139,8 +142,7 @@ reports to rule authors is the org's job, not the library's.
 
 The change detector already exists: every pin carries the hash of its declaration, so
 the reconciler compares each edition's pins with the contract's declarations and recompiles only
-the editions where one differs. A hash of a whole pin set could still serve as the
-surface-resolution memo key in `EnvironmentContract`.
+the editions where one differs.
 
 ### Call markers, trace modes, error traces
 
@@ -158,10 +160,6 @@ Small, unblocked, and easy to lose:
   and checked at the run's pre-flight, closes that; the pin hashes are not compared at run time
   by decision.
 - **`klein-bench` is in no routine check** and silently stopped compiling for two phases.
-- **The surface-resolution memos are not thread-safe**, and `run` touches the pin memo on every
-  call (twice when replaying: the pre-flight log check and the run itself). Two threads running
-  editions against one shared `Environment` race on a plain mutable map. Needs a multiplatform
-  locking decision; until then an `Environment` is single-threaded.
 - **The CLI exits 0 on usage errors** — unknown command, unknown option for a command. Matters as
   soon as `klein check` goes in a hook or a CI script.
 

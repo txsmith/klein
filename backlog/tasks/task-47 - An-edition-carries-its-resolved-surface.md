@@ -1,9 +1,11 @@
 ---
 id: TASK-47
 title: An edition carries its resolved surface
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-22 13:21'
+updated_date: '2026-09-22 17:20'
 labels:
   - host-boundary
 dependencies:
@@ -19,8 +21,34 @@ Resolving an edition's pins into its typing surface happens twice on the loading
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An edition holds the resolved surface of its pins, set by compile and by decode, and the run's pre-flight and log check read it instead of resolving pins
-- [ ] #2 Unknown pin is thrown by one code path, the pin closure, which decode and compile both call
-- [ ] #3 The run never touches the surface-resolution memo; the memo is removed if nothing else needs it
-- [ ] #4 edition.md and host-integration.md describe the carried surface and the roadmap's memo loose end is closed
+- [x] #1 An edition holds the resolved surface of its pins, set by compile and by decode, and the run's pre-flight and log check read it instead of resolving pins
+- [x] #2 Unknown pin is thrown by one code path, the pin closure, which decode and compile both call
+- [x] #3 The run never touches the surface-resolution memo; the memo is removed if nothing else needs it
+- [x] #4 edition.md and host-integration.md describe the carried surface and the roadmap's memo loose end is closed
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Edition gains an internal surface field; compile and decode set it through one internal resolve function that closes the pins and throws UnknownPin
+2. Run, pre-flight and log check read edition.surface; the run does no pin check of its own
+3. Remove the per-pin-map memo; releases keep a lazy per-release memo
+4. Move the four run-time drain tests to decode; add decoded-edition-runs test and same-message test for unknown pins from decode and compile
+5. Update edition.md, host-integration.md, roadmap loose end, CLAUDE.md listing
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decision with Thomas (2026-09-22): the in-memory edition is the trust boundary. The run does no pin check of its own; an undeclared pin is caught when the edition is made (compile or decode). The four run-time removal tests moved to the decode suite. Verified: klein-lib allTests (minus jsBrowserTest) and klein-example-host test both exit 0.
+
+Follow-up in review (2026-09-22): decode no longer throws UnknownPin; an undeclared recorded pin returns Stale with reason DeclarationRemoved and the inputs whole, so a rule on a removed revision can still be read and migrated. Only compiling against pins throws UnknownPin.
+
+Review follow-up: the stale reason is a sealed type; UnknownPins carries each unknown pin by name and revision, and Stale.pins leaves them out. The reasons are listed once, in edition.md §Decoding; other doc mentions say only 'stale, with a reason'.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Edition carries an internal ResolvedSurface set by compile (from its closed pins) and decode (from the recorded pins); run, pre-flight and log check read it. resolvePins (closePins + resolveSurface) is the one path that throws UnknownPin, called by compile and decode. The pin-set memo is gone; each release keeps a lazy surface. Specs, roadmap loose end and CLAUDE.md listing updated. Verified with the full multiplatform suite and the example host tests.
+<!-- SECTION:FINAL_SUMMARY:END -->

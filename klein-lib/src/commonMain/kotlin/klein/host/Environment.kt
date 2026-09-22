@@ -163,7 +163,6 @@ class Environment internal constructor(
         val errors = mutableListOf<RegistrationError>()
         val supplied = HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors)
         if (errors.isNotEmpty()) throw KleinException(errors)
-        contract.resolvePins(edition.pins)
         val missing = registry.missingHandlers(supplied)
         if (missing.isNotEmpty()) throw KleinException(missing)
         if (log != null) {

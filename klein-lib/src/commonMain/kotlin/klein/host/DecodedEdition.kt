@@ -1,10 +1,23 @@
 package klein.host
 
 import klein.LanguageVersion
+import klein.RevisionNumber
 import klein.check.contract.Edition
 import klein.check.contract.Pin
 
-enum class StaleReason { ChecksumMismatch, LanguageChanged, CompilerChanged, DeclarationChanged }
+sealed interface StaleReason {
+    data object ChecksumMismatch : StaleReason
+
+    data object LanguageChanged : StaleReason
+
+    data object CompilerChanged : StaleReason
+
+    class UnknownPins internal constructor(
+        val pins: Map<String, RevisionNumber>,
+    ) : StaleReason
+
+    data object DeclarationChanged : StaleReason
+}
 
 sealed interface DecodedEdition {
     class Intact internal constructor(
