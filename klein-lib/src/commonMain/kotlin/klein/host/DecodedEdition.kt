@@ -4,7 +4,7 @@ import klein.LanguageVersion
 import klein.check.contract.Edition
 import klein.check.contract.Pin
 
-enum class StaleReason { ChecksumMismatch, LanguageChanged, CompilerChanged, DeclarationChanged }
+enum class StaleReason { ChecksumMismatch, LanguageChanged, CompilerChanged, DeclarationRemoved, DeclarationChanged }
 
 sealed interface DecodedEdition {
     class Intact internal constructor(

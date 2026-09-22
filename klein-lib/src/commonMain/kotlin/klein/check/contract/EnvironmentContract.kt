@@ -129,10 +129,10 @@ class EnvironmentContract internal constructor(
     ): Checked<Edition> =
         parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
-            val closed = closePins(used.associateWith(surface::getRevision))
-            val editionPins = closed.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
+            val editionSurface = resolvePins(used.associateWith(surface::getRevision))
+            val editionPins = editionSurface.pins.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, resolveSurface(closed)))
+            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
         }
 
     /**
@@ -198,9 +198,29 @@ class EnvironmentContract internal constructor(
     internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
         resolvedReleases[release]?.value ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
-    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolveSurface(closePins(pins))
+    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
+        when (val closure = closePins(pins)) {
+            is Closure.Closed -> resolveSurface(closure.pins)
+            is Closure.Unknown -> throw KleinException(closure.pins)
+        }
 
-    private fun closePins(pins: Map<String, RevisionNumber>): Map<String, RevisionNumber> {
+    internal fun resolvePinsIfDeclared(pins: Map<String, RevisionNumber>): ResolvedSurface? =
+        when (val closure = closePins(pins)) {
+            is Closure.Closed -> resolveSurface(closure.pins)
+            is Closure.Unknown -> null
+        }
+
+    private sealed interface Closure {
+        class Closed(
+            val pins: Map<String, RevisionNumber>,
+        ) : Closure
+
+        class Unknown(
+            val pins: List<UnknownPin>,
+        ) : Closure
+    }
+
+    private fun closePins(pins: Map<String, RevisionNumber>): Closure {
         // The pins given here need not be closed: the names a source used, or pins recorded before the
         // contract changed, can lead (implicitly) to more pins being part of the actual full surface.
         // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
@@ -223,11 +243,11 @@ class EnvironmentContract internal constructor(
                 unknown.add(UnknownPin(name, revision))
             }
         }
-        if (unknown.isNotEmpty()) throw KleinException(unknown)
+        if (unknown.isNotEmpty()) return Closure.Unknown(unknown)
         for ((reachedName, reachedRevision) in roots.reachableTypeNames(contractTypeEnv)) {
             surface[reachedName] = reachedRevision
         }
-        return surface
+        return Closure.Closed(surface)
     }
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {

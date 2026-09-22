@@ -44,7 +44,7 @@ version, its pins, its Core as an opaque blob carrying the compiler version, and
 the whole. To load a stored edition, the host decodes it against the contract and gets one of
 two things: the edition, when the artifact is intact; or the recorded inputs with a reason the stored Core
 cannot be used (the checksum does not match, the compiler changed, or a pinned declaration was
-edited in place). In the second case the host compiles the recorded inputs again with
+removed or edited in place). In the second case the host compiles the recorded inputs again with
 `compileRule(source, pins)`. Compiling against a release turns the release into its pin map and
 makes the same call. An edition pins every type and capability its source reaches, never a
 constructor, and each pin carries a hash of its declaration. Re-derivation goes through the

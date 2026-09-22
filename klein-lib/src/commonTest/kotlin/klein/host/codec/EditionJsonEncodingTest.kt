@@ -352,21 +352,24 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aRecordedPinTheContractDoesNotDeclareIsAnUnknownPinAtDecode() {
-        val errors = assertFailsWith<KleinException> { Klein.checkContract(WITHOUT_REVISION_1).decodeEditionJson(document()) }.errors
+    fun aRecordedPinTheContractDoesNotDeclareIsDeclarationRemovedWithTheInputsWhole() {
+        val decoded = assertStale(document(), against = Klein.checkContract(WITHOUT_REVISION_1))
+        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
+        assertEquals(LanguageVersion.CURRENT, decoded.language)
+        assertEquals(creditPins, decoded.pins)
+        assertEquals(CREDIT_RULE, decoded.source)
+    }
+
+    @Test
+    fun rederivingFromInputsWithARemovedDeclarationIsAnUnknownPinPerPin() {
+        val without = Klein.checkContract(WITHOUT_REVISION_1)
+        val decoded = assertStale(document(), against = without)
+        val errors = assertFailsWith<KleinException> { without.compileRule(decoded.source, decoded.pins) }.errors
         assertEquals(
             setOf("creditScore" to RevisionNumber(1), "customer" to RevisionNumber(1), "Customer" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision }.toSet(),
         )
-    }
-
-    @Test
-    fun unknownPinsReadTheSameFromDecodeAndFromCompile() {
-        val without = Klein.checkContract(WITHOUT_REVISION_1)
-        val fromDecode = assertFailsWith<KleinException> { without.decodeEditionJson(document()) }.errors
-        val fromCompile = assertFailsWith<KleinException> { without.compileRule(CREDIT_RULE, creditPins) }.errors
-        assertEquals(fromDecode.map { it.message }.sorted(), fromCompile.map { it.message }.sorted())
-        assertEquals("pin 'Customer' revision 1 names a revision the contract does not declare", fromDecode.map { it.message }.min())
+        assertEquals("pin 'Customer' revision 1 names a revision the contract does not declare", errors.map { it.message }.min())
     }
 
     @Test
@@ -393,18 +396,18 @@ class EditionJsonEncodingTest {
               creditScore
             """.trimIndent()
         val edition = Klein.checkContract(twoRevisions).compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()
-        val errors = assertFailsWith<KleinException> { Klein.checkContract(rolledBack).decodeEditionJson(encodeEditionJson(edition)) }.errors
-        val pin = assertIs<UnknownPin>(errors.single())
-        assertEquals("creditScore" to RevisionNumber(2), pin.name to pin.revision)
+        val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(rolledBack))
+        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
+        assertEquals(edition.pinsWithHash, decoded.pins)
     }
 
     @Test
     fun removingOnlyATypeTheRuleReachesRefusesTheEditionWhenItIsLoaded() {
         val edition = assertCreditCompiles()
         assertEquals(RevisionNumber(1), edition.pins["Customer"], "the closure should pin the type creditScore reaches: ${edition.pins}")
-        val errors = assertFailsWith<KleinException> { Klein.checkContract(STRUCTURAL_LENDING).decodeEditionJson(encodeEditionJson(edition)) }.errors
-        val pin = assertIs<UnknownPin>(errors.single())
-        assertEquals("Customer" to RevisionNumber(1), pin.name to pin.revision)
+        val decoded = assertStale(encodeEditionJson(edition), against = Klein.checkContract(STRUCTURAL_LENDING))
+        assertEquals(StaleReason.DeclarationRemoved, decoded.reason)
+        assertEquals(edition.source, decoded.source)
     }
 
     @Test

@@ -64,7 +64,7 @@ private class Artifact(
         if (editionChecksum(language, source, pins, coreBytes) != checksum) return stale(StaleReason.ChecksumMismatch)
         if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
         if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
-        val surface = contract.resolvePins(pins.mapValues { it.value.revision })
+        val surface = contract.resolvePinsIfDeclared(pins.mapValues { it.value.revision }) ?: return stale(StaleReason.DeclarationRemoved)
         if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
         return DecodedEdition.Intact(Edition(language, decodeCore(coreBytes), pins, source, surface))
     }
