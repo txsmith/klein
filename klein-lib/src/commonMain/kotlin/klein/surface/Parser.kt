@@ -54,6 +54,7 @@ private class Parser(
      */
     fun parseContract(): ContractExpr {
         val start = peek().span
+        val environment = parseEnvironmentHeader()
         val types = mutableListOf<TypeDef<*>>()
         val declarations = mutableListOf<CapabilityDeclaration>()
         val releases = mutableListOf<ReleaseBlock>()
@@ -64,6 +65,8 @@ private class Parser(
                     peek().kind == TYPE -> parseTypeDef(::contractRevision).also { types.add(it) }.span
                     peek().kind == FUN -> parseFunDecl().also { declarations.add(it) }.span
                     isReleaseHeader() -> parseReleaseBlock().also { releases.add(it) }.span
+                    isEnvironmentHeader() ->
+                        syntaxError("A contract names its environment once, before its declarations", peek().span)
                     isDestructuringBinding() ->
                         syntaxError(definitionInContract(parsePattern().boundNames.firstOrNull()), peek().span)
                     isBinding() -> parseValDecl().also { declarations.add(it) }.span
@@ -77,7 +80,31 @@ private class Parser(
                 syntaxError("Expected newline but got ${peek()}", peek().span)
             }
         }
-        return ContractExpr(types, declarations, releases, start + end)
+        return ContractExpr(environment, types, declarations, releases, start + end)
+    }
+
+    private fun isEnvironmentHeader(): Boolean =
+        peek().kind == IDENT && peek().text == "environment" && isEnvironmentName(peekAt(1)) && peekAt(1).indent == null
+
+    private fun isEnvironmentName(token: Token): Boolean = token.kind == IDENT || token.kind == UPPER_IDENT || token.kind == STRING
+
+    private fun parseEnvironmentHeader(): String {
+        if (!isEnvironmentHeader()) {
+            syntaxError("A contract starts with the name of its environment: environment <name>", peek().span)
+        }
+        advance()
+        val nameToken = advance()
+        val name = nameToken.text!!
+        if (name.isEmpty()) {
+            syntaxError("An environment name cannot be empty", nameToken.span)
+        }
+        if (name.any { it == '\n' || it == '\r' }) {
+            syntaxError("An environment name cannot span lines", nameToken.span)
+        }
+        if (!canEndStatement()) {
+            syntaxError("The environment header takes one name and nothing else, got ${peek()}", peek().span)
+        }
+        return name
     }
 
     /**
