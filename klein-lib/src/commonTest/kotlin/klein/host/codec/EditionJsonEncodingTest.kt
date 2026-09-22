@@ -10,9 +10,8 @@ import klein.check.contract.EnvironmentContract
 import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.Environment
-import klein.host.Rederivation
 import klein.host.RunOutcome
-import klein.host.UnreadableEdition
+import klein.host.StaleReason
 import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
@@ -244,7 +243,7 @@ class EditionJsonEncodingTest {
         val damaged = creditCore.copyOf()
         damaged[damaged.size - 1] = (damaged[damaged.size - 1].toInt() xor 0x01).toByte()
         val decoded = assertStale(document("core" to "\"${base64(damaged)}\""))
-        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         assertEquals(CREDIT_RULE, decoded.source)
         assertEquals(creditPins, decoded.pins)
         val rederived = assertRederives(decoded)
@@ -257,7 +256,7 @@ class EditionJsonEncodingTest {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
         val decoded = assertStale(documentWithCore(foreign))
-        assertEquals(Rederivation.CompilerChanged, decoded.reason)
+        assertEquals(StaleReason.CompilerChanged, decoded.reason)
         assertEquals(CREDIT_RULE, decoded.source)
         assertEquals(creditPins, decoded.pins)
         val rederived = assertRederives(decoded)
@@ -269,7 +268,7 @@ class EditionJsonEncodingTest {
     fun aForeignCompilerVersionWithAStaleChecksumIsAChecksumMismatch() {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
-        assertEquals(Rederivation.ChecksumMismatch, assertStale(document("core" to "\"${base64(foreign)}\"")).reason)
+        assertEquals(StaleReason.ChecksumMismatch, assertStale(document("core" to "\"${base64(foreign)}\"")).reason)
     }
 
     @Test
@@ -300,7 +299,7 @@ class EditionJsonEncodingTest {
     @Test
     fun anEditedSourceIsAChecksumMismatchAndRederivesFromTheEditedSource() {
         val decoded = assertStale(document("source" to "\"creditScore(customer) >= 800\""))
-        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         val rederived = assertRederives(decoded)
         assertEquals("creditScore(customer) >= 800", rederived.source)
         assertEquals(Value.VBool(false), assertIs<RunOutcome.Completed>(lendingHost(contract).run(rederived)).value)
@@ -309,14 +308,14 @@ class EditionJsonEncodingTest {
     @Test
     fun anEditedPinIsAChecksumMismatchAndRederivesAgainstTheEditedPins() {
         val decoded = assertStale(document("pins" to """{"Customer":1,"creditScore":1,"customer":1}"""))
-        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         assertEquals(creditPins, assertRederives(decoded).pins)
     }
 
     @Test
     fun aPinEditedToARevisionTheContractLacksIsAnUnknownPin() {
         val decoded = assertStale(document("pins" to """{"creditScore":2,"customer":1}"""))
-        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         val errors = assertFailsWith<KleinException> { contract.compileRule(decoded.source, decoded.pins) }.errors
         val unknown = assertIs<UnknownPin>(errors.single())
         assertEquals("creditScore" to RevisionNumber(2), unknown.name to unknown.revision)
@@ -325,7 +324,7 @@ class EditionJsonEncodingTest {
     @Test
     fun aWellFormedChecksumThatDoesNotMatchIsAMismatchNotUnreadable() {
         val decoded = assertStale(document("checksum" to "\"fedcba9876543210\""))
-        assertEquals(Rederivation.ChecksumMismatch, decoded.reason)
+        assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         assertEquals(CREDIT_RULE, decoded.source)
     }
 
@@ -342,7 +341,7 @@ class EditionJsonEncodingTest {
     @Test
     fun anUnknownLanguageVersionIsLanguageChangedWithTheInputsWhole() {
         val decoded = assertStale(documentInLanguage(7))
-        assertEquals(Rederivation.LanguageChanged, decoded.reason)
+        assertEquals(StaleReason.LanguageChanged, decoded.reason)
         assertEquals(LanguageVersion(7), decoded.language)
         assertEquals(CREDIT_RULE, decoded.source)
         assertEquals(creditPins, decoded.pins)
@@ -350,14 +349,14 @@ class EditionJsonEncodingTest {
 
     @Test
     fun aChecksumMismatchIsReportedBeforeAnUnknownLanguageVersion() {
-        assertEquals(Rederivation.ChecksumMismatch, assertStale(document("language" to "7")).reason)
+        assertEquals(StaleReason.ChecksumMismatch, assertStale(document("language" to "7")).reason)
     }
 
     @Test
     fun anUnknownLanguageVersionIsReportedBeforeAForeignCompilerVersion() {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
-        assertEquals(Rederivation.LanguageChanged, assertStale(documentInLanguage(7, foreign)).reason)
+        assertEquals(StaleReason.LanguageChanged, assertStale(documentInLanguage(7, foreign)).reason)
     }
 
     @Test

@@ -19,7 +19,6 @@ import klein.core.PrimOp
 import klein.core.Run
 import klein.core.ScopeStmt
 import klein.core.Var
-import klein.host.UnreadableEdition
 
 private const val NODE_LITERAL = 0
 private const val NODE_VAR = 1

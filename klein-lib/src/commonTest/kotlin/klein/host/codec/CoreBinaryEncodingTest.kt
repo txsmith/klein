@@ -42,7 +42,6 @@ import klein.core.str
 import klein.core.unit
 import klein.core.v
 import klein.host.RunOutcome
-import klein.host.UnreadableEdition
 import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value

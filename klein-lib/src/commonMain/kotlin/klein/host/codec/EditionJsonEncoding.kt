@@ -1,18 +1,22 @@
 package klein.host.codec
 
 import klein.CompilerVersion
+import klein.HostError
 import klein.KleinException
 import klein.LanguageVersion
 import klein.RevisionNumber
 import klein.check.contract.Edition
 import klein.host.DecodedEdition
-import klein.host.Rederivation
-import klein.host.UnreadableEdition
+import klein.host.StaleReason
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 private const val FORMAT_MARKER = "klein-edition"
 private const val JSON_VERSION = 1
+
+class UnreadableEdition internal constructor(
+    override val message: String,
+) : HostError
 
 @OptIn(ExperimentalEncodingApi::class)
 fun encodeEditionJson(edition: Edition): String {
@@ -64,13 +68,13 @@ private fun readEdition(text: String): DecodedEdition {
     val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
     if (editionChecksum(language, source, pins, coreBytes) != checksum) {
-        return DecodedEdition.Stale(language, pins, source, Rederivation.ChecksumMismatch)
+        return DecodedEdition.Stale(language, pins, source, StaleReason.ChecksumMismatch)
     }
     if (language != LanguageVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, Rederivation.LanguageChanged)
+        return DecodedEdition.Stale(language, pins, source, StaleReason.LanguageChanged)
     }
     if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, Rederivation.CompilerChanged)
+        return DecodedEdition.Stale(language, pins, source, StaleReason.CompilerChanged)
     }
     return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
 }
