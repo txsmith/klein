@@ -128,7 +128,7 @@ fun EnvironmentContract.implement(
 /** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
  *  has it. Checking rules needs none of this — that is [EnvironmentContract]'s job. */
 class Environment internal constructor(
-    val contract: EnvironmentContract,
+    internal val contract: EnvironmentContract,
     internal val registry: HandlerRegistry,
     internal val transact: (block: () -> Unit) -> Unit,
 ) {

@@ -63,14 +63,14 @@ private fun readEdition(text: String): DecodedEdition {
     val source = sourceJson.value
     val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
-    if (language != LanguageVersion.CURRENT) {
-        reject("the edition was written in language version $language; this library reads language version ${LanguageVersion.CURRENT}")
-    }
     if (editionChecksum(language, source, pins, coreBytes) != checksum) {
         return DecodedEdition.Stale(language, pins, source, Rederivation.ChecksumMismatch)
     }
+    if (language != LanguageVersion.CURRENT) {
+        return DecodedEdition.Stale(language, pins, source, Rederivation.LanguageChanged)
+    }
     if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) {
-        return DecodedEdition.Stale(language, pins, source, Rederivation.LowererChanged)
+        return DecodedEdition.Stale(language, pins, source, Rederivation.CompilerChanged)
     }
     return DecodedEdition.Fresh(Edition(language, decodeCore(coreBytes), pins, source))
 }

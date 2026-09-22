@@ -9,7 +9,7 @@ class UnreadableEdition internal constructor(
     override val message: String,
 ) : HostError
 
-enum class Rederivation { ChecksumMismatch, LowererChanged }
+enum class Rederivation { ChecksumMismatch, LanguageChanged, CompilerChanged }
 
 sealed interface DecodedEdition {
     class Fresh internal constructor(

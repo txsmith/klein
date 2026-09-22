@@ -253,11 +253,11 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aForeignLowererVersionBehindAMatchingChecksumIsLowererChanged() {
+    fun aForeignCompilerVersionBehindAMatchingChecksumIsCompilerChanged() {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
         val decoded = assertStale(documentWithCore(foreign))
-        assertEquals(Rederivation.LowererChanged, decoded.reason)
+        assertEquals(Rederivation.CompilerChanged, decoded.reason)
         assertEquals(CREDIT_RULE, decoded.source)
         assertEquals(creditPins, decoded.pins)
         val rederived = assertRederives(decoded)
@@ -266,7 +266,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aForeignLowererVersionWithAStaleChecksumIsAChecksumMismatch() {
+    fun aForeignCompilerVersionWithAStaleChecksumIsAChecksumMismatch() {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
         assertEquals(Rederivation.ChecksumMismatch, assertStale(document("core" to "\"${base64(foreign)}\"")).reason)
@@ -329,18 +329,35 @@ class EditionJsonEncodingTest {
         assertEquals(CREDIT_RULE, decoded.source)
     }
 
+    private fun documentInLanguage(
+        language: Int,
+        core: ByteArray = creditCore,
+    ): String =
+        document(
+            "language" to "$language",
+            "core" to "\"${base64(core)}\"",
+            "checksum" to "\"${hex(editionChecksum(LanguageVersion(language), CREDIT_RULE, creditPins, core))}\"",
+        )
+
     @Test
-    fun anUnknownLanguageVersionIsUnreadableNamingBothVersions() {
-        val checksum = hex(editionChecksum(LanguageVersion(7), CREDIT_RULE, creditPins, creditCore))
-        val message = assertUnreadable(document("language" to "7", "checksum" to "\"$checksum\"")).message
-        assertTrue(message.contains("7"), message)
-        assertTrue(message.contains("1"), message)
-        assertTrue(message.contains("language"), message)
+    fun anUnknownLanguageVersionIsLanguageChangedWithTheInputsWhole() {
+        val decoded = assertStale(documentInLanguage(7))
+        assertEquals(Rederivation.LanguageChanged, decoded.reason)
+        assertEquals(LanguageVersion(7), decoded.language)
+        assertEquals(CREDIT_RULE, decoded.source)
+        assertEquals(creditPins, decoded.pins)
     }
 
     @Test
-    fun anUnknownLanguageVersionIsUnreadableEvenWhenTheChecksumDoesNotMatch() {
-        assertTrue(assertUnreadable(document("language" to "7")).message.contains("language"))
+    fun aChecksumMismatchIsReportedBeforeAnUnknownLanguageVersion() {
+        assertEquals(Rederivation.ChecksumMismatch, assertStale(document("language" to "7")).reason)
+    }
+
+    @Test
+    fun anUnknownLanguageVersionIsReportedBeforeAForeignCompilerVersion() {
+        val foreign = creditCore.copyOf()
+        foreign[0] = 2
+        assertEquals(Rederivation.LanguageChanged, assertStale(documentInLanguage(7, foreign)).reason)
     }
 
     @Test
