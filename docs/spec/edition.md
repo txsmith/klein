@@ -111,9 +111,11 @@ inputs, and the artifact it came from is out of date or damaged. The host should
 re-derived edition's artifact in its place. Until it does, every decode answers stale again.
 Decoding never writes anything itself.
 
-Decoding reads the contract's declarations only to compare hashes. An intact artifact's edition
-is ready to run without compiling; the run still checks that the host implements every pinned
-revision, as for any edition. 
+Decoding resolves the recorded pins into the edition's surface: the types and signatures the
+rule was checked against, as the contract declares them at the pinned revisions. Compiling
+builds the same surface from the pins it computes. The edition carries it, and the run reads it
+from there: the run resolves nothing and asks the contract for nothing about the pins. An intact
+artifact's edition is ready to run without compiling, as any edition is.
 
 ## Re-derivation
 
@@ -123,7 +125,7 @@ from what the source reaches; a recorded pin the source no longer reaches is dro
 can go wrong, both because the contract changed since the artifact was written:
 
 - A pin names a revision the contract no longer declares: thrown per pin, the same host error
-  the run's pre-flight check throws.
+  decoding throws. Resolving the pins is one step that compiling and decoding share.
 - A declaration was edited in place at a pinned revision: the source is compiled against it as
   it now stands. Either the new edition carries the new hash, or the diagnostics say why the
   source no longer fits.
@@ -194,7 +196,9 @@ Host errors, thrown, one per fault:
 
 - **Unreadable**: the artifact cannot be read. Names what was expected and where.
 - **Unknown pin**: a recorded pin names a revision the contract does not declare. One per pin,
-  the same error the run's pre-flight check throws.
+  from the one step that resolves pins, so compiling against recorded pins throws it the same
+  way. A run never throws it: an edition exists only because the contract compiled or decoded
+  it, and its pins were resolved then.
 
 A declaration edited in place is not an error: decoding returns stale, reason declaration
 changed, and re-derivation says what changed through its diagnostics, if anything.

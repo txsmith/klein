@@ -1,9 +1,11 @@
 ---
 id: TASK-47
 title: An edition carries its resolved surface
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-22 13:21'
+updated_date: '2026-09-22 14:25'
 labels:
   - host-boundary
 dependencies:
@@ -24,3 +26,13 @@ Resolving an edition's pins into its typing surface happens twice on the loading
 - [ ] #3 The run never touches the surface-resolution memo; the memo is removed if nothing else needs it
 - [ ] #4 edition.md and host-integration.md describe the carried surface and the roadmap's memo loose end is closed
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Edition gains an internal surface field; compile and decode set it through one internal resolve function that closes the pins and throws UnknownPin
+2. Run, pre-flight and log check read edition.surface; the run does no pin check of its own
+3. Remove the per-pin-map memo; releases keep a lazy per-release memo
+4. Move the four run-time drain tests to decode; add decoded-edition-runs test and same-message test for unknown pins from decode and compile
+5. Update edition.md, host-integration.md, roadmap loose end, CLAUDE.md listing
+<!-- SECTION:PLAN:END -->
