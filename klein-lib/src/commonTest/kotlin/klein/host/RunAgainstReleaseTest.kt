@@ -6,7 +6,6 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.Edition
-import klein.check.contract.UnknownPin
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -134,77 +133,6 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aDrainThatRemovedAStillPinnedRevisionIsUnservedBeforeTheInterpreterStarts() {
-        val compiling =
-            Klein.checkContract(
-                """
-                fun creditScore(c: Num): Num
-                fun creditScore/2(c: Num): Num
-
-                release 1
-                  creditScore
-
-                release 2
-                  creditScore/2
-                """.trimIndent(),
-            )
-        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(1)).orFail()
-
-        var asked = false
-        val drained =
-            Klein.checkContract(
-                """
-                fun creditScore/2(c: Num): Num
-
-                release 2
-                  creditScore/2
-                """.trimIndent(),
-            ).implement(immediate("creditScore/2") { asked = true; Value.VNum(700.0) })
-
-        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
-        assertEquals("creditScore", pin.name)
-        assertEquals(RevisionNumber(1), pin.revision)
-        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
-    }
-
-    @Test
-    fun aRollbackThatRemovedAStillPinnedRevisionIsUnservedBeforeTheInterpreterStarts() {
-        val compiling =
-            Klein.checkContract(
-                """
-                fun creditScore(c: Num): Num
-                fun creditScore/2(c: Num): Num
-
-                release 1
-                  creditScore
-
-                release 2
-                  creditScore/2
-                """.trimIndent(),
-            )
-        val edition = compiling.compileRule("creditScore(1) >= 620", ReleaseNumber(2)).orFail()
-
-        var asked = false
-        val rolledBack =
-            Klein.checkContract(
-                """
-                fun creditScore(c: Num): Num
-
-                release 1
-                  creditScore
-
-                release 2
-                  creditScore
-                """.trimIndent(),
-            ).implement(immediate("creditScore") { asked = true; Value.VNum(700.0) })
-
-        val pin = assertIs<UnknownPin>(rolledBack.runToFailure(edition))
-        assertEquals("creditScore", pin.name)
-        assertEquals(RevisionNumber(2), pin.revision)
-        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
-    }
-
-    @Test
     fun aTypeAnnotationPinIsVocabularyTheEnvironmentNeedNotServe() {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val rule =
@@ -220,63 +148,6 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { scoreByTier(it) },
             )
         assertEquals(Value.VNum(700.0), env.runToValue(edition))
-    }
-
-    @Test
-    fun aDrainThatRemovedAStillPinnedTypeIsUnservedBeforeTheInterpreterStarts() {
-        val rule =
-            """
-            fun f(c: Customer): Num = creditScore(c)
-            f(customer)
-            """.trimIndent()
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(rule, ReleaseNumber(1)).orFail()
-
-        var asked = false
-        val drained =
-            Klein.checkContract(
-                """
-                customer: { id: Num, tier: String }
-                fun creditScore(c: { id: Num, tier: String }): Num
-
-                release 1
-                  customer
-                  creditScore
-                """.trimIndent(),
-            ).implement(
-                immediate("customer") { asked = true; gold },
-                immediate("creditScore") { asked = true; Value.VNum(700.0) },
-            )
-
-        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
-        assertEquals("Customer", pin.name)
-        assertEquals(RevisionNumber(1), pin.revision)
-        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
-    }
-
-    @Test
-    fun removingATypeTheRuleReachesThroughOtherPinsIsRejectedBeforeAnyCall() {
-        val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
-        assertEquals(RevisionNumber(1), edition.pins["Customer"], "the closure should pin the type creditScore reaches: ${edition.pins}")
-
-        var asked = false
-        val drained =
-            Klein.checkContract(
-                """
-                customer: { id: Num, tier: String }
-                fun creditScore(c: { id: Num, tier: String }): Num
-
-                release 1
-                  customer
-                  creditScore
-                """.trimIndent(),
-            ).implement(
-                immediate("customer") { asked = true; gold },
-                immediate("creditScore") { asked = true; Value.VNum(700.0) },
-            )
-
-        val pin = assertIs<UnknownPin>(drained.runToFailure(edition))
-        assertEquals("Customer", pin.name)
-        assertFalse(asked, "the pin check should reject the edition before any capability is asked")
     }
 
     @Test

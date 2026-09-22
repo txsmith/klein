@@ -31,7 +31,7 @@ internal fun Environment.checkLog(
     edition: Edition,
     log: EffectLog,
 ): List<LogTypeMismatch> {
-    val ruleTypeEnv = contract.resolvePins(edition.pins).ruleTypeEnv
+    val ruleTypeEnv = edition.surface.ruleTypeEnv
     val problems = mutableListOf<LogTypeMismatch>()
     fun check(
         at: Int,

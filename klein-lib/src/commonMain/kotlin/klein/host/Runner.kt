@@ -70,7 +70,6 @@ internal class Run(
     val persist: (LogEntry) -> Unit,
     val effectLog: EffectLog?,
 ) {
-    val resolvedPins = environment.contract.resolvePins(edition.pins)
     lateinit var log: EffectLog
 
     fun start(): RunOutcome =
@@ -233,12 +232,12 @@ internal class Run(
         environment.getCapabilityDeclaration(suspension.call, edition.pins.getValue(suspension.call)) is ContractDeclaration.Value
 
     private fun askHandler(suspension: Execution.AwaitingHost): HandlerResponse {
-        if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, resolvedPins)
+        if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, edition.surface)
         return when (val handler = registry.getHandler(suspension.call, edition.pins.getValue(suspension.call))) {
             null -> throw IllegalStateException("no handler for '${suspension.call}' although the pre-flight check passed")
             is Handler.Immediate -> {
                 val answer = handler.answer(suspension.args)
-                environment.checkAnswerType(suspension, resolvedPins, answer)
+                environment.checkAnswerType(suspension, edition.surface, answer)
                 HandlerResponse.Answer(answer)
             }
             is Handler.Deferred -> {
@@ -265,21 +264,21 @@ private fun Execution.AwaitingHost.toCall() = Call(call, args)
 
 private fun Environment.checkAnswerType(
     suspension: Execution.AwaitingHost,
-    resolvedPins: ResolvedSurface,
+    surface: ResolvedSurface,
     answer: Value,
 ) {
-    val revision = resolvedPins.pins.getValue(suspension.call)
+    val revision = surface.pins.getValue(suspension.call)
     val declared = getCapabilityDeclaration(suspension.call, revision)!!.answerType
-    if (!fitsDeclaredType(answer, declared, resolvedPins.ruleTypeEnv)) {
-        throw KleinException(listOf(HandlerTypeMismatch(suspension.call, printType(answer, resolvedPins.ruleTypeEnv), declared)))
+    if (!fitsDeclaredType(answer, declared, surface.ruleTypeEnv)) {
+        throw KleinException(listOf(HandlerTypeMismatch(suspension.call, printType(answer, surface.ruleTypeEnv), declared)))
     }
 }
 
 private fun Environment.checkCallTypes(
     suspension: Execution.AwaitingHost,
-    resolvedPins: ResolvedSurface,
+    surface: ResolvedSurface,
 ) {
-    val revision = resolvedPins.pins.getValue(suspension.call)
+    val revision = surface.pins.getValue(suspension.call)
     val declaration = getCapabilityDeclaration(suspension.call, revision)
     val declared = (declaration as ContractDeclaration.Function).parameterTypes
     if (suspension.args.size != declared.size) {
@@ -287,8 +286,8 @@ private fun Environment.checkCallTypes(
         throw KleinException(listOf(CallTypeMismatch(suspension.call, got, "${declared.size}")))
     }
     for ((argument, parameter) in suspension.args.zip(declared)) {
-        if (!fitsDeclaredType(argument, parameter, resolvedPins.ruleTypeEnv)) {
-            val got = printType(argument, resolvedPins.ruleTypeEnv)
+        if (!fitsDeclaredType(argument, parameter, surface.ruleTypeEnv)) {
+            val got = printType(argument, surface.ruleTypeEnv)
             val wanted = Type.print(parameter)
             throw KleinException(listOf(CallTypeMismatch(suspension.call, got, wanted)))
         }
