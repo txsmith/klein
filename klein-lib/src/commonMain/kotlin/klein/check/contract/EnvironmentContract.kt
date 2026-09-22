@@ -125,12 +125,10 @@ class EnvironmentContract internal constructor(
         val surface = resolvePins(pins)
         return parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
-            val editionPins =
-                closePins(used.associateWith(surface::getRevision)).mapValues { (name, revision) ->
-                    Pin(revision, hashOf(name, revision)!!)
-                }
+            val closed = closePins(used.associateWith(surface::getRevision))
+            val editionPins = closed.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source))
+            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, resolveSurface(closed)))
         }
     }
 

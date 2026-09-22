@@ -14,6 +14,7 @@ class Edition internal constructor(
     val core: CoreExpr,
     val pinsWithHash: Map<String, Pin>,
     val source: String,
+    internal val surface: ResolvedSurface,
 ) {
     val pins: Map<String, RevisionNumber> = pinsWithHash.mapValues { it.value.revision }
 }
