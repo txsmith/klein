@@ -134,7 +134,7 @@ class ResolvedSurfaceTest {
             listOf("riskBand" to RevisionNumber(1), "Flag" to RevisionNumber(1), "nobody" to RevisionNumber(1)),
             errors.map { assertIs<UnknownPin>(it) }.map { it.name to it.revision },
         )
-        assertEquals("the edition pins 'nobody' revision 1, which the contract does not declare", errors.last().message)
+        assertEquals("pin 'nobody' revision 1 names a revision the contract does not declare", errors.last().message)
     }
 
     // ── the two halves agree ─────────────────────────────────────────────────
