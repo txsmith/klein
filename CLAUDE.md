@@ -144,7 +144,7 @@ instead of the empty environment. It composes with the plain form: give `check` 
 nothing else to check the contract alone.
 
 ```bash
-# Contract alone: prints its declarations and releases, exits non-zero on error
+# Contract alone: prints its environment, declarations and releases, exits non-zero on error
 ./klein check --contract examples/lending.contract
 
 # A rule against one release of that contract
@@ -242,7 +242,7 @@ klein-lang/
 │   │   │   │       └── Projection.kt           # strip(): the one ContractType -> RuleType crossing
 │   │   │   └── host/             # The embedding surface a host calls
 │   │   │       ├── Environment.kt    # implement { }, Registry, Handler (immediate and deferred), run; RegistrationError
-│   │   │       ├── PreFlightChecks.kt # Pin and log checks before a run; MissingHandler, LogTypeMismatch
+│   │   │       ├── PreFlightChecks.kt # Environment, pin and log checks before a run; WrongEnvironment, MissingHandler, LogTypeMismatch
 │   │   │       ├── Runner.kt         # The suspend/resume loop; Diverged, CallTypeMismatch, HandlerTypeMismatch
 │   │   │       ├── EffectLog.kt      # EffectLog, LogEntry, Call, RunOutcome's log
 │   │   │       ├── DecodedEdition.kt # What decoding an artifact answers: Intact (the edition) or Stale (the recorded inputs and a StaleReason)
@@ -251,7 +251,7 @@ klein-lang/
 │   │   │           ├── EffectLogBinaryEncoding.kt, EffectLogJsonEncoding.kt  # The effect log's two codecs; UnreadableLog
 │   │   │           ├── CoreBinaryEncoding.kt                                 # The Core blob: encodeCore, decodeCore, readCoreVersion; one CompilerVersion byte, then the tree
 │   │   │           ├── EditionChecksum.kt                                    # The artifact's integrity checksum over language, source, pins and the Core bytes, shared by its codecs
-│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the checksum, the language, then the Core's version, on read; UnreadableEdition
+│   │   │           └── EditionJsonEncoding.kt                                # The edition's JSON codec: encodeEditionJson, decodeEditionJson; checks the environment, the checksum, the language, then the Core's version, on read; UnreadableEdition
 │   │   ├── commonTest/kotlin/klein/
 │   │   │   ├── lexer/
 │   │   │   ├── parser/

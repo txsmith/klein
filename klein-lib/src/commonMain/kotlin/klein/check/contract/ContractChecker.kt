@@ -60,7 +60,7 @@ internal class ContractChecker {
         val declarations = bindDeclarations(contract, scope)
         val releases = flattenReleaseBlocks(contract, scope)
         return ContractResult(
-            EnvironmentContract(declarations, scope, releases.associateBy({ it.number }, { it.exposedRevisions })),
+            EnvironmentContract(contract.environment, declarations, scope, releases.associateBy({ it.number }, { it.exposedRevisions })),
             errors.toList(),
         )
     }

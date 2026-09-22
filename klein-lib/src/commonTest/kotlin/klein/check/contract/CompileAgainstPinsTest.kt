@@ -17,6 +17,8 @@ private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
 private val CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
     type Customer/2 = Customer { id: Num, name: String, tier: String }
     type Shape/2 = Circle { area: Num } | Square { area: Num }
@@ -80,6 +82,8 @@ class CompileAgainstPinsTest {
         val withoutRelease1 =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
 
                 customer: Customer
@@ -96,6 +100,8 @@ class CompileAgainstPinsTest {
         val withoutRevision1 =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
                 type Customer/2 = Customer { id: Num, name: String, tier: String }
 
@@ -121,6 +127,8 @@ class CompileAgainstPinsTest {
         val edited =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
 
                 customer: Customer
@@ -194,6 +202,8 @@ class CompileAgainstPinsTest {
         val circles =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Shape = Circle { area: Num } | Square { area: Num }
                 circle: Circle
 
@@ -211,6 +221,8 @@ class CompileAgainstPinsTest {
         val shapes =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Point = Point { x: Num, y: Num }
                 type Shape = Circle { area: Num } | Square { corner: Point }
                 circle: Circle

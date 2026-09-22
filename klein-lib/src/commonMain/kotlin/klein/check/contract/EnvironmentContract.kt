@@ -85,6 +85,7 @@ sealed class ContractDeclaration {
  * [releases] comes from the written blocks only; there is no implicit release 1.
  */
 class EnvironmentContract internal constructor(
+    val environment: String,
     // What the host needs to implement
     val declarations: List<ContractDeclaration>,
     // Encapsulates all types defined in the contract
@@ -132,7 +133,7 @@ class EnvironmentContract internal constructor(
             val editionSurface = resolvePins(used.associateWith(surface::getRevision)).getOrThrow()
             val editionPins = editionSurface.pins.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
+            Checked.success(Edition(environment, LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
         }
 
     /**

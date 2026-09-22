@@ -36,7 +36,7 @@ class ContractTest {
     }
 
     @Test
-    fun anEmptyContractParses() {
+    fun aContractWithOnlyItsHeaderParses() {
         val contract = parseContract("")
         assertTrue(contract.types.isEmpty())
         assertTrue(contract.declarations.isEmpty())
@@ -172,6 +172,168 @@ class ContractTest {
                 )
             }
         assertTrue("contract" in error.message, error.message)
+    }
+
+    // ── The environment header ───────────────────────────────────────────────
+
+    @Test
+    fun aContractNamesItsEnvironmentOnTheFirstLine() {
+        val contract =
+            parseContractFile(
+                """
+                environment acme
+
+                fun creditCheck(c: Customer): Num
+                """.trimIndent(),
+            )
+        assertEquals("acme", contract.environment)
+        assertEquals(listOf("creditCheck"), contract.declarations.map { it.name })
+    }
+
+    @Test
+    fun anEnvironmentNameMayBeACapitalisedIdentifier() {
+        assertEquals("Acme", parseContractFile("environment Acme").environment)
+    }
+
+    @Test
+    fun anEnvironmentNameMayBeAQuotedString() {
+        assertEquals("Acme EU", parseContractFile("environment \"Acme EU\"").environment)
+    }
+
+    @Test
+    fun aBareEnvironmentNameMayHoldDigitsAndUnderscores() {
+        assertEquals("acme_corp_2", parseContractFile("environment acme_corp_2").environment)
+    }
+
+    @Test
+    fun aBareEnvironmentNameCannotHoldASpace() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment acme corp") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun aBareEnvironmentNameCannotHoldAHyphen() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment acme-corp") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun aBareEnvironmentNameCannotHoldADot() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment acme.eu") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun aBareEnvironmentNameCannotStartWithADigit() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment 2acme") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun aQuotedEnvironmentNameMayHoldSpacesAndPunctuation() {
+        assertEquals("Acme Corp. (EU) / 2026", parseContractFile("environment \"Acme Corp. (EU) / 2026\"").environment)
+    }
+
+    @Test
+    fun aBareEnvironmentNameMayHoldUnicodeLetters() {
+        assertEquals("Zürich_日本語", parseContractFile("environment Zürich_日本語").environment)
+    }
+
+    @Test
+    fun aBareEnvironmentNameCannotHoldAnEmoji() {
+        assertFailsWith<Abort> { parseContractFile("environment acme🚀") }
+    }
+
+    @Test
+    fun aQuotedEnvironmentNameMayHoldAnEmoji() {
+        assertEquals("Acme 🚀 Zürich", parseContractFile("environment \"Acme 🚀 Zürich\"").environment)
+    }
+
+    @Test
+    fun aQuotedEnvironmentNameCannotSpanLines() {
+        val error =
+            assertFailsWith<Abort> {
+                parseContractFile(
+                    """
+                    environment "Acme
+                    Corp"
+                    """.trimIndent(),
+                )
+            }
+        assertTrue("line" in error.message, error.message)
+    }
+
+    @Test
+    fun aQuotedEnvironmentNameCannotHoldAnEscapedLineBreak() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment \"Acme\\nCorp\"") }
+        assertTrue("line" in error.message, error.message)
+    }
+
+    @Test
+    fun anEmptyQuotedEnvironmentNameIsRejected() {
+        val error = assertFailsWith<Abort> { parseContractFile("environment \"\"") }
+        assertTrue("empty" in error.message, error.message)
+    }
+
+    @Test
+    fun aContractWithoutAnEnvironmentHeaderIsRejected() {
+        val error = assertFailsWith<Abort> { parseContractFile("fun creditCheck(c: Num): Num") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun anEmptyContractIsRejectedForLackingItsEnvironment() {
+        val error = assertFailsWith<Abort> { parseContractFile("") }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun commentsAndBlankLinesMayComeBeforeTheEnvironmentHeader() {
+        val contract =
+            parseContractFile(
+                """
+                # The acme contract.
+                # See the docs.
+
+                environment acme
+                maxRetries: Num
+                """.trimIndent(),
+            )
+        assertEquals("acme", contract.environment)
+        assertEquals(listOf("maxRetries"), contract.declarations.map { it.name })
+    }
+
+    @Test
+    fun aDeclarationBeforeTheEnvironmentHeaderIsRejected() {
+        val error =
+            assertFailsWith<Abort> {
+                parseContractFile(
+                    """
+                    maxRetries: Num
+                    environment acme
+                    """.trimIndent(),
+                )
+            }
+        assertTrue("environment" in error.message, error.message)
+    }
+
+    @Test
+    fun aSecondEnvironmentHeaderIsRejected() {
+        val error =
+            assertFailsWith<Abort> {
+                parseContract(
+                    """
+                    maxRetries: Num
+                    environment acme
+                    """.trimIndent(),
+                )
+            }
+        assertTrue("once" in error.message, error.message)
+    }
+
+    @Test
+    fun aValueDeclarationNamedEnvironmentIsStillADeclaration() {
+        assertEquals(listOf("environment"), parseContract("environment: String").declarations.map { it.name })
     }
 
     // ── What a contract rejects ──────────────────────────────────────────────

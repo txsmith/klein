@@ -2,6 +2,7 @@ package klein.parser
 
 import klein.ReleaseNumber
 import klein.RevisionNumber
+import klein.contractOf
 import klein.surface.AppliedTypeExpr
 import klein.surface.Apply
 import klein.surface.Ascription
@@ -500,7 +501,9 @@ fun assertProgramEquals(
     assertEqualsPretty(expected, actual.stmts.map { it.stripSpan() })
 }
 
-fun parseContract(source: String): ContractExpr {
+fun parseContract(declarations: String): ContractExpr = parseContractFile(contractOf(declarations))
+
+fun parseContractFile(source: String): ContractExpr {
     val tokens = Lexer(source).tokenize().toList()
     return parseContract(tokens)
 }

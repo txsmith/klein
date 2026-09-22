@@ -16,6 +16,8 @@ keyed) is the host's, as it is for the effect log.
 
 An artifact holds:
 
+- the **environment** the edition was compiled in, by the name its contract file declares
+  (see [host-integration.md](./host-integration.md) §Environment);
 - the rule **source**, verbatim, and the **language version** it was written in;
 - the **pins**: every declaration the edition depends on, the names the source wrote and every
   declaration their signatures reach, each at the revision it was compiled against, with a hash
@@ -26,9 +28,17 @@ An artifact holds:
 
 The source, the language version, and the pins are the inputs: everything the loader needs to
 rebuild the edition. The Core is the output, stored so that loading does not have to compile.
-Nothing else is in an artifact. In particular the release the author compiled against is not:
-it is author metadata, kept by the host beside the rule with the author and the time, and the
-editor and the reconciler read it from there.
+The environment name says which contract those inputs belong to: a pin names a declaration within
+its environment, so the pins mean nothing without it. Nothing else is in an artifact. In
+particular the release the author compiled against is not: once the pins are recorded the
+release can be removed and the edition still runs, so it is author metadata, kept by the host
+beside the rule with the author and the time, and the editor and the reconciler read it from
+there. The environment is the opposite case: the edition cannot run anywhere else.
+
+The name is meant to be permanent. Renaming an environment leaves every stored artifact naming
+the old one, and none of them loads until each artifact's environment field is rewritten; that
+rewrite touches nothing the checksum covers, but how it is done safely is a migration toolkit
+question ([roadmap.md](../roadmap.md) §Migration toolkit), not settled here.
 
 The Core stays opaque. A host reads source and pins for inspection; it never reads the Core, and
 the Core's layout is not part of this spec.
@@ -47,8 +57,10 @@ The artifact carries two versions, each answered differently:
 
 ## The checksum
 
-The checksum ties the stored Core to the inputs it was compiled from. It is a hash over the whole
-artifact: the language version, the source, the pins, the compiler version, and the Core. A
+The checksum ties the stored Core to the inputs it was compiled from. It is a hash over the
+language version, the source, the pins, the compiler version, and the Core. The environment
+name is not in it: the name does not shape the Core, and decoding compares it with the contract
+directly, before the checksum, so covering it would guard nothing. A
 mismatch means the Core and the inputs no longer agree. Because the source is truth, the response
 is to re-derive from the recorded inputs; a re-derivation that fails is the sign that something
 was actually damaged. The stored Core is never run after a mismatch.
@@ -92,6 +104,10 @@ stored Core is stale and can not be used. Re-compiling a stale edition is the ho
 next step and may fail when the source no longer checks (see Errors). In order:
 
 - The artifact is read; one that cannot be read is an error and yields nothing.
+- The recorded environment is compared with the contract's. A different name is an error
+  naming both, and yields nothing: the artifact belongs to another environment, and nothing
+  below, re-derivation included, may happen under this one. This comes before the checksum so
+  that a damaged artifact from another environment is refused rather than re-derived here.
 - The reader recomputes the checksum from what it read, before the Core is opened. If it differs
   from the stored one, the artifact is stale: reason **checksum mismatch**.
 - Otherwise, if the source's language version is one the parser no longer reads, the artifact is
@@ -175,6 +191,7 @@ might read:
 {
   "format": "klein-edition",
   "version": 1,
+  "environment": "lending",
   "language": 1,
   "pins": {
     "Customer": { "revision": 2, "hash": "3c8d1f0a9b7e6d54" },
@@ -198,6 +215,8 @@ diagnostic is returned.
 Host errors, thrown, one per fault:
 
 - **Unreadable**: the artifact cannot be read. Names what was expected and where.
+- **Wrong environment**: the artifact names an environment other than the contract's. Names
+  both. A run throws the same error when the edition it is given names another environment.
 - **Unknown pin**: compiling against recorded pins, and a pin names a revision the contract
   does not declare. One per pin, from the one step that resolves pins. Decoding does not throw
   it, and a run never does: an edition exists only because the contract compiled or decoded it,

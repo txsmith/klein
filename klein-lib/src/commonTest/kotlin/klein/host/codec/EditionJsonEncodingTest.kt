@@ -30,6 +30,8 @@ private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
 private val LENDING =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -92,6 +94,8 @@ private fun assertIntact(text: String): Edition = assertIs<DecodedEdition.Intact
 
 private val RENAMED_PARAMETER =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -105,6 +109,8 @@ private val RENAMED_PARAMETER =
 
 private val WITHOUT_REVISION_1 =
     """
+    environment acme
+
     type Customer/2 = Customer { id: Num, name: String, tier: String }
 
     customer/2: Customer/2
@@ -118,6 +124,8 @@ private val WITHOUT_REVISION_1 =
 
 private val STRUCTURAL_LENDING =
     """
+    environment acme
+
     customer: { id: Num, tier: String }
     fun creditScore(c: { id: Num, tier: String }): Num
 
@@ -138,6 +146,7 @@ private fun assertSameEdition(
     expected: Edition,
     actual: Edition,
 ) {
+    assertEquals(expected.environment, actual.environment)
     assertEquals(expected.language, actual.language)
     assertEquals(expected.core, actual.core)
     assertEquals(expected.pinsWithHash, actual.pinsWithHash)
@@ -152,6 +161,7 @@ private val validFields: Map<String, String> =
     mapOf(
         "format" to "\"klein-edition\"",
         "version" to "1",
+        "environment" to "\"acme\"",
         "language" to "1",
         "pins" to pinsJson(creditPins),
         "source" to "\"$CREDIT_RULE\"",
@@ -214,7 +224,7 @@ class EditionJsonEncodingTest {
         val core = encodeCore(edition.core)
         val checksum = hex(editionChecksum(LanguageVersion(1), rule, creditPins, core))
         val expected =
-            """{"format":"klein-edition","version":1,"language":1,"pins":${pinsJson(creditPins)},""" +
+            """{"format":"klein-edition","version":1,"environment":"acme","language":1,"pins":${pinsJson(creditPins)},""" +
                 """"source":"score = creditScore(customer)\nscore > 600","core":"${base64(core)}","checksum":"$checksum"}"""
         assertEquals(expected, text)
     }
@@ -243,6 +253,7 @@ class EditionJsonEncodingTest {
             {
               "format": "klein-edition",
               "version": 1,
+              "environment": "acme",
               "language": 1,
               "pins": {
                 "Customer": { "revision": 1, "hash": "${hex(creditPins.getValue("Customer").hash)}" },
@@ -272,6 +283,7 @@ class EditionJsonEncodingTest {
               "source": "creditScore(customer) >= 620",
               "version": 1.0,
               "language": 1,
+              "environment": "acme",
               "format": "klein-edition"
             }
             """.trimIndent()
@@ -384,6 +396,8 @@ class EditionJsonEncodingTest {
     fun aRollbackToBeforeAStillPinnedRevisionRefusesTheEditionWhenItIsLoaded() {
         val twoRevisions =
             """
+            environment acme
+
             fun creditScore(c: Num): Num
             fun creditScore/2(c: Num): Num
 
@@ -395,6 +409,8 @@ class EditionJsonEncodingTest {
             """.trimIndent()
         val rolledBack =
             """
+            environment acme
+
             fun creditScore(c: Num): Num
 
             release 1
@@ -560,6 +576,8 @@ class EditionJsonEncodingTest {
         val edited =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
 
                 customer: Customer
@@ -606,7 +624,7 @@ class EditionJsonEncodingTest {
 
     @Test
     fun eachMissingFieldIsUnreadable() {
-        listOf("version", "language", "pins", "source", "core", "checksum").forEach { name ->
+        listOf("version", "environment", "language", "pins", "source", "core", "checksum").forEach { name ->
             val message = assertUnreadable(document(name to null)).message
             assertTrue(message.contains("missing its \"$name\" field"), message)
         }
@@ -649,6 +667,7 @@ class EditionJsonEncodingTest {
         assertTrue(assertUnreadable(document("version" to "\"1\"")).message.contains("whole number"))
         assertTrue(assertUnreadable(document("version" to "1.5")).message.contains("whole number"))
         assertTrue(assertUnreadable(document("language" to "true")).message.contains("whole number"))
+        assertTrue(assertUnreadable(document("environment" to "1")).message.contains("environment"))
         assertTrue(assertUnreadable(document("pins" to "[]")).message.contains("pins"))
         assertTrue(assertUnreadable(document("source" to "1")).message.contains("source"))
         assertTrue(assertUnreadable(document("core" to "1")).message.contains("core"))

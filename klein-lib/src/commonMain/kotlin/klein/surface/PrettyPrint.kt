@@ -54,7 +54,7 @@ internal fun TypeDef<*>.prettyPrint(indent: Int = 0): String {
 }
 
 internal fun ContractExpr.prettyPrint(): String =
-    (types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() } + releases.map { it.prettyPrint() })
+    (listOf("Environment $environment") + types.map { it.prettyPrint() } + declarations.map { it.prettyPrint() } + releases.map { it.prettyPrint() })
         .joinToString("\n")
 
 internal fun ReleaseBlock.prettyPrint(indent: Int = 0): String {

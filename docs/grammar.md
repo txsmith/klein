@@ -8,7 +8,9 @@ Klein uses indentation-significant syntax. Braces `{}` are reserved for record l
 
 ```
 prog        = (type_def | fun_def | stmt)*         # a rule; Parser.parseProgram()
-contract    = (type_def | fun_decl | val_decl | release)*   # Parser.parseContract()
+contract    = environment (type_def | fun_decl | val_decl | release)*   # Parser.parseContract()
+
+environment = 'environment' (IDENT | UPPER_IDENT | STRING) NEWLINE   # contracts only; first line; 'environment' is contextual
 
 type_def    = 'type' UPPER_IDENT revision? type_params? '=' constructors
 
@@ -137,13 +139,23 @@ binop       = '+' | '-' | '*' | '/' | '%'
 `fun_decl` and `val_decl` are the definition forms with the definition removed. These are interface definitions used for interaction between Klein and the host language:
 
 ```klein
+environment lending
+
 type Customer = Customer { id: Num, name: String, score: Num }
 
 fun creditCheck(c: Customer): Num
 maxRetries: Num
 ```
 
-They parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body,
+The first line is the environment header: the word `environment` followed on the same line by a
+name, which is an `IDENT`, an `UPPER_IDENT` or a `STRING` that is not empty and holds no line
+break. It is required and comes
+before every declaration, with only comments and blank lines allowed above it; the same header
+anywhere below is a parse error. `environment` is recognised by position the way
+`release` is: `environment: String` is still a `val_decl`, because a name never follows a
+declared name directly.
+
+The declarations parse into `FunDecl` and `ValDecl` — distinct nodes, not a `FunDef`/`Val` with a null body,
 and not statements: they are `Declaration`s, held by a `ContractExpr` rather than by a `Program`.
 
 The annotation is what tells a declaration apart from a definition. After the parameter list, `fun`

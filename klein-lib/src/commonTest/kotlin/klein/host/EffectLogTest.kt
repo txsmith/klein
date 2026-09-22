@@ -18,6 +18,8 @@ private const val STANDARD = "creditScore(customer) >= 620"
 
 private val LENDING =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer

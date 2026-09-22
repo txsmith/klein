@@ -16,6 +16,8 @@ import kotlin.test.assertTrue
 
 private val DECLARATIONS =
     """
+    environment acme
+
     type Customer = Customer { id: Num }
     type Customer/2 = Customer { id: Num, tier: String }
 
@@ -152,6 +154,8 @@ class ReleaseTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Shape/2 = Circle { radius: Num } | Square { side: Num }
 
                 release 2

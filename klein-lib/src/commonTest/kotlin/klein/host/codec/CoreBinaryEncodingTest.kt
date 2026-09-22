@@ -90,6 +90,8 @@ private val everyNumberBitPattern: List<Double> =
 
 private val LENDING =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -207,7 +209,7 @@ class CoreBinaryEncodingTest {
                 immediate("customer") { gold },
                 immediate("creditScore") { Value.VNum(700.0) },
             )
-        val rederived = Edition(edition.language, decoded, edition.pinsWithHash, edition.source, edition.surface)
+        val rederived = Edition(edition.environment, edition.language, decoded, edition.pinsWithHash, edition.source, edition.surface)
         val original = assertIs<RunOutcome.Completed>(makeHost().run(edition))
         val fromDecoded = assertIs<RunOutcome.Completed>(makeHost().run(rederived))
         assertEquals(Value.VStr("approve"), fromDecoded.value)

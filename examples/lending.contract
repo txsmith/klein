@@ -1,6 +1,8 @@
 # A capability contract: what the host provides to a rule, not how. See docs/spec/contracts.md.
 # Two releases: `Customer` gains a `tier` field, and `creditScore` moves with it.
 
+environment lending
+
 type Customer = Customer { id: Num, name: String }
 type Customer/2 = Customer { id: Num, name: String, tier: String }
 

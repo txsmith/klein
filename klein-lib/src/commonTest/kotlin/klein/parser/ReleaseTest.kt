@@ -19,8 +19,10 @@ class ReleaseTest {
     @Test
     fun aBlockTakesItsNumberAndItsEntries() {
         assertContractEquals(
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 2
                   Customer/2
                   creditScore/2
@@ -47,8 +49,10 @@ class ReleaseTest {
     @Test
     fun twoBlocksParseInOneFile() {
         assertContractEquals(
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 1
                   Customer
 
@@ -67,8 +71,10 @@ class ReleaseTest {
     @Test
     fun aBlockSitsBesideTypesAndDeclarations() {
         assertContractEquals(
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
 
                 fun creditScore(c: Customer): Num
@@ -102,8 +108,10 @@ class ReleaseTest {
     @Test
     fun removeTakesTheNameOutOfTheRelease() {
         assertContractEquals(
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 4
                   Customer/3
                   remove creditScore
@@ -150,8 +158,10 @@ class ReleaseTest {
     @Test
     fun aBlockDoesNotSwallowTheDeclarationAfterIt() {
         val contract =
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 1
                   Customer
                 maxRetries: Num
@@ -164,8 +174,10 @@ class ReleaseTest {
     @Test
     fun aBlockDoesNotSwallowTheNextBlock() {
         val contract =
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 1
                   Customer
                 release 2
@@ -179,8 +191,10 @@ class ReleaseTest {
     @Test
     fun entriesMayBeIndentedFurtherThanTheFirst() {
         val block =
-            parseContract(
+            parseContractFile(
                 """
+                environment acme
+
                 release 1
                   Customer
                       creditScore

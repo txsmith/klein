@@ -16,6 +16,8 @@ import kotlin.test.assertTrue
 
 private val CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num }
     type Customer/2 = Customer { id: Num, tier: String }
     type Shape/2 = Circle { radius: Num } | Square { side: Num }
@@ -122,6 +124,8 @@ class RuleAgainstReleaseTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Shape/2 = Circle { radius: Num } | Square { side: Num }
                 type Box/2<'A> = Box { value: 'A }
 
@@ -143,6 +147,8 @@ class RuleAgainstReleaseTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Tree/2 = Tree { value: Num, left: Tree/2? }
 
                 release 2

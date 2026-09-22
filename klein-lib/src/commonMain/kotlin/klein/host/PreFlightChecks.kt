@@ -10,6 +10,13 @@ import klein.check.contract.Edition
 import klein.check.infer
 import klein.interp.Value
 
+class WrongEnvironment internal constructor(
+    val edition: String,
+    val environment: String,
+) : HostError {
+    override val message = "this edition belongs to environment '$edition' but was given to environment '$environment'"
+}
+
 class MissingHandler internal constructor(
     val name: String,
     val revision: RevisionNumber,

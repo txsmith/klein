@@ -10,6 +10,7 @@ data class Pin(
 )
 
 class Edition internal constructor(
+    val environment: String,
     val language: LanguageVersion,
     val core: CoreExpr,
     val pinsWithHash: Map<String, Pin>,

@@ -14,6 +14,7 @@ import klein.SourceSpan
  * alone, and a contract holds it here, where a revision is allowed.
  */
 data class ContractExpr(
+    val environment: String,
     val types: List<TypeDef<*>>,
     val declarations: List<CapabilityDeclaration>,
     val releases: List<ReleaseBlock>,

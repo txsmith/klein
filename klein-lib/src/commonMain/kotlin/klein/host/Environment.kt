@@ -160,6 +160,9 @@ class Environment internal constructor(
         log: EffectLog? = null,
         persist: (LogEntry) -> Unit = {},
     ): RunOutcome {
+        if (edition.environment != contract.environment) {
+            throw KleinException(listOf(WrongEnvironment(edition.environment, contract.environment)))
+        }
         val errors = mutableListOf<RegistrationError>()
         val supplied = HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors)
         if (errors.isNotEmpty()) throw KleinException(errors)

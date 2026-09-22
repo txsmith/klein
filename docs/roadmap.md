@@ -47,6 +47,12 @@ worklist; and derived answers with provenance, so an answer a migration synthesi
 data is distinguishable in the log from one the host actually gave — the one `Turn` schema
 addition the toolkit requires. Needs `Parked` and edition serialization from the host map.
 
+Renaming an environment is a toolkit question too. Every stored artifact names the environment it
+was compiled in, so a rename strands them all until each artifact's environment field is
+rewritten. The field sits outside the checksum, so the rewrite is mechanical, but the artifact
+format is Klein's, and a host should not have to edit it by hand; what the toolkit offers for
+that is open.
+
 Migrating a rule's *source* (re-pinning a type, adapting a call to a revised signature) is an
 AST transformation, never text editing, and it produces a new edition: rewrite the tree, compile
 the result against the new pins (spec/edition.md §Migration), and the old artifact stays as it

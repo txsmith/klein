@@ -33,6 +33,8 @@ class SelfContainmentTest {
         val error =
             notSelfContained(
                 """
+                environment acme
+
                 type Point = Point { x: Num, y: Num }
                 type Shape = Circle { area: Num } | Square { corner: Point }
 
@@ -51,6 +53,8 @@ class SelfContainmentTest {
         val error =
             notSelfContained(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -72,6 +76,8 @@ class SelfContainmentTest {
         val error =
             notSelfContained(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -95,6 +101,8 @@ class SelfContainmentTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -119,6 +127,8 @@ class SelfContainmentTest {
             "Customer/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Customer/2 = Customer { id: Num }
 
                 fun latest/2(): Customer/2
@@ -138,6 +148,8 @@ class SelfContainmentTest {
             "Address/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Address/2 = Address { zip: String }
                 type Customer/2 = Customer { id: Num, addr: Address/2 }
 
@@ -157,6 +169,8 @@ class SelfContainmentTest {
             "Colour/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Colour/2 = Colour { hex: String }
                 type Shape/2 = Circle { radius: Num, colour: Colour/2 } | Square { side: Num }
 
@@ -178,6 +192,8 @@ class SelfContainmentTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Shape/2 = Circle { r: Num } | Square { s: Num }
                 type Wrapper/2 = P { x: Circle/2 } | Q { x: Square/2 }
 
@@ -197,6 +213,8 @@ class SelfContainmentTest {
             "Customer/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -216,6 +234,8 @@ class SelfContainmentTest {
             "Customer/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Customer/2 = Customer { id: Num }
                 type Box/2<'A> = Box { value: 'A }
 
@@ -237,6 +257,8 @@ class SelfContainmentTest {
             "Address/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Order/2 = Order { total: Num }
                 type Address/2 = Address { zip: String }
                 type Box/2<'A> = Box { value: 'A }
@@ -262,6 +284,8 @@ class SelfContainmentTest {
             "Address/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Address/2 = Address { zip: String }
                 type Customer/2 = Customer { id: Num, addr: Address/2 }
 
@@ -277,6 +301,8 @@ class SelfContainmentTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Address/2 = Address { zip: String }
                 type Order/2 = Order { total: Num }
                 type Customer/2 = Customer { id: Num, addr: Address/2, order: Order/2 }
@@ -299,6 +325,8 @@ class SelfContainmentTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Shape/2 = Circle { radius: Num } | Square { side: Num }
                 type Pick/2 = Pick { first: Circle/2 }
 
@@ -316,6 +344,8 @@ class SelfContainmentTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Tree/2 = Tree { value: Num, left: Tree/2? }
 
                 release 2
@@ -333,6 +363,8 @@ class SelfContainmentTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Node/2 = Node { edge: Edge/2? }
                 type Edge/2 = Edge { to: Node/2 }
 
@@ -354,6 +386,8 @@ class SelfContainmentTest {
             "Edge/2",
             notSelfContained(
                 """
+                environment acme
+
                 type Node/2 = Node { edge: Edge/2? }
                 type Edge/2 = Edge { to: Node/2 }
 
@@ -366,12 +400,30 @@ class SelfContainmentTest {
 
     @Test
     fun aReleaseExposingNothingIsSelfContained() {
-        Klein.checkContract("type Customer/2 = Customer { id: Num }\n\nrelease 2")
+        Klein.checkContract(
+            """
+            environment acme
+
+            type Customer/2 = Customer { id: Num }
+
+            release 2
+            """.trimIndent(),
+        )
     }
 
     @Test
     fun aBuiltInTypeNeedsNoEntry() {
-        val contract = Klein.checkContract("maxRetries: Num\n\nrelease 1\n  maxRetries")
+        val contract =
+            Klein.checkContract(
+                """
+                environment acme
+
+                maxRetries: Num
+
+                release 1
+                  maxRetries
+                """.trimIndent(),
+            )
         assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)).orFail())
     }
 
@@ -380,6 +432,8 @@ class SelfContainmentTest {
     fun anUnexposedDeclarationConstrainsNothing() {
         Klein.checkContract(
             """
+            environment acme
+
             type Customer = Customer { id: Num }
             type Customer/2 = Customer { id: Num, tier: String }
 

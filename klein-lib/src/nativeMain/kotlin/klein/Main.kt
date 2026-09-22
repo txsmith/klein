@@ -313,6 +313,7 @@ private fun <T> orExit(operation: () -> T): T =
     }
 
 private fun printContractSummary(contract: EnvironmentContract) {
+    println("environment: ${contract.environment}")
     contract.declarations.forEach { d ->
         val kind = if (d is ContractDeclaration.Function) "fun" else "val"
         println("$kind ${revisioned(d.name, d.revision)} : ${Type.print(d.type)}")
