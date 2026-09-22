@@ -184,9 +184,9 @@ class EnvironmentContract internal constructor(
     internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
         resolvedPins.getOrPut(pins) {
             // Editions only pin things explicitly mentioned in their source,
-            // but those pinned things can lead (implictly) to more pins being part of the actual full surface.
+            // but those pinned things can lead (implicitly) to more pins being part of the actual full surface.
             // Therefore we compute the transitive closure of exposed pins here.
-            // `resolveRelease` doesn't need this because each release as written in a contract file is demanded to be transitive closure already.
+            // A release goes through the same path; the contract checker already demands it be closed, so the closure adds nothing.
             val surface = mutableMapOf<String, RevisionNumber>()
             val roots = mutableListOf<ContractType>()
             val unknown = mutableListOf<UnknownPin>()

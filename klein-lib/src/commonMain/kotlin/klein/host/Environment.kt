@@ -35,12 +35,12 @@ fun deferred(
     initiate: (Call) -> Unit,
 ) = HandlerRegistration(name, Handler.Deferred(initiate))
 
-class HandlerRegistry internal constructor(
-    val declarations: List<ContractDeclaration>,
+internal class HandlerRegistry(
+    private val declarations: List<ContractDeclaration>,
     private val entries: Map<Pair<String, RevisionNumber>, Handler?>,
 ) {
     companion object {
-        internal fun fromRegistrations(
+        fun fromRegistrations(
             declarations: List<ContractDeclaration>,
             registrations: List<HandlerRegistration>,
             perRunAllowed: Boolean,
@@ -84,19 +84,19 @@ class HandlerRegistry internal constructor(
 
     operator fun plus(other: HandlerRegistry): HandlerRegistry = HandlerRegistry(declarations, entries + other.entries)
 
-    internal fun getHandler(
+    fun getHandler(
         name: String,
         revision: RevisionNumber,
     ): Handler? = entries[name to revision]
 
-    internal fun unregistered(): List<RegistrationError> =
+    fun unregistered(): List<RegistrationError> =
         declarations
             .filter { (it.name to it.revision) !in entries }
             .map { RegistrationError("'${it.name}' revision ${it.revision.value} is declared by the contract but no implementation is registered") }
 
     private val perRun: Set<Pair<String, RevisionNumber>> = entries.filterValues { it == null }.keys
 
-    internal fun missingHandlers(supplied: HandlerRegistry): List<MissingHandler> =
+    fun missingHandlers(supplied: HandlerRegistry): List<MissingHandler> =
         (perRun - supplied.entries.keys).map { (name, revision) -> MissingHandler(name, revision) }
 }
 
