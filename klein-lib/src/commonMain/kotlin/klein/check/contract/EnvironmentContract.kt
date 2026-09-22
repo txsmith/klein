@@ -127,7 +127,7 @@ class EnvironmentContract internal constructor(
         return parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
             val editionPins =
-                resolvePins(used.associateWith(surface::getRevision)).pins.mapValues { (name, revision) ->
+                closePins(used.associateWith(surface::getRevision)).mapValues { (name, revision) ->
                     Pin(revision, hashOf(name, revision)!!)
                 }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
@@ -201,36 +201,37 @@ class EnvironmentContract internal constructor(
     private fun getReleasePins(release: ReleaseNumber): Map<String, RevisionNumber> =
         releasePins[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
-    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface =
-        resolvedPins.getOrPut(pins) {
-            // The pins given here need not be closed: a hand-written or migrated set, or the names a
-            // source used, can lead (implicitly) to more pins being part of the actual full surface.
-            // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
-            // A release goes through the same path; the contract checker already demands it be closed, so the closure adds nothing.
-            val surface = mutableMapOf<String, RevisionNumber>()
-            val roots = mutableListOf<ContractType>()
-            val unknown = mutableListOf<UnknownPin>()
-            for ((name, revision) in pins) {
-                val declaration = declarations.firstOrNull { it.name == name && it.revision == revision }
-                if (declaration != null) {
-                    surface[name] = revision
-                    roots.add(declaration.type)
-                    continue
-                }
-                val typeName = contractTypeEnv.lookupConstructor(name, revision)?.parentType ?: name
-                if (contractTypeEnv.lookupTypeDef(typeName, revision) != null) {
-                    surface[typeName] = revision
-                    roots.addAll(contractTypeEnv.declaredFields(typeName, revision))
-                } else {
-                    unknown.add(UnknownPin(name, revision))
-                }
+    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolvedPins.getOrPut(pins) { resolveSurface(closePins(pins)) }
+
+    private fun closePins(pins: Map<String, RevisionNumber>): Map<String, RevisionNumber> {
+        // The pins given here need not be closed: a hand-written or migrated set, or the names a
+        // source used, can lead (implicitly) to more pins being part of the actual full surface.
+        // Therefore we compute the transitive closure of exposed pins here; an edition's pins are that closure.
+        // A release goes through the same path; the contract checker already demands it be closed, so the closure adds nothing.
+        val surface = mutableMapOf<String, RevisionNumber>()
+        val roots = mutableListOf<ContractType>()
+        val unknown = mutableListOf<UnknownPin>()
+        for ((name, revision) in pins) {
+            val declaration = declarations.firstOrNull { it.name == name && it.revision == revision }
+            if (declaration != null) {
+                surface[name] = revision
+                roots.add(declaration.type)
+                continue
             }
-            if (unknown.isNotEmpty()) throw KleinException(unknown)
-            for (reached in roots.reachableTypes(contractTypeEnv)) {
-                if (reached is Type.TRef) surface[reached.name] = reached.revision
+            val typeName = contractTypeEnv.lookupConstructor(name, revision)?.parentType ?: name
+            if (contractTypeEnv.lookupTypeDef(typeName, revision) != null) {
+                surface[typeName] = revision
+                roots.addAll(contractTypeEnv.declaredFields(typeName, revision))
+            } else {
+                unknown.add(UnknownPin(name, revision))
             }
-            resolveSurface(surface)
         }
+        if (unknown.isNotEmpty()) throw KleinException(unknown)
+        for (reached in roots.reachableTypes(contractTypeEnv)) {
+            if (reached is Type.TRef) surface[reached.name] = reached.revision
+        }
+        return surface
+    }
 
     private fun resolveSurface(surface: Map<String, RevisionNumber>): ResolvedSurface {
         val projected = TypeEnv.empty<Nothing?>()
