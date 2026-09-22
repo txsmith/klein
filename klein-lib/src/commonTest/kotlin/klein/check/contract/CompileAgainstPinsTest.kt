@@ -190,6 +190,42 @@ class CompileAgainstPinsTest {
     }
 
     @Test
+    fun aConstructorReachedThroughASignatureIsPinnedAsItsType() {
+        val circles =
+            Klein.checkContract(
+                """
+                type Shape = Circle { area: Num } | Square { area: Num }
+                circle: Circle
+
+                release 1
+                  Shape
+                  circle
+                """.trimIndent(),
+            )
+        val edition = circles.compileRule("circle.area", ReleaseNumber(1)).orFail()
+        assertEquals(pins("circle" to 1, "Shape" to 1), edition.pins)
+    }
+
+    @Test
+    fun aConstructorReachedThroughASignaturePinsWhatItsSiblingArmsReach() {
+        val shapes =
+            Klein.checkContract(
+                """
+                type Point = Point { x: Num, y: Num }
+                type Shape = Circle { area: Num } | Square { corner: Point }
+                circle: Circle
+
+                release 1
+                  Point
+                  Shape
+                  circle
+                """.trimIndent(),
+            )
+        val edition = shapes.compileRule("circle.area", ReleaseNumber(1)).orFail()
+        assertEquals(pins("circle" to 1, "Shape" to 1, "Point" to 1), edition.pins)
+    }
+
+    @Test
     fun aTypeReachedOnlyThroughAnotherTypeIsPinned() {
         val edition = contract.compileRule("account(1).address.city", ReleaseNumber(1)).orFail()
         assertEquals(pins("account" to 1, "Account" to 1, "Address" to 1), edition.pins)

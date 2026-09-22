@@ -29,6 +29,24 @@ private fun notSelfContained(src: String): TypeError.ReleaseNotSelfContained =
  */
 class SelfContainmentTest {
     @Test
+    fun aCapabilityTypedByAConstructorReachesTheConstructorsType() {
+        val error =
+            notSelfContained(
+                """
+                type Point = Point { x: Num, y: Num }
+                type Shape = Circle { area: Num } | Square { corner: Point }
+
+                circle: Circle
+
+                release 1
+                  Shape
+                  circle
+                """,
+            )
+        assertEquals("Point/1", error.unreachable)
+    }
+
+    @Test
     fun aCapabilityReachingAnotherRevisionOfAnExposedTypeIsRejected() {
         val error =
             notSelfContained(
@@ -150,13 +168,13 @@ class SelfContainmentTest {
     }
 
     /**
-     * A sum's interface types each shared field as the *lub* of its arms, so the interface can name
-     * a type no constructor field does — here `x` is `lub(Circle/2, Square/2)`, which is `Shape/2`.
-     * That is why the walk reads the interface as well as the constructors: neither contains the
-     * other.
+     * A sum's interface types each shared field as the *lub* of its arms — here `x` is
+     * `lub(Circle/2, Square/2)`, which is `Shape/2` — and the constructor fields name the arms.
+     * Every reference collapses to the type it belongs to, so the release is missing one thing,
+     * `Shape/2`, reported once and never as its constructors.
      */
     @Test
-    fun aLubbedInterfaceFieldNamesATypeNoConstructorFieldDoes() {
+    fun constructorFieldsAndTheLubbedInterfaceFieldReachTheSameType() {
         val errors =
             contractErrors(
                 """
@@ -168,8 +186,8 @@ class SelfContainmentTest {
                 """,
             )
         assertEquals(
-            listOf("Circle/2", "Shape/2", "Square/2"),
-            errors.map { assertIs<TypeError.ReleaseNotSelfContained>(it).unreachable }.sorted(),
+            listOf("Shape/2"),
+            errors.map { assertIs<TypeError.ReleaseNotSelfContained>(it).unreachable },
         )
     }
 

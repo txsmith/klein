@@ -12,7 +12,6 @@ import klein.check.ContractEnv
 import klein.check.ContractType
 import klein.check.RuleEnv
 import klein.check.RuleType
-import klein.check.Type
 import klein.check.Type.TForall
 import klein.check.Type.TFun
 import klein.check.TypeDefInfo
@@ -192,8 +191,7 @@ class EnvironmentContract internal constructor(
         revision: RevisionNumber,
     ): Long? {
         declarations.firstOrNull { it.name == name && it.revision == revision }?.let { return hashCapability(it) }
-        val typeName = contractTypeEnv.lookupConstructor(name, revision)?.parentType ?: name
-        return contractTypeEnv.hashTypeDefinition(typeName, revision)
+        return contractTypeEnv.hashTypeDefinition(contractTypeEnv.collapseToType(name, revision), revision)
     }
 
     internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface = resolvePins(getReleasePins(release))
@@ -218,7 +216,7 @@ class EnvironmentContract internal constructor(
                 roots.add(declaration.type)
                 continue
             }
-            val typeName = contractTypeEnv.lookupConstructor(name, revision)?.parentType ?: name
+            val typeName = contractTypeEnv.collapseToType(name, revision)
             if (contractTypeEnv.lookupTypeDef(typeName, revision) != null) {
                 surface[typeName] = revision
                 roots.addAll(contractTypeEnv.declaredFields(typeName, revision))
@@ -227,8 +225,8 @@ class EnvironmentContract internal constructor(
             }
         }
         if (unknown.isNotEmpty()) throw KleinException(unknown)
-        for (reached in roots.reachableTypes(contractTypeEnv)) {
-            if (reached is Type.TRef) surface[reached.name] = reached.revision
+        for ((reachedName, reachedRevision) in roots.reachableTypeNames(contractTypeEnv)) {
+            surface[reachedName] = reachedRevision
         }
         return surface
     }
