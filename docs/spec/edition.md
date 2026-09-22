@@ -73,6 +73,12 @@ What is in it:
 - every type the declaration reaches by name, with the revision it reaches it at, but not that
   type's own definition: a change there moves that type's own pin.
 
+Parameter names are in the hash even though a call is positional today. The tilde operator
+already turns a function's parameters into record fields by name (see
+[calling-conventions.md](../calling-conventions.md) §The Tilde Operator), and calling by name is
+where that leads. When it arrives, a renamed parameter is a changed signature, and the hash must
+already say so rather than be widened then.
+
 What is not in it: the declaration's own revision, which the pin records beside the hash; the
 order of record fields and of constructors; the names of type variables, which are numbered by
 first appearance. So `fun pick(x: 'A, y: 'A): 'A` and the same declaration written with `'T`
