@@ -30,6 +30,8 @@ private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
 private val LENDING =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -92,6 +94,8 @@ private fun assertIntact(text: String): Edition = assertIs<DecodedEdition.Intact
 
 private val RENAMED_PARAMETER =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -105,6 +109,8 @@ private val RENAMED_PARAMETER =
 
 private val WITHOUT_REVISION_1 =
     """
+    environment acme
+
     type Customer/2 = Customer { id: Num, name: String, tier: String }
 
     customer/2: Customer/2
@@ -118,6 +124,8 @@ private val WITHOUT_REVISION_1 =
 
 private val STRUCTURAL_LENDING =
     """
+    environment acme
+
     customer: { id: Num, tier: String }
     fun creditScore(c: { id: Num, tier: String }): Num
 
@@ -384,6 +392,8 @@ class EditionJsonEncodingTest {
     fun aRollbackToBeforeAStillPinnedRevisionRefusesTheEditionWhenItIsLoaded() {
         val twoRevisions =
             """
+            environment acme
+
             fun creditScore(c: Num): Num
             fun creditScore/2(c: Num): Num
 
@@ -395,6 +405,8 @@ class EditionJsonEncodingTest {
             """.trimIndent()
         val rolledBack =
             """
+            environment acme
+
             fun creditScore(c: Num): Num
 
             release 1
@@ -560,6 +572,8 @@ class EditionJsonEncodingTest {
         val edited =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
 
                 customer: Customer

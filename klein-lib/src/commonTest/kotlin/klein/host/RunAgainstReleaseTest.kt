@@ -19,6 +19,8 @@ private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
 private val LENDING_CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer
@@ -113,6 +115,8 @@ class RunAgainstReleaseTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 fun creditScore(c: Num): Num
                 fun creditScore/2(c: Num): Num
 
@@ -190,6 +194,8 @@ class RunAgainstReleaseTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 fun creditScore(c: Num): Num
                 fun creditScore/2(c: Num): Num
 
@@ -269,6 +275,8 @@ class RunAgainstReleaseTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 customer: { id: Num, tier: String }
 
                 release 1

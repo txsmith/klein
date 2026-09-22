@@ -90,6 +90,8 @@ private val everyNumberBitPattern: List<Double> =
 
 private val LENDING =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
 
     customer: Customer

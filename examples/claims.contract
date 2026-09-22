@@ -3,6 +3,8 @@
 #
 #   klein check --contract examples/claims.contract
 
+environment claims
+
 type Claim = Claim { id: Num, amount: Num }
 
 # Revision 2 of the decision adds a third outcome. Revision 1 stays exactly as

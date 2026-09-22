@@ -19,6 +19,8 @@ class ValueTypesTest {
         Klein
             .checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, tier: String }
                 type Shape = Circle { radius: Num } | Square { side: Num }
                 type Box<'T> = Box { item: 'T }

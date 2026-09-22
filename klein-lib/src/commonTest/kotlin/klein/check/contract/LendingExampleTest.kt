@@ -36,6 +36,8 @@ class LendingExampleTest {
 
     private val dayOne =
         """
+        environment acme
+
         type Customer = Customer { id: Num, name: String }
 
         customer: Customer
@@ -57,6 +59,8 @@ class LendingExampleTest {
     // The types do not move, so no checker can see the change: a new revision, in a new release.
     private val newBureau =
         """
+        environment acme
+
         type Customer = Customer { id: Num, name: String }
 
         customer: Customer
@@ -84,6 +88,8 @@ class LendingExampleTest {
     // mentions it. The bureau is unchanged, so release 2 is re-pointed rather than superseded.
     private val newShape =
         """
+        environment acme
+
         type Customer = Customer { id: Num, name: String }
         type Customer/2 = Customer { id: Num, tier: String }
 
@@ -146,6 +152,8 @@ class LendingExampleTest {
     // all three names, so the fold adds nothing and the file simply loses its first block.
     private val retired =
         """
+        environment acme
+
         type Customer/2 = Customer { id: Num, tier: String }
 
         customer/2: Customer/2

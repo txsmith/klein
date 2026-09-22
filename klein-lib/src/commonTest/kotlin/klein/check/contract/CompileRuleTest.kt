@@ -17,6 +17,8 @@ import kotlin.test.assertIs
 
 private val CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num, tier: String }
     type Shape/2 = Circle { area: Num } | Square { area: Num }
     type Shape/3 = Circle { area: Num } | Square { area: Num } | Dot { area: Num }

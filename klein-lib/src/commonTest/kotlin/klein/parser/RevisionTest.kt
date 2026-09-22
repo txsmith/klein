@@ -91,11 +91,13 @@ class RevisionTest {
     fun aRevisedValDeclarationDoesNotSwallowTheNextStatement() {
         val source =
             """
+            environment acme
+
             maxRetries/2: Num
             limit: Num
             """.trimIndent()
         assertContractEquals(
-            parseContract(source),
+            parseContractFile(source),
             declarations =
                 listOf(
                     valDecl("maxRetries", typeName("Num"), revision = RevisionNumber(2)),
@@ -108,13 +110,15 @@ class RevisionTest {
     fun bothRevisionsOfACapabilityParseInOneFile() {
         val source =
             """
+            environment acme
+
             type Customer = Customer { id: Num }
             type Customer/2 = Customer { id: Num, tier: String }
 
             fun creditScore(c: Customer): Num
             fun creditScore/2(c: Customer/2): Num
             """.trimIndent()
-        val contract = parseContract(source)
+        val contract = parseContractFile(source)
         assertEquals(listOf(null, RevisionNumber(2)), contract.types.map { it.revision })
         assertEquals(listOf(null, RevisionNumber(2)), contract.declarations.map { it.revision })
     }

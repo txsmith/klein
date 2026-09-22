@@ -16,6 +16,8 @@ import kotlin.test.assertTrue
 
 private val CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num, name: String }
     type Customer/2 = Customer { id: Num, name: String, tier: String }
     type Shape/2 = Circle { radius: Num } | Square { side: Num }

@@ -9,6 +9,7 @@ import klein.check.TypeError
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.InvalidContract
+import klein.contractOf
 import klein.interp.Value
 import klein.orFail
 import kotlin.test.Test
@@ -41,6 +42,8 @@ private fun forRun(
 
 private val CONTRACT =
     """
+    environment acme
+
     type Customer = Customer { id: Num, name: String }
 
     fun creditCheck(c: Customer): Num
@@ -74,7 +77,7 @@ class EnvironmentTest {
 
     @Test
     fun anEmptyContractNeedsNoRegistrations() {
-        assertEquals(emptyList(), load("type Customer = Customer { id: Num }").capabilities)
+        assertEquals(emptyList(), load(contractOf("type Customer = Customer { id: Num }")).capabilities)
     }
 
     @Test
@@ -93,6 +96,8 @@ class EnvironmentTest {
         val env =
             load(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num, name: String }
 
                 fun creditCheck/3(c: Customer): Num
@@ -179,7 +184,7 @@ class EnvironmentTest {
     // Revisions are declared in the contract; registration names one that exists.
     @Test
     fun aDeclaredRevisionIsACapability() {
-        val env = load("fun creditScore/2(c: Num): Num", immediate("creditScore/2") { Value.VNum(1.0) })
+        val env = load(contractOf("fun creditScore/2(c: Num): Num"), immediate("creditScore/2") { Value.VNum(1.0) })
         val capability = env.capabilities.single()
         assertEquals("creditScore", capability.name)
         assertEquals(RevisionNumber(2), capability.revision)
@@ -191,6 +196,8 @@ class EnvironmentTest {
         val env =
             load(
                 """
+                environment acme
+
                 fun creditScore(c: Num): Num
                 fun creditScore/2(c: Num): Num
                 """.trimIndent(),
@@ -205,7 +212,7 @@ class EnvironmentTest {
         val error =
             assertFailsWith<KleinException> {
                 load(
-                    "fun creditScore(c: Num): Num",
+                    contractOf("fun creditScore(c: Num): Num"),
                     immediate("creditScore") { Value.VNum(1.0) },
                     immediate("creditScore/2") { Value.VNum(2.0) },
                 )
@@ -220,6 +227,8 @@ class EnvironmentTest {
         val env =
             load(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -241,6 +250,8 @@ class EnvironmentTest {
             assertFailsWith<KleinException> {
                 load(
                     """
+                    environment acme
+
                     fun creditCheck(c: Num): Num
                     fun creditCheck/2(c: Num): Num
                     """.trimIndent(),
@@ -256,6 +267,8 @@ class EnvironmentTest {
             assertFailsWith<KleinException> {
                 load(
                     """
+                    environment acme
+
                     fun a(x: Nope): Num
                     fun b(y: AlsoNope): Num
                     """.trimIndent(),
@@ -268,7 +281,7 @@ class EnvironmentTest {
 
     @Test
     fun registrationErrorsAreNotReportedWhenTheContractItselfFailed() {
-        val error = assertFailsWith<KleinException> { load("fun a(x: Nope): Num", immediate("ghost") { Value.VUnit }) }
+        val error = assertFailsWith<KleinException> { load(contractOf("fun a(x: Nope): Num"), immediate("ghost") { Value.VUnit }) }
         val invalid = assertIs<InvalidContract>(error.errors.single())
         assertEquals(1, invalid.diagnostics.size, "contract errors should short-circuit: ${invalid.diagnostics}")
     }
@@ -287,6 +300,8 @@ class EnvironmentTest {
 
     private val PARTLY_EXPOSED =
         """
+        environment acme
+
         type Customer = Customer { id: Num }
 
         fun creditCheck(c: Customer): Num
@@ -332,7 +347,7 @@ class EnvironmentTest {
 
     @Test
     fun aPerRunEntryNamesADeclaredRevision() {
-        val env = load("fun creditScore/2(c: Num): Num", perRun("creditScore/2"))
+        val env = load(contractOf("fun creditScore/2(c: Num): Num"), perRun("creditScore/2"))
         assertEquals(RevisionNumber(2), env.capabilities.single().revision)
         assertEquals(null, env.registry.getHandler("creditScore", RevisionNumber(2)))
     }

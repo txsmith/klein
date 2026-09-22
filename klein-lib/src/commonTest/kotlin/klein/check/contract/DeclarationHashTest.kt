@@ -2,6 +2,7 @@ package klein.check.contract
 
 import klein.Klein
 import klein.RevisionNumber
+import klein.contractOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -30,6 +31,8 @@ class DeclarationHashTest {
     fun theSameContractTextHashesTheSameInTwoInstances() {
         val contract =
             """
+            environment acme
+
             type Customer = Customer { id: Num, tier: String }
             type Box<'A> = Box { value: 'A }
             customer: Customer
@@ -41,114 +44,165 @@ class DeclarationHashTest {
 
     @Test
     fun anUnknownNameOrRevisionHasNoHash() {
-        assertNull(hashOf("fun creditScore(c: Num): Num", "creditScore", revision = 2))
-        assertNull(hashOf("fun creditScore(c: Num): Num", "nobody"))
+        assertNull(hashOf(contractOf("fun creditScore(c: Num): Num"), "creditScore", revision = 2))
+        assertNull(hashOf(contractOf("fun creditScore(c: Num): Num"), "nobody"))
     }
 
     @Test
     fun aCapabilityAndATypeHashDifferently() {
-        val contract = "type Customer = Customer { id: Num }\ncustomer: Customer\nfun creditScore(c: Customer): Num"
+        val contract =
+            """
+            environment acme
+
+            type Customer = Customer { id: Num }
+            customer: Customer
+            fun creditScore(c: Customer): Num
+            """
         val hashes = listOf("Customer", "customer", "creditScore").map { hashOf(contract, it) }
         assertEquals(3, hashes.toSet().size)
     }
 
     @Test
     fun recordFieldOrderDoesNotMatter() {
-        assertSameHash("f", "fun f(c: { a: Num, b: String }): Num", "fun f(c: { b: String, a: Num }): Num")
+        assertSameHash("f", contractOf("fun f(c: { a: Num, b: String }): Num"), contractOf("fun f(c: { b: String, a: Num }): Num"))
     }
 
     @Test
     fun aParameterRenameChangesTheHash() {
-        assertDifferentHash("f", "type Customer = Customer { id: Num }\nfun f(c: Customer): Num", "type Customer = Customer { id: Num }\nfun f(customer: Customer): Num")
+        val before =
+            """
+            environment acme
+
+            type Customer = Customer { id: Num }
+            fun f(c: Customer): Num
+            """
+        val after =
+            """
+            environment acme
+
+            type Customer = Customer { id: Num }
+            fun f(customer: Customer): Num
+            """
+        assertDifferentHash("f", before, after)
     }
 
     @Test
     fun aParameterTypeChangeChangesTheHash() {
-        assertDifferentHash("f", "fun f(c: Num): Num", "fun f(c: String): Num")
+        assertDifferentHash("f", contractOf("fun f(c: Num): Num"), contractOf("fun f(c: String): Num"))
     }
 
     @Test
     fun aResultTypeChangeChangesTheHash() {
-        assertDifferentHash("f", "fun f(c: Num): Num", "fun f(c: Num): String")
+        assertDifferentHash("f", contractOf("fun f(c: Num): Num"), contractOf("fun f(c: Num): String"))
     }
 
     @Test
     fun aTypeVariableRenameDoesNotMatter() {
-        assertSameHash("pick", "fun pick(x: 'A, y: 'A): 'A", "fun pick(x: 'T, y: 'T): 'T")
+        assertSameHash("pick", contractOf("fun pick(x: 'A, y: 'A): 'A"), contractOf("fun pick(x: 'T, y: 'T): 'T"))
     }
 
     @Test
     fun whichVariableIsWhichMatters() {
-        assertDifferentHash("pick", "fun pick(x: 'A, y: 'B): 'A", "fun pick(x: 'A, y: 'B): 'B")
+        assertDifferentHash("pick", contractOf("fun pick(x: 'A, y: 'B): 'A"), contractOf("fun pick(x: 'A, y: 'B): 'B"))
     }
 
     @Test
     fun aReachedRevisionIsPartOfTheHash() {
-        val two = "type Customer = Customer { id: Num }\ntype Customer/2 = Customer { id: Num, tier: String }\n"
+        val two =
+            """
+            environment acme
+
+            type Customer = Customer { id: Num }
+            type Customer/2 = Customer { id: Num, tier: String }
+            """
         assertDifferentHash("f", two + "fun f(c: Customer): Num", two + "fun f(c: Customer/2): Num")
     }
 
     @Test
     fun theDeclarationsOwnRevisionIsNotPartOfTheHash() {
-        val first = Klein.checkContract("fun f(c: Num): Num").hashOf("f", RevisionNumber(1))
-        val second = Klein.checkContract("fun f/2(c: Num): Num").hashOf("f", RevisionNumber(2))
+        val first = Klein.checkContract(contractOf("fun f(c: Num): Num")).hashOf("f", RevisionNumber(1))
+        val second = Klein.checkContract(contractOf("fun f/2(c: Num): Num")).hashOf("f", RevisionNumber(2))
         assertEquals(first, second)
     }
 
     @Test
     fun aValueCapabilityHashesItsWholeType() {
-        assertDifferentHash("limit", "limit: Num", "limit: Num?")
+        assertDifferentHash("limit", contractOf("limit: Num"), contractOf("limit: Num?"))
     }
 
     @Test
     fun aTypeParameterRenameDoesNotMatter() {
-        assertSameHash("Box", "type Box<'A> = Box { value: 'A }", "type Box<'T> = Box { value: 'T }")
+        assertSameHash("Box", contractOf("type Box<'A> = Box { value: 'A }"), contractOf("type Box<'T> = Box { value: 'T }"))
     }
 
     @Test
     fun constructorOrderDoesNotMatter() {
-        assertSameHash("Shape", "type Shape = Circle { area: Num } | Square { area: Num }", "type Shape = Square { area: Num } | Circle { area: Num }")
+        assertSameHash(
+            "Shape",
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num }"),
+            contractOf("type Shape = Square { area: Num } | Circle { area: Num }"),
+        )
     }
 
     @Test
     fun aFieldAddedToOneConstructorChangesTheTypesHash() {
         assertDifferentHash(
             "Shape",
-            "type Shape = Circle { area: Num } | Square { area: Num }",
-            "type Shape = Circle { area: Num } | Square { area: Num, side: Num }",
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num }"),
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num, side: Num }"),
         )
     }
 
     @Test
     fun aFieldTypeChangeInAConstructorChangesTheTypesHash() {
-        assertDifferentHash("Customer", "type Customer = Customer { id: Num }", "type Customer = Customer { id: String }")
+        assertDifferentHash("Customer", contractOf("type Customer = Customer { id: Num }"), contractOf("type Customer = Customer { id: String }"))
     }
 
     @Test
     fun aConstructorRenameChangesTheTypesHash() {
-        assertDifferentHash("Shape", "type Shape = Circle { area: Num } | Square { area: Num }", "type Shape = Circle { area: Num } | Box { area: Num }")
+        assertDifferentHash(
+            "Shape",
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num }"),
+            contractOf("type Shape = Circle { area: Num } | Box { area: Num }"),
+        )
     }
 
     @Test
     fun aConstructorAddedChangesTheTypesHash() {
-        assertDifferentHash("Shape", "type Shape = Circle { area: Num } | Square { area: Num }", "type Shape = Circle { area: Num } | Square { area: Num } | Dot")
+        assertDifferentHash(
+            "Shape",
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num }"),
+            contractOf("type Shape = Circle { area: Num } | Square { area: Num } | Dot"),
+        )
     }
 
     @Test
     fun aTypeParameterAddedChangesTheTypesHash() {
-        assertDifferentHash("Box", "type Box = Box { value: Num }", "type Box<'A> = Box { value: Num }")
+        assertDifferentHash("Box", contractOf("type Box = Box { value: Num }"), contractOf("type Box<'A> = Box { value: Num }"))
     }
 
     @Test
     fun aConstructorNameHashesAsItsType() {
-        val contract = Klein.checkContract("type Shape = Circle { area: Num } | Square { area: Num }")
+        val contract = Klein.checkContract(contractOf("type Shape = Circle { area: Num } | Square { area: Num }"))
         assertEquals(contract.hashOf("Shape", RevisionNumber(1)), contract.hashOf("Circle", RevisionNumber(1)))
     }
 
     @Test
     fun aTypeReachedByAFieldIsNotPartOfTheReachingTypesHash() {
-        val before = "type Address = Address { city: String }\ntype Account = Account { address: Address }"
-        val after = "type Address = Address { city: String, zip: String }\ntype Account = Account { address: Address }"
+        val before =
+            """
+            environment acme
+
+            type Address = Address { city: String }
+            type Account = Account { address: Address }
+            """
+        val after =
+            """
+            environment acme
+
+            type Address = Address { city: String, zip: String }
+            type Account = Account { address: Address }
+            """
         assertSameHash("Account", before, after)
         assertDifferentHash("Address", before, after)
     }
@@ -158,6 +212,8 @@ class DeclarationHashTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Point = Point { x: Num, y: Num }
                 type Point/2 = Point { x: Num, y: Num, z: Num }
                 type Shape<'A> = Square { corner: Point/2, side: Num } | Circle { area: 'A }

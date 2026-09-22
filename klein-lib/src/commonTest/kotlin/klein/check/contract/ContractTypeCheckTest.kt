@@ -11,6 +11,7 @@ import klein.check.Type.*
 import klein.check.TypeEnv
 import klein.check.TypeError
 import klein.check.infer
+import klein.contractOf
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,6 +49,8 @@ class ContractTypeCheckTest {
     fun wellFormedContractChecks() {
         Klein.checkContract(
             """
+            environment acme
+
             type Customer = Customer { id: Num, name: String }
 
             fun creditCheck(c: Customer): Num
@@ -58,18 +61,20 @@ class ContractTypeCheckTest {
 
     @Test
     fun typeDefinitionOnlyContractIsFine() {
-        Klein.checkContract("type Customer = Customer { id: Num }")
+        Klein.checkContract(contractOf("type Customer = Customer { id: Num }"))
     }
 
     @Test
     fun emptyContractIsFine() {
-        Klein.checkContract("")
+        Klein.checkContract(contractOf(""))
     }
 
     @Test
     fun aDeclaredCapabilityIsCallableFromARuleOnItsRelease() {
         val contract =
             """
+            environment acme
+
             type Customer = Customer { id: Num, name: String }
 
             fun creditCheck(c: Customer): Num
@@ -90,6 +95,8 @@ class ContractTypeCheckTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 fun creditCheck(c: Num): Num
                 maxRetries: Num
                 fun riskScore(c: Num): Num
@@ -103,6 +110,8 @@ class ContractTypeCheckTest {
         val contract =
             Klein.checkContract(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
 
@@ -126,18 +135,18 @@ class ContractTypeCheckTest {
 
     @Test
     fun declarationWithAnUnannotatedParamIsRejected() {
-        assertIs<TypeError.MissingParamAnnotation>(contractErrors("fun creditCheck(c): Num").single())
+        assertIs<TypeError.MissingParamAnnotation>(contractErrors(contractOf("fun creditCheck(c): Num")).single())
     }
 
     @Test
     fun declarationNamingAnUnknownTypeIsRejected() {
-        val error = assertIs<TypeError.UnboundVariable>(contractErrors("fun creditCheck(c: Nope): Num").single())
+        val error = assertIs<TypeError.UnboundVariable>(contractErrors(contractOf("fun creditCheck(c: Nope): Num")).single())
         assertEquals("Nope", error.name)
     }
 
     @Test
     fun constructorFieldNamingAnUnknownTypeIsRejected() {
-        val error = assertIs<TypeError.UnboundVariable>(contractErrors("type Bad = Bad { x: Nope }").single())
+        val error = assertIs<TypeError.UnboundVariable>(contractErrors(contractOf("type Bad = Bad { x: Nope }")).single())
         assertEquals("Nope", error.name)
     }
 
@@ -146,6 +155,8 @@ class ContractTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 fun a(x: Nope): Num
                 fun b(y: AlsoNope): Num
                 """.trimIndent(),
@@ -156,10 +167,16 @@ class ContractTypeCheckTest {
 
     @Test
     fun genericDeclarationQuantifiesItsTypeVariables() {
-        assertEquals(
-            "(A) -> A",
-            Type.print(ruleAgainst("fun identity(x: 'A): 'A\n\nrelease 1\n  identity", "identity")),
-        )
+        val contract =
+            """
+            environment acme
+
+            fun identity(x: 'A): 'A
+
+            release 1
+              identity
+            """.trimIndent()
+        assertEquals("(A) -> A", Type.print(ruleAgainst(contract, "identity")))
     }
 
     // ── no functions cross the boundary ──────────────────────────────────────
@@ -167,13 +184,13 @@ class ContractTypeCheckTest {
     @Test
     fun declarationTakingAFunctionIsRejected() {
         assertIs<TypeError.FunctionTypeInCapability>(
-            contractErrors("fun sortBy(xs: Num, key: (Num) -> Num): Num").single(),
+            contractErrors(contractOf("fun sortBy(xs: Num, key: (Num) -> Num): Num")).single(),
         )
     }
 
     @Test
     fun declarationReturningAFunctionIsRejected() {
-        assertIs<TypeError.FunctionTypeInCapability>(contractErrors("fun adder(n: Num): (Num) -> Num").single())
+        assertIs<TypeError.FunctionTypeInCapability>(contractErrors(contractOf("fun adder(n: Num): (Num) -> Num")).single())
     }
 
     @Test
@@ -181,6 +198,8 @@ class ContractTypeCheckTest {
         assertIs<TypeError.FunctionTypeInCapability>(
             contractErrors(
                 """
+                environment acme
+
                 type Handler = Handler { run: (Num) -> Num }
 
                 fun register(h: Handler): Num
@@ -196,6 +215,8 @@ class ContractTypeCheckTest {
         assertIs<TypeError.FunctionTypeInCapability>(
             contractErrors(
                 """
+                environment acme
+
                 type Handler = Direct { run: (Num) -> Num } | Named { name: String }
 
                 fun register(h: Handler): Num
@@ -210,6 +231,8 @@ class ContractTypeCheckTest {
         assertIs<TypeError.FunctionTypeInCapability>(
             contractErrors(
                 """
+                environment acme
+
                 type Node = Node { edge: Edge? }
                 type Edge = Edge { to: Node, weigh: (Num) -> Num }
 
@@ -223,6 +246,8 @@ class ContractTypeCheckTest {
     fun aMutuallyRecursiveTypeCarryingNoFunctionIsFine() {
         Klein.checkContract(
             """
+            environment acme
+
             type Node = Node { edge: Edge? }
             type Edge = Edge { to: Node }
 
@@ -233,7 +258,7 @@ class ContractTypeCheckTest {
 
     @Test
     fun valueCapabilityOfFunctionTypeIsRejected() {
-        assertIs<TypeError.FunctionTypeInCapability>(contractErrors("callback: (Num) -> Num").single())
+        assertIs<TypeError.FunctionTypeInCapability>(contractErrors(contractOf("callback: (Num) -> Num")).single())
     }
 
     // ── built-in type names ──────────────────────────────────────────────────
@@ -241,19 +266,19 @@ class ContractTypeCheckTest {
     @Test
     fun redefiningABuiltinTypeIsRejected() {
         val error =
-            contractErrors("type Num = Zero | Succ { n: Num }").filterIsInstance<TypeError.ShadowsBuiltinType>().single()
+            contractErrors(contractOf("type Num = Zero | Succ { n: Num }")).filterIsInstance<TypeError.ShadowsBuiltinType>().single()
         assertEquals("Num", error.name)
     }
 
     @Test
     fun aConstructorNamedAfterABuiltinTypeIsRejected() {
-        contractErrors("type Wrapper = String { value: Num }").filterIsInstance<TypeError.ShadowsBuiltinType>().single()
+        contractErrors(contractOf("type Wrapper = String { value: Num }")).filterIsInstance<TypeError.ShadowsBuiltinType>().single()
     }
 
     @Test
     fun aRevisionDoesNotMakeABuiltinTypeDefinable() {
         val error =
-            contractErrors("type Num/2 = Zero | Succ { n: Num }")
+            contractErrors(contractOf("type Num/2 = Zero | Succ { n: Num }"))
                 .filterIsInstance<TypeError.ShadowsBuiltinType>()
                 .single()
         assertEquals("Num/2", error.name)
@@ -265,6 +290,8 @@ class ContractTypeCheckTest {
     fun aDeclarationMayNameATypeDefinedBelowIt() {
         val contract =
             """
+            environment acme
+
             fun creditCheck(c: Customer): Num
 
             type Customer = Customer { id: Num }
@@ -280,6 +307,8 @@ class ContractTypeCheckTest {
     fun aTypeMayNameATypeDefinedBelowIt() {
         val contract =
             """
+            environment acme
+
             type Order = Order { customer: Customer }
             type Customer = Customer { id: Num }
 
@@ -297,6 +326,8 @@ class ContractTypeCheckTest {
     fun mutuallyReferentialTypesResolve() {
         val contract =
             """
+            environment acme
+
             type Node = Node { edge: Edge? }
             type Edge = Edge { to: Node }
 
@@ -314,6 +345,8 @@ class ContractTypeCheckTest {
         assertIs<TypeError.DuplicateBinding>(
             contractErrors(
                 """
+                environment acme
+
                 fun creditCheck(c: Num): Num
                 fun creditCheck(c: String): Num
                 """.trimIndent(),
@@ -326,6 +359,8 @@ class ContractTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 fun creditCheck(c: Num): Num
                 creditCheck: Num
                 """.trimIndent(),
@@ -339,6 +374,8 @@ class ContractTypeCheckTest {
             assertIs<TypeError.DuplicateBinding>(
                 contractErrors(
                     """
+                    environment acme
+
                     fun creditScore/2(c: Num): Num
                     fun creditScore/2(c: String): Num
                     """.trimIndent(),
@@ -352,6 +389,8 @@ class ContractTypeCheckTest {
         assertIs<TypeError.DuplicateBinding>(
             contractErrors(
                 """
+                environment acme
+
                 fun creditScore(c: Num): Num
                 fun creditScore/1(c: String): Num
                 """.trimIndent(),
@@ -364,6 +403,8 @@ class ContractTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Customer/2 = Customer { id: Num }
                 type Customer/2 = Customer { id: Num, tier: String }
                 """.trimIndent(),
@@ -376,6 +417,8 @@ class ContractTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Customer = Customer { id: Num }
                 type Customer/1 = Customer { id: Num, tier: String }
                 """.trimIndent(),
@@ -388,6 +431,8 @@ class ContractTypeCheckTest {
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 fun creditScore/2(c: Num): Num
                 creditScore/2: Num
                 """.trimIndent(),
@@ -399,6 +444,8 @@ class ContractTypeCheckTest {
     fun aDeclarationAndAValueOfDifferentRevisionsDoNotCollide() {
         Klein.checkContract(
             """
+            environment acme
+
             fun creditScore(c: Num): Num
             creditScore/2: Num
             """.trimIndent(),
@@ -409,6 +456,8 @@ class ContractTypeCheckTest {
 
     private val twoRevisions =
         """
+        environment acme
+
         type Customer = Customer { id: Num }
         type Customer/2 = Customer { id: Num, tier: String }
 
@@ -450,6 +499,8 @@ tier(Customer(1, "gold"))""", release = 2),
     fun twoRevisionsOfAValueCapabilityCoexist() {
         val contract =
             """
+            environment acme
+
             maxRetries: Num
             maxRetries/2: String
 
@@ -467,6 +518,8 @@ tier(Customer(1, "gold"))""", release = 2),
     fun aRevisedSumTypeRevisesItsConstructors() {
         val contract =
             """
+            environment acme
+
             type Shape/2 = Circle { radius: Num } | Square { side: Num }
 
             fun area(s: Shape/2): Num
@@ -483,6 +536,8 @@ tier(Customer(1, "gold"))""", release = 2),
     fun aRevisedTypeArgumentResolves() {
         val contract =
             """
+            environment acme
+
             type Customer/2 = Customer { id: Num }
             type Box<'A> = Box { value: 'A }
 
@@ -502,6 +557,8 @@ tier(Customer(1, "gold"))""", release = 2),
             assertIs<TypeError.UnboundVariable>(
                 contractErrors(
                     """
+                    environment acme
+
                     type Customer = Customer { id: Num }
 
                     fun creditScore/2(c: Customer/3): Num
@@ -514,10 +571,16 @@ tier(Customer(1, "gold"))""", release = 2),
     /** Declaring `/2` alone does not make the bare name mean anything, so a release cannot reach it. */
     @Test
     fun aRevisionDoesNotBindTheBareName() {
-        val error =
-            assertIs<TypeError.UnknownReleaseTarget>(
-                contractErrors("maxRetries/2: Num\n\nrelease 1\n  maxRetries").single(),
-            )
+        val contract =
+            """
+            environment acme
+
+            maxRetries/2: Num
+
+            release 1
+              maxRetries
+            """.trimIndent()
+        val error = assertIs<TypeError.UnknownReleaseTarget>(contractErrors(contract).single())
         assertEquals("maxRetries", error.name)
     }
 
@@ -525,20 +588,29 @@ tier(Customer(1, "gold"))""", release = 2),
 
     @Test
     fun aRevisionOnABuiltinTypeIsRejected() {
-        val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors("maxRetries: Num/2").single())
+        val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors(contractOf("maxRetries: Num/2")).single())
         assertEquals("Num", error.typeName)
         assertEquals(RevisionNumber(2), error.revision)
     }
 
     @Test
     fun revisionOneOnABuiltinTypeIsAlsoRejected() {
-        val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors("maxRetries: Num/1").single())
+        val error = assertIs<TypeError.RevisionOnPrimitive>(contractErrors(contractOf("maxRetries: Num/1")).single())
         assertEquals(RevisionNumber(1), error.revision)
     }
 
     @Test
     fun aBareBuiltinTypeIsStillFine() {
-        assertEquals(TNum, ruleAgainst("maxRetries: Num\n\nrelease 1\n  maxRetries", "maxRetries"))
+        val contract =
+            """
+            environment acme
+
+            maxRetries: Num
+
+            release 1
+              maxRetries
+            """.trimIndent()
+        assertEquals(TNum, ruleAgainst(contract, "maxRetries"))
     }
 
     @Test
@@ -546,7 +618,7 @@ tier(Customer(1, "gold"))""", release = 2),
         for (name in listOf("Num", "String", "Bool", "Unit", "Any", "Nothing")) {
             val error =
                 assertIs<TypeError.RevisionOnPrimitive>(
-                    contractErrors("x: $name/2").single(),
+                    contractErrors(contractOf("x: $name/2")).single(),
                     "expected a rejection for '$name/2'",
                 )
             assertEquals(name, error.typeName)
@@ -567,7 +639,7 @@ tier(Customer(1, "gold"))""", release = 2),
                 "x: (Num) -> Num/2",
             )
         for (source in sources) {
-            val errors = contractErrors(source)
+            val errors = contractErrors(contractOf(source))
             assertTrue(
                 errors.any { it is TypeError.RevisionOnPrimitive },
                 "expected a RevisionOnPrimitive for '$source', got $errors",
@@ -580,6 +652,8 @@ tier(Customer(1, "gold"))""", release = 2),
         val errors =
             contractErrors(
                 """
+                environment acme
+
                 type Box<'A> = Box { value: 'A }
 
                 fun boxed(): Box<Num/2>
@@ -592,6 +666,8 @@ tier(Customer(1, "gold"))""", release = 2),
     fun aRevisionOnADeclaredTypeIsStillFine() {
         Klein.checkContract(
             """
+            environment acme
+
             type Customer = Customer { id: Num }
             type Customer/2 = Customer { id: Num, tier: String }
 
@@ -604,7 +680,16 @@ tier(Customer(1, "gold"))""", release = 2),
 
     @Test
     fun aRuleMisusingACapabilityIsRejected() {
-        val errors = ruleErrors("fun creditCheck(c: Num): Num\n\nrelease 1\n  creditCheck", """creditCheck("nope")""")
+        val contract =
+            """
+            environment acme
+
+            fun creditCheck(c: Num): Num
+
+            release 1
+              creditCheck
+            """.trimIndent()
+        val errors = ruleErrors(contract, """creditCheck("nope")""")
         assertIs<TypeError.TypeMismatch>(errors.single())
     }
 
@@ -622,15 +707,25 @@ tier(Customer(1, "gold"))""", release = 2),
     // Holding an EnvironmentContract means the contract checked: there is no errors field to read.
     @Test
     fun theEntryPointAnswersAnArtifactOrThrows() {
-        val contract = Klein.checkContract("maxRetries: Num\n\nrelease 1\n  maxRetries")
+        val contract =
+            Klein.checkContract(
+                """
+                environment acme
+
+                maxRetries: Num
+
+                release 1
+                  maxRetries
+                """.trimIndent(),
+            )
         assertEquals(listOf("maxRetries"), contract.declarations.map { it.name })
         assertEquals(listOf(ReleaseNumber(1)), contract.releases)
 
-        assertIs<TypeError.UnboundVariable>(contractErrors("fun creditCheck(c: Nope): Num").single())
+        assertIs<TypeError.UnboundVariable>(contractErrors(contractOf("fun creditCheck(c: Nope): Num")).single())
     }
 
     @Test
     fun theEntryPointThrowsOnASyntaxErrorToo() {
-        assertFailsWith<KleinException> { Klein.checkContract("maxRetries: Num = 3") }
+        assertFailsWith<KleinException> { Klein.checkContract(contractOf("maxRetries: Num = 3")) }
     }
 }
