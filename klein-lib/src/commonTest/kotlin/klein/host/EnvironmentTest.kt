@@ -34,6 +34,11 @@ private fun loadAll(
     return contract.implement(*everything(contract), *extra)
 }
 
+private fun forRun(
+    contract: EnvironmentContract,
+    vararg registrations: HandlerRegistration,
+): HandlerRegistry = HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors = mutableListOf())
+
 private val CONTRACT =
     """
     type Customer = Customer { id: Num, name: String }
@@ -352,9 +357,10 @@ class EnvironmentTest {
 
     @Test
     fun aPerRunEntryIsUnregisteredForNothingButMissingAHandler() {
-        val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
+        val contract = Klein.checkContract(CONTRACT)
+        val env = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
         assertEquals(emptyList(), env.registry.unregistered())
-        assertEquals(listOf("creditCheck"), env.registry.missingHandlers().map { it.name })
+        assertEquals(listOf("creditCheck"), env.registry.missingHandlers(forRun(contract)).map { it.name })
     }
 
     @Test
@@ -372,15 +378,9 @@ class EnvironmentTest {
     fun aLaterRegistryReplacesAPerRunEntryAndABootHandler() {
         val contract = Klein.checkContract(CONTRACT)
         val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
-        val forRun =
-            HandlerRegistry.fromRegistrations(
-                contract.declarations,
-                listOf(immediate("creditCheck") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(5.0) }),
-                perRunAllowed = false,
-                errors = mutableListOf(),
-            )
-        val combined = boot + forRun
-        assertEquals(emptyList(), combined.missingHandlers())
+        val supplied = forRun(contract, immediate("creditCheck") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(5.0) })
+        val combined = boot + supplied
+        assertEquals(emptyList(), boot.missingHandlers(supplied))
         val maxRetries = assertIs<Handler.Immediate>(combined.getHandler("maxRetries", RevisionNumber(1)))
         assertEquals(Value.VNum(5.0), maxRetries.answer(emptyList()))
     }
@@ -389,17 +389,20 @@ class EnvironmentTest {
     fun combiningLeavesTheLeftSideUntouchedWhereTheRightIsSilent() {
         val contract = Klein.checkContract(CONTRACT)
         val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
-        val forRun =
-            HandlerRegistry.fromRegistrations(
-                contract.declarations,
-                listOf(immediate("creditCheck") { Value.VNum(1.0) }),
-                perRunAllowed = false,
-                errors = mutableListOf(),
-            )
-        val combined = boot + forRun
+        val supplied = forRun(contract, immediate("creditCheck") { Value.VNum(1.0) })
+        val combined = boot + supplied
         val maxRetries = assertIs<Handler.Immediate>(combined.getHandler("maxRetries", RevisionNumber(1)))
         assertEquals(Value.VNum(3.0), maxRetries.answer(emptyList()))
-        assertEquals(listOf("creditCheck"), boot.missingHandlers().map { it.name })
+        assertEquals(emptyList(), boot.missingHandlers(supplied))
+    }
+
+    // Only the per-run promises are checked at run time; boot handlers are settled at boot.
+    @Test
+    fun theRunTimeCheckLooksOnlyAtPerRunEntries() {
+        val contract = Klein.checkContract(CONTRACT)
+        val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
+        assertEquals(listOf("creditCheck"), boot.missingHandlers(forRun(contract)).map { it.name })
+        assertEquals(emptyList(), boot.missingHandlers(forRun(contract, immediate("creditCheck") { Value.VNum(1.0) })))
     }
 
     // --- the contract reference ---

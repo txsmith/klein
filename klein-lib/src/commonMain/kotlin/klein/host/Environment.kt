@@ -94,10 +94,10 @@ class HandlerRegistry internal constructor(
             .filter { (it.name to it.revision) !in entries }
             .map { RegistrationError("'${it.name}' revision ${it.revision.value} is declared by the contract but no implementation is registered") }
 
-    internal fun missingHandlers(): List<MissingHandler> =
-        declarations
-            .filter { entries[it.name to it.revision] == null }
-            .map { MissingHandler(it.name, it.revision) }
+    private val perRun: Set<Pair<String, RevisionNumber>> = entries.filterValues { it == null }.keys
+
+    internal fun missingHandlers(supplied: HandlerRegistry): List<MissingHandler> =
+        (perRun - supplied.entries.keys).map { (name, revision) -> MissingHandler(name, revision) }
 }
 
 /**
@@ -161,16 +161,16 @@ class Environment internal constructor(
         persist: (LogEntry) -> Unit = {},
     ): RunOutcome {
         val errors = mutableListOf<RegistrationError>()
-        val handlers = registry + HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors)
+        val supplied = HandlerRegistry.fromRegistrations(contract.declarations, registrations.toList(), perRunAllowed = false, errors)
         if (errors.isNotEmpty()) throw KleinException(errors)
         contract.resolvePins(edition.pins)
-        val missing = handlers.missingHandlers()
+        val missing = registry.missingHandlers(supplied)
         if (missing.isNotEmpty()) throw KleinException(missing)
         if (log != null) {
             val logProblems = checkLog(edition, log)
             if (logProblems.isNotEmpty()) throw KleinException(logProblems)
         }
-        return Run(this, edition, handlers, persist, log).start()
+        return Run(this, edition, registry + supplied, persist, log).start()
     }
 
     internal fun getCapabilityDeclaration(
