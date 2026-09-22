@@ -152,4 +152,26 @@ class DeclarationHashTest {
         assertSameHash("Account", before, after)
         assertDifferentHash("Address", before, after)
     }
+
+    @Test
+    fun theHashOfEachDeclarationFormIsPinnedToItsRecordedValue() {
+        val contract =
+            Klein.checkContract(
+                """
+                type Point = Point { x: Num, y: Num }
+                type Point/2 = Point { x: Num, y: Num, z: Num }
+                type Shape<'A> = Square { corner: Point/2, side: Num } | Circle { area: 'A }
+                customer: { id: Num, tier: String? }
+                fun creditScore(c: { id: Num }, at: Point): Num
+                fun pick(x: 'A, y: 'B): 'A?
+                """.trimIndent(),
+            )
+        fun hex(name: String, revision: Int = 1): String = contract.hashOf(name, RevisionNumber(revision))!!.toULong().toString(16).padStart(16, '0')
+        assertEquals("c00c9f64e0a8aa23", hex("Point"))
+        assertEquals("5bb9b07d75b02487", hex("Point", 2))
+        assertEquals("6cf10602fc1c1c1e", hex("Shape"))
+        assertEquals("f63b5e55b0226168", hex("customer"))
+        assertEquals("9e7b4d1cbd3b1822", hex("creditScore"))
+        assertEquals("25501ec55932220d", hex("pick"))
+    }
 }
