@@ -1,10 +1,12 @@
-package klein.host
+package klein.host.codec
 
 internal class MalformedBytes(
     override val message: String,
 ) : Exception(message)
 
 private fun malformed(message: String): Nothing = throw MalformedBytes(message)
+
+internal const val BINARY_MAX_DEPTH = 512
 
 internal class ByteWriter {
     private var buffer = ByteArray(256)
@@ -50,9 +52,28 @@ internal class ByteReader(
     private val bytes: ByteArray,
 ) {
     private var position = 0
+    private var depth = 0
 
     val isExhausted: Boolean get() = position == bytes.size
     val remaining: Int get() = bytes.size - position
+
+    inline fun <T> nested(read: () -> T): T {
+        enter()
+        try {
+            return read()
+        } finally {
+            leave()
+        }
+    }
+
+    fun enter() {
+        if (depth >= BINARY_MAX_DEPTH) malformed("nesting deeper than $BINARY_MAX_DEPTH levels at offset $position")
+        depth++
+    }
+
+    fun leave() {
+        depth--
+    }
 
     fun readByte(): Int {
         ensureAvailable(1)
@@ -102,7 +123,7 @@ internal class ByteReader(
 
     private fun ensureAvailable(count: Int) {
         if (count < 0 || position + count > bytes.size) {
-            malformed("the log ends early: needed $count more bytes at offset $position of ${bytes.size}")
+            malformed("the input ends early: needed $count more bytes at offset $position of ${bytes.size}")
         }
     }
 }

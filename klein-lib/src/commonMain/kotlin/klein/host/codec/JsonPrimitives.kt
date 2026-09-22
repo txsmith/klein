@@ -1,4 +1,4 @@
-package klein.host
+package klein.host.codec
 
 internal class MalformedJson(
     override val message: String,
@@ -32,16 +32,33 @@ internal fun Json.JObj.expectOnly(owner: String, vararg names: String) {
     if (unexpected != null) malformed("unexpected field \"$unexpected\" in $owner")
 }
 
+internal fun toWholeNumber(
+    json: Json,
+    owner: String,
+): Int {
+    if (json !is Json.JNum) malformed("$owner must be a whole number")
+    val value = json.value
+    val whole = value.toInt()
+    if (whole.toDouble() != value) malformed("$owner must be a whole number")
+    return whole
+}
+
 internal fun StringBuilder.writeNumber(value: Double) {
     if (value.isFinite()) {
         // Kotlin/JS prints -0.0 as "0"; spell it out so the sign survives on every platform.
         if (value == 0.0 && value.toRawBits() != 0L) append("-0.0") else append(value)
     } else {
-        val bits = value.toRawBits().toULong().toString(16).padStart(16, '0')
         append("{\"bits\":\"")
-        append(bits)
+        append(hex16(value.toRawBits()))
         append("\"}")
     }
+}
+
+internal fun hex16(bits: Long): String = bits.toULong().toString(16).padStart(16, '0')
+
+internal fun parseHex16(text: String?): Long? {
+    if (text == null || text.length != 16 || !text.all { it in '0'..'9' || it in 'a'..'f' }) return null
+    return text.toULong(16).toLong()
 }
 
 internal fun StringBuilder.writeText(value: String) {
@@ -101,7 +118,9 @@ internal class JsonReader(
         }
         while (true) {
             skipWhitespace()
+            val keyStart = position
             val key = readString()
+            if (key in fields) malformed("duplicate field \"$key\" in an object at offset $keyStart")
             skipWhitespace()
             if (peek() != ':') malformed("expected ':' after an object key at offset $position")
             position++

@@ -1,9 +1,15 @@
-package klein.host
+package klein.host.codec
 
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.host.Call
+import klein.host.EffectLog
+import klein.host.LogEntry
+import klein.host.RunOutcome
+import klein.host.immediate
+import klein.host.implement
 import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
@@ -68,17 +74,17 @@ private val everyEntryKind: EffectLog =
             ),
         )
 
-class EncodingTest {
-    private fun roundTrip(log: EffectLog) = decode(encode(log))
+class EffectLogBinaryEncodingTest {
+    private fun roundTrip(log: EffectLog) = decodeBinary(encodeBinary(log))
 
     private fun assertUnreadable(bytes: ByteArray): UnreadableLog {
-        val thrown = assertFailsWith<KleinException> { decode(bytes) }
+        val thrown = assertFailsWith<KleinException> { decodeBinary(bytes) }
         return assertIs<UnreadableLog>(thrown.errors.single())
     }
 
-    private val startOnly = encode(EffectLog(LogEntry.Start(emptyMap())))
+    private val startOnly = encodeBinary(EffectLog(LogEntry.Start(emptyMap())))
     private val startBytes = startOnly.copyOfRange(9, startOnly.size)
-    private val endedLog = encode(EffectLog(LogEntry.Start(emptyMap()), ending = LogEntry.Result(Value.VNum(1.0))))
+    private val endedLog = encodeBinary(EffectLog(LogEntry.Start(emptyMap()), ending = LogEntry.Result(Value.VNum(1.0))))
     private val resultBytes = endedLog.copyOfRange(startOnly.size, endedLog.size)
 
     private fun frame(vararg entries: ByteArray): ByteArray {
@@ -193,7 +199,7 @@ class EncodingTest {
 
     @Test
     fun aWrongVersionStampIsUnreadable() {
-        val bytes = encode(EffectLog(LogEntry.Start(emptyMap())))
+        val bytes = encodeBinary(EffectLog(LogEntry.Start(emptyMap())))
         bytes[4] = 99
         val diagnostic = assertUnreadable(bytes)
         assertTrue(diagnostic.message.contains("unknown effect log version 99"), diagnostic.message)
@@ -201,14 +207,14 @@ class EncodingTest {
 
     @Test
     fun aTruncatedLogIsUnreadable() {
-        val bytes = encode(everyEntryKind)
+        val bytes = encodeBinary(everyEntryKind)
         val diagnostic = assertUnreadable(bytes.copyOf(bytes.size / 2))
         assertTrue(diagnostic.message.contains("ends early"), diagnostic.message)
     }
 
     @Test
     fun everyTruncatedPrefixIsUnreadableNeverACrashOrAWrongLog() {
-        val bytes = encode(everyEntryKind)
+        val bytes = encodeBinary(everyEntryKind)
         for (length in 0 until bytes.size) {
             assertUnreadable(bytes.copyOf(length))
         }
@@ -222,6 +228,29 @@ class EncodingTest {
     @Test
     fun anUnknownValueKindIsUnreadable() {
         assertTrue(assertUnreadable(frame(byteArrayOf(2, 99))).message.contains("unknown value kind 99"))
+    }
+
+    private val oneFieldNamedA = byteArrayOf(5, 0, 0, 0, 0, 1, 0, 0, 0, 1, 'a'.code.toByte())
+
+    private fun nestedStructs(levels: Int): ByteArray =
+        byteArrayOf(2) + (1..levels).fold(byteArrayOf()) { acc, _ -> acc + oneFieldNamedA } + byteArrayOf(4)
+
+    @Test
+    fun structsNestedUpToTheLimitDecode() {
+        val log = decodeBinary(frame(startBytes, nestedStructs(BINARY_MAX_DEPTH - 1)))
+        assertIs<LogEntry.Result>(log.ending)
+    }
+
+    @Test
+    fun structsNestedDeeperThanTheLimitAreUnreadableNotACrash() {
+        val diagnostic = assertUnreadable(frame(startBytes, nestedStructs(BINARY_MAX_DEPTH * 4)))
+        assertTrue(diagnostic.message.contains("nesting deeper than $BINARY_MAX_DEPTH levels"))
+    }
+
+    @Test
+    fun aDuplicateFieldNameInAStructIsUnreadable() {
+        val twoFieldsBothNamedA = byteArrayOf(2, 5, 0, 0, 0, 0, 2, 0, 0, 0, 1, 'a'.code.toByte(), 4, 0, 0, 0, 1, 'a'.code.toByte(), 4)
+        assertTrue(assertUnreadable(frame(startBytes, twoFieldsBothNamedA)).message.contains("duplicate name \"a\""))
     }
 
     @Test
@@ -257,12 +286,12 @@ class EncodingTest {
                 .andThen(Klein::lower)
                 .andThen(Klein::execute)
                 .output!!
-        assertFailsWith<IllegalArgumentException> { encode(EffectLog(LogEntry.Start(mapOf("f" to closure)))) }
+        assertFailsWith<IllegalArgumentException> { encodeBinary(EffectLog(LogEntry.Start(mapOf("f" to closure)))) }
     }
 
     @Test
     fun trailingBytesAreUnreadable() {
-        val diagnostic = assertUnreadable(encode(EffectLog(LogEntry.Start(emptyMap()))) + byteArrayOf(0))
+        val diagnostic = assertUnreadable(encodeBinary(EffectLog(LogEntry.Start(emptyMap()))) + byteArrayOf(0))
         assertTrue(diagnostic.message.contains("trailing"), diagnostic.message)
     }
 }

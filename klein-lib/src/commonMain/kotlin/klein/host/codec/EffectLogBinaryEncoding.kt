@@ -1,9 +1,12 @@
-package klein.host
+package klein.host.codec
 
 import klein.Diagnostic
 import klein.HostError
 import klein.KleinException
 import klein.SourceSpan
+import klein.host.Call
+import klein.host.EffectLog
+import klein.host.LogEntry
 import klein.interp.RuntimeError
 import klein.interp.Value
 
@@ -26,7 +29,7 @@ private const val VALUE_NULL = 3
 private const val VALUE_UNIT = 4
 private const val VALUE_STRUCT = 5
 
-fun encode(log: EffectLog): ByteArray {
+fun encodeBinary(log: EffectLog): ByteArray {
     val out = ByteWriter()
     out.writeBytes(MAGIC)
     out.writeByte(VERSION)
@@ -35,7 +38,7 @@ fun encode(log: EffectLog): ByteArray {
     return out.toByteArray()
 }
 
-fun decode(bytes: ByteArray): EffectLog =
+fun decodeBinary(bytes: ByteArray): EffectLog =
     try {
         readLog(bytes)
     } catch (malformed: MalformedBytes) {
@@ -154,22 +157,28 @@ private fun ByteWriter.writeValue(value: Value) {
 }
 
 private fun ByteReader.readValue(): Value =
-    when (val kind = readByte()) {
-        VALUE_NUM -> Value.VNum(Double.fromBits(readLong()))
-        VALUE_STR -> Value.VStr(readString())
-        VALUE_BOOL -> Value.VBool(readBoolean())
-        VALUE_NULL -> Value.VNull
-        VALUE_UNIT -> Value.VUnit
-        VALUE_STRUCT -> {
-            val tag = if (readBoolean()) readString() else null
-            Value.VStruct(tag, readMap { readValue() })
+    nested {
+        when (val kind = readByte()) {
+            VALUE_NUM -> Value.VNum(Double.fromBits(readLong()))
+            VALUE_STR -> Value.VStr(readString())
+            VALUE_BOOL -> Value.VBool(readBoolean())
+            VALUE_NULL -> Value.VNull
+            VALUE_UNIT -> Value.VUnit
+            VALUE_STRUCT -> {
+                val tag = if (readBoolean()) readString() else null
+                Value.VStruct(tag, readMap { readValue() })
+            }
+            else -> reject("unknown value kind $kind")
         }
-        else -> reject("unknown value kind $kind")
     }
 
 private fun <T> ByteReader.readMap(readEntry: ByteReader.() -> T): Map<String, T> {
     val count = readCount()
-    val map = LinkedHashMap<String, T>(count)
-    repeat(count) { map[readString()] = readEntry() }
+    val map = LinkedHashMap<String, T>()
+    repeat(count) {
+        val name = readString()
+        if (name in map) reject("duplicate name \"$name\" in a map")
+        map[name] = readEntry()
+    }
     return map
 }

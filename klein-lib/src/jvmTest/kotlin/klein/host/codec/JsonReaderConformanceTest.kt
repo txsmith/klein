@@ -1,4 +1,4 @@
-package klein.host
+package klein.host.codec
 
 import klein.KleinException
 import java.io.File
@@ -15,7 +15,14 @@ class JsonReaderConformanceTest {
             .orEmpty()
             .sortedBy { it.name }
 
-    private fun files(prefix: String): List<File> = suite.filter { it.name.startsWith(prefix) }
+    private val duplicateKeyFiles = setOf("y_object_duplicated_key.json", "y_object_duplicated_key_and_value.json")
+
+    private fun files(prefix: String): List<File> =
+        when (prefix) {
+            "y_" -> suite.filter { it.name.startsWith(prefix) && it.name !in duplicateKeyFiles }
+            "i_" -> suite.filter { it.name.startsWith(prefix) || it.name in duplicateKeyFiles }
+            else -> suite.filter { it.name.startsWith(prefix) }
+        }
 
     private fun decodeUtf8(bytes: ByteArray): String? =
         try {
