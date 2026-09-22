@@ -94,8 +94,8 @@ class EnvironmentContract internal constructor(
 ) {
     val releases: List<ReleaseNumber> get() = releasePins.keys.toList()
 
-    // TODO: this is where hashing a pin set would come in handy. A Map as Map keys is not great...
-    private val resolvedPins = mutableMapOf<Map<String, RevisionNumber>, ResolvedSurface>()
+    private val resolvedReleases: Map<ReleaseNumber, Lazy<ResolvedSurface>> =
+        releasePins.mapValues { (_, pins) -> lazy { resolvePins(pins) } }
 
     /**
      * Type-check [ruleSource] against exactly [release]. The rule is the author's document, so its
@@ -110,7 +110,7 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         ruleSource: String,
         release: ReleaseNumber,
-    ): Checked<Edition> = compileRule(ruleSource, getReleasePins(release))
+    ): Checked<Edition> = compile(ruleSource, resolveRelease(release))
 
     fun compileRule(
         source: String,
@@ -121,16 +121,19 @@ class EnvironmentContract internal constructor(
     fun compileRule(
         source: String,
         pins: Map<String, RevisionNumber>,
-    ): Checked<Edition> {
-        val surface = resolvePins(pins)
-        return parseAndCheck(source, surface).andThen { rule ->
+    ): Checked<Edition> = compile(source, resolvePins(pins))
+
+    private fun compile(
+        source: String,
+        surface: ResolvedSurface,
+    ): Checked<Edition> =
+        parseAndCheck(source, surface).andThen { rule ->
             val used = usedCapabilities(rule.program, surface::isExposed)
             val closed = closePins(used.associateWith(surface::getRevision))
             val editionPins = closed.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
             Checked.success(Edition(LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, resolveSurface(closed)))
         }
-    }
 
     /**
      * Compile [source] as a pure expression of type [expected] against [release] — a host answering
@@ -192,12 +195,10 @@ class EnvironmentContract internal constructor(
         return contractTypeEnv.hashTypeDefinition(contractTypeEnv.collapseToType(name, revision), revision)
     }
 
-    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface = resolvePins(getReleasePins(release))
+    internal fun resolveRelease(release: ReleaseNumber): ResolvedSurface =
+        resolvedReleases[release]?.value ?: throw KleinException(listOf(UnknownRelease(release, releases)))
 
-    private fun getReleasePins(release: ReleaseNumber): Map<String, RevisionNumber> =
-        releasePins[release] ?: throw KleinException(listOf(UnknownRelease(release, releases)))
-
-    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolvedPins.getOrPut(pins) { resolveSurface(closePins(pins)) }
+    internal fun resolvePins(pins: Map<String, RevisionNumber>): ResolvedSurface = resolveSurface(closePins(pins))
 
     private fun closePins(pins: Map<String, RevisionNumber>): Map<String, RevisionNumber> {
         // The pins given here need not be closed: the names a source used, or pins recorded before the
