@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-22 13:21'
-updated_date: '2026-09-22 15:27'
+updated_date: '2026-09-22 17:13'
 labels:
   - host-boundary
 dependencies:
@@ -41,6 +41,8 @@ Resolving an edition's pins into its typing surface happens twice on the loading
 
 <!-- SECTION:NOTES:BEGIN -->
 Decision with Thomas (2026-09-22): the in-memory edition is the trust boundary. The run does no pin check of its own; an undeclared pin is caught when the edition is made (compile or decode). The four run-time removal tests moved to the decode suite. Verified: klein-lib allTests (minus jsBrowserTest) and klein-example-host test both exit 0.
+
+Follow-up in review (2026-09-22): decode no longer throws UnknownPin; an undeclared recorded pin returns Stale with reason DeclarationRemoved and the inputs whole, so a rule on a removed revision can still be read and migrated. Only compiling against pins throws UnknownPin.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
