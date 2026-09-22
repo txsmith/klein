@@ -53,6 +53,20 @@ Environments are separate worlds. Every mechanism in this doc operates within a 
 environment. Two environments may declare the same capability name, and no machinery ever
 compares them. They can share the host code that implements a capability.
 
+An environment has a **name**, written at the top of its contract file, before any declaration:
+
+```klein
+environment lending
+```
+
+The name is the environment's identity. It is a plain word or a quoted string, and it is meant to
+be permanent: editing the contract, adding revisions and releases, keeps the name, and so keeps
+every edition compiled under it. Two contract files with different names are different
+environments even when they declare the same things, and an edition compiled under one is refused
+by the other (see §Edition and §Run). Nothing checks that two environments in one host have
+different names; giving them the same name makes them one environment as far as editions are
+concerned, which is the host's mistake to avoid.
+
 ### Capability
 
 One named, typed thing the host provides for rules to use. It is either a function the host
@@ -147,8 +161,10 @@ and a hash of that declaration as it was compiled against (a capability's signat
 definition). Each entry of that map is a **pin**. The edition also carries its **surface**: the
 types and signatures those pins resolve to, built once by whatever made the edition, compiling
 or loading its artifact. The surface is not stored; loading rebuilds it from the pins. The
-stored form of an edition, and how loading rebuilds it from source and pins without any
-release, is [edition.md](./edition.md).
+edition records the **environment** it was compiled in, by name: a pin means a declaration
+within its environment, so the name is what makes the pins meaningful, and an edition is only
+ever run or loaded under the environment it names. The stored form of an edition, and how
+loading rebuilds it from source and pins without any release, is [edition.md](./edition.md).
 
 An edition is how an accepted rule is stored. It carries the source it was compiled from,
 verbatim, so an accepted version needs no store of its own. Everything that can run is an
@@ -191,11 +207,13 @@ records which edition it executes and its effect log. Through the edition's pins
 keeps revisions alive: the host may not remove a revision while a parked run may still ask it
 live.
 
-A run is guarded at both ends of the capability boundary. It refuses to start unless the host
-has an implementation for every declared capability, whether the edition calls it or not: the
-run does not know what the rule will ask until it runs. A missing implementation fails the run
-before its first effect, naming the capability, so a rule never performs half its effects and
-then hits an unanswerable call. The run trusts the edition's pins and surface: an edition exists
+A run is guarded at both ends of the capability boundary. It refuses to start under an
+environment other than the one the edition names: that is checked first, before anything else
+about the run, and fails with a host error naming both environments. It refuses to start unless
+the host has an implementation for every declared capability, whether the edition calls it or
+not: the run does not know what the rule will ask until it runs. A missing implementation fails
+the run before its first effect, naming the capability, so a rule never performs half its effects
+and then hits an unanswerable call. The run trusts the edition's pins and surface: an edition exists
 only because the contract compiled it or loaded its artifact, and both resolve the pins then. A
 pin the contract does not declare, or a declaration edited in place, is caught at that moment,
 never by a run. Every answer is checked against the declared type as it arrives, using the
@@ -559,9 +577,10 @@ type or edition together with its diagnostics, a rule that fails at runtime ends
 outcome carrying its diagnostics, and the effect log stores them in its failure entry.
 
 A **host error** is about the environment: a registration the contract does not declare, a pin
-the contract does not declare, a handler that is missing, a log entry that does not fit the
-contract, a replay that diverges, a call or an answer of the wrong type, a release the contract
-does not have, stored bytes that do not decode. It has no span. It means the host program is
+the contract does not declare, an edition from another environment, a handler that is missing, a
+log entry that does not fit the contract, a replay that diverges, a call or an answer of the
+wrong type, a release the contract does not have, stored bytes that do not decode. It has no
+span. It means the host program is
 wrong, so it is thrown, always inside the one public exception, which carries a list of them,
 one per fault, each with the fields the host needs to inspect it.
 

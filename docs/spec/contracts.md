@@ -14,14 +14,26 @@ reconciliation — is [host-integration.md](./host-integration.md).
 Status: implemented.
 
 ```klein
+environment lending
+
 type Customer = Customer { id: Num, name: String, score: Num }
 
 fun creditCheck(c: Customer): Num
 maxRetries: Num
 ```
 
-Declarations without definitions: a `fun` header with no `= body`, a binding with no `= value`.
-The syntax is ordinary Klein with the definition removed — no keyword, no new tokens; see
+The first line names the environment the contract defines: `environment` and a name. A bare
+name is an identifier, letters, digits and underscores starting with a letter; anything else,
+spaces included, needs quotes (`environment "Lending EU"`); an empty name, or one that spans
+lines, is rejected. The
+header is required and comes before every declaration; only comments and blank lines may
+precede it. A contract without it, or with a second one, is rejected.
+What the name is for is [host-integration.md](./host-integration.md) §Environment. The examples
+below leave the line out.
+
+The rest is declarations without definitions: a `fun` header with no `= body`, a binding with no
+`= value`. The syntax is ordinary Klein with the definition removed — no keyword, no new tokens;
+`environment`, like `release`, is recognised by position and stays usable as a name; see
 [grammar.md](../grammar.md) for the productions and their disambiguation.
 
 In spirit this is an OCaml `.mli` or a TypeScript `.d.ts`, but closer in role to an IDL: it is

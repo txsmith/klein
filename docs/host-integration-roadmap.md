@@ -52,7 +52,9 @@ carries the surface its pins resolve to, built once when it is compiled or decod
 it and never resolves pins, and the contract keeps no memo of resolved pin sets (each release
 keeps one lazily built surface, which is thread-safe). Along the way handler registrations
 became values and the registry immutable, and the pin check moved to the one step that
-resolves pins, shared by compiling and decoding. The rules
+resolves pins, shared by compiling and decoding. A contract's first line names its
+environment; the edition and its artifact record that name, and both decoding and running
+refuse an edition that names another environment, before anything else happens. The rules
 are in [spec/edition.md](./spec/edition.md). Two notes for later features: the artifact must
 capture everything a release contributes to compilation (the result sink is the first feature
 that will test that), and the checksum needs only a deterministic walk, not a canonical form, so
@@ -154,11 +156,6 @@ observability starts to hurt. Tracked as the older issue #15.
 
 Small, unblocked, and easy to lose:
 
-- **An edition does not know which environment it belongs to.** Two environments in one
-  process may declare the same names, and an edition compiled under one and run under the other
-  is refused only when the revisions differ. An environment identity, recorded in the edition
-  and checked at the run's pre-flight, closes that; the pin hashes are not compared at run time
-  by decision.
 - **`klein-bench` is in no routine check** and silently stopped compiling for two phases.
 - **The CLI exits 0 on usage errors** — unknown command, unknown option for a command. Matters as
   soon as `klein check` goes in a hook or a CI script.
