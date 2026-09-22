@@ -12,6 +12,7 @@ import klein.check.contract.PinResolution
 import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.StaleReason
+import klein.host.WrongEnvironment
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -30,6 +31,8 @@ fun encodeEditionJson(edition: Edition): String {
     out.append(FORMAT_MARKER)
     out.append("\",\"version\":")
     out.append(JSON_VERSION)
+    out.append(",\"environment\":")
+    out.writeText(edition.environment)
     out.append(",\"language\":")
     out.append(edition.language.value)
     out.append(",\"pins\":{")
@@ -56,6 +59,7 @@ fun encodeEditionJson(edition: Edition): String {
 fun EnvironmentContract.decodeEditionJson(text: String): DecodedEdition = readArtifact(text).decode(this)
 
 private class Artifact(
+    val environment: String,
     val language: LanguageVersion,
     val pins: Map<String, Pin>,
     val source: String,
@@ -63,6 +67,7 @@ private class Artifact(
     val checksum: Long,
 ) {
     fun decode(contract: EnvironmentContract): DecodedEdition {
+        if (environment != contract.environment) throw KleinException(listOf(WrongEnvironment(environment, contract.environment)))
         if (editionChecksum(language, source, pins, coreBytes) != checksum) return stale(StaleReason.ChecksumMismatch)
         if (language != LanguageVersion.CURRENT) return stale(StaleReason.LanguageChanged)
         if (readCoreVersion(coreBytes) != CompilerVersion.CURRENT) return stale(StaleReason.CompilerChanged)
@@ -72,7 +77,7 @@ private class Artifact(
                 is PinResolution.Unknown -> return unknownPins(resolution.pins)
             }
         if (pins.any { (name, pin) -> contract.hashOf(name, pin.revision) != pin.hash }) return stale(StaleReason.DeclarationChanged)
-        return DecodedEdition.Intact(Edition(language, decodeCore(coreBytes), pins, source, surface))
+        return DecodedEdition.Intact(Edition(environment, language, decodeCore(coreBytes), pins, source, surface))
     }
 
     private fun stale(reason: StaleReason): DecodedEdition = DecodedEdition.Stale(language, pins, source, reason)
@@ -95,9 +100,11 @@ private fun readDocument(text: String): Artifact {
     if (document !is Json.JObj) reject("not a Klein edition: the document is not a JSON object")
     val marker = (document.fields["format"] as? Json.JStr)?.value
     if (marker != FORMAT_MARKER) reject("not a Klein edition: the document does not declare \"format\": \"$FORMAT_MARKER\"")
-    document.expectOnly("the document", "format", "version", "language", "pins", "source", "core", "checksum")
+    document.expectOnly("the document", "format", "version", "environment", "language", "pins", "source", "core", "checksum")
     val version = toWholeNumber(document.expectField("version", "the document"), "the \"version\" field")
     if (version != JSON_VERSION) reject("unknown edition version $version; this library reads version $JSON_VERSION")
+    val environmentJson = document.expectField("environment", "the document")
+    if (environmentJson !is Json.JStr) reject("the document's \"environment\" must be a string")
     val language = LanguageVersion(toWholeNumber(document.expectField("language", "the document"), "the \"language\" field"))
     val pins = toPins(document.expectField("pins", "the document"))
     val sourceJson = document.expectField("source", "the document")
@@ -105,7 +112,7 @@ private fun readDocument(text: String): Artifact {
     val source = sourceJson.value
     val coreBytes = toCoreBytes(document.expectField("core", "the document"))
     val checksum = toChecksum(document.expectField("checksum", "the document"))
-    return Artifact(language, pins, source, coreBytes, checksum)
+    return Artifact(environmentJson.value, language, pins, source, coreBytes, checksum)
 }
 
 private fun reject(message: String): Nothing = throw KleinException(listOf(UnreadableEdition(message)))
