@@ -34,8 +34,7 @@ class TypeEnv<R : RevisionNumber?> private constructor(
     private val constructors: MutableMap<String, ConstructorInfo<R>> = mutableMapOf(),
     internal val implicitParam: ImplicitParamContext = ImplicitParamContext.None,
 ) {
-    /** Bind a plain name to a type — how a host pre-binds capability vocabulary or reads back an
-     *  inferred one; see [klein.Klein.check]. */
+    /** Bind a plain name to a type — how a host pre-binds capability vocabulary; see [klein.Klein.check]. */
     fun bind(
         name: String,
         type: Type<R>,
@@ -51,7 +50,7 @@ class TypeEnv<R : RevisionNumber?> private constructor(
         bindings[key(name, revision)] = type
     }
 
-    /** Look up a plain name — how a host reads back what [klein.Klein.check] bound. */
+    /** Look up a plain name; [klein.Klein.checkBindings] returns what a program binds. */
     fun lookup(name: String): Type<R>? = bindings[name] ?: parent?.lookup(name)
 
     internal fun lookup(

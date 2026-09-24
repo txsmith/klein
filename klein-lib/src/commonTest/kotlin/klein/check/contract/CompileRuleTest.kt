@@ -9,6 +9,7 @@ import klein.core.Bind
 import klein.core.EnterScope
 import klein.core.assertRuleLowersTo
 import klein.interp.Value
+import klein.assertRejected
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,14 +113,12 @@ class CompileRuleTest {
     @Test
     fun aConstructorOnlyEditionExecutesToAValue() {
         val edition = compile("""Customer(1, "gold").tier == "gold"""")
-        val result = Klein.execute(edition.core)
-        assertEquals(emptyList(), result.diagnostics)
-        assertEquals(Value.VBool(true), result.output)
+        assertEquals(Value.VBool(true), Klein.execute(edition.core).orFail())
     }
 
     @Test
     fun anUnexposedNameIsStillUnbound() {
-        val errors = contract.compileRule("riskBand(customer)", ReleaseNumber(1)).diagnostics
+        val errors = contract.compileRule("riskBand(customer)", ReleaseNumber(1)).assertRejected()
         assertEquals("riskBand", assertIs<TypeError.UnboundVariable>(errors.single()).name)
     }
 

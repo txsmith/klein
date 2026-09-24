@@ -572,9 +572,13 @@ Klein reports two kinds of error, and the kind decides how it reaches the host.
 
 A **diagnostic** is about a document: a rule, a contract, or an answer typed in Klein. It always
 has a span, because there is text to point at. Diagnostics are addressed to whoever wrote the
-document, so they are returned, never thrown: checking or compiling a rule answers the rule's
-type or edition together with its diagnostics, a rule that fails at runtime ends in a failed
+document, so they are returned, never thrown. A rule that fails at runtime ends in a failed
 outcome carrying its diagnostics, and the effect log stores them in its failure entry.
+
+Checking or compiling a rule returns one of two results. An accepted result holds the rule's
+type or edition and nothing else. A rejected result holds at least one diagnostic and nothing
+else. A rule with any diagnostic is rejected, so a host never sees a type or an edition next to
+an error, and cannot mistake a rejected rule for one whose answer is null.
 
 A **host error** is about the environment: a registration the contract does not declare, a pin
 the contract does not declare, an edition from another environment, a handler that is missing, a

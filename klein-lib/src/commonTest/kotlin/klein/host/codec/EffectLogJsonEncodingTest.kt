@@ -317,7 +317,7 @@ class EffectLogJsonEncodingTest {
                 .andThen(Klein::parse)
                 .andThen(Klein::lower)
                 .andThen(Klein::execute)
-                .output!!
+                .orFail()
         assertFailsWith<IllegalArgumentException> { encodeJson(EffectLog(LogEntry.Start(mapOf("f" to closure)))) }
     }
 

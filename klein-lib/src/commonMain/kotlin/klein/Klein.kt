@@ -1,6 +1,7 @@
 package klein
 
 import klein.surface.*
+import klein.check.ProgramTypes
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.TypeEnv
@@ -33,30 +34,36 @@ import klein.interp.Value
 object Klein {
     fun tokenize(source: String): Checked<List<Token>> =
         try {
-            Checked.success(Lexer(source).tokenize().toList())
+            Checked.Accepted(Lexer(source).tokenize().toList())
         } catch (e: Abort) {
-            Checked.failure(e.diagnostic)
+            Checked.Rejected(e.diagnostic)
         }
 
     fun parse(tokens: List<Token>): Checked<Program> =
         try {
-            Checked.success(parseProgram(tokens))
+            Checked.Accepted(parseProgram(tokens))
         } catch (e: Abort) {
-            Checked.failure(e.diagnostic)
+            Checked.Rejected(e.diagnostic)
         }
 
     /**
-     * The checker synthesizes a type even for ill-typed programs, so the result can carry
-     * both an output and errors; [Checked.andThen] still refuses to continue past
-     * errors. [env] is mutated with the program's bindings — pass your own to inspect
-     * them afterwards, or to pre-bind host types.
+     * [env] pre-binds names the program may use, such as host types; checking leaves it unchanged.
+     * [checkBindings] returns the types of the program's own top-level names.
      */
     fun check(
         program: Program,
         env: RuleEnv = TypeEnv.empty(),
     ): Checked<RuleType> {
         val checked = checkProgram(program, env)
-        return Checked(checked.type, checked.errors)
+        return if (checked.errors.isEmpty()) Checked.Accepted(checked.type) else Checked.Rejected(checked.errors)
+    }
+
+    fun checkBindings(
+        program: Program,
+        env: RuleEnv = TypeEnv.empty(),
+    ): Checked<ProgramTypes> {
+        val checked = checkProgram(program, env)
+        return if (checked.errors.isEmpty()) Checked.Accepted(checked.types) else Checked.Rejected(checked.errors)
     }
 
     /**
@@ -85,7 +92,7 @@ object Klein {
      * here is an internal invariant violation (a lowerer bug), not a user diagnostic, so this
      * stage carries no errors — it either produces IR or throws.
      */
-    fun lower(program: Program): Checked<CoreExpr> = Checked.success(klein.core.lower(program))
+    fun lower(program: Program): Checked<CoreExpr> = Checked.Accepted(klein.core.lower(program))
 
     /**
      * Run lowered [CoreExpr] on the [Interpreter] to completion. This entry point runs without an
@@ -95,9 +102,9 @@ object Klein {
      */
     fun execute(program: CoreExpr): Checked<Value> =
         when (val exec = Interpreter.start(program)) {
-            is Execution.Done -> Checked.success(exec.value)
-            is Execution.Failure -> Checked.failure(exec.error)
+            is Execution.Done -> Checked.Accepted(exec.value)
+            is Execution.Failure -> Checked.Rejected(exec.error)
             is Execution.AwaitingHost ->
-                Checked.failure(RuntimeError("unhandled host call '${exec.call}'", exec.span))
+                Checked.Rejected(RuntimeError("unhandled host call '${exec.call}'", exec.span))
         }
 }

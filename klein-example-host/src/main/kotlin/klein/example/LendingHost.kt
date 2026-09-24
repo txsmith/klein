@@ -35,10 +35,7 @@ class LendingHost(
         ruleSource: String,
         release: ReleaseNumber,
     ): RunOutcome {
-        val compiled = contract.compileRule(ruleSource, release)
-        val edition =
-            compiled.output
-                ?: throw IllegalArgumentException("the rule does not compile:\n" + compiled.diagnostics.joinToString("\n") { it.message })
+        val edition = contract.compileRule(ruleSource, release).getOrThrow()
         return environment.run(
             edition,
             immediate("customer") {

@@ -300,7 +300,7 @@ class RunAgainstReleaseTest {
                 .andThen(Klein::parse)
                 .andThen(Klein::lower)
                 .andThen(Klein::execute)
-                .output!!
+                .orFail()
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(

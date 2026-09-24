@@ -12,6 +12,7 @@ import klein.check.TypeEnv
 import klein.check.TypeError
 import klein.check.infer
 import klein.contractOf
+import klein.diagnosticsOrEmpty
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,7 +37,7 @@ private fun ruleErrors(
     src: String,
     rule: String,
     release: Int = 1,
-): List<Diagnostic> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).diagnostics
+): List<Diagnostic> = Klein.checkContract(src).check(rule, ReleaseNumber(release)).diagnosticsOrEmpty()
 
 /**
  * Checking a capability contract, through what a caller can observe: whether [Klein.checkContract]

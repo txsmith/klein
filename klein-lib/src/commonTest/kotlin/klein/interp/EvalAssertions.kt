@@ -3,6 +3,7 @@ package klein.interp
 import klein.Klein
 import klein.core.lower
 import klein.core.parseProgram
+import klein.orFail
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -14,8 +15,7 @@ import kotlin.test.assertTrue
  */
 internal fun execSource(source: String): Execution {
     val program = parseProgram(source.trimIndent().trim())
-    val checked = Klein.check(program)
-    check(!checked.hasErrors) { "type errors in test program: ${checked.diagnostics}" }
+    Klein.check(program).orFail()
     return Interpreter.start(lower(program))
 }
 

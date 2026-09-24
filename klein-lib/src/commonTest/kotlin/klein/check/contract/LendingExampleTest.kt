@@ -5,6 +5,7 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
 import klein.check.TypeError
+import klein.diagnosticsOrEmpty
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,7 +25,7 @@ private fun checkErrors(
     contract: String,
     rule: String,
     release: Int,
-) = Klein.checkContract(contract.trimIndent()).check(rule, ReleaseNumber(release)).diagnostics
+) = Klein.checkContract(contract.trimIndent()).check(rule, ReleaseNumber(release)).diagnosticsOrEmpty()
 
 /**
  * `host-integration.md` §"Evolution, concretely" — one environment followed through a year: a new

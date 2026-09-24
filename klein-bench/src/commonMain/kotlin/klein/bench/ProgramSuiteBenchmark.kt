@@ -40,11 +40,10 @@ class ProgramSuiteBenchmark {
         source =
             Programs.suite[name]
                 ?: error("benchmark param '$name' has no entry in Programs.suite")
-        tokens = Klein.tokenize(source).output ?: error("benchmark program '$name' does not lex")
-        program = Klein.parse(tokens).output ?: error("benchmark program '$name' does not parse")
-        val checked = Klein.check(program)
-        check(checked.diagnostics.isEmpty()) { "benchmark program '$name' has type errors: ${checked.diagnostics}" }
-        core = Klein.lower(program).output ?: error("benchmark program '$name' does not lower")
+        tokens = Klein.tokenize(source).getOrThrow()
+        program = Klein.parse(tokens).getOrThrow()
+        Klein.check(program).getOrThrow()
+        core = Klein.lower(program).getOrThrow()
     }
 
     @Benchmark

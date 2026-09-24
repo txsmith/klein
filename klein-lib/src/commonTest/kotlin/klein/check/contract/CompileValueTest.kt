@@ -5,6 +5,7 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.TypeError
 import klein.interp.Value
+import klein.assertRejected
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,9 +41,7 @@ private fun evaluate(
     demandedBy: String,
 ): Value {
     val core = contract.compileValue(source, ReleaseNumber(1), answerTypeOf(demandedBy)).orFail()
-    val executed = Klein.execute(core)
-    assertEquals(emptyList(), executed.diagnostics)
-    return executed.output!!
+    return Klein.execute(core).orFail()
 }
 
 class CompileValueTest {
@@ -60,7 +59,7 @@ class CompileValueTest {
 
     @Test
     fun aWrongTypedAnswerCarriesTheCheckersMessageAtTheTypedSpan() {
-        val errors = contract.compileValue("700", ReleaseNumber(1), answerTypeOf("customer")).diagnostics
+        val errors = contract.compileValue("700", ReleaseNumber(1), answerTypeOf("customer")).assertRejected()
         val error = assertIs<TypeError.TypeMismatch>(errors.single())
         assertEquals(0, error.span.start)
         assertEquals(3, error.span.end)
@@ -70,26 +69,26 @@ class CompileValueTest {
     @Test
     fun aWrongTypedConstructorArgumentIsReportedAtItsOwnSpan() {
         val source = """Customer(1, 2)"""
-        val errors = contract.compileValue(source, ReleaseNumber(1), answerTypeOf("customer")).diagnostics
+        val errors = contract.compileValue(source, ReleaseNumber(1), answerTypeOf("customer")).assertRejected()
         assertEquals(source.indexOf("2"), assertIs<TypeError>(errors.first()).span.start)
     }
 
     @Test
     fun anAnswerWhoseLastStatementIsABindingEvaluatesToUnitAndIsRejected() {
-        val errors = contract.compileValue("Customer(1, \"gold\")\nx = 2", ReleaseNumber(1), answerTypeOf("customer")).diagnostics
+        val errors = contract.compileValue("Customer(1, \"gold\")\nx = 2", ReleaseNumber(1), answerTypeOf("customer")).assertRejected()
         val error = assertIs<TypeError.TypeMismatch>(errors.single())
         assertTrue("Unit" in error.message)
     }
 
     @Test
     fun anAnswerNamingACapabilityIsRejected() {
-        val errors = contract.compileValue("""creditScore(Customer(1, "gold"))""", ReleaseNumber(1), answerTypeOf("creditScore")).diagnostics
+        val errors = contract.compileValue("""creditScore(Customer(1, "gold"))""", ReleaseNumber(1), answerTypeOf("creditScore")).assertRejected()
         assertEquals("creditScore", assertIs<CapabilityInAnswer>(errors.single()).name)
     }
 
     @Test
     fun aValueCapabilityInAnAnswerIsRejectedToo() {
-        val errors = contract.compileValue("customer", ReleaseNumber(1), answerTypeOf("customer")).diagnostics
+        val errors = contract.compileValue("customer", ReleaseNumber(1), answerTypeOf("customer")).assertRejected()
         assertEquals("customer", assertIs<CapabilityInAnswer>(errors.single()).name)
     }
 
@@ -101,14 +100,12 @@ class CompileValueTest {
             s.area
             """.trimIndent()
         val core = contract.compileValue(source, ReleaseNumber(2), answerTypeOf("creditScore")).orFail()
-        val executed = Klein.execute(core)
-        assertEquals(emptyList(), executed.diagnostics)
-        assertEquals(Value.VNum(9.0), executed.output)
+        assertEquals(Value.VNum(9.0), Klein.execute(core).orFail())
     }
 
     @Test
     fun anAnswerNamingAnUnexposedTypeIsUnboundVariable() {
-        val errors = contract.compileValue("Circle(9).area", ReleaseNumber(1), answerTypeOf("creditScore")).diagnostics
+        val errors = contract.compileValue("Circle(9).area", ReleaseNumber(1), answerTypeOf("creditScore")).assertRejected()
         assertEquals("Circle", assertIs<TypeError.UnboundVariable>(errors.first()).name)
     }
 }
