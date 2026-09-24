@@ -233,7 +233,7 @@ private fun prompt(
         print("$call = ? ")
         fflush(null)
         val line = readlnOrNull() ?: throw UnanswerableCapability(call)
-        when (val answered = contract.compileValue(line, release, declaration.answerType).andThen(Klein::execute)) {
+        when (val answered = contract.evaluateValue(line, release, declaration.answerType)) {
             is Checked.Accepted -> {
                 answers[call] = answered.value
                 return answered.value
