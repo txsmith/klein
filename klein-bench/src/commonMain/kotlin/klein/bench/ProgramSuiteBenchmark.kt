@@ -40,20 +40,11 @@ class ProgramSuiteBenchmark {
         source =
             Programs.suite[name]
                 ?: error("benchmark param '$name' has no entry in Programs.suite")
-        tokens = accepted(Klein.tokenize(source), "lex")
-        program = accepted(Klein.parse(tokens), "parse")
-        accepted(Klein.check(program), "type check")
-        core = accepted(Klein.lower(program), "lower")
+        tokens = Klein.tokenize(source).getOrThrow()
+        program = Klein.parse(tokens).getOrThrow()
+        Klein.check(program).getOrThrow()
+        core = Klein.lower(program).getOrThrow()
     }
-
-    private fun <T> accepted(
-        result: Checked<T>,
-        stage: String,
-    ): T =
-        when (result) {
-            is Checked.Accepted -> result.value
-            is Checked.Rejected -> error("benchmark program '$name' does not $stage: ${result.diagnostics}")
-        }
 
     @Benchmark
     fun lex(): Checked<List<Token>> = Klein.tokenize(source)

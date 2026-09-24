@@ -26,4 +26,14 @@ sealed class Checked<out T> {
             is Accepted -> next(value)
             is Rejected -> this
         }
+
+    fun getOrThrow(): T =
+        when (this) {
+            is Accepted -> value
+            is Rejected -> throw RejectedException(diagnostics)
+        }
 }
+
+class RejectedException(
+    val diagnostics: List<Diagnostic>,
+) : RuntimeException(diagnostics.joinToString("\n") { it.message })

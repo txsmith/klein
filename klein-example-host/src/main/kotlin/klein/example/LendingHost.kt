@@ -1,6 +1,5 @@
 package klein.example
 
-import klein.Checked
 import klein.Klein
 import klein.ReleaseNumber
 import klein.check.contract.EnvironmentContract
@@ -36,12 +35,7 @@ class LendingHost(
         ruleSource: String,
         release: ReleaseNumber,
     ): RunOutcome {
-        val edition =
-            when (val compiled = contract.compileRule(ruleSource, release)) {
-                is Checked.Accepted -> compiled.value
-                is Checked.Rejected ->
-                    throw IllegalArgumentException("the rule does not compile:\n" + compiled.diagnostics.joinToString("\n") { it.message })
-            }
+        val edition = contract.compileRule(ruleSource, release).getOrThrow()
         return environment.run(
             edition,
             immediate("customer") {
