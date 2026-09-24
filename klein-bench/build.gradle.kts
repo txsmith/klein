@@ -1,7 +1,7 @@
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.allopen")
-    id("org.jetbrains.kotlinx.benchmark")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.allopen)
+    alias(libs.plugins.kotlinx.benchmark)
 }
 
 // JMH requires benchmark classes to be open.
@@ -16,7 +16,7 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(project(":klein-lib"))
-                implementation("org.jetbrains.kotlinx:kotlinx-benchmark-runtime:0.5.0")
+                implementation(libs.kotlinx.benchmark.runtime)
             }
         }
     }
