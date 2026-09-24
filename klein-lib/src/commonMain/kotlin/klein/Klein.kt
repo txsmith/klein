@@ -46,8 +46,8 @@ object Klein {
         }
 
     /**
-     * [env] is mutated with the program's bindings — pass your own to inspect them afterwards,
-     * or to pre-bind host types.
+     * [env] pre-binds names the program may use, such as host types; checking leaves it unchanged.
+     * [checkBindings] returns the types of the program's own top-level names.
      */
     fun check(
         program: Program,
@@ -55,6 +55,24 @@ object Klein {
     ): Checked<RuleType> {
         val checked = checkProgram(program, env)
         return if (checked.errors.isEmpty()) Checked.Accepted(checked.type) else Checked.Rejected(checked.errors)
+    }
+
+    fun checkBindings(
+        program: Program,
+        env: RuleEnv = TypeEnv.empty(),
+    ): Checked<Map<String, RuleType>> {
+        val checked = checkProgram(program, env)
+        if (checked.errors.isNotEmpty()) return Checked.Rejected(checked.errors)
+        val names =
+            program.stmts.flatMap { stmt ->
+                when (stmt) {
+                    is Val -> listOf(stmt.name)
+                    is FunDef -> listOf(stmt.name)
+                    is PatternVal -> stmt.pattern.boundNames
+                    is TypeDefStmt, is Expr -> emptyList()
+                }
+            }
+        return Checked.Accepted(names.associateWith { checked.scope.lookup(it)!! })
     }
 
     /**

@@ -117,7 +117,7 @@ echo "f = |x -> x + 1|" | ./klein parse --stdin
 ### Check Types
 
 The primary command under Operation Bidi: run the `klein.check` bidirectional checker. Prints the type of
-each top-level binding (and the trailing expression, when the program checks), then a pass/fail verdict. Exits non-zero on any
+each top-level binding and the trailing expression, then a pass verdict; a program with type errors prints only the errors. Exits non-zero on any
 type error, so it works as a gate in scripts.
 
 ```bash

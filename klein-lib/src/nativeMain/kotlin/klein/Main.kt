@@ -2,8 +2,6 @@ package klein
 
 import klein.surface.*
 import klein.check.Type
-import klein.check.RuleEnv
-import klein.check.TypeEnv
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.InvalidContract
@@ -367,32 +365,28 @@ private fun parse(
 }
 
 /**
- * Run the type checker: print the type of each top-level binding (and the trailing
- * expression), then a pass/fail verdict. Exits non-zero when the program has type errors, so `check`
- * is usable as a gate in scripts.
+ * Run the type checker: print the type of each top-level binding and the trailing expression,
+ * then a pass/fail verdict. Exits non-zero when the program has type errors, so `check` is usable
+ * as a gate in scripts.
  */
 private fun check(
     source: String,
     rawErrors: Boolean,
 ) {
     val program = acceptedOrExit(Klein.tokenize(source).andThen(Klein::parse), source, rawErrors)
+    val bindings = acceptedOrExit(Klein.checkBindings(program), source, rawErrors)
+    val type = acceptedOrExit(Klein.check(program), source, rawErrors)
 
-    val env: RuleEnv = TypeEnv.empty()
-    val checked = Klein.check(program, env)
-
+    fun printBinding(name: String) = println("$name : ${Type.print(bindings.getValue(name))}")
     for (stmt in program.stmts) {
         when (stmt) {
-            is Val -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
-            is PatternVal ->
-                stmt.pattern.boundNames.forEach { name ->
-                    env.lookup(name)?.let { println("$name : ${Type.print(it)}") }
-                }
-            is FunDef -> env.lookup(stmt.name)?.let { println("${stmt.name} : ${Type.print(it)}") }
+            is Val -> printBinding(stmt.name)
+            is PatternVal -> stmt.pattern.boundNames.forEach(::printBinding)
+            is FunDef -> printBinding(stmt.name)
             is TypeDefStmt -> println("type ${stmt.typeDef.name}")
-            is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
+            is Expr -> {}
         }
     }
-    val type = acceptedOrExit(checked, source, rawErrors)
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
         println("$exprSource : ${Type.print(type)}")
