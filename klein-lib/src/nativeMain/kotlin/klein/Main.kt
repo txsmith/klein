@@ -237,7 +237,7 @@ private fun prompt(
     while (true) {
         print("$call = ? ")
         fflush(null)
-        val line = readLine() ?: throw KleinException(listOf(UnanswerableCapability(call)))
+        val line = readlnOrNull() ?: throw KleinException(listOf(UnanswerableCapability(call)))
         val compiled = contract.compileValue(line, release, declaration.answerType)
         if (compiled.hasErrors) {
             compiled.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }

@@ -674,7 +674,7 @@ class TypeDefTest {
         val field = typeDef.constructors[0].fields[0]
         assertEquals("value", field.name)
         assertTrue(field.type is TypeVar)
-        assertEquals("B", (field.type as TypeVar).name)
+        assertEquals("B", field.type.name)
     }
 
     @Test
