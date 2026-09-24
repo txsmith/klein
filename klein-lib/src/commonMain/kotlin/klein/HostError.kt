@@ -3,6 +3,8 @@ package klein
 import klein.check.RuleType
 import klein.check.Type
 import klein.host.Call
+import klein.host.LogEntry
+import klein.interp.Value
 
 sealed interface HostError {
     val message: String
@@ -90,3 +92,23 @@ class UnreadableLog internal constructor(
 class UnreadableEdition internal constructor(
     override val message: String,
 ) : HostError
+
+class LogAlreadyEnded internal constructor(
+    val ending: LogEntry.Ending,
+) : HostError {
+    override val message get() = "the log already ends with ${describe(ending)}; nothing follows an ending"
+
+    private fun describe(ending: LogEntry.Ending) =
+        when (ending) {
+            is LogEntry.Result -> "its result ${Value.print(ending.value)}"
+            is LogEntry.Failure -> "its failure ${ending.errors.joinToString { "'${it.message}'" }}"
+        }
+}
+
+class SecondStartEntry internal constructor() : HostError {
+    override val message = "a log has exactly one start entry, and this one already has it"
+}
+
+class TransactionSkippedBlock internal constructor() : HostError {
+    override val message = "the transaction wrapper returned without running its block; it must run the block it is given"
+}

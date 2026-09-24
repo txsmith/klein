@@ -1,6 +1,9 @@
 package klein.host
 
 import klein.Diagnostic
+import klein.KleinException
+import klein.LogAlreadyEnded
+import klein.SecondStartEntry
 import klein.interp.Value
 
 data class Call(
@@ -45,9 +48,9 @@ data class EffectLog(
             }
 
     operator fun plus(entry: LogEntry): EffectLog {
-        require(ending == null) { "the log already ends with $ending; nothing follows an ending" }
+        ending?.let { throw KleinException(listOf(LogAlreadyEnded(it))) }
         return when (entry) {
-            is LogEntry.Start -> throw IllegalArgumentException("a log has exactly one start entry")
+            is LogEntry.Start -> throw KleinException(listOf(SecondStartEntry()))
             is LogEntry.Reply -> copy(replies = replies + entry)
             is LogEntry.Ending -> copy(ending = entry)
         }

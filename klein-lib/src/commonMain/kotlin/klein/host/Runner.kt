@@ -5,6 +5,7 @@ import klein.Diagnostic
 import klein.Diverged
 import klein.HandlerTypeMismatch
 import klein.KleinException
+import klein.TransactionSkippedBlock
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.Edition
@@ -201,7 +202,7 @@ internal class Run(
     private suspend fun <T : Any> transact(block: suspend () -> T): T {
         var result: T? = null
         environment.transact { result = block() }
-        return result ?: throw IllegalStateException("transact returned without completing its block")
+        return result ?: throw KleinException(listOf(TransactionSkippedBlock()))
     }
 
     private fun isValueAsk(suspension: Execution.AwaitingHost) =

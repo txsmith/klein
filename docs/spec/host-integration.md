@@ -585,8 +585,9 @@ an error, and cannot mistake a rejected rule for one whose answer is null.
 A **host error** is about the environment: a registration the contract does not declare, a pin
 the contract does not declare, an edition from another environment, a handler that is missing, a
 log entry that does not fit the contract, a replay that diverges, a call or an answer of the
-wrong type, a release the contract does not have, stored bytes that do not decode. It has no
-span. It means the host program is
+wrong type, a release the contract does not have, stored bytes that do not decode, an entry
+appended after a log's ending or a second start entry, a transaction wrapper that returns without
+running its block. It has no span. It means the host program is
 wrong, so it is thrown, always inside the one public exception, which carries a list of them,
 one per fault, each with the fields the host needs to inspect it.
 
