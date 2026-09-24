@@ -1,0 +1,23 @@
+import { InvalidContract, Klein, KleinException, type Diagnostic, type EnvironmentContract } from "klein";
+
+export type ContractCheck =
+  | { ok: true; contract: EnvironmentContract }
+  | { ok: false; diagnostics: readonly Diagnostic[]; messages: string[] };
+
+export function checkContractSource(source: string): ContractCheck {
+  try {
+    return { ok: true, contract: Klein.checkContract(source) };
+  } catch (error) {
+    if (!(error instanceof KleinException)) throw error;
+    const diagnostics = error.errors.flatMap((e) => (e instanceof InvalidContract ? e.diagnostics : []));
+    const messages = error.errors.filter((e) => !(e instanceof InvalidContract)).map((e) => e.message);
+    return { ok: false, diagnostics, messages };
+  }
+}
+
+export function lineAndColumn(source: string, offset: number): { line: number; column: number } {
+  const before = source.slice(0, offset);
+  const line = before.split("\n").length;
+  const column = offset - before.lastIndexOf("\n");
+  return { line, column };
+}
