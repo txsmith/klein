@@ -124,6 +124,14 @@ no machine state is ever persisted. The run returns the log so far and the one o
 its name and arguments. The pending call is not in the log. When a capability is designated for parking 
 is determined by the host.
 
+An answer given during the host's lifetime may still take time. The host's code that answers a
+call, its handler, may wait inside the run for in-process work, such as a network fetch. The run
+waits with it. Nothing is recorded until the answer arrives, and the wait is not a park: a wait
+that must survive a restart parks the run instead. The same holds for the code that starts a
+parked wait, the persistence callback, and the transaction wrapper. In Kotlin all of these, and
+the run itself, are suspending functions. An async host calls the run directly. A host that is
+not async calls it inside one blocking call, and its handlers may block their thread as before.
+
 Resuming a parked run mandates that the host first persist the new reply by appending it to the log, followed
 by starting the run with the freshly updated log. Resuming needs nothing but the log: the same operation 
 resumes in the same process or another one, and no other resume mechanism exists.

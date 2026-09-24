@@ -225,7 +225,9 @@ it gave and what was declared, and the value never enters the program.
 One uninterrupted stretch of a run: from start or resume until the rule parks on a capability
 call, or finishes. The host gives the interpreter a turn. The interpreter gives it back with a
 question or a result. The host decides when each turn runs. The effect log gains one or more
-entries per turn.
+entries per turn. A turn may wait on a handler that is still fetching its answer in process; the
+wait stays inside the turn, and only a park ends it early. See
+[effect-log.md](./effect-log.md) §Parked.
 
 ### Effect log
 

@@ -26,7 +26,8 @@ in the ADR
 [capabilities-execute-through-the-suspension-path](./decisions/2026-08-24-capabilities-execute-through-the-suspension-path.md).
 Two hosts prove it: `klein run` prompts for each capability call, and `klein-example-host` — a
 Gradle module outside `klein-lib`, so `internal` is invisible to it — boot-registers `creditScore`,
-marks `customer` as run-supplied, and compiles against the public surface only.
+marks `customer` as run-supplied, and compiles against the public surface only. It is not
+async, so it runs each rule inside one blocking call.
 
 **The effect log and the unified run.** Every run returns its full history as a value: the inputs
 read at the start, every call with its answer, and how the run ended. A malformed history cannot
@@ -34,7 +35,9 @@ even be represented. One run operation covers starting fresh, resuming, and repl
 matches the log by position, asks the host nothing, and treats a recorded ending as a check, never
 something to rewrite. A rule failing is a normal outcome, a host misusing the run is an error, and
 a host's own exceptions pass through untouched. Hosts persist entries as they are recorded, inside
-their own transaction, and a parked run resumes by appending the answer to its log. Logs
+their own transaction, and a parked run resumes by appending the answer to its log. Handlers,
+the persistence callback, and the transaction wrapper may suspend, so a host can wait on
+in-process work, such as a fetch, without parking the run or blocking a thread. Logs
 round-trip through a binary and a JSON encoding, both version-stamped. The rules are in
 [spec/effect-log.md](./spec/effect-log.md); the decision record is
 [replay-is-ordinal-migration-is-host-policy](./decisions/2026-08-26-replay-is-ordinal-migration-is-host-policy.md).
