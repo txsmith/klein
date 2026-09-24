@@ -24,7 +24,7 @@ tasks.withType<Test> {
 kotlin {
     jvm()
 
-    js(IR) {
+    js {
         browser()
         nodejs()
     }
@@ -56,7 +56,7 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
             }
         }
 
