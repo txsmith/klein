@@ -16,3 +16,4 @@ rootProject.name = "klein"
 include(":klein-lib")
 include(":klein-bench")
 include(":klein-example-host")
+include(":klein-js")
