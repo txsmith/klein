@@ -9,16 +9,30 @@ tasks.withType<Test> {
         showExceptions = true
         showCauses = true
         showStackTraces = true
-        afterSuite(
-            KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
-                if (desc.parent == null) {
+    }
+    addTestListener(
+        object : TestListener {
+            override fun beforeSuite(suite: TestDescriptor) {}
+
+            override fun beforeTest(testDescriptor: TestDescriptor) {}
+
+            override fun afterTest(
+                testDescriptor: TestDescriptor,
+                result: TestResult,
+            ) {}
+
+            override fun afterSuite(
+                suite: TestDescriptor,
+                result: TestResult,
+            ) {
+                if (suite.parent == null) {
                     println(
                         "\nResults: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)",
                     )
                 }
-            }),
-        )
-    }
+            }
+        },
+    )
 }
 
 kotlin {
@@ -69,7 +83,7 @@ kotlin {
 }
 
 // Create symlink to CLI binary after building
-val createKleinSymlink by tasks.registering(Exec::class) {
+val createKleinSymlink = tasks.register<Exec>("createKleinSymlink") {
     group = "build"
     description = "Create ./klein symlink to the native CLI binary"
 
