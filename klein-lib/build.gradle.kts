@@ -75,68 +75,39 @@ kotlin {
 }
 
 // Create symlink to CLI binary after building
-val createKleinSymlink = tasks.register<Exec>("createKleinSymlink") {
-    group = "build"
-    description = "Create ./klein symlink to the native CLI binary"
+val hostOs = org.gradle.internal.os.OperatingSystem.current()
+val hostArch = System.getProperty("os.arch")
+val hostNativeTarget =
+    when {
+        hostOs.isMacOsX && (hostArch == "aarch64" || hostArch == "arm64") -> "macosArm64"
+        hostOs.isLinux -> "linuxX64"
+        else -> null
+    }
 
-    // Determine the platform-specific link task
-    val arch = System.getProperty("os.arch")
-    val linkTaskName =
-        when {
-            org.gradle.internal.os.OperatingSystem
-                .current()
-                .isMacOsX && (arch == "aarch64" || arch == "arm64") -> "linkDebugExecutableMacosArm64"
-            org.gradle.internal.os.OperatingSystem
-                .current()
-                .isLinux -> "linkDebugExecutableLinuxX64"
-            else -> null
-        }
+if (hostNativeTarget != null) {
+    val linkTaskName = "linkDebugExecutable${hostNativeTarget.replaceFirstChar { it.uppercase() }}"
+    val targetPath = "klein-lib/build/bin/$hostNativeTarget/debugExecutable/klein-lib.kexe"
+    val projectRoot = rootProject.projectDir
 
-    if (linkTaskName != null) {
+    val createKleinSymlink = tasks.register<Exec>("createKleinSymlink") {
+        group = "build"
+        description = "Create ./klein symlink to the native CLI binary"
         dependsOn(linkTaskName)
-
-        val targetPath =
-            when (linkTaskName) {
-                "linkDebugExecutableMacosArm64" -> "klein-lib/build/bin/macosArm64/debugExecutable/klein-lib.kexe"
-                "linkDebugExecutableLinuxX64" -> "klein-lib/build/bin/linuxX64/debugExecutable/klein-lib.kexe"
-                else -> null
-            }
-
-        if (targetPath != null) {
-            val projectRoot = project.rootProject.projectDir
-
-            commandLine(
-                "sh",
-                "-c",
-                """
-                cd ${projectRoot.absolutePath} &&
-                rm -f klein &&
-                ln -s $targetPath klein
-                """.trimIndent(),
-            )
-
-            doLast {
-                println("Created symlink: ./klein -> $targetPath")
-            }
+        commandLine(
+            "sh",
+            "-c",
+            """
+            cd ${projectRoot.absolutePath} &&
+            rm -f klein &&
+            ln -s $targetPath klein
+            """.trimIndent(),
+        )
+        doLast {
+            println("Created symlink: ./klein -> $targetPath")
         }
     }
-}
 
-// Make the symlink task run automatically after the appropriate link task
-afterEvaluate {
-    val arch = System.getProperty("os.arch")
-    val linkTaskName =
-        when {
-            org.gradle.internal.os.OperatingSystem
-                .current()
-                .isMacOsX && (arch == "aarch64" || arch == "arm64") -> "linkDebugExecutableMacosArm64"
-            org.gradle.internal.os.OperatingSystem
-                .current()
-                .isLinux -> "linkDebugExecutableLinuxX64"
-            else -> null
-        }
-
-    if (linkTaskName != null) {
+    afterEvaluate {
         tasks.named(linkTaskName) {
             finalizedBy(createKleinSymlink)
         }
