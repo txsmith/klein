@@ -7,8 +7,10 @@ import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.UnknownPin
 import klein.UnreadableEdition
+import klein.check.contract.DeclarationHash
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
+import klein.hex16
 import klein.check.contract.Pin
 import klein.host.DecodedEdition
 import klein.host.Environment
@@ -55,6 +57,8 @@ private val creditPins = pins("creditScore" to 1, "customer" to 1, "Customer" to
 
 private fun hex(checksum: Long): String = hex16(checksum)
 
+private fun hex(hash: DeclarationHash): String = hash.toString()
+
 private fun pinJson(
     name: String,
     pin: Pin = creditPins.getValue(name),
@@ -70,7 +74,7 @@ private fun Map<String, Pin>.changeRevision(
 private fun Map<String, Pin>.changeHash(
     name: String,
     hash: Long,
-): Map<String, Pin> = this + (name to Pin(getValue(name).revision, hash))
+): Map<String, Pin> = this + (name to Pin(getValue(name).revision, DeclarationHash(hash)))
 
 private fun base64(bytes: ByteArray): String = Base64.encode(bytes)
 
@@ -509,7 +513,7 @@ class EditionJsonEncodingTest {
     fun aTamperedPinHashIsAChecksumMismatchAndRederivationRestoresIt() {
         val decoded = assertStale(document("pins" to pinsJson(creditPins.changeHash("creditScore", 0))))
         assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
-        assertEquals(Pin(RevisionNumber(1), 0), decoded.pins["creditScore"])
+        assertEquals(Pin(RevisionNumber(1), DeclarationHash(0)), decoded.pins["creditScore"])
         assertEquals(creditPins, assertRederives(decoded).pinsWithHash)
     }
 

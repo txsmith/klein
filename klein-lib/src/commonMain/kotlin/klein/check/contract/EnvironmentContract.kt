@@ -184,7 +184,7 @@ class EnvironmentContract internal constructor(
     internal fun hashOf(
         name: String,
         revision: RevisionNumber,
-    ): Long? {
+    ): DeclarationHash? {
         declarations.firstOrNull { it.name == name && it.revision == revision }?.let { return hashCapability(it) }
         return contractTypeEnv.hashTypeDefinition(contractTypeEnv.collapseToType(name, revision), revision)
     }

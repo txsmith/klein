@@ -185,7 +185,7 @@ class CompileAgainstPinsTest {
     @Test
     fun compilingAgainstPinsIgnoresTheirRecordedHashes() {
         val fromRelease = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
-        val tampered = fromRelease.pinsWithHash.mapValues { Pin(it.value.revision, it.value.hash + 1) }
+        val tampered = fromRelease.pinsWithHash.mapValues { Pin(it.value.revision, DeclarationHash(it.value.hash.bits + 1)) }
         assertSameEdition(fromRelease, contract.compileRule(CREDIT_RULE, tampered).orFail())
     }
 

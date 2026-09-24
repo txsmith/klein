@@ -12,7 +12,7 @@ private fun hashOf(
     contract: String,
     name: String,
     revision: Int = 1,
-): Long? = Klein.checkContract(contract.trimIndent()).hashOf(name, RevisionNumber(revision))
+): DeclarationHash? = Klein.checkContract(contract.trimIndent()).hashOf(name, RevisionNumber(revision))
 
 private fun assertSameHash(
     name: String,
@@ -222,7 +222,7 @@ class DeclarationHashTest {
                 fun pick(x: 'A, y: 'B): 'A?
                 """.trimIndent(),
             )
-        fun hex(name: String, revision: Int = 1): String = contract.hashOf(name, RevisionNumber(revision))!!.toULong().toString(16).padStart(16, '0')
+        fun hex(name: String, revision: Int = 1): String = contract.hashOf(name, RevisionNumber(revision))!!.toString()
         assertEquals("c00c9f64e0a8aa23", hex("Point"))
         assertEquals("5bb9b07d75b02487", hex("Point", 2))
         assertEquals("6cf10602fc1c1c1e", hex("Shape"))
