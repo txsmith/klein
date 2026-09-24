@@ -117,7 +117,7 @@ echo "f = |x -> x + 1|" | ./klein parse --stdin
 ### Check Types
 
 The primary command under Operation Bidi: run the `klein.check` bidirectional checker. Prints the type of
-each top-level binding (and the trailing expression), then a pass/fail verdict. Exits non-zero on any
+each top-level binding (and the trailing expression, when the program checks), then a pass/fail verdict. Exits non-zero on any
 type error, so it works as a gate in scripts.
 
 ```bash
@@ -198,7 +198,7 @@ klein-lang/
 │   │   ├── commonMain/kotlin/klein/
 │   │   │   ├── SourceSpan.kt     # Source location tracking (cross-cutting; stays at root)
 │   │   │   ├── Klein.kt          # Library entry: pipeline stages (tokenize → parse → check → lower → execute)
-│   │   │   ├── Checked.kt        # Output plus diagnostics, what checking a document returns; compose with andThen
+│   │   │   ├── Checked.kt        # What checking a document returns: Accepted (a value) or Rejected (diagnostics); compose with andThen
 │   │   │   ├── Diagnostic.kt     # A fault in a document (rule, contract, answer): message + span; returned, never thrown
 │   │   │   ├── HostError.kt      # A fault in the environment (registration, pin, log, release, bytes): no span; only thrown
 │   │   │   ├── KleinException.kt # The one public exception: a list of HostErrors

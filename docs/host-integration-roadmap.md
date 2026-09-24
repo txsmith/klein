@@ -61,7 +61,8 @@ that will test that), and the checksum needs only a deterministic walk, not a ca
 the canonical-form dissolution below stands.
 
 **One error architecture.** Two kinds of error, split by what they are about. A `Diagnostic` is
-about a document and has a span; checking or compiling returns it in a `Checked`, and a failed run
+about a document and has a span; checking or compiling returns it in a `Checked`, which is either
+`Accepted` with a value or `Rejected` with diagnostics, never both, and a failed run
 carries it in its outcome and its log. A `HostError` is about the environment and has no span; it
 is only ever thrown, inside the one public `KleinException`, one error per fault with its fields
 kept. A contract that does not check is a host error carrying the contract's diagnostics. The
