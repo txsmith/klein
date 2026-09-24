@@ -1,6 +1,7 @@
 package klein
 
 import klein.surface.*
+import klein.check.ProgramTypes
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.TypeEnv
@@ -60,19 +61,9 @@ object Klein {
     fun checkBindings(
         program: Program,
         env: RuleEnv = TypeEnv.empty(),
-    ): Checked<Map<String, RuleType>> {
+    ): Checked<ProgramTypes> {
         val checked = checkProgram(program, env)
-        if (checked.errors.isNotEmpty()) return Checked.Rejected(checked.errors)
-        val names =
-            program.stmts.flatMap { stmt ->
-                when (stmt) {
-                    is Val -> listOf(stmt.name)
-                    is FunDef -> listOf(stmt.name)
-                    is PatternVal -> stmt.pattern.boundNames
-                    is TypeDefStmt, is Expr -> emptyList()
-                }
-            }
-        return Checked.Accepted(names.associateWith { checked.scope.lookup(it)!! })
+        return if (checked.errors.isEmpty()) Checked.Accepted(checked.types) else Checked.Rejected(checked.errors)
     }
 
     /**

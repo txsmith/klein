@@ -12,11 +12,17 @@ internal data class TypeCheckResult(
     val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
-internal data class ProgramCheck(
+data class ProgramTypes(
     val type: RuleType,
-    val errors: List<TypeError>,
-    val scope: RuleEnv,
+    val bindings: Map<String, RuleType>,
 )
+
+internal data class ProgramCheck(
+    val types: ProgramTypes,
+    val errors: List<TypeError>,
+) {
+    val type: RuleType get() = types.type
+}
 
 internal data class ExpectedType(
     val type: RuleType,
@@ -77,7 +83,17 @@ private class Checker {
         errors.clear()
         val scope = env.copy()
         val type = synthBlockStmts(program.stmts, scope, expected)
-        return ProgramCheck(type, errors.toList(), scope)
+        val names =
+            program.stmts.flatMap { stmt ->
+                when (stmt) {
+                    is Val -> listOf(stmt.name)
+                    is FunDef -> listOf(stmt.name)
+                    is PatternVal -> stmt.pattern.boundNames
+                    is TypeDefStmt, is Expr -> emptyList()
+                }
+            }
+        val bindings = names.mapNotNull { name -> scope.lookup(name)?.let { name to it } }.toMap()
+        return ProgramCheck(ProgramTypes(type, bindings), errors.toList())
     }
 
     fun synth(

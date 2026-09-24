@@ -147,7 +147,7 @@ private fun checkCmd(
     }
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val type = acceptedOrExit(orExit { contract.check(ruleSource, release) }, ruleSource, rawErrors)
+    val type = orExit { contract.check(ruleSource, release) }.acceptedOrExit(ruleSource, rawErrors)
     println("rule : ${Type.print(type)}")
     println("✓ Type checks against release ${release.value}")
 }
@@ -178,7 +178,7 @@ private fun runCmd(
     val contract = loadContract(contractPath, rawErrors)
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val edition = acceptedOrExit(orExit { contract.compileRule(ruleSource, release) }, ruleSource, rawErrors)
+    val edition = orExit { contract.compileRule(ruleSource, release) }.acceptedOrExit(ruleSource, rawErrors)
     val canPrompt = !useStdin && isatty(STDIN_FILENO) == 1
     val answers = mutableMapOf<String, Value>()
     val registrations =
@@ -322,15 +322,14 @@ private fun revisioned(
 ): String = if (revision.value == 1) name else "$name/${revision.value}"
 
 /** Answer an accepted result's value, or print every diagnostic of a rejected one and exit non-zero. */
-private fun <T> acceptedOrExit(
-    result: Checked<T>,
+private fun <T> Checked<T>.acceptedOrExit(
     source: String,
     rawErrors: Boolean,
 ): T =
-    when (result) {
-        is Checked.Accepted -> result.value
+    when (this) {
+        is Checked.Accepted -> value
         is Checked.Rejected -> {
-            printDiagnostics(result.diagnostics, source, rawErrors)
+            printDiagnostics(diagnostics, source, rawErrors)
             exitProcess(1)
         }
     }
@@ -349,7 +348,7 @@ private fun tokenize(
     source: String,
     rawOutput: Boolean,
 ) {
-    for (token in acceptedOrExit(Klein.tokenize(source), source, rawOutput)) {
+    for (token in Klein.tokenize(source).acceptedOrExit(source, rawOutput)) {
         println(token.prettyPrint())
     }
 }
@@ -358,7 +357,7 @@ private fun parse(
     source: String,
     rawOutput: Boolean,
 ) {
-    val program = acceptedOrExit(Klein.tokenize(source).andThen(Klein::parse), source, rawOutput)
+    val program = Klein.tokenize(source).andThen(Klein::parse).acceptedOrExit(source, rawOutput)
     for (stmt in program.stmts) {
         println(stmt.prettyPrint())
     }
@@ -373,11 +372,10 @@ private fun check(
     source: String,
     rawErrors: Boolean,
 ) {
-    val program = acceptedOrExit(Klein.tokenize(source).andThen(Klein::parse), source, rawErrors)
-    val bindings = acceptedOrExit(Klein.checkBindings(program), source, rawErrors)
-    val type = acceptedOrExit(Klein.check(program), source, rawErrors)
+    val program = Klein.tokenize(source).andThen(Klein::parse).acceptedOrExit(source, rawErrors)
+    val types = Klein.checkBindings(program).acceptedOrExit(source, rawErrors)
 
-    fun printBinding(name: String) = println("$name : ${Type.print(bindings.getValue(name))}")
+    fun printBinding(name: String) = println("$name : ${Type.print(types.bindings.getValue(name))}")
     for (stmt in program.stmts) {
         when (stmt) {
             is Val -> printBinding(stmt.name)
@@ -389,7 +387,7 @@ private fun check(
     }
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
-        println("$exprSource : ${Type.print(type)}")
+        println("$exprSource : ${Type.print(types.type)}")
     }
     println("✓ Type checks")
 }
@@ -408,7 +406,7 @@ private fun core(
             .tokenize(source)
             .andThen(Klein::parse)
             .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
-    println(CorePrinter.print(acceptedOrExit(result, source, rawErrors)))
+    println(CorePrinter.print(result.acceptedOrExit(source, rawErrors)))
 }
 
 /**
@@ -425,7 +423,7 @@ private fun run(
             .andThen(Klein::parse)
             .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
             .andThen(Klein::execute)
-    println(Value.print(acceptedOrExit(result, source, rawErrors)))
+    println(Value.print(result.acceptedOrExit(source, rawErrors)))
 }
 
 private fun printError(

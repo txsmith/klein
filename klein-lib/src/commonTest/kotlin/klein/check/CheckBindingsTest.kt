@@ -14,6 +14,7 @@ private fun printedBindings(source: String): Map<String, String> =
     Klein
         .checkBindings(parseProgram(source.trimIndent()))
         .orFail()
+        .bindings
         .mapValues { Type.print(it.value) }
 
 class CheckBindingsTest {
@@ -59,6 +60,13 @@ class CheckBindingsTest {
                 """,
             )
         assertEquals(listOf("b", "a", "c"), bindings.keys.toList())
+    }
+
+    @Test
+    fun theProgramsTypeComesAlongsideItsBindings() {
+        val types = Klein.checkBindings(parseProgram("x = 1\nx > 0")).orFail()
+        assertEquals(Type.TBool, types.type)
+        assertEquals(mapOf("x" to Type.TNum), types.bindings)
     }
 
     @Test
