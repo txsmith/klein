@@ -10,11 +10,11 @@ import klein.interp.Value
 
 internal sealed interface Handler {
     class Immediate(
-        val answer: (List<Value>) -> Value,
+        val answer: suspend (List<Value>) -> Value,
     ) : Handler
 
     class Deferred(
-        val initiate: (Call) -> Unit,
+        val initiate: suspend (Call) -> Unit,
     ) : Handler
 }
 
@@ -25,14 +25,14 @@ class HandlerRegistration internal constructor(
 
 fun immediate(
     name: String,
-    answer: (List<Value>) -> Value,
+    answer: suspend (List<Value>) -> Value,
 ) = HandlerRegistration(name, Handler.Immediate(answer))
 
 fun perRun(name: String) = HandlerRegistration(name, null)
 
 fun deferred(
     name: String,
-    initiate: (Call) -> Unit,
+    initiate: suspend (Call) -> Unit,
 ) = HandlerRegistration(name, Handler.Deferred(initiate))
 
 internal class HandlerRegistry(
@@ -116,7 +116,7 @@ internal class HandlerRegistry(
  */
 fun EnvironmentContract.implement(
     vararg registrations: HandlerRegistration,
-    transact: (block: () -> Unit) -> Unit = { it() },
+    transact: suspend (block: suspend () -> Unit) -> Unit = { it() },
 ): Environment {
     val errors = mutableListOf<RegistrationError>()
     val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList(), perRunAllowed = true, errors)
@@ -130,7 +130,7 @@ fun EnvironmentContract.implement(
 class Environment internal constructor(
     internal val contract: EnvironmentContract,
     internal val registry: HandlerRegistry,
-    internal val transact: (block: () -> Unit) -> Unit,
+    internal val transact: suspend (block: suspend () -> Unit) -> Unit,
 ) {
     val capabilities: List<ContractDeclaration> get() = contract.declarations
 
@@ -154,11 +154,11 @@ class Environment internal constructor(
      * [persist] is called with each newly recorded entry before execution continues, inside the same
      * `transact` as the handler work that produced it. Replayed entries are not persisted.
      */
-    fun run(
+    suspend fun run(
         edition: Edition,
         vararg registrations: HandlerRegistration,
         log: EffectLog? = null,
-        persist: (LogEntry) -> Unit = {},
+        persist: suspend (LogEntry) -> Unit = {},
     ): RunOutcome {
         if (edition.environment != contract.environment) {
             throw KleinException(listOf(WrongEnvironment(edition.environment, contract.environment)))

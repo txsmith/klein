@@ -18,6 +18,7 @@ import klein.host.implement
 import klein.interp.Value
 import klein.assertRejected
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -186,7 +187,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anEditionEncodedAndDecodedIsIntactAndRunsIdenticallyToTheOriginal() {
+    fun anEditionEncodedAndDecodedIsIntactAndRunsIdenticallyToTheOriginal() = runTest {
         val edition = assertCreditCompiles()
         val decoded = assertIntact(encodeEditionJson(edition))
         assertSameEdition(edition, decoded)
@@ -318,7 +319,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aFlippedBlobByteIsAChecksumMismatchAndRederivesFromTheRecordedInputs() {
+    fun aFlippedBlobByteIsAChecksumMismatchAndRederivesFromTheRecordedInputs() = runTest {
         val damaged = creditCore.copyOf()
         damaged[damaged.size - 1] = (damaged[damaged.size - 1].toInt() xor 0x01).toByte()
         val decoded = assertStale(document("core" to "\"${base64(damaged)}\""))
@@ -331,7 +332,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aForeignCompilerVersionBehindAMatchingChecksumIsCompilerChanged() {
+    fun aForeignCompilerVersionBehindAMatchingChecksumIsCompilerChanged() = runTest {
         val foreign = creditCore.copyOf()
         foreign[0] = 2
         val decoded = assertStale(documentWithCore(foreign))
@@ -344,7 +345,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aDeclarationEditedInPlaceBehindAMatchingChecksumIsDeclarationChanged() {
+    fun aDeclarationEditedInPlaceBehindAMatchingChecksumIsDeclarationChanged() = runTest {
         val edited = Klein.checkContract(RENAMED_PARAMETER)
         val decoded = assertStale(document(), against = edited)
         assertEquals(StaleReason.DeclarationChanged, decoded.reason)
@@ -434,7 +435,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun aDecodedEditionRunsOnItsOwnSurfaceWithoutTheHostResolvingItsPins() {
+    fun aDecodedEditionRunsOnItsOwnSurfaceWithoutTheHostResolvingItsPins() = runTest {
         val decoded = assertIntact(encodeEditionJson(assertCreditCompiles()))
         val hostWithoutTheType = lendingHost(Klein.checkContract(STRUCTURAL_LENDING))
         assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(hostWithoutTheType.run(decoded)).value)
@@ -487,7 +488,7 @@ class EditionJsonEncodingTest {
     }
 
     @Test
-    fun anEditedSourceIsAChecksumMismatchAndRederivesFromTheEditedSource() {
+    fun anEditedSourceIsAChecksumMismatchAndRederivesFromTheEditedSource() = runTest {
         val decoded = assertStale(document("source" to "\"creditScore(customer) >= 800\""))
         assertEquals(StaleReason.ChecksumMismatch, decoded.reason)
         val rederived = assertRederives(decoded)

@@ -67,12 +67,12 @@ internal class Run(
     val environment: Environment,
     val edition: Edition,
     val registry: HandlerRegistry,
-    val persist: (LogEntry) -> Unit,
+    val persist: suspend (LogEntry) -> Unit,
     val effectLog: EffectLog?,
 ) {
     lateinit var log: EffectLog
 
-    fun start(): RunOutcome =
+    suspend fun start(): RunOutcome =
         try {
             val opening = Interpreter.start(edition.core)
             val replayed =
@@ -123,7 +123,7 @@ internal class Run(
         return execution
     }
 
-    private fun getHostInputs(from: Execution): Execution {
+    private suspend fun getHostInputs(from: Execution): Execution {
         val inputs = linkedMapOf<String, Value>()
         var execution = from
         lateinit var started: LogEntry.Start
@@ -146,7 +146,7 @@ internal class Run(
         return execution
     }
 
-    private fun executeUntilParked(from: Execution): Execution {
+    private suspend fun executeUntilParked(from: Execution): Execution {
         var execution = from
         while (true) {
             val suspension = execution as? Execution.AwaitingHost ?: return execution
@@ -171,7 +171,7 @@ internal class Run(
         }
     }
 
-    private fun finish(end: Execution): RunOutcome =
+    private suspend fun finish(end: Execution): RunOutcome =
         when (end) {
             is Execution.Failure -> {
                 val failure = LogEntry.Failure(listOf(end.error))
@@ -222,7 +222,7 @@ internal class Run(
             is Execution.Failure -> "the failure '${execution.error.message}'"
         }
 
-    private fun <T : Any> transact(block: () -> T): T {
+    private suspend fun <T : Any> transact(block: suspend () -> T): T {
         var result: T? = null
         environment.transact { result = block() }
         return result ?: throw IllegalStateException("transact returned without completing its block")
@@ -231,7 +231,7 @@ internal class Run(
     private fun isValueAsk(suspension: Execution.AwaitingHost) =
         environment.getCapabilityDeclaration(suspension.call, edition.pins.getValue(suspension.call)) is ContractDeclaration.Value
 
-    private fun askHandler(suspension: Execution.AwaitingHost): HandlerResponse {
+    private suspend fun askHandler(suspension: Execution.AwaitingHost): HandlerResponse {
         if (!isValueAsk(suspension)) environment.checkCallTypes(suspension, edition.surface)
         return when (val handler = registry.getHandler(suspension.call, edition.pins.getValue(suspension.call))) {
             null -> throw IllegalStateException("no handler for '${suspension.call}' although the pre-flight check passed")

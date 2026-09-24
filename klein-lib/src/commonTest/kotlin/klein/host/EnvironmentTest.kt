@@ -13,6 +13,7 @@ import klein.contractOf
 import klein.interp.Value
 import klein.assertRejected
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -380,7 +381,7 @@ class EnvironmentTest {
     }
 
     @Test
-    fun aPerRunEntryGivenToARunIsARegistrationError() {
+    fun aPerRunEntryGivenToARunIsARegistrationError() = runTest {
         val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
         val edition = Klein.checkContract(CONTRACT).compileRule("maxRetries", ReleaseNumber(1)).orFail()
         val error = assertFailsWith<KleinException> { env.run(edition, perRun("creditCheck")) }
@@ -391,7 +392,7 @@ class EnvironmentTest {
     // --- combining registries: the run's entries win ---
 
     @Test
-    fun aLaterRegistryReplacesAPerRunEntryAndABootHandler() {
+    fun aLaterRegistryReplacesAPerRunEntryAndABootHandler() = runTest {
         val contract = Klein.checkContract(CONTRACT)
         val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
         val supplied = forRun(contract, immediate("creditCheck") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(5.0) })
@@ -402,7 +403,7 @@ class EnvironmentTest {
     }
 
     @Test
-    fun combiningLeavesTheLeftSideUntouchedWhereTheRightIsSilent() {
+    fun combiningLeavesTheLeftSideUntouchedWhereTheRightIsSilent() = runTest {
         val contract = Klein.checkContract(CONTRACT)
         val boot = contract.implement(perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) }).registry
         val supplied = forRun(contract, immediate("creditCheck") { Value.VNum(1.0) })

@@ -8,6 +8,7 @@ import klein.RevisionNumber
 import klein.check.contract.Edition
 import klein.interp.Value
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -40,17 +41,17 @@ private fun scoreByTier(args: List<Value>): Value {
     return Value.VNum(if (customer.fields["tier"] == Value.VStr("gold")) 700.0 else 500.0)
 }
 
-private fun Environment.runToValue(
+private suspend fun Environment.runToValue(
     edition: Edition,
     vararg registrations: HandlerRegistration,
 ): Value = assertIs<RunOutcome.Completed>(run(edition, *registrations)).value
 
-private fun Environment.runToFailure(edition: Edition): HostError = assertFailsWith<KleinException> { run(edition) }.errors.single()
+private suspend fun Environment.runToFailure(edition: Edition): HostError = assertFailsWith<KleinException> { run(edition) }.errors.single()
 
 /** The execution narrative: the editions [LendingExampleTest] only checks, run against a live host. */
 class RunAgainstReleaseTest {
     @Test
-    fun aRuleCallingACapabilityRunsToAValue() {
+    fun aRuleCallingACapabilityRunsToAValue() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -61,7 +62,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aNullaryCapabilityIsAskedExactlyOnce() {
+    fun aNullaryCapabilityIsAskedExactlyOnce() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         var asks = 0
         val env =
@@ -75,7 +76,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aCallRepeatedWithTheSameArgumentsIsAskedEachTime() {
+    fun aCallRepeatedWithTheSameArgumentsIsAskedEachTime() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         var asks = 0
         val env =
@@ -92,7 +93,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun callingThroughABindingMatchesTheDirectCall() {
+    fun callingThroughABindingMatchesTheDirectCall() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -111,7 +112,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun twoEditionsOfTheSameRuleDispatchToTheirPinnedRevision() {
+    fun twoEditionsOfTheSameRuleDispatchToTheirPinnedRevision() = runTest {
         val contract =
             Klein.checkContract(
                 """
@@ -137,7 +138,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aTypeAnnotationPinIsVocabularyTheEnvironmentNeedNotServe() {
+    fun aTypeAnnotationPinIsVocabularyTheEnvironmentNeedNotServe() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val rule =
             """
@@ -155,7 +156,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aRunThatForgetsASuppliedCapabilityIsMissingImplementation() {
+    fun aRunThatForgetsASuppliedCapabilityIsMissingImplementation() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -173,7 +174,7 @@ class RunAgainstReleaseTest {
 
     // A per-run entry is a promise the run makes to the environment; the edition's pins do not shrink it.
     @Test
-    fun aRunMustImplementEveryPerRunEntryEvenOnesTheEditionNeverCalls() {
+    fun aRunMustImplementEveryPerRunEntryEvenOnesTheEditionNeverCalls() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -190,7 +191,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aRunEntryOverridesTheBootHandlerOnlyForItsOwnRevision() {
+    fun aRunEntryOverridesTheBootHandlerOnlyForItsOwnRevision() = runTest {
         val contract =
             Klein.checkContract(
                 """
@@ -218,7 +219,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aRunSuppliedImplementationWinsOverTheBootRegisteredOne() {
+    fun aRunSuppliedImplementationWinsOverTheBootRegisteredOne() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -231,7 +232,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aConstructorPinIsNotMistakenForACapability() {
+    fun aConstructorPinIsNotMistakenForACapability() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -243,7 +244,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aHandlerAnsweringTheWrongTypeIsCaughtAtTheCallSite() {
+    fun aHandlerAnsweringTheWrongTypeIsCaughtAtTheCallSite() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -257,7 +258,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aCustomerWithAWrongFieldTypeIsCaughtAtTheBoundary() {
+    fun aCustomerWithAWrongFieldTypeIsCaughtAtTheBoundary() = runTest {
         val contract = Klein.checkContract(LENDING_CONTRACT)
         val env =
             contract.implement(
@@ -271,7 +272,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aRecordAnswerWithExtraFieldsPasses() {
+    fun aRecordAnswerWithExtraFieldsPasses() = runTest {
         val contract =
             Klein.checkContract(
                 """
@@ -293,7 +294,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aHandlerAnsweringAClosureIsRejectedAsAFunction() {
+    fun aHandlerAnsweringAClosureIsRejectedAsAFunction() = runTest {
         val closure =
             Klein
                 .tokenize("|x -> x|")
@@ -313,7 +314,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun anEditionRunsAgainstAContractEditedInPlaceAtTheSameRevision() {
+    fun anEditionRunsAgainstAContractEditedInPlaceAtTheSameRevision() = runTest {
         val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         val widened =
             Klein.checkContract(
@@ -326,7 +327,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aCallWhoseArgumentNoLongerFitsTheEditedContractIsCallTypeMismatch() {
+    fun aCallWhoseArgumentNoLongerFitsTheEditedContractIsCallTypeMismatch() = runTest {
         val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var asked = false
         val narrowed =
@@ -345,7 +346,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aCallWhoseArityNoLongerMatchesTheEditedContractIsCallTypeMismatch() {
+    fun aCallWhoseArityNoLongerMatchesTheEditedContractIsCallTypeMismatch() = runTest {
         val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var asked = false
         val widened =
@@ -364,7 +365,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun aDeferredInitiationIsNotRunWhenTheArgumentNoLongerFits() {
+    fun aDeferredInitiationIsNotRunWhenTheArgumentNoLongerFits() = runTest {
         val edition = Klein.checkContract(LENDING_CONTRACT).compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         var initiated = false
         val narrowed =
@@ -380,7 +381,7 @@ class RunAgainstReleaseTest {
     }
 
     @Test
-    fun replayedCallsAreNotArgumentCheckedAgainstTheEditedContract() {
+    fun replayedCallsAreNotArgumentCheckedAgainstTheEditedContract() = runTest {
         val original = Klein.checkContract(LENDING_CONTRACT)
         val edition = original.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
         val recording =

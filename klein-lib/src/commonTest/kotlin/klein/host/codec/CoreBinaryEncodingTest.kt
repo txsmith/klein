@@ -46,6 +46,7 @@ import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -188,7 +189,7 @@ class CoreBinaryEncodingTest {
     }
 
     @Test
-    fun aDecodedCoreRunsIdenticallyToTheOriginal() {
+    fun aDecodedCoreRunsIdenticallyToTheOriginal() = runTest {
         val contract = Klein.checkContract(LENDING)
         val edition =
             contract

@@ -13,6 +13,7 @@ import klein.host.implement
 import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -185,7 +186,7 @@ class EffectLogJsonEncodingTest {
     }
 
     @Test
-    fun aDecodedLogReplaysIdenticallyToTheOriginal() {
+    fun aDecodedLogReplaysIdenticallyToTheOriginal() = runTest {
         val contract = Klein.checkContract(LENDING)
         val rule = contract.compileRule("""creditScore(Customer(2, "basic")) + creditScore(customer)""", ReleaseNumber(1)).orFail()
         var asks = 0

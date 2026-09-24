@@ -9,6 +9,7 @@ import klein.host.codec.decodeEditionJson
 import klein.host.codec.encodeEditionJson
 import klein.interp.Value
 import klein.orFail
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -41,7 +42,7 @@ private val gold = Value.VStruct("Customer", mapOf("id" to Value.VNum(1.0), "tie
 
 private fun assertCreditCompiles(contract: EnvironmentContract = acme): Edition = contract.compileRule(CREDIT_RULE, ReleaseNumber(1)).orFail()
 
-private fun assertWrongEnvironment(
+private inline fun assertWrongEnvironment(
     edition: String,
     environment: String,
     block: () -> Unit,
@@ -96,7 +97,7 @@ class EnvironmentIdentityTest {
     }
 
     @Test
-    fun runningUnderAnotherEnvironmentIsWrongEnvironmentBeforeTheFirstEffect() {
+    fun runningUnderAnotherEnvironmentIsWrongEnvironmentBeforeTheFirstEffect() = runTest {
         var asked = false
         val host =
             globex.implement(
@@ -108,7 +109,7 @@ class EnvironmentIdentityTest {
     }
 
     @Test
-    fun runningUnderItsOwnEnvironmentIsUnaffected() {
+    fun runningUnderItsOwnEnvironmentIsUnaffected() = runTest {
         val host = acme.implement(immediate("customer") { gold }, immediate("creditScore") { Value.VNum(700.0) })
         assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(host.run(assertCreditCompiles())).value)
     }
