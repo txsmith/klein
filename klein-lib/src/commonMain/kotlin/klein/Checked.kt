@@ -1,19 +1,29 @@
 package klein
 
-data class Checked<out T>(
-    val output: T?,
-    val diagnostics: List<Diagnostic>,
-) {
-    val hasErrors: Boolean get() = diagnostics.isNotEmpty()
+sealed class Checked<out T> {
+    data class Accepted<out T>(
+        val value: T,
+    ) : Checked<T>()
 
-    fun <R> map(transform: (T) -> R): Checked<R> = Checked(output?.let(transform), diagnostics)
+    data class Rejected(
+        val diagnostics: List<Diagnostic>,
+    ) : Checked<Nothing>() {
+        constructor(diagnostic: Diagnostic) : this(listOf(diagnostic))
+
+        init {
+            require(diagnostics.isNotEmpty()) { "a rejected result needs at least one diagnostic" }
+        }
+    }
+
+    fun <R> map(transform: (T) -> R): Checked<R> =
+        when (this) {
+            is Accepted -> Accepted(transform(value))
+            is Rejected -> this
+        }
 
     fun <R> andThen(next: (T) -> Checked<R>): Checked<R> =
-        if (output == null || hasErrors) Checked(null, diagnostics) else next(output)
-
-    companion object {
-        fun <T> success(output: T): Checked<T> = Checked(output, emptyList())
-
-        fun <T> failure(diagnostic: Diagnostic): Checked<T> = Checked(null, listOf(diagnostic))
-    }
+        when (this) {
+            is Accepted -> next(value)
+            is Rejected -> this
+        }
 }

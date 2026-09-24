@@ -7,6 +7,7 @@ import klein.ReleaseNumber
 import klein.check.Type
 import klein.check.Type.TNum
 import klein.check.TypeError
+import klein.assertRejected
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,7 +77,7 @@ class ReleaseTypeCheckTest {
         val contract = Klein.checkContract(contractWith("release 2"))
         assertEquals(listOf(ReleaseNumber(2)), contract.releases)
         val error = contract.check("maxRetries", ReleaseNumber(2))
-        assertIs<TypeError.UnboundVariable>(error.diagnostics.single())
+        assertIs<TypeError.UnboundVariable>(error.assertRejected().single())
     }
 
     // A capability may be declared and implemented ahead of the release that exposes it.
@@ -205,7 +206,7 @@ class ReleaseTypeCheckTest {
             )
         val rule = "fun tier(c: Customer): String = c.tier"
         assertEquals(Type.TStr, contract.check("$rule\ntier(Customer(1, \"gold\"))", ReleaseNumber(2)).orFail())
-        assertIs<TypeError.MissingField>(contract.check(rule, ReleaseNumber(1)).diagnostics.single())
+        assertIs<TypeError.MissingField>(contract.check(rule, ReleaseNumber(1)).assertRejected().single())
     }
 
     /** An empty block anywhere but first states a release identical to the one before it. */
@@ -245,7 +246,7 @@ class ReleaseTypeCheckTest {
             )
         assertEquals(TNum, contract.check("maxRetries", ReleaseNumber(1)).orFail())
         val error = contract.check("maxRetries", ReleaseNumber(2))
-        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(error.diagnostics.single()).name)
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(error.assertRejected().single()).name)
     }
 
     @Test
@@ -263,7 +264,7 @@ class ReleaseTypeCheckTest {
                 ),
             )
         val error = contract.check("fun f(c: Customer): Num = c.id", ReleaseNumber(2))
-        assertEquals("Customer", assertIs<TypeError.UnboundVariable>(error.diagnostics.first()).name)
+        assertEquals("Customer", assertIs<TypeError.UnboundVariable>(error.assertRejected().first()).name)
     }
 
     @Test

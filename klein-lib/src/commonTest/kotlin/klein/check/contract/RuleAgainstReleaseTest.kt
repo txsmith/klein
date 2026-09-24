@@ -7,6 +7,7 @@ import klein.ReleaseNumber
 import klein.check.RuleType
 import klein.check.Type
 import klein.check.TypeError
+import klein.diagnosticsOrEmpty
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,7 +49,7 @@ private fun check(
 private fun errorsFrom(
     rule: String,
     release: Int = 2,
-): List<Diagnostic> = contract.check(rule, ReleaseNumber(release)).diagnostics
+): List<Diagnostic> = contract.check(rule, ReleaseNumber(release)).diagnosticsOrEmpty()
 
 /** No rule-facing diagnostic may spell a revision, whatever channel it came out of. */
 private fun assertNoRevision(errors: List<Diagnostic>) {

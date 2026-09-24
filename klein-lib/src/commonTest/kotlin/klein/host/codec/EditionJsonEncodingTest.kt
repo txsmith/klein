@@ -16,13 +16,13 @@ import klein.host.StaleReason
 import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
+import klein.assertRejected
 import klein.orFail
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val CREDIT_RULE = "creditScore(customer) >= 620"
@@ -587,9 +587,7 @@ class EditionJsonEncodingTest {
                   creditScore
                 """.trimIndent(),
             )
-        val checked = edited.compileRule(decoded.source, decoded.pins)
-        assertNull(checked.output)
-        assertTrue(checked.diagnostics.isNotEmpty())
+        edited.compileRule(decoded.source, decoded.pins).assertRejected()
         assertEquals(CREDIT_RULE, decoded.source)
         assertEquals(creditPins, decoded.pins)
     }

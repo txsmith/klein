@@ -5,13 +5,12 @@ import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.TypeError
+import klein.assertRejected
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private const val CREDIT_RULE = "creditScore(customer) >= 620"
 
@@ -140,9 +139,7 @@ class CompileAgainstPinsTest {
                   creditScore
                 """.trimIndent(),
             )
-        val checked = edited.compileRule(CREDIT_RULE, fromRelease.pins)
-        assertNull(checked.output)
-        assertTrue(checked.diagnostics.isNotEmpty())
+        edited.compileRule(CREDIT_RULE, fromRelease.pins).assertRejected()
     }
 
     @Test
@@ -275,14 +272,12 @@ class CompileAgainstPinsTest {
 
     @Test
     fun aNameThePinsLackIsUnbound() {
-        val errors = contract.compileRule("riskBand(customer, 1)", pins("customer" to 2)).diagnostics
+        val errors = contract.compileRule("riskBand(customer, 1)", pins("customer" to 2)).assertRejected()
         assertEquals("riskBand", assertIs<TypeError.UnboundVariable>(errors.single()).name)
     }
 
     @Test
     fun aSyntaxErrorComesBackAsADiagnostic() {
-        val checked = contract.compileRule("creditScore(", pins("creditScore" to 1))
-        assertNull(checked.output)
-        assertEquals(1, checked.diagnostics.size)
+        assertEquals(1, contract.compileRule("creditScore(", pins("creditScore" to 1)).assertRejected().size)
     }
 }

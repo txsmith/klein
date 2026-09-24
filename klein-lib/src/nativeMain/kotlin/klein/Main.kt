@@ -149,9 +149,8 @@ private fun checkCmd(
     }
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val checked = orExit { contract.check(ruleSource, release) }
-    exitOnErrors(checked, ruleSource, rawErrors)
-    println("rule : ${Type.print(checked.output!!)}")
+    val type = acceptedOrExit(orExit { contract.check(ruleSource, release) }, ruleSource, rawErrors)
+    println("rule : ${Type.print(type)}")
     println("✓ Type checks against release ${release.value}")
 }
 
@@ -181,9 +180,7 @@ private fun runCmd(
     val contract = loadContract(contractPath, rawErrors)
     val ruleSource = getSource(useStdin, fileArg) ?: return
     val release = parseReleaseNumber(contract, releaseArg)
-    val compiled = orExit { contract.compileRule(ruleSource, release) }
-    exitOnErrors(compiled, ruleSource, rawErrors)
-    val edition = compiled.output!!
+    val edition = acceptedOrExit(orExit { contract.compileRule(ruleSource, release) }, ruleSource, rawErrors)
     val canPrompt = !useStdin && isatty(STDIN_FILENO) == 1
     val answers = mutableMapOf<String, Value>()
     val registrations =
@@ -238,19 +235,13 @@ private fun prompt(
         print("$call = ? ")
         fflush(null)
         val line = readlnOrNull() ?: throw KleinException(listOf(UnanswerableCapability(call)))
-        val compiled = contract.compileValue(line, release, declaration.answerType)
-        if (compiled.hasErrors) {
-            compiled.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }
-            continue
+        when (val answered = contract.compileValue(line, release, declaration.answerType).andThen(Klein::execute)) {
+            is Checked.Accepted -> {
+                answers[call] = answered.value
+                return answered.value
+            }
+            is Checked.Rejected -> printDiagnostics(answered.diagnostics, line, rawErrors)
         }
-        val executed = Klein.execute(compiled.output!!)
-        if (executed.hasErrors) {
-            executed.diagnostics.forEach { printError(line, it.span, it.message, rawErrors) }
-            continue
-        }
-        val value = executed.output!!
-        answers[call] = value
-        return value
     }
 }
 
@@ -332,26 +323,35 @@ private fun revisioned(
     revision: RevisionNumber,
 ): String = if (revision.value == 1) name else "$name/${revision.value}"
 
-/** Print every error from a stage result uniformly and exit non-zero. No-op when the result is clean. */
-private fun exitOnErrors(
-    result: Checked<*>,
+/** Answer an accepted result's value, or print every diagnostic of a rejected one and exit non-zero. */
+private fun <T> acceptedOrExit(
+    result: Checked<T>,
+    source: String,
+    rawErrors: Boolean,
+): T =
+    when (result) {
+        is Checked.Accepted -> result.value
+        is Checked.Rejected -> {
+            printDiagnostics(result.diagnostics, source, rawErrors)
+            exitProcess(1)
+        }
+    }
+
+private fun printDiagnostics(
+    diagnostics: List<Diagnostic>,
     source: String,
     rawErrors: Boolean,
 ) {
-    if (!result.hasErrors) return
-    for (error in result.diagnostics) {
+    for (error in diagnostics) {
         printError(source, error.span, error.message, rawErrors)
     }
-    exitProcess(1)
 }
 
 private fun tokenize(
     source: String,
     rawOutput: Boolean,
 ) {
-    val result = Klein.tokenize(source)
-    exitOnErrors(result, source, rawOutput)
-    for (token in result.output!!) {
+    for (token in acceptedOrExit(Klein.tokenize(source), source, rawOutput)) {
         println(token.prettyPrint())
     }
 }
@@ -360,9 +360,8 @@ private fun parse(
     source: String,
     rawOutput: Boolean,
 ) {
-    val result = Klein.tokenize(source).andThen(Klein::parse)
-    exitOnErrors(result, source, rawOutput)
-    for (stmt in result.output!!.stmts) {
+    val program = acceptedOrExit(Klein.tokenize(source).andThen(Klein::parse), source, rawOutput)
+    for (stmt in program.stmts) {
         println(stmt.prettyPrint())
     }
 }
@@ -376,9 +375,7 @@ private fun check(
     source: String,
     rawErrors: Boolean,
 ) {
-    val parsed = Klein.tokenize(source).andThen(Klein::parse)
-    exitOnErrors(parsed, source, rawErrors)
-    val program = parsed.output!!
+    val program = acceptedOrExit(Klein.tokenize(source).andThen(Klein::parse), source, rawErrors)
 
     val env: RuleEnv = TypeEnv.empty()
     val checked = Klein.check(program, env)
@@ -395,12 +392,11 @@ private fun check(
             is Expr -> {} // trailing expression handled below; interior ones carry no recorded type
         }
     }
+    val type = acceptedOrExit(checked, source, rawErrors)
     (program.stmts.lastOrNull() as? Expr)?.let { expr ->
         val exprSource = source.substring(expr.span.start, expr.span.end)
-        println("$exprSource : ${Type.print(checked.output!!)}")
+        println("$exprSource : ${Type.print(type)}")
     }
-
-    exitOnErrors(checked, source, rawErrors)
     println("✓ Type checks")
 }
 
@@ -418,8 +414,7 @@ private fun core(
             .tokenize(source)
             .andThen(Klein::parse)
             .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
-    exitOnErrors(result, source, rawErrors)
-    println(CorePrinter.print(result.output!!))
+    println(CorePrinter.print(acceptedOrExit(result, source, rawErrors)))
 }
 
 /**
@@ -436,8 +431,7 @@ private fun run(
             .andThen(Klein::parse)
             .andThen { program -> Klein.check(program).andThen { Klein.lower(program) } }
             .andThen(Klein::execute)
-    exitOnErrors(result, source, rawErrors)
-    println(Value.print(result.output!!))
+    println(Value.print(acceptedOrExit(result, source, rawErrors)))
 }
 
 private fun printError(

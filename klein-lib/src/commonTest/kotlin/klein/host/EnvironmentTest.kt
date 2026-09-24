@@ -11,6 +11,7 @@ import klein.check.contract.EnvironmentContract
 import klein.check.contract.InvalidContract
 import klein.contractOf
 import klein.interp.Value
+import klein.assertRejected
 import klein.orFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -326,7 +327,7 @@ class EnvironmentTest {
 
         // The same contract, from a rule's side: `maxRetries` is not vocabulary release 1 gave it.
         val unbound = Klein.checkContract(PARTLY_EXPOSED).check("maxRetries", ReleaseNumber(1))
-        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.diagnostics.single()).name)
+        assertEquals("maxRetries", assertIs<TypeError.UnboundVariable>(unbound.assertRejected().single()).name)
     }
 
     // --- per-run supply: registered at boot, implemented by each run ---

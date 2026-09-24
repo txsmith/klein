@@ -287,7 +287,7 @@ class EffectLogBinaryEncodingTest {
                 .andThen(Klein::parse)
                 .andThen(Klein::lower)
                 .andThen(Klein::execute)
-                .output!!
+                .orFail()
         assertFailsWith<IllegalArgumentException> { encodeBinary(EffectLog(LogEntry.Start(mapOf("f" to closure)))) }
     }
 

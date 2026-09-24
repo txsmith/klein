@@ -133,7 +133,7 @@ class EnvironmentContract internal constructor(
             val editionSurface = resolvePins(used.associateWith(surface::getRevision)).getOrThrow()
             val editionPins = editionSurface.pins.mapValues { (name, revision) -> Pin(revision, hashOf(name, revision)!!) }
             val prelude = used.mapNotNull { surface.bindingFor(it) }
-            Checked.success(Edition(environment, LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
+            Checked.Accepted(Edition(environment, LanguageVersion.CURRENT, lowerWithPrelude(rule.program, prelude), editionPins, source, editionSurface))
         }
 
     /**
@@ -161,9 +161,9 @@ class EnvironmentContract internal constructor(
                     }.sortedBy { it.span.start }
                     .distinctBy { it.name }
             if (capabilities.isNotEmpty()) {
-                Checked(null, capabilities.map { CapabilityInAnswer(it.name, it.span) })
+                Checked.Rejected(capabilities.map { CapabilityInAnswer(it.name, it.span) })
             } else {
-                Checked.success(lowerWithPrelude(rule.program, mentions.mapNotNull { resolvedRelease.bindingFor(it.name) }.distinct()))
+                Checked.Accepted(lowerWithPrelude(rule.program, mentions.mapNotNull { resolvedRelease.bindingFor(it.name) }.distinct()))
             }
         }
     }
@@ -182,10 +182,10 @@ class EnvironmentContract internal constructor(
             try {
                 parseProgram(Lexer(ruleSource).tokenize().toList())
             } catch (e: Abort) {
-                return Checked.failure(e.diagnostic)
+                return Checked.Rejected(e.diagnostic)
             }
         val checked = checkProgram(program, surface.ruleTypeEnv, expected)
-        return Checked(CheckedRule(program, checked.type), checked.errors)
+        return if (checked.errors.isEmpty()) Checked.Accepted(CheckedRule(program, checked.type)) else Checked.Rejected(checked.errors)
     }
 
     internal fun hashOf(
