@@ -4,6 +4,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.RevisionNumber
+import klein.UnknownPin
 import klein.check.TypeError
 import klein.assertRejected
 import klein.orFail

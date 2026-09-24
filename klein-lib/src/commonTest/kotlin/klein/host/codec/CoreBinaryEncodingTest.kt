@@ -5,6 +5,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.UnreadableEdition
 import klein.check.contract.Edition
 import klein.core.Apply
 import klein.core.Bind

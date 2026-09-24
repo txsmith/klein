@@ -4,6 +4,7 @@ import klein.Klein
 import klein.Diagnostic
 import klein.KleinException
 import klein.ReleaseNumber
+import klein.UnknownRelease
 import klein.check.RuleType
 import klein.check.Type
 import klein.check.TypeError

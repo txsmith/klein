@@ -8,7 +8,6 @@ import klein.check.TypeEnv
 import klein.check.checkProgram
 import klein.check.contract.ContractChecker
 import klein.check.contract.EnvironmentContract
-import klein.check.contract.InvalidContract
 import klein.core.CoreExpr
 import klein.interp.Execution
 import klein.interp.Interpreter

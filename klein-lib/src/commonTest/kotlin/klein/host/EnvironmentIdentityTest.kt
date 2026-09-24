@@ -3,6 +3,7 @@ package klein.host
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
+import klein.WrongEnvironment
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
 import klein.host.codec.decodeEditionJson

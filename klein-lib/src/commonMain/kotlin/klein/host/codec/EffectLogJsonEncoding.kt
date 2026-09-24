@@ -3,6 +3,7 @@ package klein.host.codec
 import klein.Diagnostic
 import klein.KleinException
 import klein.SourceSpan
+import klein.UnreadableLog
 import klein.host.Call
 import klein.host.EffectLog
 import klein.host.LogEntry

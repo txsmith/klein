@@ -1,8 +1,10 @@
 package klein.host
 
-import klein.HostError
 import klein.KleinException
+import klein.MissingHandler
+import klein.RegistrationError
 import klein.RevisionNumber
+import klein.WrongEnvironment
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
@@ -180,7 +182,3 @@ class Environment internal constructor(
         revision: RevisionNumber,
     ): ContractDeclaration? = declarations[name to revision]
 }
-
-class RegistrationError internal constructor(
-    override val message: String,
-) : HostError

@@ -1,7 +1,12 @@
 package klein.host
 
+import klein.Diverged
+import klein.HandlerTypeMismatch
 import klein.Klein
 import klein.KleinException
+import klein.LogTypeMismatch
+import klein.MissingHandler
+import klein.RegistrationError
 import klein.ReleaseNumber
 import klein.SourceSpan
 import klein.interp.RuntimeError

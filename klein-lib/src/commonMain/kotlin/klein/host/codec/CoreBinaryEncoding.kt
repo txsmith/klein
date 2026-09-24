@@ -3,6 +3,7 @@ package klein.host.codec
 import klein.CompilerVersion
 import klein.KleinException
 import klein.SourceSpan
+import klein.UnreadableEdition
 import klein.core.Apply
 import klein.core.Bind
 import klein.core.Constant

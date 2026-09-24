@@ -1,9 +1,10 @@
 package klein.host
 
+import klein.CallTypeMismatch
 import klein.Diagnostic
-import klein.HostError
+import klein.Diverged
+import klein.HandlerTypeMismatch
 import klein.KleinException
-import klein.check.RuleType
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.Edition
@@ -36,31 +37,6 @@ sealed interface RunOutcome {
     ) : RunOutcome {
         fun toReply(answer: Value) = LogEntry.Reply(call, answer)
     }
-}
-
-class Diverged internal constructor(
-    val expected: String,
-    val got: String,
-    val at: Int,
-    val call: Call?,
-) : HostError {
-    override val message get() = "replay diverged at log entry $at: expected $expected, got $got"
-}
-
-class HandlerTypeMismatch internal constructor(
-    val call: String,
-    val answerType: String,
-    val declaredType: RuleType,
-) : HostError {
-    override val message get() = "'$call' answered with $answerType where the contract declares ${Type.print(declaredType)}"
-}
-
-class CallTypeMismatch internal constructor(
-    val call: String,
-    val got: String,
-    val declared: String,
-) : HostError {
-    override val message get() = "'$call' was called with $got where the contract declares $declared"
 }
 
 internal class Run(

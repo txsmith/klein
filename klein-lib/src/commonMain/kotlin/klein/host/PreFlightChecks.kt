@@ -1,7 +1,6 @@
 package klein.host
 
-import klein.HostError
-import klein.RevisionNumber
+import klein.LogTypeMismatch
 import klein.check.RuleEnv
 import klein.check.RuleType
 import klein.check.Subtyping
@@ -9,30 +8,6 @@ import klein.check.Type
 import klein.check.contract.Edition
 import klein.check.infer
 import klein.interp.Value
-
-class WrongEnvironment internal constructor(
-    val edition: String,
-    val environment: String,
-) : HostError {
-    override val message = "this edition belongs to environment '$edition' but was given to environment '$environment'"
-}
-
-class MissingHandler internal constructor(
-    val name: String,
-    val revision: RevisionNumber,
-) : HostError {
-    override val message =
-        "'$name' revision ${revision.value} has no handler: register one at boot or supply one with the run"
-}
-
-class LogTypeMismatch internal constructor(
-    val at: Int,
-    val name: String,
-    val answerType: String,
-    val declaredType: RuleType,
-) : HostError {
-    override val message get() = "log entry $at holds $answerType for '$name' where the contract declares ${Type.print(declaredType)}"
-}
 
 internal fun Environment.checkLog(
     edition: Edition,

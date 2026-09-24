@@ -4,7 +4,6 @@ import klein.surface.*
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
-import klein.check.contract.InvalidContract
 import klein.core.CorePrinter
 import klein.host.RunOutcome
 import klein.host.immediate

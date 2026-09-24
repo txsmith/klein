@@ -1,26 +1,22 @@
 package klein.host.codec
 
 import klein.CompilerVersion
-import klein.HostError
 import klein.KleinException
 import klein.LanguageVersion
 import klein.RevisionNumber
+import klein.UnknownPin
+import klein.UnreadableEdition
+import klein.WrongEnvironment
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.Pin
 import klein.check.contract.PinResolution
-import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.StaleReason
-import klein.host.WrongEnvironment
 import kotlin.io.encoding.Base64
 
 private const val FORMAT_MARKER = "klein-edition"
 private const val JSON_VERSION = 1
-
-class UnreadableEdition internal constructor(
-    override val message: String,
-) : HostError
 
 fun encodeEditionJson(edition: Edition): String {
     val coreBytes = encodeCore(edition.core)
