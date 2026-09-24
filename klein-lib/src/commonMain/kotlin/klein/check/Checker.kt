@@ -370,7 +370,7 @@ private class Checker {
         // result. On a non-optional receiver `?.` is redundant, so it behaves as a plain call.
         val rawCallee = synth(expr.callee, env)
         val isNullableApply = expr.callee is SafeFieldAccess && rawCallee is TOptional
-        val callee = if (isNullableApply) (rawCallee as TOptional).type else rawCallee
+        val callee = if (isNullableApply) rawCallee.type else rawCallee
         val demand = if (isNullableApply) expected?.let { if (it is TOptional) it.type else it } else expected
         val scheme = callee as? TForall<Nothing?> ?: TForall(emptySet(), callee)
         val body = scheme.body

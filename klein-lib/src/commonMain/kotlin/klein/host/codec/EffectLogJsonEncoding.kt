@@ -231,7 +231,7 @@ private fun toObjectValue(json: Json.JObj): Value {
             json.expectOnly("a struct value", "tag", "fields")
             val tagJson = json.fields["tag"]
             if (tagJson != null && tagJson !is Json.JStr) reject("a struct's \"tag\" must be a string")
-            val tag = (tagJson as? Json.JStr)?.value
+            val tag = tagJson?.value
             val fieldsJson = json.expectField("fields", "a struct value")
             val fields = toValueMap(fieldsJson, "a struct's \"fields\"")
             Value.VStruct(tag, fields)

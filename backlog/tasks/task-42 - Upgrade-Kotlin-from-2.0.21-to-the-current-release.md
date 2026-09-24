@@ -1,9 +1,11 @@
 ---
 id: TASK-42
 title: Upgrade Kotlin from 2.0.21 to the current release
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-09 11:00'
+updated_date: '2026-09-24 08:41'
 labels:
   - tooling
 dependencies: []
@@ -21,9 +23,35 @@ The build pins Kotlin 2.0.21 (October 2024) for all four plugins in build.gradle
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 build.gradle.kts pins the current stable Kotlin release for the multiplatform, jvm, serialization, and allopen plugins
-- [ ] #2 kotlinx-benchmark and kotlinx-serialization-json are on releases compatible with that Kotlin, and Gradle is on a version the Kotlin plugin supports
-- [ ] #3 The three `@OptIn(ExperimentalEncodingApi::class)` annotations in EditionJsonEncoding.kt and EditionJsonEncodingTest.kt are removed and the code still compiles
-- [ ] #4 ./gradlew :klein-lib:allTests -x :klein-lib:jsBrowserTest and ./gradlew :klein-example-host:test exit 0
-- [ ] #5 The native CLI links (linkDebugExecutableLinuxX64 or the macOS equivalent) and ./gradlew :klein-bench:smokeBenchmark runs
+- [x] #1 build.gradle.kts pins the current stable Kotlin release for the multiplatform, jvm, serialization, and allopen plugins
+- [x] #2 kotlinx-benchmark and kotlinx-serialization-json are on releases compatible with that Kotlin, and Gradle is on a version the Kotlin plugin supports
+- [x] #3 The three `@OptIn(ExperimentalEncodingApi::class)` annotations in EditionJsonEncoding.kt and EditionJsonEncodingTest.kt are removed and the code still compiles
+- [x] #4 ./gradlew :klein-lib:allTests -x :klein-lib:jsBrowserTest and ./gradlew :klein-example-host:test exit 0
+- [x] #5 The native CLI links (linkDebugExecutableLinuxX64 or the macOS equivalent) and ./gradlew :klein-bench:smokeBenchmark runs
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Move the four Kotlin plugins to 2.4.20, kotlinx-benchmark to 0.5.0 and kotlinx-serialization-json to 1.11.0.
+2. Replace the deprecated js(IR) target with js, and regenerate the committed yarn lock.
+3. Remove the Base64 opt-ins, stable since Kotlin 2.2.0.
+4. Move the Gradle wrapper from 8.10 to 9.7.1 (Thomas chose it over 9.7.0, the newest on the plugin's tested list).
+5. Run every acceptance build and compare warnings against main.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Versions checked against Maven Central on 2026-09-24: Kotlin 2.4.20, kotlinx-serialization-json 1.11.0, kotlinx-benchmark 0.5.0 are the newest stable releases. Kotlin 2.4.20 lists Gradle 7.6.3 to 9.7.0 as supported.
+
+Main builds with no warnings. The upgrade adds: Kotlin 2.4 checker warnings (redundant casts, needless safe calls and a needless !!, deprecated readLine in the native CLI), the macosX64 target deprecation, and two Gradle 10 deprecations in klein-lib's build script (afterSuite with a closure, and the by registering delegate). Left for Thomas to decide.
+
+Validation: allTests without jsBrowserTest (2667 JVM and 2663 JS Node tests), klein-example-host test, linkDebugExecutableLinuxX64 (the CLI evaluates 1 + 2 * 3 to 7), and smokeBenchmark (30 results) all exit 0.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Moved Kotlin to 2.4.20, kotlinx-serialization-json to 1.11.0, kotlinx-benchmark to 0.5.0 and Gradle to 9.7.1; replaced js(IR) with js; removed the Base64 opt-ins. Verified with allTests (JS browser excluded), the example host tests, the native link and the smoke benchmark.
+<!-- SECTION:FINAL_SUMMARY:END -->

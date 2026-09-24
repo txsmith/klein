@@ -9,35 +9,41 @@ tasks.withType<Test> {
         showExceptions = true
         showCauses = true
         showStackTraces = true
-        afterSuite(
-            KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
-                if (desc.parent == null) {
+    }
+    addTestListener(
+        object : TestListener {
+            override fun beforeSuite(suite: TestDescriptor) {}
+
+            override fun beforeTest(testDescriptor: TestDescriptor) {}
+
+            override fun afterTest(
+                testDescriptor: TestDescriptor,
+                result: TestResult,
+            ) {}
+
+            override fun afterSuite(
+                suite: TestDescriptor,
+                result: TestResult,
+            ) {
+                if (suite.parent == null) {
                     println(
                         "\nResults: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)",
                     )
                 }
-            }),
-        )
-    }
+            }
+        },
+    )
 }
 
 kotlin {
     jvm()
 
-    js(IR) {
+    js {
         browser()
         nodejs()
     }
 
     macosArm64 {
-        binaries {
-            executable {
-                entryPoint = "klein.main"
-            }
-        }
-    }
-
-    macosX64 {
         binaries {
             executable {
                 entryPoint = "klein.main"
@@ -56,7 +62,7 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
             }
         }
 
@@ -69,23 +75,17 @@ kotlin {
 }
 
 // Create symlink to CLI binary after building
-val createKleinSymlink by tasks.registering(Exec::class) {
+val createKleinSymlink = tasks.register<Exec>("createKleinSymlink") {
     group = "build"
     description = "Create ./klein symlink to the native CLI binary"
 
     // Determine the platform-specific link task
+    val arch = System.getProperty("os.arch")
     val linkTaskName =
         when {
             org.gradle.internal.os.OperatingSystem
                 .current()
-                .isMacOsX -> {
-                val arch = System.getProperty("os.arch")
-                if (arch == "aarch64" || arch == "arm64") {
-                    "linkDebugExecutableMacosArm64"
-                } else {
-                    "linkDebugExecutableMacosX64"
-                }
-            }
+                .isMacOsX && (arch == "aarch64" || arch == "arm64") -> "linkDebugExecutableMacosArm64"
             org.gradle.internal.os.OperatingSystem
                 .current()
                 .isLinux -> "linkDebugExecutableLinuxX64"
@@ -98,7 +98,6 @@ val createKleinSymlink by tasks.registering(Exec::class) {
         val targetPath =
             when (linkTaskName) {
                 "linkDebugExecutableMacosArm64" -> "klein-lib/build/bin/macosArm64/debugExecutable/klein-lib.kexe"
-                "linkDebugExecutableMacosX64" -> "klein-lib/build/bin/macosX64/debugExecutable/klein-lib.kexe"
                 "linkDebugExecutableLinuxX64" -> "klein-lib/build/bin/linuxX64/debugExecutable/klein-lib.kexe"
                 else -> null
             }
@@ -130,13 +129,7 @@ afterEvaluate {
         when {
             org.gradle.internal.os.OperatingSystem
                 .current()
-                .isMacOsX -> {
-                if (arch == "aarch64" || arch == "arm64") {
-                    "linkDebugExecutableMacosArm64"
-                } else {
-                    "linkDebugExecutableMacosX64"
-                }
-            }
+                .isMacOsX && (arch == "aarch64" || arch == "arm64") -> "linkDebugExecutableMacosArm64"
             org.gradle.internal.os.OperatingSystem
                 .current()
                 .isLinux -> "linkDebugExecutableLinuxX64"

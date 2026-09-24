@@ -81,7 +81,6 @@ The actual binary is at: `klein-lib/build/bin/macosArm64/debugExecutable/klein-l
 
 For other platforms:
 - Linux: `linkDebugExecutableLinuxX64`
-- macOS Intel: `linkDebugExecutableMacosX64`
 
 ### Tokenize (Lex)
 

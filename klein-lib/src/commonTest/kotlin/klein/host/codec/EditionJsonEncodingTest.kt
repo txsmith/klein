@@ -18,7 +18,6 @@ import klein.host.implement
 import klein.interp.Value
 import klein.orFail
 import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -71,7 +70,6 @@ private fun Map<String, Pin>.changeHash(
     hash: Long,
 ): Map<String, Pin> = this + (name to Pin(getValue(name).revision, hash))
 
-@OptIn(ExperimentalEncodingApi::class)
 private fun base64(bytes: ByteArray): String = Base64.encode(bytes)
 
 private fun lendingHost(contract: EnvironmentContract): Environment =

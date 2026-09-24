@@ -216,7 +216,7 @@ class BindingTest {
     @Test
     fun numberAsName() {
         val error = assertFailsWith<Abort> { parseStmt("123 = 1") }
-        assertTrue(error.message!!.startsWith("Expected newline but got '='"))
+        assertTrue(error.message.startsWith("Expected newline but got '='"))
     }
 
     @Test

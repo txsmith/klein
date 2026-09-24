@@ -14,7 +14,6 @@ import klein.host.DecodedEdition
 import klein.host.StaleReason
 import klein.host.WrongEnvironment
 import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 private const val FORMAT_MARKER = "klein-edition"
 private const val JSON_VERSION = 1
@@ -23,7 +22,6 @@ class UnreadableEdition internal constructor(
     override val message: String,
 ) : HostError
 
-@OptIn(ExperimentalEncodingApi::class)
 fun encodeEditionJson(edition: Edition): String {
     val coreBytes = encodeCore(edition.core)
     val out = StringBuilder()
@@ -117,7 +115,6 @@ private fun readDocument(text: String): Artifact {
 
 private fun reject(message: String): Nothing = throw KleinException(listOf(UnreadableEdition(message)))
 
-@OptIn(ExperimentalEncodingApi::class)
 private fun toCoreBytes(json: Json): ByteArray {
     if (json !is Json.JStr) reject("the document's \"core\" must be a base64 string")
     return try {

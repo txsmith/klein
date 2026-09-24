@@ -546,49 +546,49 @@ class NullTest {
     fun nullAsVariableName_fails() {
         val error = assertFailsWith<Abort> { parseStmt("null = 42") }
         // Expects identifier for binding, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullAsFunctionName_fails() {
         val error = assertFailsWith<Abort> { parseTopLevel("fun null(x) = x") }
         // Expects identifier for function name, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullAsParameterName_fails() {
         val error = assertFailsWith<Abort> { parse("|null -> 42|") }
         // Expects identifier for parameter, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullAsMultipleParameterName_fails() {
         val error = assertFailsWith<Abort> { parse("|x, null -> 42|") }
         // Expects identifier for parameter, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullAsFunctionParameter_fails() {
         val error = assertFailsWith<Abort> { parseTopLevel("fun f(null) = 42") }
         // Expects identifier for parameter, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullAsRecordFieldName_fails() {
         val error = assertFailsWith<Abort> { parse("{ null = 42 }") }
         // Expects identifier for field name, got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test
     fun nullInFieldAccess_fails() {
         val error = assertFailsWith<Abort> { parse("x.null") }
         // Expects identifier after '.', got keyword
-        assertTrue(error.message?.contains("null") == true || error.message?.contains("identifier") == true)
+        assertTrue(error.message.contains("null") || error.message.contains("identifier"))
     }
 
     @Test

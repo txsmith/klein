@@ -16,7 +16,7 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(project(":klein-lib"))
-                implementation("org.jetbrains.kotlinx:kotlinx-benchmark-runtime:0.4.13")
+                implementation("org.jetbrains.kotlinx:kotlinx-benchmark-runtime:0.5.0")
             }
         }
     }
