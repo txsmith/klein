@@ -15,6 +15,7 @@ internal data class TypeCheckResult(
 internal data class ProgramCheck(
     val type: RuleType,
     val errors: List<TypeError>,
+    val scope: RuleEnv,
 )
 
 internal data class ExpectedType(
@@ -76,7 +77,7 @@ private class Checker {
         errors.clear()
         val scope = env.copy()
         val type = synthBlockStmts(program.stmts, scope, expected)
-        return ProgramCheck(type, errors.toList())
+        return ProgramCheck(type, errors.toList(), scope)
     }
 
     fun synth(
