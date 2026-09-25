@@ -7,7 +7,10 @@ import klein.RevisionNumber
 import klein.UnknownPin
 import klein.UnreadableEdition
 import klein.WrongEnvironment
+import klein.check.contract.DeclarationHash
 import klein.check.contract.Edition
+import klein.hex16
+import klein.parseHex16
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.Pin
 import klein.check.contract.PinResolution
@@ -37,7 +40,7 @@ fun encodeEditionJson(edition: Edition): String {
         out.append(":{\"revision\":")
         out.append(pin.revision.value)
         out.append(",\"hash\":\"")
-        out.append(hex16(pin.hash))
+        out.append(pin.hash.toString())
         out.append("\"}")
     }
     out.append("},\"source\":")
@@ -136,7 +139,7 @@ private fun toPin(
     json.expectOnly(owner, "revision", "hash")
     val revision = toWholeNumber(json.expectField("revision", owner), "the revision of $owner")
     if (revision < 1) reject("the revision of $owner must be a whole number of 1 or more")
-    val hash = parseHex16((json.expectField("hash", owner) as? Json.JStr)?.value) ?: reject("the hash of $owner must be a string of 16 lowercase hex digits")
+    val hash = DeclarationHash.parse((json.expectField("hash", owner) as? Json.JStr)?.value) ?: reject("the hash of $owner must be a string of 16 lowercase hex digits")
     return Pin(RevisionNumber(revision), hash)
 }
 

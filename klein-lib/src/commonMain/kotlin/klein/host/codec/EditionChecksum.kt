@@ -17,7 +17,7 @@ internal fun editionChecksum(
         val pin = pins.getValue(name)
         fnv.string(name)
         fnv.int(pin.revision.value)
-        fnv.long(pin.hash)
+        fnv.long(pin.hash.bits)
     }
     fnv.bytes(coreBytes)
     return fnv.result()

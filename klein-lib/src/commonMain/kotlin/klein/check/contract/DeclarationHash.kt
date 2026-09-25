@@ -26,17 +26,17 @@ private const val TAG_REF = 20
 private const val TAG_VARIABLE = 21
 private const val TAG_FORALL = 22
 
-internal fun hashCapability(declaration: ContractDeclaration): Long {
+internal fun hashCapability(declaration: ContractDeclaration): DeclarationHash {
     val hasher = DeclarationHasher()
     hasher.fnv.byte(if (declaration is ContractDeclaration.Function) TAG_FUNCTION else TAG_VALUE)
     hasher.type(declaration.type)
-    return hasher.fnv.result()
+    return DeclarationHash(hasher.fnv.result())
 }
 
 internal fun hashTypeDefinition(
     definition: TypeDefInfo<RevisionNumber>,
     constructors: List<ConstructorInfo<RevisionNumber>>,
-): Long {
+): DeclarationHash {
     val hasher = DeclarationHasher()
     hasher.fnv.byte(TAG_TYPE_DEFINITION)
     hasher.fnv.int(definition.typeParams.size)
@@ -46,13 +46,13 @@ internal fun hashTypeDefinition(
         hasher.fnv.string(constructor.name)
         hasher.fields(constructor.fields)
     }
-    return hasher.fnv.result()
+    return DeclarationHash(hasher.fnv.result())
 }
 
 internal fun ContractEnv.hashTypeDefinition(
     name: String,
     revision: RevisionNumber,
-): Long? {
+): DeclarationHash? {
     val definition = lookupTypeDef(name, revision) ?: return null
     return hashTypeDefinition(definition, constructorsOf(name, revision))
 }

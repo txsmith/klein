@@ -4,11 +4,14 @@ import klein.Diverged
 import klein.HandlerTypeMismatch
 import klein.Klein
 import klein.KleinException
+import klein.LogAlreadyEnded
 import klein.LogTypeMismatch
 import klein.MissingHandler
 import klein.RegistrationError
 import klein.ReleaseNumber
+import klein.SecondStartEntry
 import klein.SourceSpan
+import klein.TransactionSkippedBlock
 import klein.interp.RuntimeError
 import klein.interp.Value
 import klein.orFail
@@ -275,10 +278,10 @@ class EffectLogTest {
     }
 
     @Test
-    fun aTransactThatNeverRunsItsBlockIsAnError() = runTest {
+    fun aTransactThatNeverRunsItsBlockIsAHostError() = runTest {
         val env = makeHost(transact = { })
-        val thrown = assertFailsWith<IllegalStateException> { env.run(compile(STANDARD)) }
-        assertEquals("transact returned without completing its block", thrown.message)
+        val thrown = assertFailsWith<KleinException> { env.run(compile(STANDARD)) }
+        assertIs<TransactionSkippedBlock>(thrown.errors.single())
     }
 
     @Test
@@ -291,16 +294,20 @@ class EffectLogTest {
     }
 
     @Test
-    fun appendingPastTheLogsEndingIsRefused() {
+    fun appendingPastTheLogsEndingIsAHostErrorNamingTheEnding() {
         val log = EffectLog(LogEntry.Start(emptyMap())) + LogEntry.Result(Value.VNum(1.0))
         assertEquals(2, log.entries.size)
-        assertFailsWith<IllegalArgumentException> { log + LogEntry.Result(Value.VNum(2.0)) }
+        val thrown = assertFailsWith<KleinException> { log + LogEntry.Result(Value.VNum(2.0)) }
+        val ended = assertIs<LogAlreadyEnded>(thrown.errors.single())
+        assertEquals(LogEntry.Result(Value.VNum(1.0)), ended.ending)
+        assertEquals("the log already ends with its result 1; nothing follows an ending", ended.message)
     }
 
     @Test
-    fun appendingASecondStartEntryIsRefused() {
+    fun appendingASecondStartEntryIsAHostError() {
         val log = EffectLog(LogEntry.Start(emptyMap()))
-        assertFailsWith<IllegalArgumentException> { log + LogEntry.Start(emptyMap()) }
+        val thrown = assertFailsWith<KleinException> { log + LogEntry.Start(emptyMap()) }
+        assertIs<SecondStartEntry>(thrown.errors.single())
     }
 
     @Test

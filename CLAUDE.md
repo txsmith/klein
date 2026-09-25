@@ -233,7 +233,7 @@ klein-lang/
 │   │   │   │   ├── ValueTypes.kt           # infer(Value): the runtime answer's type, for the resume boundary
 │   │   │   │   └── contract/     # Contracts, revisions, releases
 │   │   │   │       ├── ContractChecker.kt      # Contract checking, release folding, self-containment
-│   │   │   │       ├── EnvironmentContract.kt  # check / compileRule / compileValue per release
+│   │   │   │       ├── EnvironmentContract.kt  # check / compileRule / evaluateValue per release
 │   │   │   │       ├── ResolvedRelease.kt      # A release materialised: types + revisions, bindingFor
 │   │   │   │       ├── UsedCapabilities.kt     # The used-capability pass (expression, type, pattern positions); CapabilityInAnswer
 │   │   │   │       ├── Edition.kt              # Compiled rule: revision-free Core + pin map + the surface the pins resolve to

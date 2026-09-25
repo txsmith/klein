@@ -1,6 +1,7 @@
 package klein.check.contract
 
 import klein.Checked
+import klein.Klein
 import klein.KleinException
 import klein.LanguageVersion
 import klein.ReleaseNumber
@@ -20,6 +21,7 @@ import klein.check.checkProgram
 import klein.core.CoreExpr
 import klein.core.PreludeBinding
 import klein.core.lowerWithPrelude
+import klein.interp.Value
 import klein.surface.Abort
 import klein.surface.Lexer
 import klein.surface.Program
@@ -122,13 +124,19 @@ class EnvironmentContract internal constructor(
         }
 
     /**
-     * Compile [source] as a pure expression of type [expected] against [release] — a host answering
-     * a capability call in Klein rather than in its own language. Unlike an [Edition], the result
-     * needs no pins and no environment: an answer may use the release's types but not its
-     * capabilities, so `Klein.execute` is enough to evaluate it. The [Checked] carries the checker's
-     * diagnostics for a mismatch, and a [CapabilityInAnswer] for each capability named.
+     * Compile [source] as a pure expression of type [expected] against [release] and evaluate it — a
+     * host answering a capability call in Klein rather than in its own language. Unlike an [Edition],
+     * the answer needs no pins and no environment: it may use the release's types but not its
+     * capabilities. The [Checked] carries the checker's diagnostics for a mismatch, a
+     * [CapabilityInAnswer] for each capability named, and the runtime error if evaluation fails.
      */
-    fun compileValue(
+    fun evaluateValue(
+        source: String,
+        release: ReleaseNumber,
+        expected: RuleType,
+    ): Checked<Value> = compileValue(source, release, expected).andThen(Klein::execute)
+
+    private fun compileValue(
         source: String,
         release: ReleaseNumber,
         expected: RuleType,
@@ -176,7 +184,7 @@ class EnvironmentContract internal constructor(
     internal fun hashOf(
         name: String,
         revision: RevisionNumber,
-    ): Long? {
+    ): DeclarationHash? {
         declarations.firstOrNull { it.name == name && it.revision == revision }?.let { return hashCapability(it) }
         return contractTypeEnv.hashTypeDefinition(contractTypeEnv.collapseToType(name, revision), revision)
     }
