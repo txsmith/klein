@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation(project(":klein-lib"))
+    implementation(libs.kotlinx.coroutines.core)
     testImplementation(kotlin("test"))
 }
 

@@ -9,6 +9,7 @@ import klein.host.immediate
 import klein.host.implement
 import klein.host.perRun
 import klein.interp.Value
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 private fun customer(vararg fields: Pair<String, Value>) = Value.VStruct("Customer", mapOf(*fields))
@@ -36,15 +37,17 @@ class LendingHost(
         release: ReleaseNumber,
     ): RunOutcome {
         val edition = contract.compileRule(ruleSource, release).getOrThrow()
-        return environment.run(
-            edition,
-            immediate("customer") {
-                customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"))
-            },
-            immediate("customer/2") {
-                customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"), "tier" to Value.VStr("gold"))
-            },
-        )
+        return runBlocking {
+            environment.run(
+                edition,
+                immediate("customer") {
+                    customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"))
+                },
+                immediate("customer/2") {
+                    customer("id" to Value.VNum(1.0), "name" to Value.VStr("Acme"), "tier" to Value.VStr("gold"))
+                },
+            )
+        }
     }
 }
 

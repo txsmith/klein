@@ -9,6 +9,9 @@ import klein.host.RunOutcome
 import klein.host.immediate
 import klein.host.implement
 import klein.interp.Value
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 import kotlin.system.exitProcess
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.refTo
@@ -185,7 +188,7 @@ private fun runCmd(
             immediate("${d.name}/${d.revision.value}") { args -> prompt(contract, release, d, args, answers, canPrompt, rawErrors) }
         }
     val environment = contract.implement(*registrations.toTypedArray())
-    when (val outcome = orExit { environment.run(edition) }) {
+    when (val outcome = orExit { runWithoutSuspending { environment.run(edition) } }) {
         is RunOutcome.Completed -> println(Value.print(outcome.value))
         is RunOutcome.Failed -> {
             outcome.diagnostics.forEach { printError(ruleSource, it.span, it.message, rawErrors) }
@@ -300,6 +303,12 @@ private fun <T> orExit(operation: () -> T): T =
         println("Error: ${e.message}")
         exitProcess(1)
     }
+
+private fun <T> runWithoutSuspending(operation: suspend () -> T): T {
+    var result: Result<T>? = null
+    operation.startCoroutine(Continuation(EmptyCoroutineContext) { result = it })
+    return checkNotNull(result) { "the run suspended, but the command line never answers later" }.getOrThrow()
+}
 
 private fun printContractSummary(contract: EnvironmentContract) {
     println("environment: ${contract.environment}")
