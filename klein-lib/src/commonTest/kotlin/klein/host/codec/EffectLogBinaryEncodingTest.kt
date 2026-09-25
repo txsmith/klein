@@ -4,6 +4,7 @@ import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.SourceSpan
+import klein.UnreadableLog
 import klein.host.Call
 import klein.host.EffectLog
 import klein.host.LogEntry

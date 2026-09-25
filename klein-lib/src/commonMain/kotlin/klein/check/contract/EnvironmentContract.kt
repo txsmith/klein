@@ -1,12 +1,12 @@
 package klein.check.contract
 
 import klein.Checked
-import klein.Diagnostic
-import klein.HostError
 import klein.KleinException
 import klein.LanguageVersion
 import klein.ReleaseNumber
 import klein.RevisionNumber
+import klein.UnknownPin
+import klein.UnknownRelease
 import klein.check.ConstructorInfo
 import klein.check.ContractEnv
 import klein.check.ContractType
@@ -25,21 +25,6 @@ import klein.surface.Lexer
 import klein.surface.Program
 import klein.surface.parseProgram
 import kotlin.jvm.JvmName
-
-class UnknownRelease(
-    val number: ReleaseNumber,
-    val available: List<ReleaseNumber>,
-) : HostError {
-    override val message =
-        "release ${number.value} is not in this contract; " +
-            if (available.isEmpty()) "it has none" else "it has ${available.joinToString { it.value.toString() }}"
-}
-
-class InvalidContract(
-    val diagnostics: List<Diagnostic>,
-) : HostError {
-    override val message get() = diagnostics.joinToString("\n") { "${it.message} at ${it.span}" }
-}
 
 /** One accepted declaration: what the host must implement, and what a release may point at. */
 sealed class ContractDeclaration {

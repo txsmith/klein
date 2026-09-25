@@ -5,10 +5,11 @@ import klein.KleinException
 import klein.LanguageVersion
 import klein.ReleaseNumber
 import klein.RevisionNumber
+import klein.UnknownPin
+import klein.UnreadableEdition
 import klein.check.contract.Edition
 import klein.check.contract.EnvironmentContract
 import klein.check.contract.Pin
-import klein.check.contract.UnknownPin
 import klein.host.DecodedEdition
 import klein.host.Environment
 import klein.host.RunOutcome

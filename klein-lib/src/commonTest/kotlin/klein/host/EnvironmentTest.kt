@@ -1,14 +1,15 @@
 package klein.host
 
+import klein.InvalidContract
 import klein.Klein
 import klein.KleinException
+import klein.RegistrationError
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.Type
 import klein.check.TypeError
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
-import klein.check.contract.InvalidContract
 import klein.contractOf
 import klein.interp.Value
 import klein.assertRejected

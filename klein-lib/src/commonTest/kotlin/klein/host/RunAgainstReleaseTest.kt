@@ -1,8 +1,11 @@
 package klein.host
 
+import klein.CallTypeMismatch
+import klein.HandlerTypeMismatch
 import klein.HostError
 import klein.Klein
 import klein.KleinException
+import klein.MissingHandler
 import klein.ReleaseNumber
 import klein.RevisionNumber
 import klein.check.contract.Edition

@@ -1,8 +1,10 @@
 package klein.check.contract
 
+import klein.InvalidContract
 import klein.Klein
 import klein.KleinException
 import klein.ReleaseNumber
+import klein.UnknownRelease
 import klein.check.Type
 import klein.check.TypeError
 import klein.diagnosticsOrEmpty

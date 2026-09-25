@@ -4,7 +4,6 @@ import klein.surface.*
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.EnvironmentContract
-import klein.check.contract.InvalidContract
 import klein.core.CorePrinter
 import klein.host.RunOutcome
 import klein.host.immediate
@@ -201,9 +200,7 @@ private fun runCmd(
 
 private class UnanswerableCapability(
     call: String,
-) : HostError {
-    override val message = "cannot answer '$call': interactive run needs a terminal, and stdin is not one"
-}
+) : Exception("cannot answer '$call': interactive run needs a terminal, and stdin is not one")
 
 /**
  * Ask the person at the terminal to be the host for one capability call: print the call, read a
@@ -228,11 +225,11 @@ private fun prompt(
             declaration.name
         }
     answers[call]?.let { return it }
-    if (!canPrompt) throw KleinException(listOf(UnanswerableCapability(call)))
+    if (!canPrompt) throw UnanswerableCapability(call)
     while (true) {
         print("$call = ? ")
         fflush(null)
-        val line = readlnOrNull() ?: throw KleinException(listOf(UnanswerableCapability(call)))
+        val line = readlnOrNull() ?: throw UnanswerableCapability(call)
         when (val answered = contract.compileValue(line, release, declaration.answerType).andThen(Klein::execute)) {
             is Checked.Accepted -> {
                 answers[call] = answered.value
@@ -298,6 +295,9 @@ private fun <T> orExit(operation: () -> T): T =
         operation()
     } catch (e: KleinException) {
         e.errors.forEach { println("Error: ${it.message}") }
+        exitProcess(1)
+    } catch (e: UnanswerableCapability) {
+        println("Error: ${e.message}")
         exitProcess(1)
     }
 

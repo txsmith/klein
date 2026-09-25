@@ -1,6 +1,7 @@
 package klein.host.codec
 
 import klein.KleinException
+import klein.UnreadableLog
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException

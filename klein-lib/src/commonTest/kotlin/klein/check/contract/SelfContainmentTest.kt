@@ -2,6 +2,7 @@ package klein.check.contract
 
 import klein.Klein
 import klein.Diagnostic
+import klein.InvalidContract
 import klein.KleinException
 import klein.ReleaseNumber
 import klein.check.Type
