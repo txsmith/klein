@@ -107,24 +107,26 @@ internal class HandlerRegistry(
  * `(name, revision)` — an immediate implementation, a deferred one whose ask parks the run after its
  * initiation lambda has run, or a per-run entry whose implementation arrives with each run.
  * Throws [KleinException] if any declaration is unregistered, any registration names something
- * undeclared, or anything is registered twice. [transact] wraps every unit of a run that pairs host
- * work with a log write — an ask's handler, answer check, and `persist` — so a DB host can commit
- * both together. It must run its block and let an exception from it propagate; catching one breaks
- * the run.
+ * undeclared, or anything is registered twice.
  *
  * An extension declared in `klein.host` rather than a member of [EnvironmentContract]: `klein.host`
  * depends on `klein.check`, so a member returning an [Environment] would point that arrow both
  * ways. It reads identically at the call site and leaves the checker unaware that hosts exist.
  */
-fun EnvironmentContract.implement(
-    vararg registrations: HandlerRegistration,
-    transact: suspend (block: suspend () -> Unit) -> Unit = { it() },
-): Environment {
+fun EnvironmentContract.implement(vararg registrations: HandlerRegistration): Environment {
     val errors = mutableListOf<RegistrationError>()
     val registry = HandlerRegistry.fromRegistrations(declarations, registrations.toList(), perRunAllowed = true, errors)
     errors += registry.unregistered()
     if (errors.isNotEmpty()) throw KleinException(errors)
-    return Environment(this, registry, transact)
+    return Environment(this, registry, WithoutTransactions, {})
+}
+
+interface Transactor {
+    suspend fun <T> transact(block: suspend () -> T): T
+}
+
+private object WithoutTransactions : Transactor {
+    override suspend fun <T> transact(block: suspend () -> T): T = block()
 }
 
 /** A contract and an implementation of it: one injection point, as `host-integration.md` §Environment
@@ -132,15 +134,23 @@ fun EnvironmentContract.implement(
 class Environment internal constructor(
     internal val contract: EnvironmentContract,
     internal val registry: HandlerRegistry,
-    internal val transact: suspend (block: suspend () -> Unit) -> Unit,
+    internal val transactor: Transactor,
+    internal val persist: suspend (LogEntry) -> Unit,
 ) {
-    val capabilities: List<ContractDeclaration> get() = contract.declarations
-
     private val declarations = contract.declarations.associateBy { it.name to it.revision }
 
+    fun withTransactor(transactor: Transactor): Environment = Environment(contract, registry, transactor, persist)
+
+    fun withPersister(persist: suspend (LogEntry) -> Unit): Environment = Environment(contract, registry, transactor, persist)
+
+    suspend fun run(
+        edition: Edition,
+        vararg registrations: HandlerRegistration,
+    ): RunOutcome = start(edition, null, registrations)
+
     /**
-     * Start, resume, and replay are this one call. A null [log] starts fresh; otherwise the log is
-     * replayed first (start values by name, replies by position) and every call past the
+     * Start, resume, and replay are this one call. Without a log the run starts fresh; with one, the
+     * log is replayed first (start values by name, replies by position) and every call past the
      * end of the log is answered by the run's [registrations], or failing that by the environment's
      * own.
      *
@@ -148,19 +158,25 @@ class Environment internal constructor(
      * the log so far. Everything else Klein detects is the host's fault and throws [KleinException]
      * carrying one error per fault: [RegistrationError], [klein.check.contract.UnknownPin],
      * [MissingHandler], [LogTypeMismatch], [Diverged], [CallTypeMismatch], [HandlerTypeMismatch].
-     * An exception from the host's own code (a handler, an initiation, [persist], `transact`)
+     * An exception from the host's own code (a handler, an initiation, the persister, the transactor)
      * escapes unwrapped. A call to a deferred capability runs its initiation,
      * records nothing, and returns [RunOutcome.Parked]; resume by calling run again with
      * `parked.toReply(answer)` appended to the log.
      *
-     * [persist] is called with each newly recorded entry before execution continues, inside the same
-     * `transact` as the handler work that produced it. Replayed entries are not persisted.
+     * The persister ([withPersister]) is called with each newly recorded entry before execution
+     * continues, inside the same transaction ([withTransactor]) as the handler work that produced it.
+     * Replayed entries are not persisted.
      */
     suspend fun run(
         edition: Edition,
+        log: EffectLog,
         vararg registrations: HandlerRegistration,
-        log: EffectLog? = null,
-        persist: suspend (LogEntry) -> Unit = {},
+    ): RunOutcome = start(edition, log, registrations)
+
+    private suspend fun start(
+        edition: Edition,
+        log: EffectLog?,
+        registrations: Array<out HandlerRegistration>,
     ): RunOutcome {
         if (edition.environment != contract.environment) {
             throw KleinException(listOf(WrongEnvironment(edition.environment, contract.environment)))
@@ -174,7 +190,7 @@ class Environment internal constructor(
             val logProblems = checkLog(edition, log)
             if (logProblems.isNotEmpty()) throw KleinException(logProblems)
         }
-        return Run(this, edition, registry + supplied, persist, log).start()
+        return Run(this, edition, registry + supplied, log).start()
     }
 
     internal fun getCapabilityDeclaration(

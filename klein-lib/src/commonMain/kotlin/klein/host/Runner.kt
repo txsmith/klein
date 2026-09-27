@@ -5,7 +5,6 @@ import klein.Diagnostic
 import klein.Diverged
 import klein.HandlerTypeMismatch
 import klein.KleinException
-import klein.TransactionSkippedBlock
 import klein.check.Type
 import klein.check.contract.ContractDeclaration
 import klein.check.contract.Edition
@@ -44,7 +43,6 @@ internal class Run(
     val environment: Environment,
     val edition: Edition,
     val registry: HandlerRegistry,
-    val persist: suspend (LogEntry) -> Unit,
     val effectLog: EffectLog?,
 ) {
     lateinit var log: EffectLog
@@ -199,11 +197,9 @@ internal class Run(
             is Execution.Failure -> "the failure '${execution.error.message}'"
         }
 
-    private suspend fun <T : Any> transact(block: suspend () -> T): T {
-        var result: T? = null
-        environment.transact { result = block() }
-        return result ?: throw KleinException(listOf(TransactionSkippedBlock()))
-    }
+    private suspend fun <T> transact(block: suspend () -> T): T = environment.transactor.transact(block)
+
+    private suspend fun persist(entry: LogEntry) = environment.persist(entry)
 
     private fun isValueAsk(suspension: Execution.AwaitingHost) =
         environment.getCapabilityDeclaration(suspension.call, edition.pins.getValue(suspension.call)) is ContractDeclaration.Value

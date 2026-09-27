@@ -132,6 +132,16 @@ parked wait, the persistence callback, and the transaction wrapper. In Kotlin al
 the run itself, are suspending functions. An async host calls the run directly. A host that is
 not async calls it inside one blocking call, and its handlers may block their thread as before.
 
+The transaction wrapper, the transactor, wraps each unit of host work: an ask's handler with the
+persist of its reply, or the persist of the start entry or the ending. It must run the block it is
+given, wait for it, and return its result. Its type says so: it is generic in the block's result,
+so in Kotlin or TypeScript it can only produce that result by running the block. The type does
+not say the block runs once, or that the transaction commits only after the block is done: a
+transactor that runs the block twice persists every entry twice, and one that commits before the
+block finishes (in TypeScript, a missing `await`) commits before the entry is persisted. Klein does
+not check any of this at run time. A plain JavaScript transactor that does not wait for its block
+and return its result breaks the run.
+
 Resuming a parked run mandates that the host first persist the new reply by appending it to the log, followed
 by starting the run with the freshly updated log. Resuming needs nothing but the log: the same operation 
 resumes in the same process or another one, and no other resume mechanism exists.

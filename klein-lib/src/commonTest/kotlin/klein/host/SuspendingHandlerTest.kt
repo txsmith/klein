@@ -43,7 +43,7 @@ class SuspendingHandlerTest {
         val score = CompletableDeferred<Value>()
         val env = contract.implement(immediate("customer") { gold }, immediate("creditScore") { score.await() })
         val persisted = mutableListOf<LogEntry>()
-        val run = async(start = CoroutineStart.UNDISPATCHED) { env.run(edition, persist = persisted::add) }
+        val run = async(start = CoroutineStart.UNDISPATCHED) { env.withPersister(persisted::add).run(edition) }
         assertFalse(run.isCompleted, "the run should wait while the handler waits")
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
         score.complete(Value.VNum(700.0))
@@ -64,7 +64,7 @@ class SuspendingHandlerTest {
         val score = CompletableDeferred<Value>()
         val env = contract.implement(immediate("customer") { gold }, immediate("creditScore") { score.await() })
         val persisted = mutableListOf<LogEntry>()
-        val run = async(start = CoroutineStart.UNDISPATCHED) { runCatching { env.run(edition, persist = persisted::add) } }
+        val run = async(start = CoroutineStart.UNDISPATCHED) { runCatching { env.withPersister(persisted::add).run(edition) } }
         score.completeExceptionally(IllegalStateException("score service down"))
         val thrown = assertFailsWith<IllegalStateException> { run.await().getOrThrow() }
         assertEquals("score service down", thrown.message)

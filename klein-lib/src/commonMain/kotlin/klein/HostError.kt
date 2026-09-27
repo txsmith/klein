@@ -108,7 +108,3 @@ class LogAlreadyEnded internal constructor(
 class SecondStartEntry internal constructor() : HostError {
     override val message = "a log has exactly one start entry, and this one already has it"
 }
-
-class TransactionSkippedBlock internal constructor() : HostError {
-    override val message = "the transaction wrapper returned without running its block; it must run the block it is given"
-}

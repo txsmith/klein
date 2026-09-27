@@ -341,7 +341,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) },
             )
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<KleinException> { narrowed.run(edition, persist = persisted::add) }
+        val failure = assertFailsWith<KleinException> { narrowed.withPersister(persisted::add).run(edition) }
         val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with Customer where the contract declares String", mismatch.message)
         assertFalse(asked, "the argument check should reject the call before the handler runs")
@@ -360,7 +360,7 @@ class RunAgainstReleaseTest {
                 immediate("creditScore") { asked = true; Value.VNum(700.0) },
             )
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<KleinException> { widened.run(edition, persist = persisted::add) }
+        val failure = assertFailsWith<KleinException> { widened.withPersister(persisted::add).run(edition) }
         val mismatch = assertIs<CallTypeMismatch>(failure.errors.single())
         assertEquals("'creditScore' was called with 1 argument where the contract declares 2", mismatch.message)
         assertFalse(asked, "the arity check should reject the call before the handler runs")
@@ -401,7 +401,7 @@ class RunAgainstReleaseTest {
                 immediate("customer") { gold },
                 immediate("creditScore") { asked = true; Value.VNum(700.0) },
             )
-        val replayed = assertIs<RunOutcome.Completed>(narrowed.run(edition, log = live.log))
+        val replayed = assertIs<RunOutcome.Completed>(narrowed.run(edition, live.log))
         assertEquals(live.value, replayed.value)
         assertFalse(asked, "replay should answer from the log without asking the host")
     }
