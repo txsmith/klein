@@ -171,9 +171,9 @@ class EffectLogBinaryEncodingTest {
                 },
             )
         val live = assertIs<RunOutcome.Completed>(makeHost().run(rule))
-        val fromOriginal = assertIs<RunOutcome.Completed>(makeHost().run(rule, log = live.log))
+        val fromOriginal = assertIs<RunOutcome.Completed>(makeHost().run(rule, live.log))
         asks = 0
-        val fromDecoded = assertIs<RunOutcome.Completed>(makeHost().run(rule, log = roundTrip(live.log)))
+        val fromDecoded = assertIs<RunOutcome.Completed>(makeHost().run(rule, roundTrip(live.log)))
         assertEquals(fromOriginal.value, fromDecoded.value)
         assertEquals(fromOriginal.log, fromDecoded.log)
         assertEquals(live.log, fromDecoded.log)

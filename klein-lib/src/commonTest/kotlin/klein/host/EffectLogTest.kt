@@ -4,10 +4,12 @@ import klein.Diverged
 import klein.HandlerTypeMismatch
 import klein.Klein
 import klein.KleinException
+import klein.LogAlreadyEnded
 import klein.LogTypeMismatch
 import klein.MissingHandler
 import klein.RegistrationError
 import klein.ReleaseNumber
+import klein.SecondStartEntry
 import klein.SourceSpan
 import klein.interp.RuntimeError
 import klein.interp.Value
@@ -49,6 +51,16 @@ private fun scoreByTier(args: List<Value>): Value {
 
 private fun makeScore(customer: Value) = LogEntry.Reply(Call("creditScore", listOf(customer)), scoreByTier(listOf(customer)))
 
+private fun makeTracingTransactor(trace: MutableList<String>) =
+    object : Transactor {
+        override suspend fun <T> transact(block: suspend () -> T): T {
+            trace.add("begin")
+            val result = block()
+            trace.add("commit")
+            return result
+        }
+    }
+
 /** The log side of the lending runs: what every outcome carries, and what `persist` and `transact` see. */
 class EffectLogTest {
     private val contract = Klein.checkContract(LENDING)
@@ -58,7 +70,7 @@ class EffectLogTest {
     private fun compile(rule: String) = contract.compileRule(rule, ReleaseNumber(1)).orFail()
 
     private fun makeHost(
-        transact: suspend (suspend () -> Unit) -> Unit = { it() },
+        transactor: Transactor? = null,
         vararg overrides: Pair<String, (List<Value>) -> Value>,
     ): Environment {
         val handlers =
@@ -68,7 +80,8 @@ class EffectLogTest {
                 "creditScore" to { scoreByTier(it) },
             ) + overrides
         val registrations = handlers.map { (name, answer) -> immediate(name) { asks++; answer(it) } }
-        return contract.implement(*registrations.toTypedArray(), transact = transact)
+        val env = contract.implement(*registrations.toTypedArray())
+        return if (transactor == null) env else env.withTransactor(transactor)
     }
 
     private fun makeLog(vararg inputs: Pair<String, Value>) = EffectLog(LogEntry.Start(mapOf(*inputs)))
@@ -101,7 +114,7 @@ class EffectLogTest {
     @Test
     fun theInputPhasePersistsOneStartEntryForAllItsValues() = runTest {
         val persisted = mutableListOf<LogEntry>()
-        val outcome = makeHost().run(compile("creditScore(customer) >= threshold"), persist = persisted::add)
+        val outcome = makeHost().withPersister(persisted::add).run(compile("creditScore(customer) >= threshold"))
         assertIs<RunOutcome.Completed>(outcome)
         assertEquals(LogEntry.Start(mapOf("customer" to gold, "threshold" to Value.VNum(620.0))), persisted.first())
         assertEquals(1, persisted.count { it is LogEntry.Start })
@@ -133,7 +146,7 @@ class EffectLogTest {
     fun aWrongTypedAnswerThrowsWithNothingPersistedPastTheStart() = runTest {
         val env = makeHost(overrides = arrayOf("creditScore" to { Value.VStr("hi") }))
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD), persist = persisted::add) }
+        val failure = assertFailsWith<KleinException> { env.withPersister(persisted::add).run(compile(STANDARD)) }
         assertIs<HandlerTypeMismatch>(failure.errors.single())
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
     }
@@ -183,10 +196,11 @@ class EffectLogTest {
         val boom = IllegalStateException("disk full")
         val thrown =
             assertFailsWith<IllegalStateException> {
-                makeHost().run(compile(STANDARD), persist = {
-                    if (it is LogEntry.Reply) throw boom
-                    persisted.add(it)
-                })
+                makeHost()
+                    .withPersister {
+                        if (it is LogEntry.Reply) throw boom
+                        persisted.add(it)
+                    }.run(compile(STANDARD))
             }
         assertSame(boom, thrown)
         assertEquals(listOf<LogEntry>(LogEntry.Start(mapOf("customer" to gold))), persisted)
@@ -197,11 +211,11 @@ class EffectLogTest {
         val trace = mutableListOf<String>()
         val env =
             makeHost(
-                transact = { block -> trace.add("begin"); block(); trace.add("commit") },
+                makeTracingTransactor(trace),
                 "customer" to { trace.add("ask customer"); gold },
                 "creditScore" to { trace.add("ask creditScore"); scoreByTier(it) },
             )
-        val outcome = env.run(compile(STANDARD), persist = { trace.add("persist ${it::class.simpleName}") })
+        val outcome = env.withPersister { trace.add("persist ${it::class.simpleName}") }.run(compile(STANDARD))
         assertIs<RunOutcome.Completed>(outcome)
         assertEquals(
             listOf(
@@ -225,7 +239,7 @@ class EffectLogTest {
     fun aWrongTypedValueAnswerThrowsBeforeTheStartPersists() = runTest {
         val env = makeHost(overrides = arrayOf("customer" to { Value.VStr("nope") }))
         val persisted = mutableListOf<LogEntry>()
-        val failure = assertFailsWith<KleinException> { env.run(compile(STANDARD), persist = persisted::add) }
+        val failure = assertFailsWith<KleinException> { env.withPersister(persisted::add).run(compile(STANDARD)) }
         assertIs<HandlerTypeMismatch>(failure.errors.single())
         assertEquals(emptyList<LogEntry>(), persisted)
     }
@@ -233,7 +247,7 @@ class EffectLogTest {
     @Test
     fun aPersistThatThrowsOnTheStartEscapesWithNothingPersisted() = runTest {
         val boom = IllegalStateException("disk full")
-        val thrown = assertFailsWith<IllegalStateException> { makeHost().run(compile(STANDARD), persist = { throw boom }) }
+        val thrown = assertFailsWith<IllegalStateException> { makeHost().withPersister { throw boom }.run(compile(STANDARD)) }
         assertSame(boom, thrown)
         assertEquals(1, asks)
     }
@@ -244,10 +258,11 @@ class EffectLogTest {
         val boom = IllegalStateException("disk full")
         val thrown =
             assertFailsWith<IllegalStateException> {
-                makeHost().run(compile(STANDARD), persist = {
-                    if (it is LogEntry.Result) throw boom
-                    persisted.add(it)
-                })
+                makeHost()
+                    .withPersister {
+                        if (it is LogEntry.Result) throw boom
+                        persisted.add(it)
+                    }.run(compile(STANDARD))
             }
         assertSame(boom, thrown)
         assertEquals(listOf(LogEntry.Start(mapOf("customer" to gold)), makeScore(gold)), persisted)
@@ -258,11 +273,11 @@ class EffectLogTest {
         val trace = mutableListOf<String>()
         val env =
             makeHost(
-                transact = { block -> trace.add("begin"); block(); trace.add("commit") },
+                makeTracingTransactor(trace),
                 "customer" to { trace.add("ask customer"); gold },
                 "threshold" to { trace.add("ask threshold"); Value.VNum(620.0) },
             )
-        val outcome = env.run(compile("creditScore(customer) >= threshold"), persist = { trace.add("persist ${it::class.simpleName}") })
+        val outcome = env.withPersister { trace.add("persist ${it::class.simpleName}") }.run(compile("creditScore(customer) >= threshold"))
         assertIs<RunOutcome.Completed>(outcome)
         assertEquals(
             listOf(
@@ -275,32 +290,36 @@ class EffectLogTest {
     }
 
     @Test
-    fun aTransactThatNeverRunsItsBlockIsAnError() = runTest {
-        val env = makeHost(transact = { })
-        val thrown = assertFailsWith<IllegalStateException> { env.run(compile(STANDARD)) }
-        assertEquals("transact returned without completing its block", thrown.message)
-    }
-
-    @Test
     fun aTransactThatThrowsEscapesUnwrapped() = runTest {
         var units = 0
         val boom = IllegalStateException("rollback")
-        val env = makeHost(transact = { block -> block(); if (++units == 2) throw boom })
-        val thrown = assertFailsWith<IllegalStateException> { env.run(compile(STANDARD)) }
+        val throwing =
+            object : Transactor {
+                override suspend fun <T> transact(block: suspend () -> T): T {
+                    val result = block()
+                    if (++units == 2) throw boom
+                    return result
+                }
+            }
+        val thrown = assertFailsWith<IllegalStateException> { makeHost(throwing).run(compile(STANDARD)) }
         assertSame(boom, thrown)
     }
 
     @Test
-    fun appendingPastTheLogsEndingIsRefused() {
+    fun appendingPastTheLogsEndingIsAHostErrorNamingTheEnding() {
         val log = EffectLog(LogEntry.Start(emptyMap())) + LogEntry.Result(Value.VNum(1.0))
         assertEquals(2, log.entries.size)
-        assertFailsWith<IllegalArgumentException> { log + LogEntry.Result(Value.VNum(2.0)) }
+        val thrown = assertFailsWith<KleinException> { log + LogEntry.Result(Value.VNum(2.0)) }
+        val ended = assertIs<LogAlreadyEnded>(thrown.errors.single())
+        assertEquals(LogEntry.Result(Value.VNum(1.0)), ended.ending)
+        assertEquals("the log already ends with its result 1; nothing follows an ending", ended.message)
     }
 
     @Test
-    fun appendingASecondStartEntryIsRefused() {
+    fun appendingASecondStartEntryIsAHostError() {
         val log = EffectLog(LogEntry.Start(emptyMap()))
-        assertFailsWith<IllegalArgumentException> { log + LogEntry.Start(emptyMap()) }
+        val thrown = assertFailsWith<KleinException> { log + LogEntry.Start(emptyMap()) }
+        assertIs<SecondStartEntry>(thrown.errors.single())
     }
 
     @Test
@@ -309,7 +328,7 @@ class EffectLogTest {
         val live = assertIs<RunOutcome.Completed>(makeHost().run(rule))
         asks = 0
         val persisted = mutableListOf<LogEntry>()
-        val replayed = assertIs<RunOutcome.Completed>(makeHost().run(rule, log = live.log, persist = persisted::add))
+        val replayed = assertIs<RunOutcome.Completed>(makeHost().withPersister(persisted::add).run(rule, live.log))
         assertEquals(live.value, replayed.value)
         assertEquals(live.log, replayed.log)
         assertEquals(0, asks)
@@ -322,7 +341,7 @@ class EffectLogTest {
         val live = assertIs<RunOutcome.Failed>(makeHost().run(rule))
         asks = 0
         val persisted = mutableListOf<LogEntry>()
-        val replayed = assertIs<RunOutcome.Failed>(makeHost().run(rule, log = live.log, persist = persisted::add))
+        val replayed = assertIs<RunOutcome.Failed>(makeHost().withPersister(persisted::add).run(rule, live.log))
         assertEquals(live.diagnostics, replayed.diagnostics)
         assertEquals(live.log, replayed.log)
         assertEquals(0, asks)
@@ -332,7 +351,7 @@ class EffectLogTest {
     @Test
     fun aPartialLogContinuesLiveAndPersistsOnlyTheNewEntries() = runTest {
         val persisted = mutableListOf<LogEntry>()
-        val outcome = makeHost().run(compile(STANDARD), log = makeLog("customer" to gold), persist = persisted::add)
+        val outcome = makeHost().withPersister(persisted::add).run(compile(STANDARD), makeLog("customer" to gold))
         assertIs<RunOutcome.Completed>(outcome)
         assertEquals(1, asks)
         assertEquals(listOf(makeScore(gold), LogEntry.Result(Value.VBool(true))), persisted)
@@ -342,14 +361,14 @@ class EffectLogTest {
     @Test
     fun aRecordedFailureTheRunDoesNotReproduceDiverges() = runTest {
         val log = makeLog("customer" to gold) + makeScore(gold) + LogEntry.Failure(listOf(RuntimeError("Division by zero", SourceSpan(0, 1))))
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(2, diverged.at)
         assertEquals(0, asks)
     }
 
     @Test
     fun aValueMissingFromTheStartEntryDiverges() = runTest {
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = makeLog()) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), makeLog()) }
         assertEquals(0, diverged.at)
         assertEquals(Call("customer", emptyList()), diverged.call)
         assertEquals("the start entry to hold 'customer'", diverged.expected)
@@ -360,7 +379,7 @@ class EffectLogTest {
     @Test
     fun aCallNameMismatchDiverges() = runTest {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("threshold", emptyList()), Value.VNum(700.0))
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(1, diverged.at)
         assertEquals(Call("creditScore", listOf(gold)), diverged.call)
         assertEquals("a call to threshold()", diverged.expected)
@@ -371,7 +390,7 @@ class EffectLogTest {
     @Test
     fun anArgumentMismatchDiverges() = runTest {
         val log = makeLog("customer" to gold) + makeScore(basic)
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(1, diverged.at)
         assertEquals(Call("creditScore", listOf(gold)), diverged.call)
         assertEquals(0, asks)
@@ -380,7 +399,7 @@ class EffectLogTest {
     @Test
     fun anOutcomeReachedWithUnconsumedRepliesDiverges() = runTest {
         val log = makeLog("customer" to gold) + makeScore(gold) + makeScore(basic)
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(2, diverged.at)
         assertEquals(null, diverged.call)
         assertEquals("the result true", diverged.got)
@@ -390,7 +409,7 @@ class EffectLogTest {
     @Test
     fun aStartValueTheRunNeverAsksForIsIgnored() = runTest {
         val log = makeLog("customer" to gold, "threshold" to Value.VNum(620.0)) + makeScore(gold)
-        val outcome = assertIs<RunOutcome.Completed>(makeHost().run(compile(STANDARD), log = log))
+        val outcome = assertIs<RunOutcome.Completed>(makeHost().run(compile(STANDARD), log))
         assertEquals(Value.VBool(true), outcome.value)
         assertEquals(0, asks)
     }
@@ -398,7 +417,7 @@ class EffectLogTest {
     @Test
     fun aRunThatFailsWhereTheLogExpectsACallDiverges() = runTest {
         val log = makeLog("customer" to gold) + makeScore(gold)
-        val diverged = assertDiverges { makeHost().run(compile("1 / 0 + creditScore(customer)"), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile("1 / 0 + creditScore(customer)"), log) }
         assertEquals(1, diverged.at)
         assertEquals(null, diverged.call)
         assertEquals("the failure 'Division by zero'", diverged.got)
@@ -408,7 +427,7 @@ class EffectLogTest {
     @Test
     fun aResultDifferentFromTheRecordedOneDiverges() = runTest {
         val log = makeLog("customer" to gold) + makeScore(gold) + LogEntry.Result(Value.VBool(false))
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(2, diverged.at)
         assertEquals(null, diverged.call)
         assertEquals("the recorded result false", diverged.expected)
@@ -418,7 +437,7 @@ class EffectLogTest {
 
     @Test
     fun aStartValueOfTheWrongTypeFailsPreFlight() = runTest {
-        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), log = makeLog("customer" to Value.VStr("x"))) }
+        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), makeLog("customer" to Value.VStr("x"))) }
         val mismatch = assertIs<LogTypeMismatch>(failure.errors.single())
         assertEquals(0, mismatch.at)
         assertEquals("customer", mismatch.name)
@@ -428,7 +447,7 @@ class EffectLogTest {
     @Test
     fun aReplyAnswerOfTheWrongTypeFailsPreFlight() = runTest {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("creditScore", listOf(gold)), Value.VStr("hi"))
-        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), log = log) }
+        val failure = assertFailsWith<KleinException> { makeHost().run(compile(STANDARD), log) }
         val mismatch = assertIs<LogTypeMismatch>(failure.errors.single())
         assertEquals(1, mismatch.at)
         assertEquals("creditScore", mismatch.name)
@@ -438,7 +457,7 @@ class EffectLogTest {
     @Test
     fun anEntryForAnUnpinnedNamePassesPreFlightAndDivergesPositionally() = runTest {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("somethingElse", emptyList()), Value.VStr("whatever"))
-        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log = log) }
+        val diverged = assertDiverges { makeHost().run(compile(STANDARD), log) }
         assertEquals(1, diverged.at)
         assertEquals(0, asks)
     }
@@ -446,20 +465,23 @@ class EffectLogTest {
     @Test
     fun recordedArgumentsAreNotTypeCheckedOnlyCompared() = runTest {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("creditScore", listOf(Value.VStr("junk"))), Value.VNum(700.0))
-        assertEquals(1, assertDiverges { makeHost().run(compile(STANDARD), log = log) }.at)
+        assertEquals(1, assertDiverges { makeHost().run(compile(STANDARD), log) }.at)
     }
 
     private var initiations = 0
 
     private fun makeParkingHost(
-        transact: suspend (suspend () -> Unit) -> Unit = { it() },
+        transactor: Transactor? = null,
         initiate: (Call) -> Unit = {},
-    ) = contract.implement(
-        immediate("customer") { asks++; gold },
-        immediate("threshold") { asks++; Value.VNum(620.0) },
-        deferred("creditScore") { initiations++; initiate(it) },
-        transact = transact,
-    )
+    ): Environment {
+        val env =
+            contract.implement(
+                immediate("customer") { asks++; gold },
+                immediate("threshold") { asks++; Value.VNum(620.0) },
+                deferred("creditScore") { initiations++; initiate(it) },
+            )
+        return if (transactor == null) env else env.withTransactor(transactor)
+    }
 
     @Test
     fun aDeferredAskParksTheRunWithTheCallAndTheLogSoFar() = runTest {
@@ -474,10 +496,10 @@ class EffectLogTest {
         val trace = mutableListOf<String>()
         val env =
             makeParkingHost(
-                transact = { block -> trace.add("begin"); block(); trace.add("commit") },
+                makeTracingTransactor(trace),
                 initiate = { trace.add("initiate ${it.print()}") },
             )
-        val outcome = env.run(compile(STANDARD), persist = { trace.add("persist ${it::class.simpleName}") })
+        val outcome = env.withPersister { trace.add("persist ${it::class.simpleName}") }.run(compile(STANDARD))
         assertIs<RunOutcome.Parked>(outcome)
         assertEquals(
             listOf(
@@ -495,7 +517,7 @@ class EffectLogTest {
         val reply = parked.toReply(Value.VNum(700.0))
         assertEquals(LogEntry.Reply(parked.call, Value.VNum(700.0)), reply)
         val persisted = mutableListOf<LogEntry>()
-        val resumed = assertIs<RunOutcome.Completed>(env.run(compile(STANDARD), log = parked.log + reply, persist = persisted::add))
+        val resumed = assertIs<RunOutcome.Completed>(env.withPersister(persisted::add).run(compile(STANDARD), parked.log + reply))
         assertEquals(Value.VBool(true), resumed.value)
         assertEquals(parked.log.entries + reply + LogEntry.Result(Value.VBool(true)), resumed.log.entries)
         assertEquals(listOf<LogEntry>(LogEntry.Result(Value.VBool(true))), persisted)
@@ -508,7 +530,7 @@ class EffectLogTest {
         val fresh = Klein.checkContract(LENDING)
         val resumed =
             fresh.implement(immediate("customer") { gold }, immediate("threshold") { Value.VNum(620.0) }, deferred("creditScore") {})
-                .run(fresh.compileRule(STANDARD, ReleaseNumber(1)).orFail(), log = parked.log + parked.toReply(Value.VNum(500.0)))
+                .run(fresh.compileRule(STANDARD, ReleaseNumber(1)).orFail(), parked.log + parked.toReply(Value.VNum(500.0)))
         assertEquals(Value.VBool(false), assertIs<RunOutcome.Completed>(resumed).value)
     }
 
@@ -516,7 +538,7 @@ class EffectLogTest {
     fun reRunningAnUnresumedParkedLogParksAndInitiatesAgain() = runTest {
         val env = makeParkingHost()
         val parked = assertIs<RunOutcome.Parked>(env.run(compile(STANDARD)))
-        val again = assertIs<RunOutcome.Parked>(env.run(compile(STANDARD), log = parked.log))
+        val again = assertIs<RunOutcome.Parked>(env.run(compile(STANDARD), parked.log))
         assertEquals(parked.call, again.call)
         assertEquals(parked.log, again.log)
         assertEquals(2, initiations)
@@ -524,7 +546,7 @@ class EffectLogTest {
 
     @Test
     fun aDeferredCapabilityAnsweredByReplayDoesNotInitiate() = runTest {
-        val outcome = makeParkingHost().run(compile(STANDARD), log = makeLog("customer" to gold) + makeScore(gold))
+        val outcome = makeParkingHost().run(compile(STANDARD), makeLog("customer" to gold) + makeScore(gold))
         assertEquals(Value.VBool(true), assertIs<RunOutcome.Completed>(outcome).value)
         assertEquals(0, initiations)
     }
@@ -555,7 +577,7 @@ class EffectLogTest {
     @Test
     fun aWellTypedLogPassesPreFlightAndReplays() = runTest {
         val log = makeLog("customer" to gold) + LogEntry.Reply(Call("creditScore", listOf(gold)), Value.VNum(650.0))
-        val outcome = assertIs<RunOutcome.Completed>(makeHost().run(compile(STANDARD), log = log))
+        val outcome = assertIs<RunOutcome.Completed>(makeHost().run(compile(STANDARD), log))
         assertEquals(Value.VBool(true), outcome.value)
         assertEquals(0, asks)
     }

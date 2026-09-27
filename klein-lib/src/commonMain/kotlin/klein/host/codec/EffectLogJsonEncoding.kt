@@ -1,6 +1,7 @@
 package klein.host.codec
 
 import klein.Diagnostic
+import klein.parseHex16
 import klein.KleinException
 import klein.SourceSpan
 import klein.UnreadableLog

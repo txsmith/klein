@@ -62,9 +62,9 @@ class EnvironmentTest {
     @Test
     fun declarationsBecomeCapabilities() {
         val env = loadAll(CONTRACT)
-        assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
-        assertIs<ContractDeclaration.Function>(env.capabilities.first { it.name == "creditCheck" })
-        assertIs<ContractDeclaration.Value>(env.capabilities.first { it.name == "maxRetries" })
+        assertEquals(listOf("creditCheck", "maxRetries"), env.contract.declarations.map { it.name })
+        assertIs<ContractDeclaration.Function>(env.contract.declarations.first { it.name == "creditCheck" })
+        assertIs<ContractDeclaration.Value>(env.contract.declarations.first { it.name == "maxRetries" })
     }
 
     @Test
@@ -80,18 +80,18 @@ class EnvironmentTest {
 
     @Test
     fun anEmptyContractNeedsNoRegistrations() {
-        assertEquals(emptyList(), load(contractOf("type Customer = Customer { id: Num }")).capabilities)
+        assertEquals(emptyList(), load(contractOf("type Customer = Customer { id: Num }")).contract.declarations)
     }
 
     @Test
     fun registrationsDefaultToRevisionOne() {
-        assertTrue(loadAll(CONTRACT).capabilities.all { it.revision == RevisionNumber(1) })
+        assertTrue(loadAll(CONTRACT).contract.declarations.all { it.revision == RevisionNumber(1) })
     }
 
     @Test
     fun registrationAttachesAnImplementation() {
         val env = loadAll(CONTRACT)
-        env.capabilities.forEach { assertTrue(env.registry.getHandler(it.name, it.revision) != null, "${it.name} should have an implementation") }
+        env.contract.declarations.forEach { assertTrue(env.registry.getHandler(it.name, it.revision) != null, "${it.name} should have an implementation") }
     }
 
     @Test
@@ -109,8 +109,8 @@ class EnvironmentTest {
                 immediate("creditCheck/3") { Value.VNum(1.0) },
                 immediate("maxRetries") { Value.VNum(3.0) },
             )
-        assertEquals(RevisionNumber(3), env.capabilities.first { it.name == "creditCheck" }.revision)
-        assertEquals(RevisionNumber(1), env.capabilities.first { it.name == "maxRetries" }.revision)
+        assertEquals(RevisionNumber(3), env.contract.declarations.first { it.name == "creditCheck" }.revision)
+        assertEquals(RevisionNumber(1), env.contract.declarations.first { it.name == "maxRetries" }.revision)
     }
 
     @Test
@@ -143,7 +143,7 @@ class EnvironmentTest {
     @Test
     fun anExplicitRevisionOneSuffixNamesRevisionOne() {
         val env = load(CONTRACT, immediate("creditCheck/1") { Value.VNum(1.0) }, immediate("maxRetries") { Value.VNum(3.0) })
-        assertTrue(env.capabilities.any { it.name == "creditCheck" })
+        assertTrue(env.contract.declarations.any { it.name == "creditCheck" })
     }
 
     @Test
@@ -188,7 +188,7 @@ class EnvironmentTest {
     @Test
     fun aDeclaredRevisionIsACapability() {
         val env = load(contractOf("fun creditScore/2(c: Num): Num"), immediate("creditScore/2") { Value.VNum(1.0) })
-        val capability = env.capabilities.single()
+        val capability = env.contract.declarations.single()
         assertEquals("creditScore", capability.name)
         assertEquals(RevisionNumber(2), capability.revision)
         assertTrue(env.registry.getHandler(capability.name, capability.revision) != null)
@@ -207,7 +207,7 @@ class EnvironmentTest {
                 immediate("creditScore") { Value.VNum(1.0) },
                 immediate("creditScore/2") { Value.VNum(2.0) },
             )
-        assertEquals(listOf(RevisionNumber(1), RevisionNumber(2)), env.capabilities.map { it.revision })
+        assertEquals(listOf(RevisionNumber(1), RevisionNumber(2)), env.contract.declarations.map { it.revision })
     }
 
     @Test
@@ -241,7 +241,7 @@ class EnvironmentTest {
                 immediate("creditCheck") { Value.VNum(1.0) },
                 immediate("creditCheck/2") { Value.VNum(2.0) },
             )
-        val both = env.capabilities.filter { it.name == "creditCheck" }
+        val both = env.contract.declarations.filter { it.name == "creditCheck" }
         assertEquals(listOf(RevisionNumber(1), RevisionNumber(2)), both.map { it.revision })
         assertNotEquals(both[0].type, both[1].type)
         both.forEach { assertTrue(env.registry.getHandler(it.name, it.revision) != null, "revision ${it.revision} should be implemented") }
@@ -325,7 +325,7 @@ class EnvironmentTest {
     @Test
     fun capabilitiesComeFromDeclarationsNotFromTheReleaseSurface() {
         val env = loadAll(PARTLY_EXPOSED)
-        assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
+        assertEquals(listOf("creditCheck", "maxRetries"), env.contract.declarations.map { it.name })
 
         // The same contract, from a rule's side: `maxRetries` is not vocabulary release 1 gave it.
         val unbound = Klein.checkContract(PARTLY_EXPOSED).check("maxRetries", ReleaseNumber(1))
@@ -338,7 +338,7 @@ class EnvironmentTest {
     fun aPerRunEntrySatisfiesCompleteness() {
         assertFailsWith<KleinException> { load(CONTRACT, immediate("maxRetries") { Value.VNum(3.0) }) }
         val env = load(CONTRACT, perRun("creditCheck"), immediate("maxRetries") { Value.VNum(3.0) })
-        assertEquals(listOf("creditCheck", "maxRetries"), env.capabilities.map { it.name })
+        assertEquals(listOf("creditCheck", "maxRetries"), env.contract.declarations.map { it.name })
     }
 
     @Test
@@ -351,7 +351,7 @@ class EnvironmentTest {
     @Test
     fun aPerRunEntryNamesADeclaredRevision() {
         val env = load(contractOf("fun creditScore/2(c: Num): Num"), perRun("creditScore/2"))
-        assertEquals(RevisionNumber(2), env.capabilities.single().revision)
+        assertEquals(RevisionNumber(2), env.contract.declarations.single().revision)
         assertEquals(null, env.registry.getHandler("creditScore", RevisionNumber(2)))
     }
 
