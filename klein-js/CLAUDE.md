@@ -1,117 +1,103 @@
 # klein-js
 
-Klein's JavaScript binding. It mirrors the Kotlin host API of `klein-lib` for JavaScript and
-TypeScript hosts, and sees only the library's public API.
+Klein's JavaScript and TypeScript binding. Its API is the Kotlin host API of `klein-lib`: the same
+names, the same shapes, and the same file names. It sees only the library's public API.
 
-## The three layers
+## Two layers
 
-1. **Kotlin mirror classes** in `src/jsMain/kotlin/klein/js`. Each exported class wraps one library
-   value in an `internal` field and has an `internal` constructor. JavaScript never builds one,
-   except `TaggedValue`; `types.check.mts` asserts which classes are constructible. Shapes follow
-   the library: an edition's `pins` map names to revisions and its `pinsWithHash` map names to
-   pins, as in Kotlin.
-2. **Generated declarations** (`klein.d.mts` in the build output). Kotlin writes them. They are an
-   internal detail: they cannot express unions, fixed words or a Klein value.
-3. **Handwritten declarations** in `src/jsMain/resources/index.d.mts`. This is the package's
-   `types` entry, so it is what TypeScript users see. It declares every export by hand.
+1. **The Kotlin layer** in `src/jsMain/kotlin/klein/jsbinding`. It exports the library to JavaScript as
+   plainly as it can: handles that wrap a library object, plain fields, and strings where the
+   library has a sealed case. It makes no effort to look like JavaScript. Kotlin writes its type
+   declarations, and nothing outside this module sees them.
+2. **The TypeScript layer** in `src/ts`. This is the package's API. Each file matches a library
+   file by name (`EnvironmentContract.ts`, `Runner.ts`, `EffectLogJsonEncoding.ts`) and declares
+   what that file declares. It is compiled against the Kotlin layer's declarations, so a renamed
+   or retyped member of the Kotlin layer that the TypeScript does not follow is a compile error. A
+   new case of a sealed type is not: the Kotlin layer passes cases as strings or as its own
+   classes, and the TypeScript only fails at run time on one it does not know. The tests close
+   that gap (see below).
 
-A sealed type in the library becomes an abstract base class in Kotlin with `abstract val kind`,
-and one subclass per case with a fixed kind word. In `index.d.mts` the base is not declared.
-Instead a union type of the same name lists the cases, and each case declares its kind as a
-literal. Every declared class carries `#private;`, so TypeScript compares it by identity and not
-by shape.
+`Kotlin.ts` is the TypeScript layer's bridge: it imports the Kotlin module as `kotlin` and turns a
+thrown `KleinException` into the TypeScript one.
 
-## When you change something, change its partners
+Every class is a view: it holds only its Kotlin object, in a `#kotlin` field, and every property is
+a getter that reads from it, so there is no second copy to fall out of step. A getter that builds
+an object keeps it after the first read, so reading twice gives the same object; this is safe
+because the Kotlin objects never change. Arrays come out
+frozen and maps as read-only maps that refuse changes at run time. Only what a host keeps in
+storage has a public constructor: `EffectLog`, the four `LogEntry` kinds and `Call`. Each builds its
+Kotlin object at once. Everything else is made through a static `fromKotlin` (or a constructor
+overload taking the Kotlin object), marked `@internal` so it is left out of the published
+declarations.
 
-When the library adds, removes or changes a type, a field or a function that crosses to
-JavaScript:
+## Where JavaScript cannot say what Kotlin says
 
-- Update the Kotlin mirror. A new case of a sealed type, host errors included, shows up as a
-  non-exhaustive `when` in the matching `toJs`, so the binding stops compiling until it is mirrored.
-- Update `index.d.mts`: the class, its members, and, for a new case, the union it belongs to.
-- For a new sealed type, add its union to `Unions` in `test/types.check.mts`.
-- Add or update a Node test in `test/binding.test.mjs`.
-- For a host error, add its case to the table in `test/host-errors.test.mts`. The table's type
-  requires one case per kind in the `HostError` union, so the type check fails, naming the kind,
-  until you do. Each case triggers the error through the real library and checks every field it
-  carries.
-- For a new case of any other union, add it to its table in `test/kinds.test.mts`. The same kind
-  of typed table requires one case per kind and checks, through the real library, that the kind
-  word Kotlin writes is the one `index.d.mts` declares.
-- Update the playground (`klein-playground`) if it uses what changed.
-
-## What the build checks, and what it does not
-
-`./gradlew :klein-js:check` runs the Node tests and type-checks the TypeScript test files
-(`types.check.mts`, `fixtures.mts`, `host-errors.test.mts`, `kinds.test.mts`). `fixtures.mts`
-holds the contract, rule and environments the tests share; helpers that assert are named
-`assert...`. Both tasks run the Node that the Kotlin plugin downloads, not whatever `node` is
-installed, so every machine uses the same version. The type check walks
-every export of the generated module on its own and fails, naming the export, when:
-
-- an export exists in one declaration file and not the other;
-- a class's members differ in name, or a handwritten member does not fit the generated one;
-- a function's signature does not fit;
-- a union does not fit its generated base class.
-
-It does not catch:
-
-- a new case missing from its union. The export check forces you to declare the class, but not
-  to add it to the union, and a missing case makes every `switch` over that union silently
-  incomplete;
-- a kind word that differs between Kotlin and `index.d.mts`, because a literal fits `string`.
-  `kinds.test.mts` and `host-errors.test.mts` catch this at runtime for every kind except the
-  stale reasons `languageChanged` and `compilerChanged`, which no test can produce: changing the
-  recorded language or compiler also breaks the checksum, which is checked first;
-- a member hidden on purpose. `HiddenMembers` in the type check lists them (`Rejected.value`
-  throws at runtime and is left out of the types so TypeScript forces a check of the kind first).
+- **`is` checks** are `instanceof`. Every class that shares a union with a class of the same
+  shape carries a `#` field, so TypeScript tells them apart by identity, not by shape.
+- **Data objects** (`StaleReason.ChecksumMismatch`) are classes with one instance, checked with
+  `instanceof` instead of `==`.
+- **Handler arguments** arrive as separate parameters, `immediate("area", (r) => ...)`, where
+  Kotlin passes one list, because a Kotlin lambda cannot take a variable number of parameters.
+- **Maps** are `ReadonlyMap`, and **lists** are frozen `readonly` arrays.
+- **Value classes** (`ReleaseNumber`, `RevisionNumber`, `LanguageVersion`) are branded numbers with
+  no `.value`, and a function of the same name makes one: `ReleaseNumber(2)`.
+- **Suspending functions** return a promise. Handlers and `persist` may be plain or async
+  functions; the TypeScript layer always hands the Kotlin layer a promise, and the Kotlin layer
+  awaits it. A `Transactor`'s `transact` returns a promise of its block's result; nothing checks
+  at run time that it waited for the block. Whatever the host's own code throws reaches the caller unchanged, even when it
+  is not an `Error`: the Kotlin layer carries such a value in a `ThrownValue` and `mapExceptions`
+  takes it out again.
 
 ## Values
 
 Klein values cross as plain JavaScript: numbers, strings, booleans, `null` for Klein's null,
-`undefined` for unit, plain objects for records, and `TaggedValue` for constructed values.
-`fromJs` and `toJs` in `Values.kt` are the only conversion; `KleinValue` in `index.d.mts` is its
-type.
+`undefined` for unit, and objects for records and constructed values.
+
+A record is a plain object, `{ w: 2, h: 3 }`. A constructed value is an instance of a class whose
+static `kleinName` is the constructor's name:
+
+```ts
+class Customer {
+  static readonly kleinName = "Customer";
+  constructor(readonly id: number, readonly name: string) {}
+}
+```
+
+Its fields are its own properties, so a constructed value reads exactly like a record with the same
+fields, as Klein's subtyping allows. The name lives on the class, so it is not a field, not in
+`Object.keys`, and not in JSON, and minifying the class name changes nothing. Values coming out of
+Klein are frozen instances of a class the binding makes for each name, with the same static
+`kleinName`. Any other object, a class instance without `kleinName` included, is refused with a
+`TypeError`.
+
+`Value.ts` converts both ways; the Kotlin layer sees records and constructed values as `Struct`.
+The TypeScript `Value` type admits any object, so field types are checked when the value crosses,
+not at compile time.
 
 Unit as `undefined` has one known gap, accepted because unit is rarely carried as data: JavaScript
-treats a field set to `undefined` as missing, so `JSON.stringify` drops a unit field from a
-record. A handler whose answer type is unit returns nothing, which is why unit stays `undefined`.
+treats a field set to `undefined` as missing, so `JSON.stringify` drops a unit field from a record.
 
-Everything the binding hands out is frozen, so a caller cannot change what other readers see.
-Arrays are `JsReadonlyArray` built with `frozen()`, which TypeScript sees as `readonly T[]`.
-Records come from `toJsObject`, which freezes them. Array parameters are `JsReadonlyArray` too,
-so callers may pass either kind of array.
+## When the library changes
 
-## Release and revision numbers
-
-At runtime they are plain numbers. `index.d.mts` brands them, as `ReleaseNumber` and
-`RevisionNumber`, so TypeScript keeps them apart and refuses a bare number literal. Hosts get
-them from the contract (`contract.releases`, a declaration's revision) and pass them back. The
-brand markers are type-only, so `types.check.mts` leaves them out of the export comparison. The
-binding does not check the numbers itself: a release or revision the contract lacks, fractions
-included, is refused by the library as an unknown release or an unknown pin.
-
-## Waiting
-
-The library's run is a suspending function, and so are its handlers, `persist` and `transact`.
-The binding bridges them without a coroutines library, in `Async.kt`: `promise` turns a suspending
-block into a JavaScript promise, so `run` returns one, and `awaitResult` waits on whatever a
-JavaScript function returns when it is a promise, so a handler, `persist` or `transact` may be
-async. A JavaScript `transact` receives a block that returns a promise and must await it. An error
-or rejection from the host's own code reaches the caller unchanged.
+- Change the Kotlin layer. A new case of a sealed type, host errors included, is a
+  non-exhaustive `when` there, so the module stops compiling until it is handled.
+- Change the matching TypeScript file.
+- A new host error needs a case in `test/host-errors.test.ts`, and a new case of any other union
+  (run outcome, log entry, decoded edition, stale reason, contract declaration, checked result)
+  one in `test/kinds.test.ts`. Each table's type check fails, naming the missing case, until it has
+  one, and each case is produced by the real library, so a case the TypeScript does not know
+  fails its test. Two stale reasons, `LanguageChanged` and `CompilerChanged`, cannot be produced:
+  changing the recorded language or compiler also breaks the checksum, which is checked first.
+  They are listed as unreachable instead.
+- Update the playground (`klein-playground`) if it uses what changed.
 
 ## Building and testing
 
 ```bash
-./gradlew :klein-js:check                                  # Node tests and the type check
-./gradlew :klein-js:jsBrowserProductionLibraryDistribution   # the package for browsers
+./gradlew :klein-js:assemble   # the package, in build/package
+./gradlew :klein-js:check      # the Node tests, and a type check of the tests against the package
 ```
 
-The module builds for both browsers and Node. Both targets write the package to
-`build/dist/js/productionLibrary`, and their output is the same apart from ordering. The tests
-use the Node build, and the playground the browser build. Browser tests are turned off, since
-they need a browser the build does not provide. Rebuild the package, then run `npm install` in
-`klein-playground` to pick up changes.
-
-The package's `package.json` declares an `exports` map pointing at `index.d.mts` and `klein.mjs`,
-and `sideEffects: false`, so bundlers such as Vite can drop what an app does not use.
+The tests are TypeScript that Node runs directly. Both tasks use the Node that the Kotlin plugin
+downloads, and the TypeScript compiler that the build installs, so every machine uses the same
+versions. The package's `package.json` is the one in this directory.

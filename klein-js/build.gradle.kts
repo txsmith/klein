@@ -6,13 +6,12 @@ plugins {
 
 kotlin {
     js {
-        browser {
+        nodejs {
             testTask {
                 enabled = false
             }
         }
-        nodejs()
-        outputModuleName = "klein"
+        outputModuleName = "klein-kotlin"
         useEsModules()
         compilerOptions {
             target = "es2015"
@@ -21,22 +20,13 @@ kotlin {
         }
         generateTypeScriptDefinitions()
         binaries.library()
-        compilations["main"].packageJson {
-            customField("types", "index.d.mts")
-            customField("exports", mapOf("." to mapOf("types" to "./index.d.mts", "default" to "./klein.mjs")))
-            customField("sideEffects", false)
-        }
     }
 
     sourceSets {
         jsMain {
             dependencies {
                 implementation(project(":klein-lib"))
-            }
-        }
-
-        jsTest {
-            dependencies {
+                implementation(devNpm("typescript", "6.0.3"))
                 implementation(devNpm("@types/node", "24.13.6"))
             }
         }
@@ -45,45 +35,57 @@ kotlin {
 
 val nodeJs = the<NodeJsEnvSpec>()
 val nodeJsSetup = with(nodeJs) { project.nodeJsSetupTaskProvider }
+val nodeModules = rootProject.layout.buildDirectory.dir("js/node_modules")
+val packageDir = layout.buildDirectory.dir("package")
 
-val bindingTest = tasks.register<Exec>("bindingTest") {
-    group = "verification"
-    description = "Run the JavaScript tests against the built binding"
-    dependsOn("jsNodeProductionLibraryDistribution", nodeJsSetup)
-    inputs.dir("test")
-    inputs.dir(layout.buildDirectory.dir("dist/js/productionLibrary"))
-    commandLine(nodeJs.executable.get(), "--test", "test/*.test.mjs", "test/*.test.mts")
+val syncKotlin = tasks.register<Sync>("syncKotlin") {
+    description = "Copy the compiled Kotlin module into the package"
+    dependsOn("jsNodeProductionLibraryDistribution")
+    from(layout.buildDirectory.dir("dist/js/productionLibrary")) {
+        include("*.mjs", "*.d.mts")
+    }
+    into(packageDir.map { it.dir("kotlin") })
 }
 
-val bindingTypes = tasks.register<Exec>("bindingTypes") {
+val compileTypeScript = tasks.register<Exec>("compileTypeScript") {
+    group = "build"
+    description = "Compile the TypeScript API into the package"
+    dependsOn(syncKotlin, ":kotlinNpmInstall", nodeJsSetup)
+    inputs.dir("src/ts")
+    inputs.file("tsconfig.json")
+    inputs.dir(packageDir.map { it.dir("kotlin") })
+    outputs.files(fileTree(packageDir) { exclude("kotlin/**") })
+    commandLine(nodeJs.executable.get(), nodeModules.get().file("typescript/bin/tsc").asFile.path, "-p", "tsconfig.json")
+    doLast {
+        copy {
+            from("package.json")
+            into(packageDir)
+        }
+    }
+}
+
+tasks.named("assemble") {
+    dependsOn(compileTypeScript)
+}
+
+val typeScriptTest = tasks.register<Exec>("typeScriptTest") {
     group = "verification"
-    description = "Type-check the TypeScript tests, including the check that the handwritten declarations match the generated ones"
-    dependsOn("jsNodeProductionLibraryDistribution", ":kotlinNpmInstall", nodeJsSetup)
+    description = "Run the Node tests against the package"
+    dependsOn(compileTypeScript, nodeJsSetup)
     inputs.dir("test")
-    inputs.dir(layout.buildDirectory.dir("dist/js/productionLibrary"))
-    commandLine(
-        nodeJs.executable.get(),
-        rootProject.layout.buildDirectory.file("js/node_modules/typescript/bin/tsc").get().asFile.path,
-        "--noEmit",
-        "--strict",
-        "--target",
-        "es2022",
-        "--module",
-        "nodenext",
-        "--moduleResolution",
-        "nodenext",
-        "--allowImportingTsExtensions",
-        "--typeRoots",
-        rootProject.layout.buildDirectory.dir("js/node_modules/@types").get().asFile.path,
-        "--types",
-        "node",
-        "test/types.check.mts",
-        "test/fixtures.mts",
-        "test/host-errors.test.mts",
-        "test/kinds.test.mts",
-    )
+    inputs.dir(packageDir)
+    commandLine(nodeJs.executable.get(), "--test", "test/*.test.ts")
+}
+
+val typeScriptTestTypes = tasks.register<Exec>("typeScriptTestTypes") {
+    group = "verification"
+    description = "Type-check the Node tests against the package's declarations"
+    dependsOn(compileTypeScript, nodeJsSetup)
+    inputs.dir("test")
+    inputs.dir(packageDir)
+    commandLine(nodeJs.executable.get(), nodeModules.get().file("typescript/bin/tsc").asFile.path, "-p", "test/tsconfig.json")
 }
 
 tasks.named("check") {
-    dependsOn(bindingTest, bindingTypes)
+    dependsOn(typeScriptTest, typeScriptTestTypes)
 }
